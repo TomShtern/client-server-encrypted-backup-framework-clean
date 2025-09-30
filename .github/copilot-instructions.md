@@ -86,7 +86,7 @@ python scripts/one_click_build_and_run.py
 - **Naming**: snake_case for variables/functions, PascalCase for classes, UPPER_CASE for constants
 - **Types**: Use type hints, strict mypy compliance
 - **Line Length**: 110 characters max
-- **Error Handling**: Try/except with specific exceptions, log errors with context
+- **Error Handling**: Try/except with specific exceptions, log errors with context. Use `contextlib.suppress(Exception)` for concise suppressed-exception blocks.
 - **Async**: Use async/await for I/O operations, avoid blocking calls
 - **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
 - **Sourcery**: Address all sourcery warnings in the `#file:main.py`.
@@ -135,6 +135,47 @@ python scripts/one_click_build_and_run.py
     - `0` (or omitted/undefined depending on implementation) — effectively disables the timeout (no client‑side abort).
   - Interaction with `maxRetries`: if a request times out, the client may retry up to `contentGenerator.maxRetries` times (so a short timeout + retries can cause multiple fast retry attempts).
   - Practical recommendation: pick a reasonable timeout for your network and model latency (30_000–60_000 ms is common). If you want no client-side cutoff, keep `0`.
+- **Flet GUI Startup**: The Flet GUI should start successfully and run in browser mode by default. If port 8550 is already in use, the application will use port 8551 or 8552. The GUI should be fully operational for managing the encrypted backup system.
+- **GUI Access**: The Flet GUI is accessible via a web browser. The application typically runs on port 8550 by default and will use ports 8551/8552 if 8550 is occupied. Navigate to `http://localhost:8550` (or 8551/8552 if port 8550 is in use) to access the GUI.
+- **GUI-Only Mode**: When running in GUI-only mode, ensure the `backup_server` parameter is set to `None` when calling `main.main(page, backup_server=None)` to trigger Lorem ipsum placeholder data. The Flet GUI should start successfully and run in browser mode by default. If port 8550 is already in use, the application will use port 8551.
+- **Navigation Bar Styling**: When improving the navigation bar's design, adhere to the following specifications:
+  - **Layout**:
+    - Position: fixed left column (vertical), full-height of app.
+    - Width: expanded 260 px, collapsed 72 px.
+    - Padding: 16px vertical inside container, 12px horizontal for items.
+    - Item spacing: 10 px vertical gap between nav items.
+    - Icon size: 22 px for list icons; active icon 24 px with subtle scale animation.
+    - Label typography: 14 px medium (FontWeight W_500), single-line ellipsis.
+    - Secondary text (badges/labels): 11 px, uppercase, color token outline.
+  - **Visuals**:
+    - Background: Surface variant slightly elevated. Example token: ft.Colors.SURFACE_VARIANT (dark) with linear gradient subtle top-left to bottom-right or box shadow inner glow (use BoxShadow with small blur).
+    - Border radius: 10 px for the container; nav items: 8 px.
+    - Active item: Elevated card (bgcolor = ft.Colors.SURFACE_HIGHLIGHT or custom token), left accent bar: 4 px solid accent color (Primary/TINT).
+    - Hover: Slight lighten of bg (increase alpha) and soft outer glow ring (BoxShadow with color primary, opacity 0.08). Animated transitions: 120-180ms ease-out.
+  - **Icon & label alignment**:
+    - Row: icon left, label right.
+    - When collapsed: only icon visible, icons centered in a circular container (48x48).
+    - Tooltip: show label on hover when collapsed (Flet Tooltip wrapper).
+  - **Interactions and behavior**:
+    - Collapse/expand button at bottom (arrow icon). Animated width transition (use control.update with small task that animates).
+    - Non-blocking: Keep nav z-index low, no modal behavior. Content area should have left padding equal to nav width (update on collapse).
+    - Keyboard navigation: items reachable via Tab; add semantic attributes (aria-like text via tooltip and accessible_text on Buttons).
+    - Touch targets: min 44x44 px for each item to be mobile-friendly.
+  - **Animations**:
+    - Hover elevation: 160ms easing.
+    - Active selection ripple: use small scale + opacity overlay.
+    - Collapse/expand animation: 220ms linear.
+  - **Colors (dark theme tokens - map to Flet)**:
+    - Surface: ft.Colors.SURFACE (dark).
+    - Surface variant / card: ft.Colors.SURFACE_VARIANT.
+    - Primary accent: ft.Colors.PRIMARY (or ft.Colors.BLUE_500).
+    - Text primary: ft.Colors.ON_SURFACE.
+    - Muted: ft.Colors.OUTLINE or ft.Colors.OUTLINE_VARIANT.
+    - Danger/destructive: ft.Colors.ERROR.
+  - **Accessibility**:
+    - Provide tooltips for collapsed state.
+    - Use descriptive icons + accessible_text on buttons.
+    - Ensure contrast ratios — primary text on surface should meet 4.5:1 where possible.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -477,207 +518,6 @@ async def export_logs_wrapper():
 self.page.run_task(export_logs_wrapper)
 ```
 
-### Error Handling & Feedback
-Use robust try/except with logging and Snackbar messages via `utils.user_feedback`.
-
-#### StateManager Integration
-```python
-from utils.state_manager import StateManager
-
-def create_dashboard_view(page: ft.Page, server_bridge: ServerBridge, state_manager: StateManager) -> ft.Control:
-    """Create dashboard view with reactive state management."""
-
-    # Subscribe to state changes
-    def on_progress_update(progress_data):
-        """Handle progress updates from state manager."""
-        progress_bar.value = progress_data.get('percentage', 0) / 100
-        progress_text.value = progress_data.get('message', '')
-        page.update()
-
-    # Subscribe to progress updates
-    state_manager.subscribe_settings('progress', on_progress_update)
-
-    def start_operation(e):
-        """Start operation and update state."""
-        # Update state - triggers reactive updates
-        state_manager.set_progress({
-            'percentage': 0,
-            'message': 'Starting operation...'
-        })
-    # Perform operation
-
-    # UI components that react to state changes
-    progress_bar = ft.ProgressBar(value=0)
-    progress_text = ft.Text('')
-
-    return ft.Container(
-        content=ft.Column([
-            ft.Text("Dashboard", size=24, weight=ft.FontWeight.BOLD),
-            progress_bar,
-            progress_text,
-            themed_button("Start", on_click=start_operation)
-        ])
-    )
-```
-
-#### Reactive UI Updates
-```python
-def create_reactive_component(state_manager: StateManager) -> ft.Control:
-    """Create component that reacts to state changes."""
-    local_data = {}
-    def on_data_change(new_data):
-        """Handle data changes from state manager."""
-        nonlocal local_data
-        local_data = new_data
-        update_display()
-
-    def update_display():
-        """Update UI with current data."""
-        data_container.controls = [
-            create_data_row(item) for item in local_data.values()
-        ]
-        page.update()
-
-    # Subscribe to data changes
-    state_manager.subscribe_settings('data', on_data_change)
-
-    data_container = ft.Column()
-    return data_container
-```
-
-#### StateManager Anti-Patterns (AVOID)
-```python
-def bad_update_pattern(e):
-    # Avoid scattered page.update() calls and prefer control.update() when possible
-    button.text = "Loading..."
-    page.update()  # Scattered calls
-    # ... more code ...
-    page.update()  # More scattered calls
-
-# ❌ WRONG: No state synchronization
-def bad_state_management():
-    # Local variables not synced with global state
-    local_counter = 0  # Gets out of sync
-    # No reactive updates when state changes elsewhere
-```
-
-### UI Component Patterns
-
-**CRITICAL**: Use themed UI components for consistent styling and maintainability. **Simplify designs and avoid overly complex layouts or effects that can cause rendering issues, especially with shadows.**
-
-#### Themed Component Usage
-```python
-from utils.ui_components import themed_card, themed_button, create_info_card
-
-def create_dashboard_cards() -> ft.Control:
-    """Create dashboard using themed components."""
-
-    # Primary action button
-    start_button = themed_button(
-        text="Start Backup",
-        on_click=handle_start_backup,
-        icon=ft.Icons.PLAY_ARROW,
-        variant="primary"
-    )
-
-    # Secondary action button
-    settings_button = themed_button(
-        text="Settings",
-        on_click=handle_open_settings,
-        icon=ft.Icons.SETTINGS,
-        variant="secondary"
-    )
-
-    # Destructive action button
-    stop_button = themed_button(
-        text="Stop Server",
-        on_click=handle_stop_server,
-        icon=ft.Icons.STOP,
-        variant="destructive"
-    )
-
-    # Information card
-    status_card = themed_card(
-        title="Server Status",
-        content=ft.Column([
-            ft.Text("Uptime: 2h 15m"),
-            ft.Text("Connections: 3")
-        ]),
-        variant="info"
-    )
-
-    # Success card
-    backup_card = themed_card(
-        title="Last Backup",
-        content=ft.Text("Completed successfully at 14:30"),
-        variant="success"
-    )
-
-    return ft.Container(
-        content=ft.Column([
-            ft.Row([status_card, backup_card])
-        ])
-    )
-```
-
-#### Custom Component Creation
-```python
-def create_metric_card(title: str, value: str, trend: str, icon: str) -> ft.Control:
-    """Create a metric card with consistent styling."""
-    return ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Icon(icon, size=24, color=ft.Colors.PRIMARY),
-                ft.Text(title, size=14, weight=ft.FontWeight.W_500)
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Text(value, size=28, weight=ft.FontWeight.BOLD),
-            ft.Text(trend, size=12, color=ft.Colors.GREEN if "up" in trend.lower() else ft.Colors.RED)
-        ]),
-        padding=20,
-        border_radius=12,
-        bgcolor=ft.Colors.SURFACE,
-        shadow=ft.BoxShadow(
-            spread_radius=0,
-            blur_radius=4,
-            color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
-            offset=ft.Offset(0, 2)
-        )
-    )
-```
-
-#### ListView for Large Datasets
-```python
-def create_data_list(items: List[Dict[str, Any]]) -> ft.Control:
-    """Create efficient list for large datasets."""
-    return ft.Container(
-        content=ft.ListView(
-            controls=[
-                create_list_item(item) for item in items
-            ],
-            expand=True,
-            spacing=8,
-            semantic_child_count=len(items)  # Performance optimization
-        ),
-        height=400  # Fixed height for virtualization
-    )
-
-def create_list_item(item: Dict[str, Any]]) -> ft.Control:
-    """Create individual list item."""
-    return ft.Container(
-        content=ft.Row([
-            ft.Icon(ft.Icons.FILE_PRESENT, size=20),
-            ft.Column([
-                ft.Text(item['name'], weight=ft.FontWeight.W_500),
-                ft.Text(f"Size: {item['size']}", size=12, color=ft.Colors.OUTLINE)
-            ], expand=True),
-            ft.Text(item['date'], size=12, color=ft.Colors.OUTLINE)
-        ]),
-        padding=12,
-        border_radius=8,
-        bgcolor=ft.Colors.SURFACE_VARIANT,
-    )
-```
-
 ### Error Handling Patterns
 
 **CRITICAL**: Implement proper error handling with user feedback and logging.
@@ -733,106 +573,182 @@ async def handle_async_operation(e):
 
     except asyncio.TimeoutError:
         logger.error("Operation timed out")
-        show_error_message(page, "Operation timed out. Please try again.")
+        show_error_message(page, "Operation timed out. Please check your network connection or try again later.")
 
     except Exception as ex:
-        logger.error(f"Async operation failed: {ex}", exc_info=True)
+        logger.error(f"Operation failed: {ex}", exc_info=True)
         show_error_message(page, f"Operation failed: {str(ex)}")
 
     finally:
-        # Always restore UI state
+        # Restore UI state
         button.disabled = False
         button.text = "Start Operation"
         page.update()
 ```
 
-#### Error Boundary Pattern
-```python
-def create_safe_component(component_factory, fallback_content=None):
-    """Create component with error boundary."""
-    try:
-        return component_factory()
-    except Exception as ex:
-        logger.error(f"Component creation failed: {ex}", exc_info=True)
+#### contextlib.suppress Usage
 
-        # Return fallback content
-        if fallback_content is None:
-            fallback_content = ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.ERROR, color=ft.Colors.ERROR, size=48),
-                    ft.Text("Component failed to load", color=ft.Colors.ERROR),
-                    ft.Text(str(ex), size=12, color=ft.Colors.OUTLINE)
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=20,
-                border=ft.border.all(1, ft.Colors.ERROR),
-                border_radius=8
+Prefer `contextlib.suppress(Exception)` for concise suppressed-exception blocks. This improves code readability and addresses Sourcery warnings related to bare `try/except` blocks that simply pass.
+
+Example:
+
+```python
+import contextlib
+
+# Instead of:
+try:
+    some_operation()
+except Exception:
+    pass
+
+# Use:
+with contextlib.suppress(Exception):
+    some_operation()
+```
+
+Apply this pattern when silencing expected and non-critical exceptions, particularly in UI update and subscription setup routines.
+
+#### Recursive Visibility Fixer
+
+When forcing visibility of nested dashboard controls, use `contextlib.suppress` within the recursive function to handle potential errors during property access and updates. This ensures that the process continues even if specific controls raise exceptions.
+
+```python
+import contextlib
+
+def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
+    if ctrl is None:
+        return
+
+    # Prefer contextlib.suppress for concise suppressed-exception blocks
+    with contextlib.suppress(Exception):
+        if hasattr(ctrl, 'visible') and ctrl.visible is False:
+            ctrl.visible = True
+
+    with contextlib.suppress(Exception):
+        if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
+            ctrl.opacity = 1.0
+
+    with contextlib.suppress(Exception):
+        if hasattr(ctrl, 'update'):
+            try:
+                ctrl.update()
+            except Exception:
+                # Keep the inner safety for update() call failures
+                pass
+
+    if depth >= max_depth:
+        return
+
+    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
+    with contextlib.suppress(Exception):
+        if hasattr(ctrl, 'controls') and ctrl.controls:
+            for child in list(ctrl.controls):
+                _force_visible_recursive(child, depth + 1, max_depth)
+
+        if hasattr(ctrl, 'content') and ctrl.content:
+            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
+
+        if hasattr(ctrl, 'rows') and ctrl.rows:
+            for child in list(ctrl.rows):
+                _force_visible_recursive(child, depth + 1, max_depth)
+
+        if hasattr(ctrl, 'columns') and ctrl.columns:
+            for child in list(ctrl.columns):
+                _force_visible_recursive(child, depth + 1, max_depth)
+```
+
+#### Subscription Waiter
+
+The subscription waiter in `_post_content_update` should use `contextlib.suppress` to handle exceptions during attachment checks and subscription setup. Ensure that both the inner and outer `try` blocks within the `_wait_and_setup` coroutine are properly completed with appropriate exception handling.
+
+```python
+import asyncio
+import contextlib
+import logging
+from typing import Any, Callable, cast
+
+import flet as ft
+
+logger = logging.getLogger(__name__)
+
+class FletV2App(ft.Row):
+    # ...existing code...
+    def _post_content_update(self, content: Any, view_name: str) -> None:
+        """Handle visibility and subscription setup after content update."""
+        if content is None:
+            return
+
+        # Force visibility if dashboard content remains hidden
+        if view_name == 'dashboard':
+            try:
+                if getattr(content, 'opacity', 1.0) == 0.0:
+                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
+                    content.opacity = 1.0
+                    with contextlib.suppress(Exception):
+                        content.update()
+
+                def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
+                    if ctrl is None:
+                        return
+
+                    # Prefer contextlib.suppress for concise suppressed-exception blocks
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'visible') and ctrl.visible is False:
+                            ctrl.visible = True
+
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
+                            ctrl.opacity = 1.0
+
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'update'):
+                            try:
+                                ctrl.update()
+                            except Exception:
+                                # Keep the inner safety for update() call failures
+                                pass
+
+                    if depth >= max_depth:
+                        return
+
+                    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
+                    with contextlib.suppress(Exception):
+                        if hasattr(ctrl, 'controls') and ctrl.controls:
+                            for child in list(ctrl.controls):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+
+                        if hasattr(ctrl, 'content') and ctrl.content:
+                            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
+
+                        if hasattr(ctrl, 'rows') and ctrl.rows:
+                            for child in list(ctrl.rows):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+
+                        if hasattr(ctrl, 'columns') and ctrl.columns:
+                            for child in list(ctrl.columns):
+                                _force_visible_recursive(child, depth + 1, max_depth)
+
+                _force_visible_recursive(content, 0, 10)
+
+                # Use contextlib.suppress for page.update safety
+                with contextlib.suppress(Exception):
+                    if hasattr(self, 'page') and self.page is not None:
+                        self.page.update()
+
+                logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
+            except Exception as vis_err:
+                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
+
+        # ...existing code...
+
+        # Schedule subscription setup once control is attached to the page
+        setup_cb = getattr(content, '_setup_subscriptions', None)
+        if not callable(setup_cb):
+            logger.debug(
+                f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
+                f"(type={type(setup_cb).__name__})"
             )
+            return
 
-        return fallback_content
-```
-
-#### Error Handling Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Silent error handling
-def bad_error_handling():
-    try:
-        risky_operation()
-    except:
-        pass  # Never do this - errors disappear
-
-# ❌ WRONG: Generic exception handling
-def bad_generic_catch():
-    try:
-        operation()
-    except Exception as ex:
-        print(f"Error: {ex}")  # No logging, no user feedback
-
-# ❌ WRONG: UI updates in exception handlers
-def bad_ui_in_catch():
-    try:
-        operation()
-    except Exception as ex:
-        button.text = "Error!"  # UI updates in catch block
-        page.update()  # Can cause more errors
-```
-
-### Configuration Management Patterns
-
-**CRITICAL**: Use centralized configuration management with environment variables and validation.
-
-#### Configuration Loading
-```python
-#!/usr/bin/env python3
-"""
-Configuration and Constants for FletV2.
-"""
-
-import os
-from pathlib import Path
-from contextlib import suppress
-from contextlib import suppress
-
-# Load environment variables from .env file if it exists
-with suppress(ImportError):
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
-
-# Debug mode - controls visibility of mock data and debug features
-DEBUG_MODE = os.environ.get('FLET_V_DEBUG', 'false').lower() == 'true'
-
-# Secure secret handling from environment variables
-GITHUB_PERSONAL_ACCESS_TOKEN = os.environ.get('GITHUB_PERSONAL_ACCESS_TOKEN')
-SERVER_API_KEY = os.environ.get('SERVER_API_KEY')
-DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD')
-
-# Real server configuration
-REAL_SERVER_URL = os.environ.get('REAL_SERVER_URL')  # e.g., https://backup.example.com/api
-BACKUP_SERVER_TOKEN = os.environ.get('BACKUP_SERVER_TOKEN') or os.environ.get('BACKUP_SERVER_API_KEY')
-REQUEST_TIMEOUT = float(os.environ.get('REQUEST_TIMEOUT', '10'))
-VERIFY_TLS = os.environ.get('VERIFY_TLS', 'true').lower() == 'true'
-
-# Optional: Validate critical secrets in debug mode
-if DEBUG_MODE:
-    if not GITHUB_PERSONAL_ACCESS_TOKEN:
-        print("Warning: GITHUB_PERSONAL_ACCESS_TOKEN not set")
-    if not SERVER_API
+        try:
+            if hasattr(self

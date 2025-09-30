@@ -36,6 +36,8 @@ if __name__ == "__main__":
     import asyncio
 
     async def gui_only_main(page):
-        await main.main(page, real_server=None)
+        # FIX: Instantiate FletV2App directly instead of calling non-existent main.main()
+        app = main.FletV2App(page, real_server=None)
+        await app.initialize()
 
     ft.app(target=gui_only_main, view=ft.AppView.FLET_APP)

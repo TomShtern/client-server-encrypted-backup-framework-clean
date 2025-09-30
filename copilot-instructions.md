@@ -1,4 +1,4 @@
-# Client-Server Encrypted Backup Framework - Agent Instructions
+# Client-Server Encrypted Backup Framework - Copilot Instructions
 
 ## Project Overview
 
@@ -211,7 +211,7 @@ python -m FletV2.main
 - MyPy for additional type verification
 - Comprehensive logging for debugging
 
-## Special Considerations for Agents
+## Special Considerations for Copilot
 
 ### Security Context
 - Always prioritize secure handling of encryption keys and credentials
@@ -244,6 +244,12 @@ python -m FletV2.main
 - Implement efficient data processing for large file transfers
 - Consider memory usage when handling large datasets in GUI
 - Use GPU-accelerated animations for smooth interactions
+
+### Code Quality
+- Maintain the high code quality standards already established
+- Use proper type hints and comprehensive error handling
+- Follow the existing patterns for logging and diagnostics
+- Ensure all new code is well-documented with docstrings
 
 ## Troubleshooting
 

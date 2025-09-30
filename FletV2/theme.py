@@ -3,11 +3,16 @@
 Sophisticated FletV2 Theme System - Material Design 3 + Neumorphism + Glassmorphism
 Flet 0.28.3 implementation with triple design system architecture.
 Foundation: Material Design 3 semantic colors and typography
-Structure: Neumorphic soft shadows and tactile depth
-Focus: Glassmorphic transparency and blur effects
+Structure: Neumorphic soft shadows and tactile depth (40-45% intensity)
+Focus: Glassmorphic transparency and blur effects (20-30% intensity)
+
+Performance Optimizations:
+- Pre-computed shadow constants for zero-allocation performance
+- Reusable shadow objects prevent GC pressure
+- GPU-accelerated animations (scale, opacity only)
 """
 
-from typing import cast
+from typing import cast, Literal
 
 import flet as ft
 
@@ -25,7 +30,109 @@ BRAND_COLORS = {
     "outline": "#CBD5E1",      # Material Slate 300
 }
 
-# Neumorphic shadow configurations
+# ========================================================================================
+# PRE-COMPUTED NEUMORPHIC SHADOWS (40-45% Intensity)
+# Performance: Reused objects prevent allocation overhead
+# ========================================================================================
+
+# PRONOUNCED NEUMORPHIC SHADOWS (40-45% intensity) - For primary interactive elements
+PRONOUNCED_NEUMORPHIC_SHADOWS = [
+    # ENHANCED: Stronger dark shadow for visibility in dark theme (40-45% intensity)
+    ft.BoxShadow(
+        spread_radius=3,  # Increased from 2
+        blur_radius=16,   # Increased from 12
+        color=ft.Colors.with_opacity(0.4, "#000000"),  # Increased from 0.25
+        offset=ft.Offset(8, 8),  # Increased from (6,6)
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+    # REDUCED: Weaker light highlight to prevent shadow cancellation in dark theme
+    ft.BoxShadow(
+        spread_radius=2,
+        blur_radius=12,
+        color=ft.Colors.with_opacity(0.5, "#FFFFFF"),  # REDUCED from 0.9
+        offset=ft.Offset(-4, -4),  # Reduced from (-6,-6)
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+]
+
+# MODERATE NEUMORPHIC SHADOWS (30% intensity) - For secondary elements
+MODERATE_NEUMORPHIC_SHADOWS = [
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=8,
+        color=ft.Colors.with_opacity(0.18, "#000000"),
+        offset=ft.Offset(4, 4),
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=8,
+        color=ft.Colors.with_opacity(0.7, "#FFFFFF"),
+        offset=ft.Offset(-4, -4),
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+]
+
+# SUBTLE NEUMORPHIC SHADOWS (20% intensity) - For tertiary elements
+SUBTLE_NEUMORPHIC_SHADOWS = [
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=6,
+        color=ft.Colors.with_opacity(0.12, "#000000"),
+        offset=ft.Offset(3, 3),
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=6,
+        color=ft.Colors.with_opacity(0.6, "#FFFFFF"),
+        offset=ft.Offset(-3, -3),
+        blur_style=ft.ShadowBlurStyle.NORMAL
+    ),
+]
+
+# INSET NEUMORPHIC SHADOWS - For pressed/depressed states
+INSET_NEUMORPHIC_SHADOWS = [
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=6,
+        color=ft.Colors.with_opacity(0.2, "#000000"),
+        offset=ft.Offset(2, 2),
+        blur_style=ft.ShadowBlurStyle.INNER
+    ),
+    ft.BoxShadow(
+        spread_radius=1,
+        blur_radius=6,
+        color=ft.Colors.with_opacity(0.6, "#FFFFFF"),
+        offset=ft.Offset(-2, -2),
+        blur_style=ft.ShadowBlurStyle.INNER
+    ),
+]
+
+# ========================================================================================
+# GLASSMORPHIC CONFIGURATION CONSTANTS (20-30% Intensity)
+# Performance: Direct dictionary access faster than function calls
+# ========================================================================================
+
+GLASS_STRONG = {
+    "blur": 15,
+    "bg_opacity": 0.12,
+    "border_opacity": 0.2
+}
+
+GLASS_MODERATE = {
+    "blur": 12,
+    "bg_opacity": 0.10,
+    "border_opacity": 0.15
+}
+
+GLASS_SUBTLE = {
+    "blur": 10,
+    "bg_opacity": 0.08,
+    "border_opacity": 0.12
+}
+
+# Legacy configuration for backward compatibility
 NEUMORPHIC_SHADOWS = {
     "raised": {
         "light_shadow": {
@@ -57,7 +164,7 @@ NEUMORPHIC_SHADOWS = {
     }
 }
 
-# Glassmorphic configuration
+# Legacy glassmorphic configuration
 GLASSMORPHIC_CONFIG = {
     "background_opacity": 0.08,
     "border_opacity": 0.12,
@@ -328,35 +435,29 @@ def create_material_card(content: ft.Control) -> ft.Container:
 def create_neumorphic_container(
     content: ft.Control,
     effect_type: str = "raised",  # "raised" or "inset"
-    hover_effect: bool = True
+    hover_effect: bool = True,
+    intensity: Literal["pronounced", "moderate", "subtle"] = "moderate"
 ) -> ft.Container:
-    """Create neumorphic container with dual shadow effects."""
-    shadow_config = NEUMORPHIC_SHADOWS[effect_type]
+    """
+    Create neumorphic container with dual shadow effects.
 
-    shadows = [
-        # Dark shadow
-        ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=shadow_config["dark_shadow"]["blur"],
-            color=ft.Colors.with_opacity(
-                shadow_config["dark_shadow"]["opacity"],
-                shadow_config["dark_shadow"]["color"]
-            ),
-            offset=ft.Offset(*shadow_config["dark_shadow"]["offset"]),
-            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
-        ),
-        # Light highlight
-        ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=shadow_config["light_shadow"]["blur"],
-            color=ft.Colors.with_opacity(
-                shadow_config["light_shadow"]["opacity"],
-                shadow_config["light_shadow"]["color"]
-            ),
-            offset=ft.Offset(*shadow_config["light_shadow"]["offset"]),
-            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
-        ),
-    ]
+    Args:
+        content: The control to wrap in neumorphic styling
+        effect_type: "raised" for elevated look, "inset" for pressed look
+        hover_effect: Enable scale animation on hover (GPU-accelerated)
+        intensity: Shadow intensity - "pronounced" (40-45%), "moderate" (30%), "subtle" (20%)
+
+    Performance: Uses pre-computed shadow constants for zero-allocation overhead
+    """
+    # Use pre-computed shadows for performance
+    if effect_type == "inset":
+        shadows = INSET_NEUMORPHIC_SHADOWS
+    elif intensity == "pronounced":
+        shadows = PRONOUNCED_NEUMORPHIC_SHADOWS
+    elif intensity == "moderate":
+        shadows = MODERATE_NEUMORPHIC_SHADOWS
+    else:  # subtle
+        shadows = SUBTLE_NEUMORPHIC_SHADOWS
 
     return ft.Container(
         content=content,
@@ -364,56 +465,184 @@ def create_neumorphic_container(
         border_radius=20,
         padding=ft.padding.all(24),
         shadow=shadows,
-        animate=ft.Animation(200) if hover_effect else None
+        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC) if hover_effect else None,
+        animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC) if hover_effect else None
     )
+
+def create_neumorphic_metric_card(
+    content: ft.Control,
+    intensity: Literal["pronounced", "moderate", "subtle"] = "pronounced",
+    enable_hover: bool = True
+) -> ft.Container:
+    """
+    Create neumorphic metric card optimized for dashboard metrics.
+
+    Args:
+        content: The metric content (typically Text/Icon combinations)
+        intensity: Shadow intensity - "pronounced" (40-45%) for primary metrics
+        enable_hover: Enable subtle scale animation on hover
+
+    Features:
+        - Pre-computed shadows for performance
+        - GPU-accelerated scale animation (1.0 -> 1.02)
+        - Optimized for frequent updates (uses control.update() pattern)
+    """
+    # Select shadow intensity
+    if intensity == "pronounced":
+        shadows = PRONOUNCED_NEUMORPHIC_SHADOWS
+    elif intensity == "moderate":
+        shadows = MODERATE_NEUMORPHIC_SHADOWS
+    else:
+        shadows = SUBTLE_NEUMORPHIC_SHADOWS
+
+    container = ft.Container(
+        content=content,
+        bgcolor=ft.Colors.SURFACE,
+        border_radius=16,
+        padding=ft.padding.all(20),
+        shadow=shadows,
+        animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC) if enable_hover else None
+    )
+
+    if enable_hover:
+        # GPU-accelerated hover effect
+        def on_hover(e):
+            container.scale = 1.02 if e.data == "true" else 1.0
+            container.update()
+
+        container.on_hover = on_hover
+
+    return container
 
 def create_glassmorphic_container(
     content: ft.Control,
-    intensity: str = "medium"  # "light", "medium", "strong"
+    intensity: Literal["subtle", "moderate", "strong"] = "moderate"
 ) -> ft.Container:
-    """Create glassmorphic container with blur and transparency."""
-    intensity_config = {
-        "light": {"opacity": 0.05, "border_opacity": 0.08, "blur": 10},
-        "medium": {"opacity": 0.08, "border_opacity": 0.12, "blur": 15},
-        "strong": {"opacity": 0.12, "border_opacity": 0.18, "blur": 20}
-    }
+    """
+    Create glassmorphic container with blur and transparency.
 
-    config = intensity_config[intensity]
+    Args:
+        content: The control to wrap in glassmorphic styling
+        intensity: Glass effect intensity - "subtle" (20%), "moderate" (25%), "strong" (30%)
+
+    Performance: Uses pre-computed configuration constants for optimal access
+    """
+    # Use pre-computed glass configurations
+    if intensity == "strong":
+        config = GLASS_STRONG
+    elif intensity == "moderate":
+        config = GLASS_MODERATE
+    else:
+        config = GLASS_SUBTLE
 
     return ft.Container(
         content=content,
         border_radius=16,
         padding=ft.padding.all(20),
-        bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE),
+        bgcolor=ft.Colors.with_opacity(config["bg_opacity"], ft.Colors.SURFACE),
         border=ft.border.all(1, ft.Colors.with_opacity(config["border_opacity"], ft.Colors.OUTLINE)),
         blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"])
     )
 
-def get_neumorphic_shadows(effect_type: str = "raised") -> list[ft.BoxShadow]:
-    """Get neumorphic shadow configuration."""
-    shadow_config = NEUMORPHIC_SHADOWS[effect_type]
-    return [
-        ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=shadow_config["dark_shadow"]["blur"],
-            color=ft.Colors.with_opacity(
-                shadow_config["dark_shadow"]["opacity"],
-                shadow_config["dark_shadow"]["color"]
-            ),
-            offset=ft.Offset(*shadow_config["dark_shadow"]["offset"]),
-            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
-        ),
-        ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=shadow_config["light_shadow"]["blur"],
-            color=ft.Colors.with_opacity(
-                shadow_config["light_shadow"]["opacity"],
-                shadow_config["light_shadow"]["color"]
-            ),
-            offset=ft.Offset(*shadow_config["light_shadow"]["offset"]),
-            blur_style=ft.ShadowBlurStyle.INNER if effect_type == "inset" else ft.ShadowBlurStyle.NORMAL
-        ),
-    ]
+def create_glassmorphic_overlay(
+    content: ft.Control,
+    intensity: Literal["subtle", "moderate", "strong"] = "strong"
+) -> ft.Container:
+    """
+    Create glassmorphic overlay optimized for modal/dialog overlays.
+
+    Args:
+        content: The overlay content
+        intensity: Glass effect intensity - "strong" (30%) recommended for focal overlays
+
+    Features:
+        - Optimized blur application for performance
+        - Higher opacity for clear content visibility
+        - Designed for floating elements that need focus
+    """
+    # Use pre-computed glass configurations
+    if intensity == "strong":
+        config = GLASS_STRONG
+    elif intensity == "moderate":
+        config = GLASS_MODERATE
+    else:
+        config = GLASS_SUBTLE
+
+    return ft.Container(
+        content=content,
+        border_radius=20,
+        padding=ft.padding.all(24),
+        bgcolor=ft.Colors.with_opacity(config["bg_opacity"], ft.Colors.SURFACE),
+        border=ft.border.all(1.5, ft.Colors.with_opacity(config["border_opacity"], ft.Colors.OUTLINE)),
+        blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"]),
+        shadow=[
+            ft.BoxShadow(
+                blur_radius=20,
+                spread_radius=0,
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                offset=ft.Offset(0, 10)
+            )
+        ]
+    )
+
+def create_hybrid_gauge_container(content: ft.Control) -> ft.Container:
+    """
+    Create hybrid container combining neumorphic base + glassmorphic overlay.
+
+    Args:
+        content: Gauge or chart content to display
+
+    Design Philosophy:
+        - Neumorphic base provides tactile structure (40% intensity)
+        - Glassmorphic overlay adds depth and focus (25% intensity)
+        - Optimized for dashboard gauges and data visualizations
+
+    Performance: Pre-computed shadows and glass configs ensure zero overhead
+    """
+    # Glassmorphic overlay on top
+    glass_overlay = ft.Container(
+        content=content,
+        border_radius=16,
+        padding=ft.padding.all(16),
+        bgcolor=ft.Colors.with_opacity(GLASS_MODERATE["bg_opacity"], ft.Colors.SURFACE),
+        border=ft.border.all(1, ft.Colors.with_opacity(GLASS_MODERATE["border_opacity"], ft.Colors.OUTLINE)),
+        blur=ft.Blur(sigma_x=GLASS_MODERATE["blur"], sigma_y=GLASS_MODERATE["blur"])
+    )
+
+    # Neumorphic base container
+    return ft.Container(
+        content=glass_overlay,
+        bgcolor=ft.Colors.SURFACE,
+        border_radius=20,
+        padding=ft.padding.all(8),
+        shadow=PRONOUNCED_NEUMORPHIC_SHADOWS
+    )
+
+def get_neumorphic_shadows(
+    effect_type: str = "raised",
+    intensity: Literal["pronounced", "moderate", "subtle"] = "moderate"
+) -> list[ft.BoxShadow]:
+    """
+    Get neumorphic shadow configuration.
+
+    Args:
+        effect_type: "raised" for elevated, "inset" for pressed (legacy parameter)
+        intensity: Shadow intensity - "pronounced" (40-45%), "moderate" (30%), "subtle" (20%)
+
+    Returns:
+        List of pre-computed BoxShadow objects for performance
+
+    Performance: Returns reference to module-level constants (zero allocation)
+    """
+    # Use pre-computed shadows for performance
+    if effect_type == "inset":
+        return INSET_NEUMORPHIC_SHADOWS
+    elif intensity == "pronounced":
+        return PRONOUNCED_NEUMORPHIC_SHADOWS
+    elif intensity == "moderate":
+        return MODERATE_NEUMORPHIC_SHADOWS
+    else:
+        return SUBTLE_NEUMORPHIC_SHADOWS
 
 def create_glassmorphic_status_badge(text: str, color: str = ft.Colors.BLUE) -> ft.Container:
     """Create glassmorphic status badge with blur effect."""
@@ -431,10 +660,123 @@ def create_glassmorphic_status_badge(text: str, color: str = ft.Colors.BLUE) -> 
         blur=ft.Blur(sigma_x=10, sigma_y=10)
     )
 
-# Maintain compatibility with existing code by providing aliases
+# ========================================================================================
+# MICRO-ANIMATION HELPERS
+# Performance: GPU-accelerated properties only (scale, opacity, rotation)
+# ========================================================================================
+
+def create_hover_animation(
+    scale_from: float = 1.0,
+    scale_to: float = 1.02,
+    duration_ms: int = 180
+) -> ft.Animation:
+    """
+    Create hover animation configuration for interactive elements.
+
+    Args:
+        scale_from: Starting scale (typically 1.0)
+        scale_to: Target scale on hover (1.02 = 2% larger)
+        duration_ms: Animation duration in milliseconds (180ms recommended)
+
+    Returns:
+        Animation object configured for smooth GPU-accelerated scaling
+
+    Performance: Uses EASE_OUT_CUBIC for natural deceleration
+    Usage: Apply to container.animate_scale property
+    """
+    return ft.Animation(duration_ms, ft.AnimationCurve.EASE_OUT_CUBIC)
+
+def create_press_animation(duration_ms: int = 100) -> ft.Animation:
+    """
+    Create press/click animation configuration.
+
+    Args:
+        duration_ms: Animation duration (100ms recommended for snappy feedback)
+
+    Returns:
+        Animation object configured for quick responsive feedback
+
+    Performance: Uses EASE_IN_OUT for balanced acceleration
+    Usage: Apply to button press effects with scale: 1.0 -> 0.98 -> 1.0
+    """
+    return ft.Animation(duration_ms, ft.AnimationCurve.EASE_IN_OUT)
+
+def create_fade_animation(duration_ms: int = 300) -> ft.Animation:
+    """
+    Create fade in/out animation configuration.
+
+    Args:
+        duration_ms: Animation duration (300ms recommended for smooth fades)
+
+    Returns:
+        Animation object configured for opacity transitions
+
+    Performance: GPU-accelerated opacity changes
+    Usage: Apply to container.animate_opacity property
+    """
+    return ft.Animation(duration_ms, ft.AnimationCurve.EASE_OUT)
+
+def create_slide_animation(duration_ms: int = 250) -> ft.Animation:
+    """
+    Create slide animation configuration for transitions.
+
+    Args:
+        duration_ms: Animation duration (250ms recommended for smooth slides)
+
+    Returns:
+        Animation object configured for position-based animations
+
+    Performance: Uses DECELERATE curve for natural motion
+    Usage: Apply to container.animate_position property
+    """
+    return ft.Animation(duration_ms, ft.AnimationCurve.DECELERATE)
+
+def apply_interactive_animations(
+    container: ft.Container,
+    enable_hover: bool = True,
+    enable_press: bool = False,
+    hover_scale: float = 1.02
+) -> ft.Container:
+    """
+    Apply interactive animations to a container.
+
+    Args:
+        container: The container to enhance with animations
+        enable_hover: Enable hover scale effect
+        enable_press: Enable press feedback effect
+        hover_scale: Target scale on hover (1.02 = 2% larger)
+
+    Returns:
+        The same container with animations applied (for chaining)
+
+    Usage:
+        container = apply_interactive_animations(
+            ft.Container(...),
+            enable_hover=True,
+            hover_scale=1.03
+        )
+    """
+    if enable_hover:
+        container.animate_scale = create_hover_animation()
+
+        def on_hover(e):
+            container.scale = hover_scale if e.data == "true" else 1.0
+            container.update()
+
+        container.on_hover = on_hover
+
+    if enable_press:
+        container.animate_scale = create_press_animation()
+
+    return container
+
+# ========================================================================================
+# BACKWARD COMPATIBILITY ALIASES
+# Maintain compatibility with existing code
+# ========================================================================================
+
 setup_modern_theme = setup_sophisticated_theme  # Backward compatibility
 create_modern_button_style = themed_button
 create_modern_card_container = create_neumorphic_container
 create_trend_indicator = create_status_badge
-create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)
 create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)

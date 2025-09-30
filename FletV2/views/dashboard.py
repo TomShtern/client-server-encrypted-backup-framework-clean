@@ -24,6 +24,23 @@ for _path in (_flet_v2_root, _repo_root):
 import flet as ft
 import Shared.utils.utf8_solution as _  # noqa: F401
 
+# PHASE 1: Enhanced theme utilities for tri-style visual system
+from theme import (
+    # Pre-computed neumorphic shadows (40-45% intensity)
+    PRONOUNCED_NEUMORPHIC_SHADOWS,
+    MODERATE_NEUMORPHIC_SHADOWS,
+    SUBTLE_NEUMORPHIC_SHADOWS,
+    # Glassmorphic configuration constants (20-30% intensity)
+    GLASS_STRONG,
+    GLASS_MODERATE,
+    GLASS_SUBTLE,
+    # Helper functions
+    get_neumorphic_shadows,
+    create_glassmorphic_container,
+    create_glassmorphic_overlay,
+    create_hover_animation
+)
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -56,9 +73,11 @@ def create_dashboard_view(
 
     # Status and control refs
     last_update_ref = ft.Ref[ft.Text]()
-    status_indicator_ref = ft.Ref[ft.Icon]()
+    gui_status_ref = ft.Ref[ft.Container]()  # GUI operational status
+    server_status_ref = ft.Ref[ft.Container]()  # Server connection status
     refresh_button_ref = ft.Ref[ft.IconButton]()
     loading_indicator_ref = ft.Ref[ft.ProgressRing]()
+    theme_toggle_ref = ft.Ref[ft.Container]()  # Theme switcher
 
     # Activity stream refs
     activity_list_ref = ft.Ref[ft.ListView]()
@@ -67,6 +86,47 @@ def create_dashboard_view(
     _background_task = None
     _disposed = False
     _last_update_time = None
+    _timestamp_update_task = None
+
+    # === SERVER CONNECTION DETECTION ===
+    def is_real_server_connected() -> bool:
+        """Detect if connected to real server vs mock data - with health check."""
+        if not server_bridge:
+            return False
+        # Check if server_bridge has real_server attribute and it's not None
+        if not hasattr(server_bridge, 'real_server') or server_bridge.real_server is None:
+            return False
+        # FIX: Verify server is actually responsive with health check
+        try:
+            # Check for common server health indicators
+            if hasattr(server_bridge.real_server, 'is_running'):
+                return server_bridge.real_server.is_running()
+            # Fallback: check if server object has expected methods (duck typing)
+            has_methods = (hasattr(server_bridge.real_server, 'get_clients') or
+                          hasattr(server_bridge.real_server, 'get_dashboard_summary'))
+            return has_methods
+        except Exception:
+            return False
+
+    def get_relative_time(timestamp: float) -> str:
+        """Convert timestamp to relative time string (e.g., '2 seconds ago')."""
+        if not timestamp:
+            return "Never"
+
+        elapsed = time.time() - timestamp
+        if elapsed < 5:
+            return "Just now"
+        elif elapsed < 60:
+            return f"{int(elapsed)} seconds ago"
+        elif elapsed < 3600:
+            minutes = int(elapsed / 60)
+            return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        elif elapsed < 86400:
+            hours = int(elapsed / 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        else:
+            days = int(elapsed / 86400)
+            return f"{days} day{'s' if days != 1 else ''} ago"
 
     # === ASYNC SERVER INTEGRATION PATTERNS ===
     async def safe_server_call(method_name: str, *args, **kwargs) -> dict:
@@ -98,8 +158,17 @@ def create_dashboard_view(
             logger.error(f"Server call {method_name} failed: {e}")
             return {'success': False, 'error': str(e)}
 
-    async def get_comprehensive_server_data() -> dict:
-        """Fetch comprehensive server data using multiple API calls with proper method mapping."""
+    async def get_comprehensive_server_data() -> Optional[dict]:
+        """Fetch comprehensive server data using multiple API calls with proper method mapping.
+
+        Returns:
+            dict | None: Consolidated server data dictionary when connected, otherwise None.
+        """
+        # Return None if real server is not connected (caller handles None)
+        if not is_real_server_connected():
+            logger.warning("Server not connected - returning None (no mock data)")
+            return None
+
         data = {}
 
         # 1. Get dashboard summary (primary source for consolidated metrics)
@@ -175,7 +244,7 @@ def create_dashboard_view(
         return data
 
     def show_user_feedback(message: str, is_error: bool = False):
-        """Show user feedback via snackbar."""
+        """Show user feedback via snackbar - OPTIMIZED: targeted update."""
         try:
             if hasattr(page, 'snack_bar'):
                 page.snack_bar = ft.SnackBar(
@@ -183,9 +252,53 @@ def create_dashboard_view(
                     bgcolor=ft.Colors.ERROR if is_error else ft.Colors.PRIMARY
                 )
                 page.snack_bar.open = True
-                page.update()
+                # PHASE 6: Performance optimization - use snack_bar.update() instead of page.update()
+                page.snack_bar.update()
         except Exception as e:
             logger.error(f"Failed to show user feedback: {e}")
+
+    def toggle_theme_mode():
+        """Cycle through theme modes: LIGHT → DARK → SYSTEM."""
+        current_mode = page.theme_mode
+
+        # Cycle through modes
+        if current_mode == ft.ThemeMode.LIGHT:
+            page.theme_mode = ft.ThemeMode.DARK
+            new_icon = ft.Icons.DARK_MODE
+            new_tooltip = "Dark mode active"
+            new_label = "Dark"
+        elif current_mode == ft.ThemeMode.DARK:
+            page.theme_mode = ft.ThemeMode.SYSTEM
+            new_icon = ft.Icons.BRIGHTNESS_AUTO
+            new_tooltip = "System theme active"
+            new_label = "Auto"
+        else:  # SYSTEM
+            page.theme_mode = ft.ThemeMode.LIGHT
+            new_icon = ft.Icons.LIGHT_MODE
+            new_tooltip = "Light mode active"
+            new_label = "Light"
+
+        # Update theme toggle UI
+        if theme_toggle_ref.current:
+            icon_container = theme_toggle_ref.current.content.controls[0]
+            label_text = theme_toggle_ref.current.content.controls[1]
+
+            icon_container.content.name = new_icon
+            label_text.value = new_label
+            theme_toggle_ref.current.tooltip = new_tooltip
+
+            theme_toggle_ref.current.update()
+
+        # Persist preference in state manager
+        if state_manager:
+            try:
+                state_manager.update('theme_mode', page.theme_mode.value)
+            except Exception as e:
+                logger.debug(f"Failed to persist theme preference: {e}")
+
+        page.update()
+        show_user_feedback(f"Theme changed to {new_label} mode")
+        logger.info(f"Theme mode changed to: {page.theme_mode}")
 
     def set_loading_state(loading: bool):
         """Set loading state across UI components."""
@@ -201,14 +314,35 @@ def create_dashboard_view(
             logger.debug(f"Error setting loading state: {e}")
 
     def update_status_indicator(connected: bool):
-        """Update connection status indicator."""
+        """Update dual status indicators (GUI + Server)."""
         try:
-            if status_indicator_ref.current:
-                status_indicator_ref.current.name = ft.Icons.CLOUD_DONE if connected else ft.Icons.CLOUD_OFF
-                status_indicator_ref.current.color = ft.Colors.GREEN if connected else ft.Colors.RED
-                status_indicator_ref.current.update()
+            # GUI status is always operational (always green)
+            # No update needed as it's static
+
+            # Update server status indicator
+            if server_status_ref.current:
+                # FIX: Show green if we successfully got data (even if mock data in demo mode)
+                # The 'connected' parameter indicates successful data retrieval
+                server_connected = connected
+                status_color = ft.Colors.GREEN_400 if server_connected else ft.Colors.GREY_500
+                status_text = "Server" if server_connected else "Server"
+                status_tooltip = "Server connected" if server_connected else "Server disconnected"
+
+                # Update dot color
+                dot = server_status_ref.current.content.controls[0]
+                dot.bgcolor = status_color
+
+                # Update text color
+                text = server_status_ref.current.content.controls[1]
+                text.color = status_color
+
+                # Update container background
+                server_status_ref.current.bgcolor = ft.Colors.with_opacity(0.1, status_color)
+                server_status_ref.current.tooltip = status_tooltip
+
+                server_status_ref.current.update()
         except Exception as e:
-            logger.debug(f"Error updating status indicator: {e}")
+            logger.debug(f"Error updating status indicators: {e}")
 
     def update_dashboard_data(data: dict):
         """Update all dashboard components with new data - optimized with targeted updates."""
@@ -231,13 +365,19 @@ def create_dashboard_view(
                 uptime_value_ref.current.value = data.get('uptime_formatted', 'N/A')
                 uptime_value_ref.current.update()
 
-            # PHASE 4.2: Update enhanced circular gauges with status indicators
+            # PHASE 4.2: Update enhanced circular gauges with gradient colors + status indicators
             def update_gauge_with_status(progress_ref, container, value, label):
-                """Update circular gauge with status indicators and percentage display."""
+                """Update circular gauge with gradient colors, status indicators, and percentage display."""
                 if not progress_ref.current or not container:
                     return
-                # Update main progress ring
+
+                # Update main progress ring with VALUE and GRADIENT COLOR
                 progress_ref.current.value = min(1.0, value / 100)
+
+                # ENHANCEMENT: Update ring color based on gradient
+                if hasattr(container, 'get_gradient_color'):
+                    progress_ref.current.color = container.get_gradient_color(value)
+
                 progress_ref.current.update()
 
                 # Update percentage display
@@ -308,37 +448,60 @@ def create_dashboard_view(
                 )
                 activity_list_ref.current.controls.append(activity_item)
 
-            # PHASE 4.2: Enhanced placeholder with premium styling
+            # PHASE 4.2: Enhanced placeholder with skeleton items showing UI structure
             if not activities:
-                placeholder = ft.Container(
-                    content=ft.Column([
-                        ft.Container(
-                            content=ft.Icon(
-                                ft.Icons.TIMELINE,
-                                size=32,
-                                color=ft.Colors.with_opacity(0.4, ft.Colors.ON_SURFACE)
-                            ),
-                            alignment=ft.alignment.center,
-                            margin=ft.Margin(0, 0, 0, 12)
-                        ),
+                # FIX: Show skeleton placeholder items instead of empty state for better UX
+                skeleton_activities = [
+                    {
+                        'title': 'Backup completed',
+                        'client': 'CLIENT-001',
+                        'status': 'Success',
+                        'description': 'Example activity will appear here',
+                        'time': datetime.now().isoformat()
+                    },
+                    {
+                        'title': 'File sync started',
+                        'client': 'CLIENT-002',
+                        'status': 'In Progress',
+                        'description': 'Real-time activities when server connects',
+                        'time': datetime.now().isoformat()
+                    },
+                    {
+                        'title': 'System health check',
+                        'client': 'SYSTEM',
+                        'status': 'Success',
+                        'description': 'Server monitoring and diagnostics',
+                        'time': datetime.now().isoformat()
+                    }
+                ]
+
+                for idx, skeleton_activity in enumerate(skeleton_activities):
+                    # create_activity_item(client, action, status, timestamp=None, is_last=False)
+                    skeleton_item = create_activity_item(
+                        skeleton_activity.get('client', 'Client'),
+                        skeleton_activity.get('title', 'Activity'),
+                        skeleton_activity.get('status', 'Status'),
+                        skeleton_activity.get('time', datetime.now().isoformat()),
+                        is_last=(idx == len(skeleton_activities) - 1)
+                    )
+                    # FIX: Increased opacity from 0.4 to 0.75 for visibility in dark theme
+                    skeleton_item.opacity = 0.75
+                    activity_list_ref.current.controls.append(skeleton_item)
+
+                # Add "waiting for data" indicator
+                waiting_notice = ft.Container(
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=14, color=ft.Colors.with_opacity(0.5, ft.Colors.PRIMARY)),
                         ft.Text(
-                            "No Recent Activity",
-                            size=16,
-                            weight=ft.FontWeight.W_600,
-                            color=ft.Colors.ON_SURFACE,
-                            text_align=ft.TextAlign.CENTER
-                        ),
-                        ft.Text(
-                            "Activity will appear here as clients connect and perform operations",
-                            size=12,
-                            color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
-                            text_align=ft.TextAlign.CENTER
+                            "Waiting for server connection...",
+                            size=11,
+                            italic=True,
+                            color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE)
                         )
-                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
-                    padding=40,
-                    alignment=ft.alignment.center
+                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.Padding(0, 12, 0, 0)
                 )
-                activity_list_ref.current.controls.append(placeholder)
+                activity_list_ref.current.controls.append(waiting_notice)
 
             activity_list_ref.current.update()
 
@@ -371,7 +534,7 @@ def create_dashboard_view(
 
     async def background_refresh_loop():
         """Background task for automatic data refresh."""
-        refresh_interval = int(os.environ.get('DASHBOARD_REFRESH_INTERVAL', '5'))  # 5 seconds default
+        refresh_interval = int(os.environ.get('DASHBOARD_REFRESH_INTERVAL', '20'))  # 20 seconds default
 
         while not _disposed:
             try:
@@ -383,6 +546,25 @@ def create_dashboard_view(
             except Exception as e:
                 logger.error(f"Background refresh error: {e}")
                 await asyncio.sleep(refresh_interval * 2)  # Backoff on error
+
+    async def timestamp_update_loop():
+        """Background task for updating relative timestamp every second."""
+        while not _disposed:
+            try:
+                if _last_update_time and last_update_ref.current:
+                    relative_time = get_relative_time(_last_update_time)
+                    last_update_ref.current.value = f"Updated {relative_time}"
+                    # Use contextlib.suppress to ignore update errors (clearer intent)
+                    with contextlib.suppress(Exception):
+                        last_update_ref.current.update()
+
+                await asyncio.sleep(1)  # Update every second
+            except asyncio.CancelledError:
+                logger.info("Timestamp update loop cancelled")
+                break
+            except Exception as e:
+                logger.debug(f"Timestamp update error: {e}")
+                await asyncio.sleep(1)
 
     # === NAVIGATION HANDLERS (PHASE 4.1) ===
 
@@ -431,30 +613,38 @@ def create_dashboard_view(
             logger.error(f"Navigation to analytics failed: {nav_error}")
 
     # === UI COMPONENT BUILDERS ===
-    def create_enhanced_metric_card(title: str, value_ref: ft.Ref, icon: str, color: str, on_click=None, destination_hint: str = "") -> ft.Container:
-        """PHASE 4.1: Interactive Metric Card - Clickable with navigation and hover states."""
+    def create_enhanced_metric_card(title: str, value_ref: ft.Ref, icon: str, color: str, on_click=None, destination_hint: str = "", trend_data: Optional[list[int]] = None) -> ft.Container:
+        """PHASE 2: Enhanced Metric Card - Pronounced Neumorphic + Hover Animations + Sparkline (40-45% intensity)."""
 
-        # Track hover state for visual feedback
+        # Generate simple trend data if not provided (mock 24-hour pattern)
+        if trend_data is None:
+            import random
+            trend_data = [random.randint(40, 100) for _ in range(24)]
+
+        # Track hover state for visual feedback and animations
         is_hovered = False
 
         def on_hover_change(e):
             nonlocal is_hovered
             is_hovered = e.data == "true"
-            # Update card appearance on hover if clickable
+            # PHASE 2: Enhanced hover with micro-animations
             if on_click:
-                container.bgcolor = ft.Colors.with_opacity(0.08, color) if is_hovered else ft.Colors.SURFACE
+                # FIX: Reduced opacity from 0.08 to 0.03 to prevent white text showing through in dark mode
+                container.bgcolor = ft.Colors.with_opacity(0.03, color) if is_hovered else ft.Colors.SURFACE
+                # Micro-scale animation (1.0 → 1.005) - reduced intensity
+                container.scale = 1.005 if is_hovered else 1.0
                 container.update()
 
-        # Material Design 3 interactive container
+        # PHASE 2: Pronounced neumorphic container with gradient backing
         container = ft.Container(
             content=ft.Column([
-                # MD3 Header with proper icon-text relationship
+                # Header with icon and title
                 ft.Row([
                     ft.Container(
                         content=ft.Icon(icon, color=color, size=20),
                         width=40, height=40,
                         bgcolor=ft.Colors.with_opacity(0.12, color),
-                        border_radius=20,  # Circular icon container
+                        border_radius=20,
                         alignment=ft.alignment.center
                     ),
                     ft.Text(
@@ -465,19 +655,37 @@ def create_dashboard_view(
                     )
                 ], spacing=12, alignment=ft.MainAxisAlignment.START),
 
-                # MD3 Primary value with proper typography scale
-                ft.Container(
-                    content=ft.Text(
-                        "Loading...",
-                        ref=value_ref,
-                        size=32,  # Display Large from MD3 type scale
-                        weight=ft.FontWeight.W_600,
-                        color=ft.Colors.ON_SURFACE
+                # Value and sparkline combined display
+                ft.Row([
+                    # Primary value display
+                    ft.Container(
+                        content=ft.Text(
+                            "Loading...",
+                            ref=value_ref,
+                            size=32,
+                            weight=ft.FontWeight.W_600,
+                            color=ft.Colors.ON_SURFACE
+                        ),
+                        expand=True
                     ),
-                    padding=ft.Padding(0, 8, 0, 0)
-                ),
+                    # ENHANCEMENT: Mini sparkline chart (24-hour trend) - Enhanced visibility
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Container(
+                                width=3,  # Increased from 2px for better visibility
+                                height=max(10, int(value * 0.35)),  # Increased min height and scaling
+                                bgcolor=ft.Colors.with_opacity(0.5 if i < len(trend_data) - 3 else 0.85, color),  # Increased opacity
+                                border_radius=1.5,
+                                alignment=ft.alignment.bottom_center
+                            ) for i, value in enumerate(trend_data[-12:])  # Show last 12 hours
+                        ], spacing=2, alignment=ft.MainAxisAlignment.END),
+                        width=80,
+                        height=30,
+                        alignment=ft.alignment.bottom_right
+                    )
+                ], spacing=8, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                # MD3 Progress indicator with refined styling
+                # Progress indicator with refined styling
                 ft.Container(
                     content=ft.ProgressBar(
                         value=0,
@@ -489,7 +697,7 @@ def create_dashboard_view(
                     margin=ft.Margin(0, 8, 0, 0)
                 ),
 
-                # PHASE 4.1: Navigation hint for clickable cards
+                # Navigation hint for clickable cards
                 ft.Container(
                     content=ft.Row([
                         ft.Text(
@@ -504,30 +712,28 @@ def create_dashboard_view(
                             color=ft.Colors.with_opacity(0.7, color)
                         ) if on_click else ft.Container()
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    visible=bool(on_click),  # Only show if clickable
+                    visible=bool(on_click),
                     margin=ft.Margin(0, 4, 0, 0)
                 )
 
             ], spacing=8, alignment=ft.MainAxisAlignment.START),
 
-            # MD3 Surface styling with elevation
-            padding=24,  # MD3 spacing standard
-            border_radius=16,  # MD3 large component radius
-            bgcolor=ft.Colors.SURFACE,  # Conservative MD3-style surface
+            # PHASE 2: PRONOUNCED NEUMORPHIC STYLING (40-45% intensity)
+            padding=24,
+            border_radius=16,
+            bgcolor=ft.Colors.SURFACE,
             border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
-            width=240,  # Optimized for desktop
+            width=240,
             height=180,
 
-            # MD3 interaction states with Phase 4.1 enhancements
-            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=4,
-                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-                offset=ft.Offset(0, 2)
-            ),
+            # PHASE 2: Import theme's pre-computed shadows (zero-allocation performance)
+            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
 
-            # PHASE 4.1: Interactive behaviors
+            # PHASE 2: GPU-accelerated micro-animations
+            animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+            animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC),
+
+            # Interactive behaviors preserved
             on_click=on_click or None,
             on_hover=on_hover_change if on_click else None,
             tooltip=f"Click to navigate to {destination_hint}" if on_click and destination_hint else None
@@ -536,7 +742,7 @@ def create_dashboard_view(
         return container
 
     def create_progress_indicator_card(title: str, progress_ref: ft.Ref, color: str) -> ft.Container:
-        """PHASE 4.2: Premium Circular Gauge with Status Thresholds and Micro-animations."""
+        """PHASE 3: Enhanced Circular Gauge - Moderate Neumorphic + Glassmorphic Overlay (30% intensity)."""
 
         # Create additional refs for enhanced status display
         status_icon_ref = ft.Ref[ft.Icon]()
@@ -554,31 +760,90 @@ def create_dashboard_view(
             else:
                 return ft.Icons.CHECK_CIRCLE, ft.Colors.GREEN, "Optimal"
 
-        # Track hover state for premium interactions
+        def get_gradient_color(value: float) -> str:
+            """Get smooth gradient color based on value (green→yellow→orange→red)."""
+            if value < 50:
+                # Green zone: 0-50% (interpolate green shades)
+                return ft.Colors.GREEN_400
+            elif value < 75:
+                # Yellow zone: 50-75% (green→yellow transition)
+                progress = (value - 50) / 25  # 0.0 to 1.0
+                # Simple lerp between green and amber
+                return ft.Colors.LIGHT_GREEN_400 if progress < 0.5 else ft.Colors.AMBER_400
+            elif value < 90:
+                # Orange zone: 75-90% (yellow→orange transition)
+                return ft.Colors.ORANGE_400
+            else:
+                # Red zone: 90-100% (critical)
+                return ft.Colors.RED_400
+
+        # Track hover state for glassmorphic intensity shifts
         is_hovered = False
 
         def on_hover_change(e):
             nonlocal is_hovered
             is_hovered = e.data == "true"
-            # Subtle scale and shadow enhancement on hover
-            container.scale = 1.02 if is_hovered else 1.0
-            if is_hovered:
-                container.shadow = ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=12,
-                    color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-                    offset=ft.Offset(0, 6)
-                )
-            else:
-                container.shadow = ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=6,
-                    color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-                    offset=ft.Offset(0, 2)
-                )
+            # PHASE 3: Scale animation + intensified glassmorphic effect on hover - reduced intensity
+            container.scale = 1.005 if is_hovered else 1.0
             container.update()
 
-        # PHASE 4.2: Premium circular gauge container
+        # PHASE 3: Glassmorphic gauge area with frosted glass effect + gradient colors
+        gauge_area = ft.Container(
+            content=ft.Stack([
+                # Background arc (light gray)
+                ft.ProgressRing(
+                    value=1.0,
+                    color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE),
+                    stroke_width=10,
+                    width=90,
+                    height=90
+                ),
+                # Active progress ring with GRADIENT color (dynamically updated)
+                ft.ProgressRing(
+                    ref=progress_ref,
+                    value=0.0,
+                    color=get_gradient_color(0.0),  # Initial color, will update dynamically
+                    stroke_width=10,
+                    stroke_cap=ft.StrokeCap.ROUND,
+                    width=90,
+                    height=90,
+                    animate_rotation=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT)
+                ),
+                # Center content with value and label
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(
+                            "0%",
+                            ref=percentage_ref,
+                            size=20,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.ON_SURFACE,
+                            text_align=ft.TextAlign.CENTER
+                        ),
+                        ft.Text(
+                            "Load",
+                            size=11,
+                            color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                            text_align=ft.TextAlign.CENTER
+                        )
+                    ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                    width=90,
+                    height=90,
+                    alignment=ft.alignment.center
+                )
+            ], width=90, height=90),
+            # PHASE 3: GLASSMORPHIC OVERLAY (20-30% intensity)
+            # DISABLED: blur causing rendering issues in Flet 0.28.3
+            # blur=ft.Blur(sigma_x=GLASS_MODERATE["blur"], sigma_y=GLASS_MODERATE["blur"]),
+            bgcolor=ft.Colors.with_opacity(GLASS_MODERATE["bg_opacity"], ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(GLASS_MODERATE["border_opacity"], ft.Colors.OUTLINE)),
+            border_radius=12,
+            padding=ft.padding.all(8),
+            alignment=ft.alignment.center,
+            margin=ft.Margin(0, 12, 0, 8)
+        )
+
+        # PHASE 3: Outer container with MODERATE NEUMORPHIC shadows (30% intensity)
         container = ft.Container(
             content=ft.Column([
                 # Enhanced header with status indicator
@@ -609,56 +874,10 @@ def create_dashboard_view(
                     )
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                # PHASE 4.2: Sophisticated circular gauge design
-                ft.Container(
-                    content=ft.Stack([
-                        # Background arc
-                        ft.ProgressRing(
-                            value=1.0,
-                            color=ft.Colors.with_opacity(0.08, color),
-                            stroke_width=10,
-                            width=90,
-                            height=90
-                        ),
-                        # Active progress ring with rounded caps
-                        ft.ProgressRing(
-                            ref=progress_ref,
-                            value=0.0,
-                            color=color,
-                            stroke_width=10,
-                            stroke_cap=ft.StrokeCap.ROUND,
-                            width=90,
-                            height=90,
-                            animate_rotation=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT)
-                        ),
-                        # Center content with value and label
-                        ft.Container(
-                            content=ft.Column([
-                                ft.Text(
-                                    "0%",
-                                    ref=percentage_ref,
-                                    size=20,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=ft.Colors.ON_SURFACE,
-                                    text_align=ft.TextAlign.CENTER
-                                ),
-                                ft.Text(
-                                    "Load",
-                                    size=11,
-                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
-                                    text_align=ft.TextAlign.CENTER
-                                )
-                            ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
-                            width=90,
-                            height=90,
-                            alignment=ft.alignment.center
-                        )
-                    ], width=90, height=90),
-                    alignment=ft.alignment.center,
-                    margin=ft.Margin(0, 12, 0, 8)
-                ),
+                # PHASE 3: Glassmorphic gauge area
+                gauge_area,
 
-                # PHASE 4.2: Enhanced footer with trend indicator
+                # Enhanced footer with trend indicator
                 ft.Row([
                     ft.Text(
                         "Real-time",
@@ -683,34 +902,34 @@ def create_dashboard_view(
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
             ], spacing=8, alignment=ft.MainAxisAlignment.START),
 
-            # PHASE 4.2: Premium container with enhanced styling and interactions
+            # PHASE 3: MODERATE NEUMORPHIC CONTAINER (30% intensity)
             padding=18,
-            border_radius=16,  # Larger radius for premium feel
+            border_radius=16,
             bgcolor=ft.Colors.SURFACE,
             border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
             width=200,
-            height=170,  # Taller for circular gauge
+            height=170,
+
+            # PHASE 3: Pre-computed moderate shadows for performance
+            shadow=MODERATE_NEUMORPHIC_SHADOWS,
+
+            # GPU-accelerated animations
             animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
             animate_scale=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-            on_hover=on_hover_change,
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=6,
-                color=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-                offset=ft.Offset(0, 2)
-            )
+            on_hover=on_hover_change
         )
 
-        # Attach additional refs for external updates
+        # Attach additional refs and helper functions for external updates
         container.status_icon_ref = status_icon_ref
         container.status_text_ref = status_text_ref
         container.percentage_ref = percentage_ref
         container.get_threshold_status = get_threshold_status
+        container.get_gradient_color = get_gradient_color  # ENHANCEMENT: For gradient color updates
 
         return container
 
-    def create_activity_item(client: str, action: str, status: str, timestamp: Optional[str] = None, is_last: bool = False) -> ft.Container:
-        """PHASE 4.2: Premium Activity Timeline Item - Enhanced with connecting lines and micro-animations."""
+    def create_activity_item(client: str, action: str, status: str, timestamp: Optional[str] = None, *, is_last: bool = False) -> ft.Container:
+        """PHASE 4: Enhanced Activity Timeline - Subtle Glassmorphic + Frosted Background."""
 
         # Enhanced status configuration with icons and descriptions
         status_config = {
@@ -759,17 +978,17 @@ def create_dashboard_view(
             date_str = now.strftime('%m/%d')
             relative_time = "Just now"
 
-        # Track hover state for interactions
+        # Track hover state for glassmorphic intensity shifts
         is_hovered = False
 
         def on_hover_change(e):
             nonlocal is_hovered
             is_hovered = e.data == "true"
-            # Subtle highlight on hover
-            container.bgcolor = ft.Colors.with_opacity(0.04, config['color']) if is_hovered else ft.Colors.TRANSPARENT
-            container.update()
+            # FIX: Removed hover effect to prevent glitching/blinking
+            # Hover animations were causing re-render flicker in activity stream
+            # Subtle visual feedback is already provided by border opacity change via animate parameter
 
-        # PHASE 4.2: Professional timeline item design
+        # PHASE 4: Glassmorphic timeline item with frosted background
         container = ft.Container(
             content=ft.Row([
                 # Timeline indicator column
@@ -806,78 +1025,81 @@ def create_dashboard_view(
                 ),
 
                 # Content area with enhanced information hierarchy
-                ft.Expanded(
-                    child=ft.Column([
-                        # Primary content row
-                        ft.Row([
-                            ft.Column([
-                                # Client name with emphasis
-                                ft.Text(
-                                    client,
-                                    size=15,
-                                    weight=ft.FontWeight.W_600,
-                                    color=ft.Colors.ON_SURFACE
-                                ),
-                                # Action description
-                                ft.Text(
-                                    action,
-                                    size=13,
-                                    color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
-                                    max_lines=2,
-                                    overflow=ft.TextOverflow.ELLIPSIS
-                                )
-                            ], spacing=2, expand=True),
+                # FIX: Flet 0.28.3 doesn't have ft.Expanded - use Column with expand=True
+                ft.Column([
+                    # Primary content row
+                    ft.Row([
+                        ft.Column([
+                            # Client name with emphasis
+                            ft.Text(
+                                client,
+                                size=15,
+                                weight=ft.FontWeight.W_600,
+                                color=ft.Colors.ON_SURFACE
+                            ),
+                            # Action description
+                            ft.Text(
+                                action,
+                                size=13,
+                                color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
+                                max_lines=2,
+                                overflow=ft.TextOverflow.ELLIPSIS
+                            )
+                        ], spacing=2, expand=True),
 
-                            # Time and status information
-                            ft.Column([
-                                ft.Text(
-                                    time_str,
-                                    size=12,
-                                    weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.ON_SURFACE,
-                                    text_align=ft.TextAlign.RIGHT
-                                ),
-                                ft.Text(
-                                    relative_time,
-                                    size=10,
-                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
-                                    text_align=ft.TextAlign.RIGHT
-                                )
-                            ], spacing=1, alignment=ft.CrossAxisAlignment.END)
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        # Time and status information
+                        ft.Column([
+                            ft.Text(
+                                time_str,
+                                size=12,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.ON_SURFACE,
+                                text_align=ft.TextAlign.RIGHT
+                            ),
+                            ft.Text(
+                                relative_time,
+                                size=10,
+                                color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                                text_align=ft.TextAlign.RIGHT
+                            )
+                        ], spacing=1, alignment=ft.CrossAxisAlignment.END)
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-                        # Status badge with enhanced design
-                        ft.Container(
-                            content=ft.Row([
-                                ft.Container(
-                                    width=4,
-                                    height=4,
-                                    bgcolor=config['color'],
-                                    border_radius=2
-                                ),
-                                ft.Text(
-                                    status,
-                                    size=11,
-                                    weight=ft.FontWeight.W_500,
-                                    color=config['color']
-                                ),
-                                ft.Text(
-                                    f"• {config['description']}",
-                                    size=10,
-                                    color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
-                                    italic=True
-                                )
-                            ], spacing=6),
-                            margin=ft.Margin(0, 4, 0, 0)
-                        )
-                    ], spacing=4, alignment=ft.CrossAxisAlignment.START)
-                )
+                    # Status badge with enhanced design
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Container(
+                                width=4,
+                                height=4,
+                                bgcolor=config['color'],
+                                border_radius=2
+                            ),
+                            ft.Text(
+                                status,
+                                size=11,
+                                weight=ft.FontWeight.W_500,
+                                color=config['color']
+                            ),
+                            ft.Text(
+                                f"• {config['description']}",
+                                size=10,
+                                color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
+                                italic=True
+                            )
+                        ], spacing=6),
+                        margin=ft.Margin(0, 4, 0, 0)
+                    )
+                ], spacing=4, alignment=ft.CrossAxisAlignment.START, expand=True)
             ], spacing=0),
 
-            # PHASE 4.2: Enhanced container with hover interactions
+            # PHASE 4: SUBTLE GLASSMORPHIC CONTAINER with frosted background
             padding=ft.Padding(12, 8, 12, 8),
             border_radius=8,
-            bgcolor=ft.Colors.TRANSPARENT,
+            # PHASE 4: Glassmorphic styling (20% intensity)
+            bgcolor=ft.Colors.with_opacity(GLASS_SUBTLE["bg_opacity"], ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(GLASS_SUBTLE["border_opacity"], ft.Colors.OUTLINE)),
+            # DISABLED: blur causing rendering issues in Flet 0.28.3
+            # blur=ft.Blur(sigma_x=GLASS_SUBTLE["blur"], sigma_y=GLASS_SUBTLE["blur"]),
             on_hover=on_hover_change,
             animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
             margin=ft.Margin(0, 0, 0, 4)
@@ -887,49 +1109,128 @@ def create_dashboard_view(
 
     # === UI LAYOUT CONSTRUCTION ===
 
-    # Enhanced header with status indicators
+    # PHASE 5: Enhanced header with subtle glassmorphic container
     header = ft.Container(
-        content=ft.Row([
-            ft.Row([
-                ft.Text(
-                    "SERVER DASHBOARD",
-                    size=28,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.PRIMARY
-                ),
-                ft.Icon(
-                    ft.Icons.CLOUD_OFF,
-                    ref=status_indicator_ref,
-                    color=ft.Colors.RED,
-                    size=20
-                ),
-            ], spacing=12),
-            ft.Row([
-                ft.Container(
-                    content=ft.ProgressRing(width=16, height=16, stroke_width=2),
-                    ref=loading_indicator_ref,
-                    visible=False
-                ),
-                ft.Text(
-                    "Connecting...",
-                    ref=last_update_ref,
-                    size=12,
-                    color=ft.Colors.ON_SURFACE
-                ),
-                ft.IconButton(
-                    ft.Icons.REFRESH,
-                    ref=refresh_button_ref,
-                    on_click=lambda _: page.run_task(refresh_dashboard_data),
-                    tooltip="Refresh dashboard data"
-                )
-            ], spacing=8)
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        padding=20,
-        border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.PRIMARY_CONTAINER))
+        content=ft.Container(
+            content=ft.Row([
+                ft.Row([
+                    ft.Text(
+                        "SERVER DASHBOARD",
+                        size=28,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.PRIMARY
+                    ),
+                    # ENHANCED: Dual status indicators (GUI + Server)
+                    ft.Row([
+                        # GUI Status (always operational when visible)
+                        ft.Container(
+                            ref=gui_status_ref,
+                            content=ft.Row([
+                                ft.Container(
+                                    width=8,
+                                    height=8,
+                                    border_radius=4,
+                                    bgcolor=ft.Colors.GREEN_400,  # GUI operational
+                                ),
+                                ft.Text("GUI", size=11, weight=ft.FontWeight.W_500, color=ft.Colors.GREEN_400)
+                            ], spacing=4, tight=True),
+                            padding=ft.Padding(6, 4, 6, 4),
+                            border_radius=8,
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),
+                            tooltip="GUI is operational"
+                        ),
+                        # Server Status (start green - will be updated dynamically if connection fails)
+                        ft.Container(
+                            ref=server_status_ref,
+                            content=ft.Row([
+                                ft.Container(
+                                    width=8,
+                                    height=8,
+                                    border_radius=4,
+                                    bgcolor=ft.Colors.GREEN_400,  # Start green, updated by update_status_indicator()
+                                ),
+                                ft.Text(
+                                    "Server",
+                                    size=11,
+                                    weight=ft.FontWeight.W_500,
+                                    color=ft.Colors.GREEN_400  # Start green, updated by update_status_indicator()
+                                )
+                            ], spacing=4, tight=True),
+                            padding=ft.Padding(6, 4, 6, 4),
+                            border_radius=8,
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.GREEN_400),  # Start green
+                            tooltip="Server operational (demo mode with mock data)"
+                        ),
+                    ], spacing=6),
+                ], spacing=12),
+                ft.Row([
+                    ft.Container(
+                        content=ft.ProgressRing(width=16, height=16, stroke_width=2),
+                        ref=loading_indicator_ref,
+                        visible=False
+                    ),
+                    ft.Text(
+                        "Never updated",
+                        ref=last_update_ref,
+                        size=12,
+                        color=ft.Colors.ON_SURFACE
+                    ),
+                    ft.IconButton(
+                        ft.Icons.REFRESH,
+                        ref=refresh_button_ref,
+                        on_click=lambda _: page.run_task(refresh_dashboard_data),
+                        tooltip="Refresh dashboard data (Ctrl+R)"
+                    ),
+                    # ENHANCEMENT: Neumorphic Theme Switcher (moved to right of refresh button)
+                    ft.Container(
+                        ref=theme_toggle_ref,
+                        content=ft.Row([
+                            ft.Container(
+                                content=ft.Icon(
+                                    ft.Icons.BRIGHTNESS_AUTO if page.theme_mode == ft.ThemeMode.SYSTEM
+                                    else ft.Icons.DARK_MODE if page.theme_mode == ft.ThemeMode.DARK
+                                    else ft.Icons.LIGHT_MODE,
+                                    size=16,
+                                    color=ft.Colors.PRIMARY
+                                ),
+                                padding=4,
+                            ),
+                            ft.Text(
+                                "Auto" if page.theme_mode == ft.ThemeMode.SYSTEM
+                                else "Dark" if page.theme_mode == ft.ThemeMode.DARK
+                                else "Light",
+                                size=11,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.PRIMARY
+                            )
+                        ], spacing=4, tight=True),
+                        padding=ft.Padding(8, 6, 8, 6),
+                        border_radius=10,
+                        bgcolor=ft.Colors.SURFACE,
+                        shadow=SUBTLE_NEUMORPHIC_SHADOWS,
+                        tooltip="System theme active" if page.theme_mode == ft.ThemeMode.SYSTEM
+                        else "Dark mode active" if page.theme_mode == ft.ThemeMode.DARK
+                        else "Light mode active",
+                        on_click=lambda _: toggle_theme_mode(),
+                        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+                        ink=True
+                    )
+                ], spacing=8)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            # PHASE 5: SUBTLE GLASSMORPHIC header styling
+            padding=20,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(GLASS_SUBTLE["bg_opacity"], ft.Colors.SURFACE),
+            border=ft.border.all(1, ft.Colors.with_opacity(GLASS_SUBTLE["border_opacity"], ft.Colors.OUTLINE)),
+            # DISABLED: blur causing rendering issues in Flet 0.28.3
+            # blur=ft.Blur(sigma_x=GLASS_SUBTLE["blur"], sigma_y=GLASS_SUBTLE["blur"])
+        ),
+        margin=ft.Margin(0, 0, 0, 16)
     )
 
     # PHASE 4.1: Interactive Desktop-Optimized Metrics Layout with Navigation
     # Using golden ratio (1.618) and desktop-first approach + clickable cards
+    # FIX: Use consistent spacing with run_spacing instead of container padding for better ResponsiveRow compatibility
     metrics_row = ft.ResponsiveRow([
         ft.Container(
             create_enhanced_metric_card(
@@ -940,8 +1241,7 @@ def create_dashboard_view(
                 on_click=navigate_to_clients,
                 destination_hint="clients page"
             ),
-            col={"lg": 3, "md": 6, "sm": 12},  # Desktop-first: 4 columns on large screens
-            padding=ft.Padding(0, 0, 16, 0)  # Golden ratio spacing: 16px gaps
+            col={"lg": 3, "md": 6, "sm": 12}  # Desktop-first: 4 columns on large screens
         ),
         ft.Container(
             create_enhanced_metric_card(
@@ -952,8 +1252,7 @@ def create_dashboard_view(
                 on_click=navigate_to_files,
                 destination_hint="files page"
             ),
-            col={"lg": 3, "md": 6, "sm": 12},
-            padding=ft.Padding(0, 0, 16, 0)
+            col={"lg": 3, "md": 6, "sm": 12}
         ),
         ft.Container(
             create_enhanced_metric_card(
@@ -964,8 +1263,7 @@ def create_dashboard_view(
                 on_click=navigate_to_database,
                 destination_hint="database page"
             ),
-            col={"lg": 3, "md": 6, "sm": 12},
-            padding=ft.Padding(0, 0, 16, 0)
+            col={"lg": 3, "md": 6, "sm": 12}
         ),
         ft.Container(
             create_enhanced_metric_card(
@@ -976,10 +1274,9 @@ def create_dashboard_view(
                 on_click=navigate_to_analytics,
                 destination_hint="analytics page"
             ),
-            col={"lg": 3, "md": 6, "sm": 12},
-            padding=ft.Padding(0, 0, 0, 0)  # No right padding on last item
+            col={"lg": 3, "md": 6, "sm": 12}
         ),
-    ], spacing=0)  # Use container padding instead of run_spacing for precise control
+    ], run_spacing=16, spacing=16)  # FIX: Use ResponsiveRow spacing parameters for proper gaps
 
     # PHASE 4.2: Enhanced Performance Layout with Container References
     # Store container references for status updates
@@ -1015,51 +1312,62 @@ def create_dashboard_view(
 
     activity_container = ft.Container(
         content=ft.Column([
-            ft.Text("Recent Activity", size=18, weight=ft.FontWeight.BOLD),
+            ft.Container(
+                ft.Text("Recent Activity", size=22, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                padding=ft.Padding(4, 0, 0, 12)  # Consistent with other section titles
+            ),
             activity_list
-        ], spacing=10),
+        ], spacing=0),
         padding=20,
         border_radius=12,
         bgcolor=ft.Colors.SURFACE
     )
 
-    # PHASE 2: Premium Desktop Container with Golden Ratio Vertical Hierarchy
-    dashboard_container = ft.Column([
-        header,
+    # PHASE 2: Premium Desktop Container with Professional Spacing & Layout
+    # FIX: Flet 0.28.3 Column doesn't support padding parameter - wrap in Container
+    # NOTE: ft.Column doesn't accept 'padding' kw in Flet 0.28.3 — keep layout in a Container
+    dashboard_content = ft.Column([
+            header,
 
-        # Golden ratio spacing: 26px (16 * 1.618) for major sections
-        ft.Container(height=26),
+            # Compact spacing after header: 20px
+            ft.Container(height=20),
 
-        # System Metrics Section with enhanced typography hierarchy
-        ft.Container(
-            ft.Text("System Metrics", size=24, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-            padding=ft.Padding(0, 0, 0, 16)  # 16px bottom spacing
-        ),
-        metrics_row,
+            # System Metrics Section with enhanced typography hierarchy
+            ft.Container(
+                ft.Text("System Metrics", size=22, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                padding=ft.Padding(4, 0, 0, 12)  # Aligned with content, compact bottom spacing
+            ),
+            metrics_row,
 
-        # Golden ratio spacing between major sections
-        ft.Container(height=26),
+            # Moderate spacing between sections: 24px
+            ft.Container(height=24),
 
-        # Performance Section
-        ft.Container(
-            ft.Text("Performance Monitoring", size=24, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-            padding=ft.Padding(0, 0, 0, 16)
-        ),
-        performance_row,
+            # Performance Section
+            ft.Container(
+                ft.Text("Performance Monitoring", size=22, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                padding=ft.Padding(4, 0, 0, 12)  # Consistent with metrics section
+            ),
+            performance_row,
 
-        # Golden ratio spacing
-        ft.Container(height=26),
+            # Moderate spacing: 24px
+            ft.Container(height=24),
 
-        # Activity Section with enhanced styling
-        activity_container
+            # Activity Section with enhanced styling
+            activity_container
 
-    ], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)  # Use explicit spacing instead of automatic
+        ], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+
+    dashboard_container = ft.Container(
+        content=dashboard_content,
+        padding=ft.Padding(24, 20, 20, 20),  # FIX: Increased left padding from 20 to 24 to prevent clipping by navigation rail
+        expand=True
+    )
 
     # === LIFECYCLE METHODS ===
 
     def setup_subscriptions():
         """Initialize dashboard with background polling."""
-        nonlocal _background_task
+        nonlocal _background_task, _timestamp_update_task
 
         logger.info("Dashboard setup_subscriptions called")
         logger.info(f"Server bridge available: {server_bridge is not None}")
@@ -1070,7 +1378,8 @@ def create_dashboard_view(
             logger.info("Setting up dashboard with proper Flet async patterns")
 
             # Set initial loading values
-            update_status_indicator(False)  # Show disconnected initially
+            # NOTE: Don't call update_status_indicator(False) here - initial state is green
+            # It will be updated by refresh_dashboard_data() based on actual connection status
             if last_update_ref.current:
                 last_update_ref.current.value = "Loading..."
                 last_update_ref.current.update()
@@ -1081,7 +1390,7 @@ def create_dashboard_view(
             # Start background refresh with proper async pattern
             async def safe_background_refresh():
                 """Background refresh with error handling and proper async patterns."""
-                refresh_interval = 5  # 5 seconds
+                refresh_interval = 20  # 20 seconds
                 while not _disposed:
                     try:
                         await asyncio.sleep(refresh_interval)
@@ -1094,9 +1403,10 @@ def create_dashboard_view(
                         logger.error(f"Background refresh error: {e}")
                         await asyncio.sleep(refresh_interval * 2)  # Backoff on error
 
-            # Start background task using Flet's recommended approach
+            # Start background tasks using Flet's recommended approach
             _background_task = page.run_task(safe_background_refresh)
-            logger.info("Dashboard async tasks started using page.run_task()")
+            _timestamp_update_task = page.run_task(timestamp_update_loop)
+            logger.info("Dashboard async tasks started using page.run_task() (data refresh + timestamp update)")
 
             # State manager integration
             if state_manager:
@@ -1117,14 +1427,18 @@ def create_dashboard_view(
 
     def dispose():
         """Cleanup dashboard resources."""
-        nonlocal _disposed, _background_task
+        nonlocal _disposed, _background_task, _timestamp_update_task
 
         _disposed = True
 
-        # Cancel background task
+        # Cancel background tasks
         if _background_task and not _background_task.done():
             _background_task.cancel()
             logger.info("Background refresh task cancelled")
+
+        if _timestamp_update_task and not _timestamp_update_task.done():
+            _timestamp_update_task.cancel()
+            logger.info("Timestamp update task cancelled")
 
         # Unsubscribe from state manager
         if state_manager:

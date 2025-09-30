@@ -586,7 +586,7 @@ class FletV2App(ft.Row):
                         await asyncio.sleep(0.1)
                         if not self._dashboard_loading and not self._dashboard_loaded:
                             self._dashboard_loading = True
-                            self._load_view("dashboard", force_reload=False)
+                            self._perform_view_loading("dashboard")
                             self._dashboard_loaded = True
                             print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
                     except Exception as immediate_err:
@@ -636,15 +636,29 @@ class FletV2App(ft.Row):
             logger.debug(f"Failed to set animation for {view_name}: {e}")
 
     def navigate_to(self, view_name: str) -> None:
-        """Navigate to a specific view."""
+        """Navigate to a specific view and sync navigation rail."""
         try:
-            self._load_view(view_name, force_reload=False)
+            # Update navigation rail selected index
+            view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]
+            if view_name in view_names:
+                new_index = view_names.index(view_name)
+                if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
+                    self._nav_rail_control.selected_index = new_index
+                    try:
+                        self._nav_rail_control.update()
+                    except Exception:
+                        pass  # Ignore update errors if control not attached yet
+
+            # Load the view
+            self._perform_view_loading(view_name)
             logger.info(f"Navigated to {view_name}")
         except Exception as e:
             logger.error(f"Navigation to {view_name} failed: {e}")
 
     def _create_navigation_rail(self) -> ft.Container:
-        """Create the navigation rail with modern Material Design 3 styling."""
+        """Create collapsible navigation rail with premium neumorphic design (40-45% intensity)."""
+        from theme import PRONOUNCED_NEUMORPHIC_SHADOWS, GLASS_MODERATE
+
         def on_nav_change(e: ft.ControlEvent) -> None:
             try:
                 selected_index = e.control.selected_index
@@ -655,59 +669,160 @@ class FletV2App(ft.Row):
             except Exception as nav_error:
                 logger.error(f"Navigation error: {nav_error}")
 
+        def toggle_rail(e):
+            """Toggle navigation rail collapse state with smooth animation."""
+            try:
+                self.nav_rail_extended = not self.nav_rail_extended
+                rail.extended = self.nav_rail_extended
+
+                # Update toggle button icon (access nested IconButton inside container)
+                toggle_button_inner = toggle_button_container.content
+                toggle_button_inner.icon = ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU
+                toggle_button_inner.tooltip = "Collapse sidebar" if self.nav_rail_extended else "Expand sidebar"
+
+                # Animate container width change
+                nav_container.width = 200 if self.nav_rail_extended else 100
+
+                # Update everything
+                nav_container.update()
+                toggle_button_container.update()
+                rail.update()
+
+                state_text = 'expanded' if self.nav_rail_extended else 'collapsed'
+                logger.info(f"Navigation rail {state_text}")
+            except Exception as toggle_error:
+                logger.error(f"Toggle rail error: {toggle_error}")
+
+        # REDESIGNED: Slim, modern navigation rail with clean visual hierarchy
         rail = ft.NavigationRail(
             selected_index=0,
             label_type=ft.NavigationRailLabelType.ALL,
-            min_width=100,
-            min_extended_width=200,
-            group_alignment=-0.9,
+            # MODERNIZED: Sleeker widths for contemporary look
+            min_width=70,
+            min_extended_width=160,
+            group_alignment=-0.9,  # Tighter alignment for better use of space
             destinations=[
                 ft.NavigationRailDestination(
                     icon=ft.Icons.DASHBOARD_OUTLINED,
                     selected_icon=ft.Icons.DASHBOARD,
-                    label="Dashboard"
+                    label="Dashboard",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.PEOPLE_OUTLINED,
                     selected_icon=ft.Icons.PEOPLE,
-                    label="Clients"
+                    label="Clients",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.FOLDER_OUTLINED,
                     selected_icon=ft.Icons.FOLDER,
-                    label="Files"
+                    label="Files",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.STORAGE_OUTLINED,
                     selected_icon=ft.Icons.STORAGE,
-                    label="Database"
+                    label="Database",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.ANALYTICS_OUTLINED,
                     selected_icon=ft.Icons.ANALYTICS,
-                    label="Analytics"
+                    label="Analytics",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.LIST_ALT_OUTLINED,
                     selected_icon=ft.Icons.LIST_ALT,
-                    label="Logs"
+                    label="Logs",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
-                    label="Settings"
+                    label="Settings",
+                    padding=ft.Padding(8, 8, 8, 8)
                 ),
             ],
             on_change=on_nav_change,
             extended=self.nav_rail_extended,
+            # ENHANCED: Premium neumorphic styling (40-45% intensity)
+            bgcolor=ft.Colors.SURFACE,
+            # Pronounced selection indicator with inset neumorphic effect
+            indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),  # Increased from 0.12
+            indicator_shape=ft.RoundedRectangleBorder(radius=14),  # Increased from 12
+            selected_label_text_style=ft.TextStyle(
+                size=13,
+                weight=ft.FontWeight.W_700,  # Increased from W_600
+                color=ft.Colors.PRIMARY,
+                letter_spacing=0.3  # Increased from 0.2
+            ),
+            unselected_label_text_style=ft.TextStyle(
+                size=12,
+                weight=ft.FontWeight.W_500,  # Increased from W_400
+                color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),  # Reduced from 0.65
+                letter_spacing=0.15  # Increased from 0.1
+            ),
         )
 
-        return ft.Container(
-            content=rail,
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-            border_radius=ft.BorderRadius(0, 16, 16, 0),
-            padding=ft.Padding(8, 12, 8, 12),
+        # Store rail control reference for programmatic navigation
+        self._nav_rail_control = rail
+
+        # MODERNIZED: Slim toggle button with subtle styling
+        toggle_button_container = ft.Container(
+            content=ft.IconButton(
+                icon=ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU,
+                icon_size=20,
+                icon_color=ft.Colors.PRIMARY,
+                tooltip="Collapse sidebar" if self.nav_rail_extended else "Expand sidebar",
+                on_click=toggle_rail,
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=10),
+                    padding=ft.Padding(8, 8, 8, 8),
+                    bgcolor=ft.Colors.SURFACE,  # Match container surface
+                )
+            ),
+            bgcolor=ft.Colors.SURFACE,
+            border_radius=12,
+            padding=2,
+            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))
         )
+
+        # MODERNIZED: Slim, contemporary navigation container
+        nav_container = ft.Container(
+            content=ft.Column([
+                # Toggle button at top - no wrapper padding to eliminate gray artifact
+                ft.Container(
+                    content=toggle_button_container,
+                    padding=ft.Padding(10, 8, 10, 8),  # Minimal symmetric padding
+                    alignment=ft.alignment.center,
+                    bgcolor=None  # Transparent - no background
+                ),
+                # Navigation rail (no divider for cleaner look)
+                ft.Container(
+                    content=rail,
+                    expand=True
+                )
+            ], spacing=0, expand=True),
+            width=200 if self.nav_rail_extended else 100,
+            # MODERNIZED: Subtle glassmorphic blend
+            bgcolor=ft.Colors.with_opacity(GLASS_MODERATE["bg_opacity"], ft.Colors.SURFACE),
+            border=ft.border.all(
+                width=1,  # Thin border for modern look
+                color=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)  # Subtle border
+            ),
+            border_radius=ft.BorderRadius(0, 16, 16, 0),  # Softer, smaller radius
+            padding=ft.Padding(0, 12, 0, 12),  # Reduced padding
+            # SUBTLE: Lighter shadows for modern, floating appearance
+            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
+            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT_CUBIC),  # Smooth collapse animation
+            # DISABLED: blur causing rendering issues in Flet 0.28.3
+            # blur=ft.Blur(sigma_x=10, sigma_y=10)
+        )
+
+        return nav_container
 
     def _on_page_connect(self, e: ft.ControlEvent) -> None:
         """Handle page connection event."""
@@ -774,7 +889,23 @@ class FletV2App(ft.Row):
             view_function = getattr(module, function_name)
             logger.info(f"✅ Successfully got view function: {function_name}")
 
-            content, dispose_func = self._create_enhanced_view(view_function, actual_view_name)
+            # Call the view function directly with required arguments
+            # Dashboard needs navigate_callback for hero card clicks
+            if view_name == "dashboard":
+                result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
+            else:
+                result = view_function(self.server_bridge, self.page, self.state_manager)
+            # Handle different return types: tuple (content, dispose, setup) or just content
+            if isinstance(result, tuple) and len(result) >= 2:
+                content = result[0]
+                dispose_func = result[1] if len(result) > 1 else lambda: None  # noqa: E731
+                setup_func = result[2] if len(result) > 2 else None
+                # Store setup function to be called AFTER content is added to page
+                self._current_view_setup = setup_func
+            else:
+                content = result
+                dispose_func = lambda: None  # noqa: E731
+                self._current_view_setup = None
             logger.info(f"✅ Successfully created view content, type: {type(content)}")
         except Exception as e:
             logger.error(f"❌ Error during view creation for {view_name}: {e}")
@@ -834,6 +965,26 @@ class FletV2App(ft.Row):
         if content is None:
             return
 
+        # Call setup function asynchronously (AFTER content is rendered)
+        if hasattr(self, '_current_view_setup') and self._current_view_setup and callable(self._current_view_setup):
+            setup_func = self._current_view_setup
+            self._current_view_setup = None  # Clear immediately to prevent double-calling
+
+            async def delayed_setup():
+                """Delay setup until controls are fully attached to page tree."""
+                try:
+                    await asyncio.sleep(0.1)  # Let Flet complete rendering
+                    logger.info(f"Calling delayed setup function for {view_name}")
+                    setup_func()
+                except Exception as setup_err:
+                    logger.warning(f"Setup function failed for {view_name}: {setup_err}")
+
+            # Run setup asynchronously using page.run_task()
+            try:
+                self.page.run_task(delayed_setup)
+            except Exception as e:
+                logger.warning(f"Failed to schedule setup task for {view_name}: {e}")
+
         # Force visibility if dashboard content remains hidden
         if view_name == 'dashboard':
             try:
@@ -846,23 +997,29 @@ class FletV2App(ft.Row):
                 def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
                     if ctrl is None:
                         return
+
+                    # Prefer contextlib.suppress for concise suppressed-exception blocks
                     with contextlib.suppress(Exception):
                         if hasattr(ctrl, 'visible') and ctrl.visible is False:
                             ctrl.visible = True
+
                     with contextlib.suppress(Exception):
                         if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
                             ctrl.opacity = 1.0
+
                     with contextlib.suppress(Exception):
                         if hasattr(ctrl, 'update'):
                             try:
                                 ctrl.update()
                             except Exception:
+                                # Keep inner safety for update() call failures
                                 pass
 
                     if depth >= max_depth:
                         return
 
-                    try:
+                    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
+                    with contextlib.suppress(Exception):
                         if hasattr(ctrl, 'controls') and ctrl.controls:
                             for child in list(ctrl.controls):
                                 _force_visible_recursive(child, depth + 1, max_depth)
@@ -873,20 +1030,17 @@ class FletV2App(ft.Row):
                         if hasattr(ctrl, 'rows') and ctrl.rows:
                             for child in list(ctrl.rows):
                                 _force_visible_recursive(child, depth + 1, max_depth)
+
                         if hasattr(ctrl, 'columns') and ctrl.columns:
                             for child in list(ctrl.columns):
                                 _force_visible_recursive(child, depth + 1, max_depth)
-                    except Exception:
-                        pass
 
                 _force_visible_recursive(content, 0, 10)
 
-                try:
+                # Use contextlib.suppress for page.update safety
+                with contextlib.suppress(Exception):
                     if hasattr(self, 'page') and self.page is not None:
-                        with contextlib.suppress(Exception):
-                            self.page.update()
-                except Exception:
-                    pass
+                        self.page.update()
 
                 logger.info('[DASH_FIX] Forced nested dashboard controls visible (aggressive)')
             except Exception as vis_err:
@@ -910,25 +1064,23 @@ class FletV2App(ft.Row):
                         waited = 0.0
                         attached = False
                         while waited < timeout:
-                            try:
+                            # Use contextlib.suppress to avoid noisy try/except
+                            with contextlib.suppress(Exception):
                                 if hasattr(content, 'page') and content.page:
                                     attached = True
-                                    break
-
-                                if hasattr(self, 'content_area') and self.content_area:
+                                elif hasattr(self, 'content_area') and self.content_area:
                                     container = self.content_area
                                     if hasattr(container, 'content') and container.content:
                                         inner = container.content
                                         if hasattr(inner, 'page') and inner.page:
                                             attached = True
-                                            break
-
+                                # compact check for the animated switcher
                                 animated = getattr(self, '_animated_switcher', None)
-                                if animated and hasattr(animated, 'page') and animated.page:
+                                if not attached and animated and hasattr(animated, 'page') and animated.page:
                                     attached = True
-                                    break
-                            except Exception:
-                                pass
+
+                            if attached:
+                                break
                             await asyncio.sleep(interval)
                             waited += interval
 
@@ -964,285 +1116,5 @@ class FletV2App(ft.Row):
         result_t: tuple[Any, ...],
     ) -> tuple[Any, Callable[[], None] | None]:
         """Extract content and dispose function from result tuple."""
-        content = result_t[0]
-        dispose_func = cast(Callable[[], None] | None, result_t[1])
-        return content, dispose_func
+        return result_t[0], cast(Callable[[], None] | None, result_t[1])
 
-    def _diagnose_dashboard_content(self, content: Any) -> None:
-        """Centralized dashboard diagnostics (removed duplication)."""
-        try:
-            ctrl = content
-            desc = type(ctrl).__name__
-            has_controls = hasattr(ctrl, 'controls') and bool(ctrl.controls)
-            if hasattr(ctrl, 'controls'):
-                children_count = len(ctrl.controls)
-            elif hasattr(ctrl, 'content') and ctrl.content:
-                children_count = 1
-            else:
-                children_count = 0
-            logger.warning(
-                "[DASH_DBG] dashboard content type=%s has_controls=%s children_count=%s",
-                desc,
-                has_controls,
-                children_count,
-            )
-        except Exception as _dbg_err:
-            logger.warning(f"[DASH_DBG] inspection failed: {_dbg_err}")
-
-    def _process_view_result_tuple(
-        self,
-        result_t: tuple[Any, ...],
-        view_name: str,
-    ) -> tuple[Any, Callable[[], None] | None]:
-        """Process view result tuple (deduplicated)."""
-        length = len(result_t)
-        if length not in (2, 3):
-            logger.error(f"Unexpected tuple length {length} for {view_name}")
-            return self._create_error_view(f"Invalid tuple length for {view_name}"), lambda: None
-
-        content, dispose_func = self._extract_content_and_dispose(result_t)
-        if length == 3:
-            setup_func = cast(Callable[..., Any], result_t[2])
-            content._setup_subscriptions = setup_func  # type: ignore[attr-defined]
-
-        if view_name == 'dashboard':
-            self._diagnose_dashboard_content(content)
-
-        logger.debug("Successfully processed %s-tuple for %s", length, view_name)
-        return content, dispose_func
-
-    def _create_enhanced_view(
-        self, view_function: Callable[..., Any], view_name: str
-    ) -> tuple[Any, Callable[[], None] | None]:
-        """Create view with state manager integration - now required for all views."""
-        try:
-            # Lightweight per-view cache to avoid reconstructing heavy views (dashboard) repeatedly
-            # Only enabled for views explicitly marked safe for reuse (currently: dashboard) to
-            # prevent stale state issues on views requiring fresh data bindings.
-            if not hasattr(self, "_view_cache"):
-                # view_name -> (content, dispose_func)
-                self._view_cache = {}
-            cache_enabled = (view_name == "dashboard")
-            if cache_enabled and view_name in self._view_cache:
-                cached_content, cached_dispose = self._view_cache[view_name]
-                with contextlib.suppress(Exception):
-                    logger.warning(
-                        "[VIEW_CACHE] Reusing cached %s view (no reconstruction) type=%s disposed=%s",
-                        view_name, type(cached_content).__name__, cached_dispose is None
-                    )
-                    if os.environ.get('FLET_DASHBOARD_CONTENT_DEBUG') == '1' and view_name == 'dashboard':
-                        # Lightweight cache integrity check
-                        has_children = hasattr(cached_content, 'controls') and bool(cached_content.controls)
-                        logger.warning(
-                            "[VIEW_CACHE] Cached dashboard control integrity: has_children=%s opacity=%s",
-                            has_children,
-                            getattr(cached_content, 'opacity', None),
-                        )
-                return cached_content, cached_dispose
-            # All views now require state_manager as per Phase 2 refactor
-            # PHASE 4.1: Special handling for dashboard navigation
-            if view_name == "dashboard":
-                # Dashboard gets additional navigation callback for clickable metric cards
-                result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
-            else:
-                result = view_function(self.server_bridge, self.page, self.state_manager)
-            logger.debug(f"View function returned: {type(result)} for {view_name}")
-
-            # Comment 12: Check if view returned dispose function and subscription setup (new pattern)
-            if isinstance(result, tuple):
-                result_t = cast(tuple[Any, ...], result)
-                logger.debug(f"Tuple length: {len(result_t)} for {view_name}")
-                return self._process_view_result_tuple(result_t, view_name)
-
-            logger.debug(f"Non-tuple result for {view_name}, creating auto-dispose")
-            # Backward compatibility: create auto-dispose function
-            # Track subscriptions for automatic cleanup
-            dispose_func = self._create_auto_dispose_for_view(view_name)
-            # Store in cache if eligible
-            if cache_enabled:
-                with contextlib.suppress(Exception):
-                    self._view_cache[view_name] = (result, dispose_func)
-                    logger.debug(
-                        "[VIEW_CACHE] Stored %s view in cache (type=%s)",
-                        view_name,
-                        type(result).__name__,
-                    )
-            return result, dispose_func
-
-        except Exception as e:
-            logger.error(f"View creation failed for {view_name}: {e}")
-            return self._create_error_view(f"Failed to create {view_name} view: {e}"), lambda: None
-
-    def _create_auto_dispose_for_view(self, view_name: str) -> Callable[[], None]:
-        """Create auto-dispose function for views that don't implement dispose (Comment 12)."""
-        # For now, return a no-op function since automatic tracking would be complex
-        # This allows views to be enhanced incrementally
-        def auto_dispose() -> None:
-            logger.debug(f"Auto-dispose called for view: {view_name} (no-op)")
-        return auto_dispose
-
-    def _create_error_view(self, error_message: str) -> ft.Control:
-        """Simple error view for fallback."""
-        def _on_return_button_click(e: ft.ControlEvent) -> None:
-            # Explicit typed handler to satisfy static analysis
-            try:
-                self.navigate_to("dashboard")
-            except Exception as nav_error:
-                logger.error(f"Navigation error: {nav_error}")
-
-        return ft.Column([
-            ft.Text(error_message, size=16, color=ft.Colors.RED),
-            ft.ElevatedButton("Return to Dashboard", on_click=_on_return_button_click)
-        ], spacing=10)
-
-    def _load_view(self, view_name: str, force_reload: bool = False) -> bool:
-        """Load view with simplified and thread-safe mechanism."""
-
-        print(f"🔧 _load_view called for: {view_name}")
-        print(f"🔧 Force reload: {force_reload}")
-        print(f"🔧 Loading view flag: {self._loading_view}")
-
-        # Prevent multiple simultaneous view loads
-        if self._loading_view:
-            logger.warning(f"View load in progress. Skipping '{view_name}' request.")
-            print(f"❌ Skipping {view_name} - load in progress")
-            return False
-
-        # Check if view reload is necessary
-        if not force_reload and view_name == getattr(self, '_current_view_name', None):
-            logger.debug(f"Skipping reload for view '{view_name}' (already current)")
-            return True
-
-        try:
-            self._loading_view = True
-            result = self._perform_view_loading(view_name)
-            return result
-        except Exception as e:
-            logger.error(f"Failed to load view {view_name}: {e}")
-            return False
-        finally:
-            self._loading_view = False
-
-
-async def main(page: ft.Page, backup_server) -> None:
-    """Main Flet application entry point."""
-    app = FletV2App(page, backup_server)
-    await app.initialize()
-
-
-def run_application():
-    """Initialize and run the FletV2 application."""
-    # Initialize real server for standalone mode
-    backup_server = None
-    if REAL_SERVER_AVAILABLE and real_server_instance is not None:
-        # Use the existing real server instance
-        backup_server = real_server_instance
-        logger.info("✅ Using existing BackupServer instance for standalone mode")
-    elif REAL_SERVER_AVAILABLE:
-        try:
-            # Create new BackupServer instance if needed
-            backup_server = BackupServer()
-            logger.info("✅ Created new BackupServer instance for standalone mode")
-        except Exception as e:
-            logger.error(f"❌ Failed to create BackupServer for standalone mode: {e}")
-            backup_server = None
-    else:
-        logger.error("❌ Real server not available, application cannot run without server integration")
-        logger.error("Please check that the python_server module is available and the database file exists")
-        raise RuntimeError("Application requires real server integration")
-
-    # Use browser mode for faster development
-    print("FletV2 is starting in browser mode for faster development")
-
-    # Launch async Flet app in browser mode with real server
-    async def main_with_server(page: ft.Page) -> None:
-        await main(page, backup_server)
-
-    # Dynamically resolve a free port starting from preferred 8550 with robust IPv4 + IPv6 checks
-    def _is_port_free(port: int) -> bool:
-        import socket as _sock
-        sockets: list[tuple[_sock.socket, str]] = []
-        try:
-            for family in (getattr(_sock, 'AF_INET', None), getattr(_sock, 'AF_INET6', None)):
-                if family is None:
-                    continue
-                try:
-                    s = _sock.socket(family, _sock.SOCK_STREAM)
-                    s.setsockopt(_sock.SOL_SOCKET, _sock.SO_REUSEADDR, 1)
-                    bind_addr = ('::', port, 0, 0) if family == _sock.AF_INET6 else ('0.0.0.0', port)
-                    s.bind(bind_addr)
-                    sockets.append((s, 'ipv6' if family == _sock.AF_INET6 else 'ipv4'))
-                except OSError:
-                    # Any bind failure indicates port in use
-                    return False
-            return True
-        finally:
-            for s, _ in sockets:
-                with contextlib.suppress(Exception):
-                    s.close()
-
-    _preferred_port = 8550
-    _port_candidate = None
-    for candidate in range(_preferred_port, _preferred_port + 25):
-        if _is_port_free(candidate):
-            _port_candidate = candidate
-            break
-    if _port_candidate is None:
-        print("Warning: Could not find free port in preferred range; letting OS choose")
-        _port_candidate = 0  # OS-assigned ephemeral port
-    elif _port_candidate != _preferred_port:
-        print(f"Info: Preferred port {_preferred_port} in use; using {_port_candidate} instead")
-
-    try:
-        asyncio.run(
-            ft.app_async(
-                target=main_with_server,
-                view=ft.AppView.WEB_BROWSER,
-                port=_port_candidate,
-            )
-        )  # type: ignore[attr-defined]
-    except OSError as bind_err:  # Port race condition fallback
-        print(f"Port {_port_candidate} bind failed ({bind_err}); retrying with ephemeral port")
-        asyncio.run(
-            ft.app_async(
-                target=main_with_server,
-                view=ft.AppView.WEB_BROWSER,
-                port=0,
-            )
-        )  # type: ignore[attr-defined]
-    except ImportError as imp_err:
-        # FastAPI / pydantic_core compatibility issue (often on bleeding-edge Python versions)
-        err_text = str(imp_err)
-        if 'pydantic_core' in err_text or 'fastapi' in err_text:
-            print("Browser mode failed due to FastAPI/Pydantic import issue; falling back to native app view")
-            try:
-                asyncio.run(
-                    ft.app_async(
-                        target=main_with_server,
-                        view=ft.AppView.FLET_APP,
-                        port=_port_candidate,
-                    )
-                )  # type: ignore[attr-defined]
-            except Exception as fallback_err:
-                import traceback as _tb
-                print("Native app view fallback failed:", fallback_err)
-                print(_tb.format_exc())
-                print("Attempting minimal fallback view (no specific AppView)")
-                try:
-                    asyncio.run(
-                        ft.app_async(
-                            target=main_with_server,
-                            port=_port_candidate,
-                        )
-                    )  # type: ignore[attr-defined]
-                except Exception as minimal_err:
-                    print("Minimal fallback also failed, aborting startup:", minimal_err)
-                    print(_tb.format_exc())
-                    raise
-        else:
-            # If ImportError wasn't the known FastAPI/pydantic issue, re-raise to surface original problem
-            raise
-
-
-if __name__ == "__main__":
-    run_application()
