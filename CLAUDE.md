@@ -60,13 +60,35 @@ This is a comprehensive encrypted file backup system that implements a robust cl
 
 ## FletV2 GUI Architecture Details
 
+### 🚨 CRITICAL: Server Integration Architecture (October 1, 2025)
+
+**The BackupServer does NOT have an API.** All communication is via **direct Python method calls**:
+
+1. **Server-Launched Mode** ([start_with_server.py](FletV2/start_with_server.py)):
+   - BackupServer creates instance of itself
+   - Passes `self` as Python object to FletV2App
+   - GUI calls server methods directly: `server.get_clients()`, `server.add_file()`, etc.
+   - **Zero network overhead** - in-memory Python calls only
+
+2. **Standalone GUI Mode** ([start_gui_only.py](FletV2/start_gui_only.py)):
+   - GUI launches without server instance (`FLET_GUI_ONLY_MODE=1`)
+   - All views show empty states (no data)
+   - Used for GUI development and testing only
+
+3. **ServerBridge Pattern** ([server_bridge.py](FletV2/utils/server_bridge.py)):
+   - **NOT an API client** - it's a thin delegation wrapper
+   - Direct method delegation: `bridge.get_clients()` → `server.get_clients()`
+   - Data format conversion (BackupServer ↔ FletV2 formats)
+   - Structured error handling with `{'success': bool, 'data': Any, 'error': str}`
+   - **NO HTTP, NO REST, NO API CALLS** - pure Python method delegation
+
 ### ServerBridge Integration
 The ServerBridge acts as the primary interface between the GUI and the backend server. Key components include:
 
-- **ServerBridge Class**: Delegates operations to the real backup server with data format conversion
-- **Data Conversion**: Converts between BackupServer and FletV2 data formats
+- **Direct Method Delegation**: Calls real server methods directly (not API endpoints)
+- **Data Conversion**: Converts between BackupServer and FletV2 data formats (BLOB UUIDs ↔ strings)
 - **Error Handling**: Provides structured responses for server operations
-- **Async Support**: Implements both synchronous and asynchronous operations
+- **Async Support**: Implements both synchronous and asynchronous operations via executors
 
 ### State Management System
 The enhanced StateManager provides reactive state management with:
@@ -193,12 +215,30 @@ python -m python_server.server.server
 python -m FletV2.main
 ```
 
+### Launcher Modes
+
+**Server-Launched Mode (Integrated)** - `python FletV2/start_with_server.py`:
+```python
+# Creates BackupServer instance
+server_instance = BackupServer()
+# Passes server as Python object to GUI
+app = FletV2App(page, real_server=server_instance)
+# GUI calls server.get_clients(), server.add_file(), etc. directly
+```
+
+**Standalone GUI Mode** - `python FletV2/start_gui_only.py`:
+```python
+# Sets FLET_GUI_ONLY_MODE=1 environment variable
+# Launches GUI without server instance
+app = FletV2App(page, real_server=None)
+# All views show empty states with "Server not connected" messages
+```
+
 ### Environment Variables
-- `FLET_GUI_ONLY_MODE`: Enable GUI-only mode without server connection
+- `FLET_GUI_ONLY_MODE`: Enable GUI-only mode without server connection (empty states)
 - `CYBERBACKUP_DISABLE_INTEGRATED_GUI`: Disable embedded server GUI
 - `DASHBOARD_REFRESH_INTERVAL`: Set dashboard refresh interval in seconds
 - `FLET_V2_DEBUG`: Enable debug mode for additional logging
-- `FLET_V2_SHOW_MOCK_DATA`: Show mock data for testing purposes
 
 ## Testing and Quality Assurance
 
@@ -230,10 +270,12 @@ python -m FletV2.main
 - Prefer Flet's built-in components over complex custom implementations
 
 ### Server Integration
-- Use the ServerBridge pattern for GUI-server communication
-- Implement proper error handling for network operations
-- Ensure thread safety in multi-client scenarios
-- Maintain the existing protocol compatibility
+- **CRITICAL**: Server has NO API - use direct Python method calls via ServerBridge
+- ServerBridge is a thin delegation wrapper, not an API client
+- All operations are in-memory Python calls: `bridge.get_clients()` → `server.get_clients()`
+- Implement proper error handling for server method calls (not network operations)
+- Ensure thread safety when calling server methods from GUI thread
+- Data format conversion handled by ServerBridge (BLOB UUIDs ↔ strings)
 
 ### Database Operations
 - Use the existing DatabaseManager for all database interactions

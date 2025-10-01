@@ -718,6 +718,83 @@ class BackupServer:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_client, client_id)
 
+    def update_client(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Update client information.
+
+        Args:
+            client_id: Client UUID as hex string
+            updated_data: Dictionary with fields to update:
+                - 'name': str (optional) - New client name
+                - 'public_key': bytes (optional) - New public key
+
+        Returns:
+            dict: {'success': bool, 'data': dict, 'error': str}
+        """
+        try:
+            # Convert hex string to bytes
+            client_id_bytes = bytes.fromhex(client_id)
+
+            # Extract fields to update
+            name = updated_data.get('name')
+            public_key = updated_data.get('public_key')  # Should be bytes if provided
+
+            # Validate name if provided
+            if name is not None:
+                if not isinstance(name, str) or len(name) == 0:
+                    return self._format_response(False, error="Invalid name: must be non-empty string")
+                if len(name) > MAX_CLIENT_NAME_LENGTH:
+                    return self._format_response(False, error=f"Name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
+
+                # Check if new name conflicts with existing client
+                with self.clients_lock:
+                    if name in self.clients_by_name:
+                        existing_id = self.clients_by_name[name]
+                        if existing_id != client_id_bytes:
+                            return self._format_response(False, error=f"Client name '{name}' already exists")
+
+            # Update in database
+            success = self.db_manager.update_client(client_id_bytes, name, public_key)
+
+            if not success:
+                return self._format_response(False, error="Failed to update client in database")
+
+            # Update in-memory representation if client is currently connected
+            with self.clients_lock:
+                if client := self.clients.get(client_id_bytes):
+                    old_name = client.name
+
+                    # Update name mapping
+                    if name and name != old_name:
+                        self.clients_by_name.pop(old_name, None)
+                        client.name = name
+                        self.clients_by_name[name] = client_id_bytes
+                        logger.info(f"Updated client name: '{old_name}' → '{name}'")
+
+                    # Update public key if provided
+                    if public_key:
+                        client.set_public_key(public_key)
+                        logger.info(f"Updated public key for client '{client.name}'")
+
+            return self._format_response(True, {
+                'id': client_id,
+                'updated': True,
+                'fields_updated': [k for k, v in {'name': name, 'public_key': public_key}.items() if v is not None]
+            })
+
+        except ValueError as e:
+            logger.error(f"Invalid client ID format '{client_id}': {e}")
+            return self._format_response(False, error=f"Invalid client ID: {e}")
+        except Exception as e:
+            logger.error(f"Failed to update client {client_id}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def update_client_async(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
+        """Async version of update_client()."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.update_client, client_id, updated_data)
+
     def disconnect_client(self, client_id: str) -> dict[str, Any]:
         """Disconnect a client (remove from in-memory store only)."""
         try:
@@ -1230,6 +1307,130 @@ class BackupServer:
         import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_statistics)
+
+    async def get_recent_activity_async(self, limit: int = 50) -> dict[str, Any]:
+        """
+        Get recent system activity from server logs.
+
+        Args:
+            limit: Maximum number of activity entries to return (default 50)
+
+        Returns:
+            dict: {'success': bool, 'data': list[dict], 'error': str}
+                Each activity dict contains:
+                - 'timestamp': ISO timestamp string
+                - 'type': Activity type (info/warning/error/client/file)
+                - 'message': Human-readable message
+                - 'details': Optional additional context
+        """
+        import asyncio
+
+        try:
+            # Run log parsing in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            activities = await loop.run_in_executor(None, self._parse_recent_logs, limit)
+
+            return self._format_response(True, activities)
+        except Exception as e:
+            logger.error(f"Failed to get recent activity: {e}")
+            return self._format_response(False, error=str(e))
+
+    def _parse_recent_logs(self, limit: int) -> list[dict[str, Any]]:
+        """
+        Parse recent log entries into structured activity records.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            list: Activity records sorted by timestamp (most recent first)
+        """
+        activities = []
+
+        # Determine which log file to read
+        log_file = getattr(self, 'backup_log_file', None)
+        if not log_file or not os.path.exists(log_file):
+            log_file = 'server.log'
+
+        if not os.path.exists(log_file):
+            logger.warning(f"Log file not found: {log_file}")
+            return []
+
+        try:
+            with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                # Read last N*2 lines (we'll filter and limit after parsing)
+                lines = f.readlines()[-(limit * 2):]
+
+            # Parse log format: "timestamp - thread - level - message"
+            for line in lines:
+                try:
+                    parts = line.strip().split(' - ', 3)
+                    if len(parts) < 4:
+                        continue
+
+                    timestamp_str, thread_name, log_level, message = parts
+
+                    # Determine activity type based on message content
+                    activity_type = self._classify_activity(message, log_level)
+
+                    # Skip debug/verbose entries unless specifically requested
+                    if log_level.upper() == 'DEBUG':
+                        continue
+
+                    activities.append({
+                        'timestamp': timestamp_str,
+                        'type': activity_type,
+                        'level': log_level.upper(),
+                        'message': message,
+                        'thread': thread_name
+                    })
+
+                except (ValueError, IndexError) as e:
+                    # Skip malformed log lines
+                    logger.debug(f"Skipped malformed log line: {e}")
+                    continue
+
+            # Sort by timestamp (most recent first) and limit
+            activities.reverse()
+            return activities[:limit]
+
+        except Exception as e:
+            logger.error(f"Error reading log file {log_file}: {e}")
+            return []
+
+    def _classify_activity(self, message: str, log_level: str) -> str:
+        """
+        Classify activity type based on message content.
+
+        Args:
+            message: Log message text
+            log_level: Log level (INFO/WARNING/ERROR)
+
+        Returns:
+            str: Activity type (client/file/server/error/warning/info)
+        """
+        message_lower = message.lower()
+
+        # Client-related activities
+        if any(keyword in message_lower for keyword in ['client', 'connected', 'disconnected', 'registered']):
+            return 'client'
+
+        # File-related activities
+        if any(keyword in message_lower for keyword in ['file', 'upload', 'backup', 'download', 'verified']):
+            return 'file'
+
+        # Server-related activities
+        if any(keyword in message_lower for keyword in ['server', 'started', 'stopped', 'shutdown', 'startup']):
+            return 'server'
+
+        # Error/warning based on log level
+        if log_level.upper() == 'ERROR':
+            return 'error'
+        if log_level.upper() == 'WARNING':
+            return 'warning'
+
+        # Default
+        return 'info'
 
     def get_historical_data(self, metric: str = "connections", hours: int = 24) -> dict[str, Any]:
         """Get historical data for metrics."""

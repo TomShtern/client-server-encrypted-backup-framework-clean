@@ -942,10 +942,10 @@ class DatabaseManager:
     def delete_client(self, client_id: bytes) -> bool:
         """
         Deletes a client and all associated file records.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client to delete.
-            
+
         Returns:
             True if the client was deleted, False if an error occurred.
         """
@@ -959,6 +959,66 @@ class DatabaseManager:
                 return False
         except Exception as e:
             logger.error(f"Error deleting client {client_id.hex()}: {e}")
+            return False
+
+    def update_client(self, client_id: bytes, name: str | None = None,
+                      public_key: bytes | None = None) -> bool:
+        """
+        Update client information in database.
+
+        Args:
+            client_id: Client UUID as bytes (16 bytes)
+            name: New client name (optional)
+            public_key: New public key in X.509 format (optional)
+
+        Returns:
+            bool: True if update successful, False otherwise
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Build dynamic UPDATE query based on provided fields
+                fields = []
+                params = []
+
+                if name is not None:
+                    fields.append("Name = ?")
+                    params.append(name)
+
+                if public_key is not None:
+                    fields.append("PublicKey = ?")
+                    params.append(public_key)
+
+                if not fields:
+                    logger.warning("update_client called with no fields to update")
+                    return False
+
+                # Add LastSeen timestamp update
+                fields.append("LastSeen = ?")
+                params.append(datetime.now(UTC).isoformat())
+
+                # Add client_id for WHERE clause
+                params.append(client_id)
+
+                query = f"UPDATE clients SET {', '.join(fields)} WHERE ID = ?"
+
+                cursor.execute(query, params)
+                conn.commit()
+
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(f"Updated client {client_id.hex()}: {fields}")
+                else:
+                    logger.warning(f"No client found with ID {client_id.hex()}")
+
+                return success
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error updating client {client_id.hex()}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error updating client: {e}")
             return False
 
     def delete_file_record(self, client_id: bytes, file_name: str) -> bool:
