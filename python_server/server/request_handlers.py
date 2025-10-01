@@ -94,8 +94,7 @@ class RequestHandler:
             code: The request code.
             payload: The request payload.
         """
-        print(f"[DEBUG] Processing request - Code: {code}, Client ID: {client_id_from_header.hex()}, Payload size: {len(payload)}")
-        logger.info(f"[DEBUG] Processing request - Code: {code}, Client ID: {client_id_from_header.hex()}, Payload size: {len(payload)}")
+        logger.debug(f"Processing request - Code: {code}, Client ID: {client_id_from_header.hex()}, Payload size: {len(payload)}")
 
         handler_method = self.handler_map.get(code)
 

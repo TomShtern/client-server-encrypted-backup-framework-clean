@@ -207,20 +207,20 @@ class FileTransferManager:
                    f"Packet {metadata['packet_number']}/{metadata['total_packets']} "
                    f"(EncSize:{metadata['encrypted_size']}, OrigSize:{metadata['original_size']})")
 
-        # DEBUG: Enhanced logging for multi-packet transfers
+        # Enhanced logging for multi-packet transfers
         if metadata['total_packets'] > 1:
-            logger.debug(f"MULTI-PACKET DEBUG: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
+            logger.debug(f"Multi-packet transfer: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
                        f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
                        f"Content size: {len(metadata['content'])} bytes")
 
         # Handle multi-packet reassembly logic
         is_complete = self._handle_packet_reassembly(client, metadata)
 
-        # DEBUG: Log reassembly status
+        # Log reassembly status
         if metadata['total_packets'] > 1:
-            logger.debug(f"REASSEMBLY DEBUG: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
+            logger.debug(f"Reassembly status: Client '{client.name}', File '{metadata['filename']}', "  # type: ignore
                        f"Packet {metadata['packet_number']}/{metadata['total_packets']}, "
-                       f"Transfer complete: {is_complete}")
+                       f"Complete: {is_complete}")
 
         if is_complete:
             # All packets received - process the complete file

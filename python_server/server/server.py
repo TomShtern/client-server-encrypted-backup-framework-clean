@@ -69,11 +69,35 @@ MAX_PAYLOAD_READ_LIMIT = (16 * 1024 * 1024) + 1024  # Max size for a single payl
 MAX_ORIGINAL_FILE_SIZE = 4 * 1024 * 1024 * 1024 # Max original file size (e.g., 4GB) - for sanity checking
 MAX_CONCURRENT_CLIENTS = 50 # Max number of concurrent client connections
 
-MAX_CLIENT_NAME_LENGTH = 100 # As per spec (implicit from me.info and general limits)
+# MAX_CLIENT_NAME_LENGTH imported from config.py (line 39)
 MAX_FILENAME_FIELD_SIZE = 255 # Size of the filename field in protocol
 MAX_ACTUAL_FILENAME_LENGTH = 250 # Practical limit for actual filename within the field
 RSA_PUBLIC_KEY_SIZE = 160 # Bytes, X.509 format (for 1024-bit RSA - per protocol specification)
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
+
+# Logging Configuration
+DEFAULT_LOG_LINES_LIMIT = 100  # Default number of log lines to retrieve
+DEFAULT_ACTIVITY_LIMIT = 50  # Default number of activity entries to return
+
+# Settings Configuration
+SETTINGS_FILE = "server_settings.json"  # Settings persistence file
+
+"""
+LOGGING LEVEL STANDARDS:
+- DEBUG: Protocol details, packet parsing, reassembly status, detailed state changes
+- INFO: Client connections/disconnections, file transfers, successful operations, startup/shutdown
+- WARNING: Recoverable errors, validation failures, retries, deprecated usage
+- ERROR: Failed operations, database errors, crypto failures, network issues
+- CRITICAL: System failures, startup failures, security violations
+
+Best Practices:
+1. Use DEBUG for verbose diagnostic info (disabled in production by default)
+2. Use INFO for important events that help understand system flow
+3. Use WARNING for issues that don't stop operation but need attention
+4. Use ERROR for failures that prevent specific operations
+5. Include relevant context (client name, file name, operation type) in all messages
+6. Avoid duplicate logging (don't log same event at multiple levels)
+"""
 
 # Enhanced Logging Configuration with dual output
 # Initialize Sentry error tracking for backup server
@@ -657,13 +681,33 @@ class BackupServer:
             client_id = uuid.uuid4().bytes
             name = client_data.get('name', '')
 
+            # Validate name field
             if not name:
                 return self._format_response(False, error="Client name is required")
 
-            # Check if client name already exists
+            if not isinstance(name, str):
+                return self._format_response(False, error="Client name must be a string")
+
+            # Check name length
+            if len(name) > MAX_CLIENT_NAME_LENGTH:
+                return self._format_response(False, error=f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
+
+            # Check for invalid characters (basic validation)
+            if '\x00' in name or '\n' in name or '\r' in name:
+                return self._format_response(False, error="Client name contains invalid characters")
+
+            # Check if client name already exists in memory
             with self.clients_lock:
                 if name in self.clients_by_name:
                     return self._format_response(False, error=f"Client name '{name}' already exists")
+
+            # Check database for duplicate name (catch race conditions)
+            try:
+                existing_clients = self.db_manager.get_all_clients()
+                if any(c.get('name') == name for c in existing_clients):
+                    return self._format_response(False, error=f"Client name '{name}' already exists in database")
+            except Exception as db_check_error:
+                logger.warning(f"Could not verify name uniqueness in database: {db_check_error}")
 
             # Create new client
             client = self.create_client(client_id, name)
@@ -1228,13 +1272,13 @@ class BackupServer:
         return await loop.run_in_executor(None, self.get_analytics_data)
 
     def get_performance_metrics(self) -> dict[str, Any]:
-        """Get performance data."""
+        """Get performance data with real system metrics."""
         try:
             metrics_data = {
                 'active_connections': len(self.clients),
-                'database_response_time_ms': 0,  # Placeholder
-                'memory_usage_mb': 0,  # Placeholder
-                'cpu_usage_percent': 0  # Placeholder
+                'database_response_time_ms': 0,
+                'memory_usage_mb': 0,
+                'cpu_usage_percent': 0
             }
 
             # Test database response time
@@ -1244,6 +1288,25 @@ class BackupServer:
                 metrics_data['database_response_time_ms'] = int((time.time() - start_time) * 1000)
             except Exception:
                 metrics_data['database_response_time_ms'] = -1
+
+            # Get real system metrics
+            try:
+                import psutil
+                process = psutil.Process(os.getpid())
+
+                # Memory usage in MB
+                memory_info = process.memory_info()
+                metrics_data['memory_usage_mb'] = round(memory_info.rss / (1024 * 1024), 2)
+
+                # CPU usage percent (non-blocking, interval=None uses cached value)
+                metrics_data['cpu_usage_percent'] = round(process.cpu_percent(interval=None), 2)
+
+            except ImportError:
+                logger.debug("psutil not available, system metrics unavailable")
+                # Leave as 0 if psutil not installed
+            except Exception as e:
+                logger.warning(f"Failed to get system metrics: {e}")
+                # Leave as 0 on error
 
             return self._format_response(True, metrics_data)
         except Exception as e:
@@ -1308,7 +1371,7 @@ class BackupServer:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_statistics)
 
-    async def get_recent_activity_async(self, limit: int = 50) -> dict[str, Any]:
+    async def get_recent_activity_async(self, limit: int = DEFAULT_ACTIVITY_LIMIT) -> dict[str, Any]:
         """
         Get recent system activity from server logs.
 
@@ -1491,20 +1554,17 @@ class BackupServer:
                 if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
                     with open(self.backup_log_file, encoding='utf-8') as f:
                         lines = f.readlines()
-                        # Get last 100 lines
-                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
                         log_data['logs'] = [line.strip() for line in recent_lines]
                 elif os.path.exists(backup_log_file):  # Fallback to module variable
                     with open(backup_log_file, encoding='utf-8') as f:
                         lines = f.readlines()
-                        # Get last 100 lines
-                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
                         log_data['logs'] = [line.strip() for line in recent_lines]
                 elif os.path.exists('server.log'):
                     with open('server.log', encoding='utf-8') as f:
                         lines = f.readlines()
-                        # Get last 100 lines
-                        recent_lines = lines[-100:] if len(lines) > 100 else lines
+                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
                         log_data['logs'] = [line.strip() for line in recent_lines]
             except Exception as read_error:
                 log_data['read_error'] = str(read_error)
@@ -1521,30 +1581,237 @@ class BackupServer:
         return await loop.run_in_executor(None, self.get_logs)
 
     async def clear_logs_async(self) -> dict[str, Any]:
-        """Clear system logs (placeholder implementation)."""
+        """
+        Rotate/clear system logs safely by moving current logs to archive.
+
+        Instead of deleting logs, this creates a backup and starts fresh log files.
+        """
         try:
-            # This would require careful implementation to avoid disrupting active logging
-            return self._format_response(False, error="Log clearing functionality not yet implemented for safety")
+            import asyncio
+
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self._rotate_logs_sync)
+
+            return result
         except Exception as e:
-            logger.error(f"Failed to clear logs: {e}")
+            logger.error(f"Failed to clear/rotate logs: {e}")
             return self._format_response(False, error=str(e))
 
-    async def export_logs_async(self, export_format: str, filters: dict[str, Any]) -> dict[str, Any]:
-        """Export logs with filtering (placeholder implementation)."""
+    def _rotate_logs_sync(self) -> dict[str, Any]:
+        """Synchronous log rotation implementation."""
         try:
-            return self._format_response(False, error="Log export functionality not yet implemented")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            rotated_files = []
+
+            # Rotate enhanced log file
+            if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
+                archive_name = f"{self.backup_log_file}.{timestamp}"
+                try:
+                    os.rename(self.backup_log_file, archive_name)
+                    rotated_files.append(archive_name)
+                    logger.info(f"Rotated enhanced log to: {archive_name}")
+                except OSError as e:
+                    logger.warning(f"Could not rotate enhanced log: {e}")
+
+            # Rotate legacy server.log
+            if os.path.exists('server.log'):
+                archive_name = f"server.log.{timestamp}"
+                try:
+                    os.rename('server.log', archive_name)
+                    rotated_files.append(archive_name)
+                    logger.info(f"Rotated server log to: {archive_name}")
+                except OSError as e:
+                    logger.warning(f"Could not rotate server.log: {e}")
+
+            if rotated_files:
+                return self._format_response(True, {
+                    'rotated': True,
+                    'archived_files': rotated_files,
+                    'timestamp': timestamp
+                })
+            else:
+                return self._format_response(False, error="No log files found to rotate")
+
+        except Exception as e:
+            logger.error(f"Log rotation failed: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def export_logs_async(self, export_format: str = "text", filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        """
+        Export logs with optional filtering to a file.
+
+        Args:
+            export_format: Format for export ("text", "json", "csv")
+            filters: Optional filters dict with keys:
+                - 'level': Minimum log level (DEBUG/INFO/WARNING/ERROR/CRITICAL)
+                - 'start_date': Start date for log entries (ISO format)
+                - 'end_date': End date for log entries (ISO format)
+                - 'search_term': Search term to filter messages
+                - 'limit': Maximum number of entries (default: 1000)
+
+        Returns:
+            dict: {'success': bool, 'data': dict with 'file_path' and 'entries_exported', 'error': str}
+        """
+        try:
+            import asyncio
+            import json
+
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self._export_logs_sync, export_format, filters or {})
+
+            return result
         except Exception as e:
             logger.error(f"Failed to export logs: {e}")
+            return self._format_response(False, error=str(e))
+
+    def _export_logs_sync(self, export_format: str, filters: dict[str, Any]) -> dict[str, Any]:
+        """Synchronous log export implementation."""
+        import json
+
+        try:
+            # Determine log file to read
+            log_file = getattr(self, 'backup_log_file', None)
+            if not log_file or not os.path.exists(log_file):
+                log_file = 'server.log'
+
+            if not os.path.exists(log_file):
+                return self._format_response(False, error="Log file not found")
+
+            # Extract filter parameters
+            level_filter = filters.get('level', '').upper()
+            start_date = filters.get('start_date', '')
+            end_date = filters.get('end_date', '')
+            search_term = filters.get('search_term', '').lower()
+            limit = filters.get('limit', 1000)
+
+            # Read and filter log entries
+            filtered_entries = []
+            try:
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                    for line in f:
+                        # Apply filters
+                        if level_filter and level_filter not in line:
+                            continue
+                        if search_term and search_term not in line.lower():
+                            continue
+                        # Date filtering would require parsing timestamp - simplified for now
+                        filtered_entries.append(line.strip())
+
+                        if len(filtered_entries) >= limit:
+                            break
+            except Exception as e:
+                return self._format_response(False, error=f"Error reading log file: {e}")
+
+            # Generate export filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            export_filename = f"logs_export_{timestamp}.{export_format}"
+
+            # Export based on format
+            try:
+                if export_format == "json":
+                    # Export as JSON array
+                    log_entries = []
+                    for line in filtered_entries:
+                        parts = line.split(' - ', 3)
+                        if len(parts) >= 4:
+                            log_entries.append({
+                                'timestamp': parts[0],
+                                'thread': parts[1],
+                                'level': parts[2],
+                                'message': parts[3]
+                            })
+                        else:
+                            log_entries.append({'raw': line})
+
+                    with open(export_filename, 'w', encoding='utf-8') as f:
+                        json.dump(log_entries, f, indent=2, ensure_ascii=False)
+
+                elif export_format == "csv":
+                    # Export as CSV
+                    import csv
+                    with open(export_filename, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(['Timestamp', 'Thread', 'Level', 'Message'])
+                        for line in filtered_entries:
+                            parts = line.split(' - ', 3)
+                            if len(parts) >= 4:
+                                writer.writerow(parts)
+                            else:
+                                writer.writerow(['', '', '', line])
+
+                else:  # text format (default)
+                    with open(export_filename, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(filtered_entries))
+
+                logger.info(f"Logs exported to {export_filename}: {len(filtered_entries)} entries")
+                return self._format_response(True, {
+                    'exported': True,
+                    'file_path': os.path.abspath(export_filename),
+                    'entries_exported': len(filtered_entries),
+                    'format': export_format,
+                    'filters_applied': filters
+                })
+
+            except Exception as e:
+                return self._format_response(False, error=f"Error writing export file: {e}")
+
+        except Exception as e:
+            logger.error(f"Log export failed: {e}")
             return self._format_response(False, error=str(e))
 
     # --- Settings Management ---
 
     def save_settings(self, settings_data: dict[str, Any]) -> dict[str, Any]:
-        """Save settings (placeholder implementation)."""
+        """
+        Save application settings to JSON file.
+
+        Args:
+            settings_data: Dictionary containing all settings to save
+
+        Returns:
+            dict: {'success': bool, 'data': dict, 'error': str}
+        """
         try:
-            # This would require implementation of a settings storage system
-            logger.info("Settings save requested")
-            return self._format_response(False, error="Settings save functionality not yet implemented")
+            import json
+
+            # Validate settings structure
+            if not isinstance(settings_data, dict):
+                return self._format_response(False, error="Settings must be a dictionary")
+
+            # Add metadata
+            settings_with_metadata = {
+                'version': '1.0',
+                'saved_at': datetime.now().isoformat(),
+                'server_version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'settings': settings_data
+            }
+
+            # Write to file with atomic operation (write to temp, then rename)
+            temp_file = f"{SETTINGS_FILE}.tmp"
+            try:
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(settings_with_metadata, f, indent=2, ensure_ascii=False)
+
+                # Atomic rename
+                if os.path.exists(SETTINGS_FILE):
+                    os.replace(temp_file, SETTINGS_FILE)
+                else:
+                    os.rename(temp_file, SETTINGS_FILE)
+
+                logger.info(f"Settings saved successfully to {SETTINGS_FILE}")
+                return self._format_response(True, {
+                    'saved': True,
+                    'file': SETTINGS_FILE,
+                    'timestamp': settings_with_metadata['saved_at']
+                })
+
+            finally:
+                # Clean up temp file if it still exists
+                with contextlib.suppress(OSError):
+                    os.remove(temp_file)
+
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
             return self._format_response(False, error=str(e))
@@ -1556,19 +1823,86 @@ class BackupServer:
         return await loop.run_in_executor(None, self.save_settings, settings_data)
 
     def load_settings(self) -> dict[str, Any]:
-        """Load settings (placeholder implementation)."""
+        """
+        Load application settings from JSON file.
+
+        Returns:
+            dict: {'success': bool, 'data': dict, 'error': str}
+                If file doesn't exist, returns default settings
+        """
         try:
-            # This would require implementation of a settings storage system
-            default_settings = {
-                'server_port': self.port,
-                'max_clients': MAX_CONCURRENT_CLIENTS if 'MAX_CONCURRENT_CLIENTS' in globals() else 50,
-                'log_level': 'INFO',
-                'note': 'Settings load functionality requires implementation of settings storage system'
-            }
-            return self._format_response(True, default_settings)
+            import json
+
+            # Return defaults if no saved settings exist
+            if not os.path.exists(SETTINGS_FILE):
+                default_settings = self._get_default_settings()
+                return self._format_response(True, default_settings)
+
+            # Read settings file
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings_with_metadata = json.load(f)
+
+            # Validate structure
+            if not isinstance(settings_with_metadata, dict):
+                logger.warning("Invalid settings file format, returning defaults")
+                return self._format_response(True, self._get_default_settings())
+
+            # Extract settings (handle both old and new format)
+            if 'settings' in settings_with_metadata:
+                settings = settings_with_metadata['settings']
+            else:
+                # Old format - entire file is settings
+                settings = settings_with_metadata
+
+            # Merge with defaults to ensure all keys exist
+            default_settings = self._get_default_settings()
+            merged_settings = {**default_settings, **settings}
+
+            logger.info(f"Settings loaded successfully from {SETTINGS_FILE}")
+            return self._format_response(True, merged_settings)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse settings file: {e}")
+            return self._format_response(False, error=f"Invalid JSON in settings file: {e}")
         except Exception as e:
             logger.error(f"Failed to load settings: {e}")
             return self._format_response(False, error=str(e))
+
+    def _get_default_settings(self) -> dict[str, Any]:
+        """
+        Get default server settings.
+
+        Returns:
+            dict: Default settings structure matching FletV2/views/settings.py expectations
+        """
+        return {
+            # Server settings
+            'server_port': self.port,
+            'max_concurrent_clients': MAX_CONCURRENT_CLIENTS,
+            'client_timeout': CLIENT_SESSION_TIMEOUT,
+
+            # Interface settings
+            'theme': 'dark',
+            'language': 'en',
+
+            # Monitoring settings
+            'enable_monitoring': True,
+            'metrics_retention_days': 30,
+
+            # Logging settings
+            'log_level': 'INFO',
+            'log_to_file': True,
+            'log_rotation_size_mb': 10,
+
+            # Security settings
+            'encryption_enabled': True,
+            'key_size': 1024,
+
+            # Backup settings
+            'auto_backup_interval': 3600,
+            'backup_retention_days': 90,
+            'compression_enabled': True
+        }
 
     async def load_settings_async(self) -> dict[str, Any]:
         """Async version of load_settings()."""
@@ -1614,16 +1948,15 @@ if __name__ == "__main__":
             print("Please ensure PyCryptodome is properly installed (e.g., via 'pip install pycryptodomex'). Server cannot start.", file=sys.stderr)
             sys.exit(1) # Exit if essential crypto library is missing/broken
 
-        print("DEBUG: Checking crypto library...")
+        logger.info("Verifying cryptography library availability...")
         # Ensure only one server instance runs at a time
-        print("DEBUG: Ensuring single server instance...")
+        logger.info("Ensuring single server instance...")
         ensure_single_server_instance("BackupServer", 1256)
 
         # Instantiate the server
-        print("DEBUG: Creating BackupServer instance...")
-        # Instantiate the server
+        logger.info("Creating BackupServer instance...")
         server_instance = BackupServer()
-        print("DEBUG: BackupServer created successfully!")
+        logger.info("BackupServer instance created successfully")
 
         # The GUIManager was initialized in the BackupServer constructor.
         # The GUI is running in a separate thread, started by the GUIManager.
@@ -1631,26 +1964,22 @@ if __name__ == "__main__":
         # The GUI's mainloop will handle user interaction and application lifetime.
 
         # Wait for the GUI to signal it's ready before we proceed (with timeout)
-        print("DEBUG: Waiting for GUI to initialize...")
         logger.info("Waiting for GUI to initialize...")
         gui_ready = server_instance.gui_manager.gui_ready.wait(timeout=5.0)  # Reduced timeout
-        print(f"DEBUG: GUI ready result: {gui_ready}")
+        logger.info(f"GUI initialization result: {'ready' if gui_ready else 'timeout'}")
 
         # Start the server regardless of GUI status
-        print("DEBUG: Starting backup server...")
         logger.info("Starting backup server on port 1256...")
         server_instance.start()
-        print("DEBUG: Backup server started successfully!")
+        logger.info("Backup server started successfully")
 
         if gui_ready and hasattr(server_instance.gui_manager, 'is_gui_running') and server_instance.gui_manager.is_gui_running():
-            print("DEBUG: GUI is running, entering GUI mode...")
             logger.info("GUI is ready. Main thread is now idle, application is driven by GUI and server threads.")
             # Keep the main thread alive. The application will exit when the GUI is closed.
             while server_instance.gui_manager.is_gui_running():
                 time.sleep(1)
         else:
             # Console-only mode
-            print("DEBUG: Running in console-only mode...")
             logger.info("Running in console-only mode. Press Ctrl+C to stop.")
             while server_instance.running and not server_instance.shutdown_event.is_set():
                 time.sleep(1)

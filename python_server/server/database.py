@@ -608,7 +608,7 @@ class DatabaseManager:
     def __init__(self, db_name: str | None = None, use_pool: bool = True):
         """
         Initialize the DatabaseManager.
-        
+
         Args:
             db_name: Optional database name override. Uses config default if None.
             use_pool: Whether to use connection pooling for better performance.
@@ -717,8 +717,8 @@ class DatabaseManager:
                 ID BLOB(16) PRIMARY KEY,
                 Name VARCHAR(255) UNIQUE NOT NULL,
                 PublicKey BLOB(160),
-                LastSeen TEXT NOT NULL, 
-                AESKey BLOB(32) 
+                LastSeen TEXT NOT NULL,
+                AESKey BLOB(32)
             )
         ''', commit=True)
 
@@ -740,6 +740,59 @@ class DatabaseManager:
 
         # Add missing columns to existing tables
         self._add_missing_columns()
+
+        # Create performance indexes
+        self._create_performance_indexes()
+
+    def _create_performance_indexes(self):
+        """Create indexes on frequently queried columns for better performance."""
+        try:
+            # Index on clients.Name for faster lookups by client name
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(Name)
+            ''', commit=True)
+            logger.debug("Created index on clients.Name")
+
+            # Index on clients.LastSeen for sorting and filtering by last seen time
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_clients_lastseen ON clients(LastSeen)
+            ''', commit=True)
+            logger.debug("Created index on clients.LastSeen")
+
+            # Index on files.ClientID for faster file lookups by client (most common query)
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_files_clientid ON files(ClientID)
+            ''', commit=True)
+            logger.debug("Created index on files.ClientID")
+
+            # Index on files.FileName for faster file lookups by name
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_files_filename ON files(FileName)
+            ''', commit=True)
+            logger.debug("Created index on files.FileName")
+
+            # Composite index on files(ClientID, FileName) for the common query pattern
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_files_client_filename ON files(ClientID, FileName)
+            ''', commit=True)
+            logger.debug("Created composite index on files(ClientID, FileName)")
+
+            # Index on files.Verified for filtering verified files
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_files_verified ON files(Verified)
+            ''', commit=True)
+            logger.debug("Created index on files.Verified")
+
+            # Index on files.ModificationDate for sorting and filtering by date
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_files_moddate ON files(ModificationDate)
+            ''', commit=True)
+            logger.debug("Created index on files.ModificationDate")
+
+            logger.info("Database performance indexes created successfully")
+
+        except Exception as e:
+            logger.warning(f"Some indexes may not have been created: {e}")
 
     def _add_missing_columns(self):
         """Add missing columns to existing tables for backward compatibility."""
@@ -814,10 +867,10 @@ class DatabaseManager:
     def load_clients_from_db(self) -> list[tuple[bytes, str, bytes | None, str]]:
         """
         Loads existing client data from the database.
-        
+
         Returns:
             List of tuples containing (client_id, name, public_key_bytes, last_seen_iso_utc)
-            
+
         Raises:
             ServerError: If a critical database read error occurs.
         """
@@ -836,7 +889,7 @@ class DatabaseManager:
     def save_client_to_db(self, client_id: bytes, name: str, public_key_bytes: bytes | None, aes_key: bytes | None) -> None:
         """
         Saves or updates a client's information in the database.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client.
             name: The username of the client.
@@ -848,7 +901,7 @@ class DatabaseManager:
         current_wall_time_utc_iso = datetime.now(UTC).isoformat(timespec='seconds') + "Z"
 
         self.execute('''
-            INSERT OR REPLACE INTO clients (ID, Name, PublicKey, LastSeen, AESKey) 
+            INSERT OR REPLACE INTO clients (ID, Name, PublicKey, LastSeen, AESKey)
             VALUES (?, ?, ?, ?, ?)
         ''', (client_id, name, public_key_bytes, current_wall_time_utc_iso, aes_key), commit=True)
 
@@ -890,10 +943,10 @@ class DatabaseManager:
     def get_client_by_id(self, client_id: bytes) -> tuple[bytes, str, bytes | None, str, bytes | None] | None:
         """
         Retrieves a client record by ID.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client.
-            
+
         Returns:
             Tuple containing (client_id, name, public_key_bytes, last_seen_iso_utc, aes_key) or None if not found.
         """
@@ -907,10 +960,10 @@ class DatabaseManager:
     def get_client_by_name(self, name: str) -> tuple[bytes, str, bytes | None, str, bytes | None] | None:
         """
         Retrieves a client record by name.
-        
+
         Args:
             name: The username of the client.
-            
+
         Returns:
             Tuple containing (client_id, name, public_key_bytes, last_seen_iso_utc, aes_key) or None if not found.
         """
@@ -924,10 +977,10 @@ class DatabaseManager:
     def get_client_files(self, client_id: bytes) -> list[tuple[str, str, bool]]:
         """
         Retrieves all files for a specific client.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client.
-            
+
         Returns:
             List of tuples containing (file_name, path_name, verified) for each file.
         """
@@ -975,44 +1028,90 @@ class DatabaseManager:
             bool: True if update successful, False otherwise
         """
         try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
+            if self.use_pool and self.connection_pool:
+                # Use connection pool for better performance
+                conn = self.connection_pool.get_connection()
+                try:
+                    cursor = conn.cursor()
 
-                # Build dynamic UPDATE query based on provided fields
-                fields = []
-                params = []
+                    # Build dynamic UPDATE query based on provided fields
+                    fields = []
+                    params = []
 
-                if name is not None:
-                    fields.append("Name = ?")
-                    params.append(name)
+                    if name is not None:
+                        fields.append("Name = ?")
+                        params.append(name)
 
-                if public_key is not None:
-                    fields.append("PublicKey = ?")
-                    params.append(public_key)
+                    if public_key is not None:
+                        fields.append("PublicKey = ?")
+                        params.append(public_key)
 
-                if not fields:
-                    logger.warning("update_client called with no fields to update")
-                    return False
+                    if not fields:
+                        logger.warning("update_client called with no fields to update")
+                        return False
 
-                # Add LastSeen timestamp update
-                fields.append("LastSeen = ?")
-                params.append(datetime.now(UTC).isoformat())
+                    # Add LastSeen timestamp update
+                    fields.append("LastSeen = ?")
+                    params.append(datetime.now(UTC).isoformat())
 
-                # Add client_id for WHERE clause
-                params.append(client_id)
+                    # Add client_id for WHERE clause
+                    params.append(client_id)
 
-                query = f"UPDATE clients SET {', '.join(fields)} WHERE ID = ?"
+                    query = f"UPDATE clients SET {', '.join(fields)} WHERE ID = ?"
 
-                cursor.execute(query, params)
-                conn.commit()
+                    cursor.execute(query, params)
+                    conn.commit()
 
-                success = cursor.rowcount > 0
-                if success:
-                    logger.info(f"Updated client {client_id.hex()}: {fields}")
-                else:
-                    logger.warning(f"No client found with ID {client_id.hex()}")
+                    success = cursor.rowcount > 0
+                    if success:
+                        logger.info(f"Updated client {client_id.hex()}: {fields}")
+                    else:
+                        logger.warning(f"No client found with ID {client_id.hex()}")
 
-                return success
+                    return success
+
+                finally:
+                    self.connection_pool.return_connection(conn)
+            else:
+                # Fallback to direct connection
+                with sqlite3.connect(self.db_name, timeout=10.0) as conn:
+                    cursor = conn.cursor()
+
+                    # Build dynamic UPDATE query based on provided fields
+                    fields = []
+                    params = []
+
+                    if name is not None:
+                        fields.append("Name = ?")
+                        params.append(name)
+
+                    if public_key is not None:
+                        fields.append("PublicKey = ?")
+                        params.append(public_key)
+
+                    if not fields:
+                        logger.warning("update_client called with no fields to update")
+                        return False
+
+                    # Add LastSeen timestamp update
+                    fields.append("LastSeen = ?")
+                    params.append(datetime.now(UTC).isoformat())
+
+                    # Add client_id for WHERE clause
+                    params.append(client_id)
+
+                    query = f"UPDATE clients SET {', '.join(fields)} WHERE ID = ?"
+
+                    cursor.execute(query, params)
+                    conn.commit()
+
+                    success = cursor.rowcount > 0
+                    if success:
+                        logger.info(f"Updated client {client_id.hex()}: {fields}")
+                    else:
+                        logger.warning(f"No client found with ID {client_id.hex()}")
+
+                    return success
 
         except sqlite3.Error as e:
             logger.error(f"Database error updating client {client_id.hex()}: {e}")
@@ -1024,11 +1123,11 @@ class DatabaseManager:
     def delete_file_record(self, client_id: bytes, file_name: str) -> bool:
         """
         Deletes a specific file record for a client.
-        
+
         Args:
             client_id: The unique UUID (bytes) of the client.
             file_name: The filename to delete from records.
-            
+
         Returns:
             True if the file record was deleted, False if an error occurred.
         """
@@ -1074,7 +1173,7 @@ class DatabaseManager:
     def get_database_stats(self) -> dict[str, Any]:
         """
         Retrieves basic statistics about the database.
-        
+
         Returns:
             Dictionary containing database statistics.
         """
@@ -1195,6 +1294,26 @@ class DatabaseManager:
             logger.error(f"Database error while getting total client count: {e}")
             return 0
 
+    def get_total_files_count(self) -> int:
+        """
+        Returns the total number of files in the database.
+
+        This is more efficient than calling len(get_all_files()) as it uses
+        a COUNT query instead of retrieving all file records.
+
+        Returns:
+            int: Total number of file records in the database
+        """
+        try:
+            if result := self.execute(
+                "SELECT COUNT(*) FROM files", fetchone=True
+            ):
+                return result[0] if result[0] is not None else 0
+            return 0
+        except Exception as e:
+            logger.error(f"Database error while getting total files count: {e}")
+            return 0
+
     def get_total_bytes_transferred(self) -> int:
         """Returns the total number of bytes transferred."""
         try:
@@ -1210,12 +1329,12 @@ class DatabaseManager:
     def execute_many(self, query: str, param_list: list[tuple[Any, ...]], commit: bool = True) -> bool:
         """
         Execute a query multiple times with different parameters for bulk operations.
-        
+
         Args:
             query: The SQL query string.
             param_list: List of parameter tuples.
             commit: Whether to commit the transaction.
-            
+
         Returns:
             True if successful, False otherwise.
         """
@@ -1250,7 +1369,7 @@ class DatabaseManager:
                              max_size: int = 0, verified_only: bool = False) -> list[dict[str, Any]]:
         """
         Advanced file search with multiple filters.
-        
+
         Args:
             search_term: Search in filename or path
             file_type: File extension to filter by
@@ -1260,7 +1379,7 @@ class DatabaseManager:
             min_size: Minimum file size in bytes
             max_size: Maximum file size in bytes
             verified_only: Only return verified files
-            
+
         Returns:
             List of file dictionaries matching the criteria
         """
@@ -1310,7 +1429,7 @@ class DatabaseManager:
 
         query = f"""
             SELECT {base_columns}{extended_columns}
-            FROM files f 
+            FROM files f
             JOIN clients c ON f.ClientID = c.ID
             WHERE {' AND '.join(conditions)}
             ORDER BY f.ModificationDate DESC
@@ -1377,7 +1496,7 @@ class DatabaseManager:
 
             # Client statistics
             if client_stats := self.execute("""
-                SELECT 
+                SELECT
                     COUNT(*) as total_clients,
                     COUNT(CASE WHEN PublicKey IS NOT NULL THEN 1 END) as clients_with_keys,
                     AVG(CASE WHEN LastSeen IS NOT NULL THEN julianday('now') - julianday(LastSeen) END) as avg_days_since_seen
@@ -1391,7 +1510,7 @@ class DatabaseManager:
 
             # File statistics
             if file_stats := self.execute("""
-                SELECT 
+                SELECT
                     COUNT(*) as total_files,
                     COUNT(CASE WHEN Verified = 1 THEN 1 END) as verified_files,
                     AVG(FileSize) as avg_file_size,
@@ -1421,7 +1540,7 @@ class DatabaseManager:
             # Performance info (if tables exist)
             try:
                 index_info = self.execute("""
-                    SELECT name FROM sqlite_master 
+                    SELECT name FROM sqlite_master
                     WHERE type='index' AND sql IS NOT NULL
                     ORDER BY name
                 """, fetchall=True)
@@ -1442,7 +1561,7 @@ class DatabaseManager:
     def optimize_database(self) -> dict[str, Any]:
         """
         Perform database optimization tasks.
-        
+
         Returns:
             Dictionary with optimization results
         """
@@ -1492,10 +1611,10 @@ class DatabaseManager:
     def backup_database_to_file(self, backup_path: str | None = None) -> str:
         """
         Create a backup of the database.
-        
+
         Args:
             backup_path: Optional custom backup path
-            
+
         Returns:
             Path to the created backup file
         """
@@ -1529,7 +1648,7 @@ class DatabaseManager:
     def get_database_health(self) -> dict[str, Any]:
         """
         Check database health and integrity.
-        
+
         Returns:
             Dictionary with health check results
         """
@@ -1757,7 +1876,7 @@ class DatabaseManager:
     def check_startup_permissions(self):
         """
         Performs critical permission checks before the server starts.
-        
+
         Raises:
             SystemExit: If critical permissions are not available.
         """
@@ -1779,7 +1898,7 @@ class DatabaseManager:
     def ensure_storage_dir(self):
         """
         Ensures that the file storage directory exists.
-        
+
         Raises:
             OSError: If the directory cannot be created or accessed.
         """
@@ -1793,13 +1912,13 @@ class DatabaseManager:
     def get_table_names(self) -> list[str]:
         """
         Get list of all table names in the database.
-        
+
         Returns:
             List of table names for database browser functionality.
         """
         try:
             result = self.execute("""
-                SELECT name FROM sqlite_master 
+                SELECT name FROM sqlite_master
                 WHERE type='table' AND name NOT LIKE 'sqlite_%'
                 ORDER BY name
             """, fetchall=True)
@@ -1811,10 +1930,10 @@ class DatabaseManager:
     def get_table_content(self, table_name: str) -> tuple[list[str], list[dict[str, Any]]]:
         """
         Get column names and data for a specific table.
-        
+
         Args:
             table_name: Name of the table to query
-            
+
         Returns:
             Tuple of (column_names, data_rows) where:
             - column_names: List of column names
@@ -1857,10 +1976,10 @@ class DatabaseManager:
 def get_database_manager(db_name: str | None = None) -> DatabaseManager:
     """
     Factory function to get a DatabaseManager instance.
-    
+
     Args:
         db_name: Optional database name override.
-        
+
     Returns:
         DatabaseManager instance.
     """
@@ -1870,7 +1989,7 @@ def get_database_manager(db_name: str | None = None) -> DatabaseManager:
 def init_database(db_name: str | None = None):
     """
     Initialize the database schema.
-    
+
     Args:
         db_name: Optional database name override.
     """

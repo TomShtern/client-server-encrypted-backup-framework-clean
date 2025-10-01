@@ -198,6 +198,9 @@ python scripts/one_click_build_and_run.py
   - The server is ready to accept connections
   The Flet GUI should open automatically in the default web browser. If it doesn't appear, you can typically access it at `http://localhost:8550` (or ports 8551/8552 if 8550 is occupied).
 - **FletV2 Analysis**: Before making any changes to `FletV2`, analyze the folder for issues, problems, flaws, wrongs, anti-patterns, and bad practices using context7 MCP for up-to-date official context, documentation, and information to verify that all is going the way it should be going.
+- **Database Connection Management**: When updating client information in the database, ensure proper handling of connection acquisition and release, especially when using connection pooling. Mirror the pattern used in the `execute` method for connection management. Add checks for whether connection pooling is enabled (`self.use_pool` and `self.connection_pool`). Use manual connection management (get, use, return) when pooling is enabled, and a direct `sqlite3.connect` context manager when pooling is disabled. Ensure the connection is committed and returned properly to avoid resource leaks or database locks.
+- **Codacy Instructions**: When working with `codacy.instructions.md`, ensure that the instructions do not contain references to files or folders that do not exist in the repository (e.g., `#file:AI-Context` or `#file:important_docs`). Remove such references to avoid "File not found" errors.
+- **File and Folder References**: In this project's documentation convention, the syntax `#file:` is used to reference both individual files and folders (e.g., `#file:AI-Context` for the AI-Context folder). There isn't a separate `#folder:` keyword.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -227,7 +230,7 @@ python scripts/one_click_build_and_run.py
 self.backup_process = subprocess.Popen(
     [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
     stdin=self.PIPE,
-    stdout=self.PIPE,
+    stdout=the self.PIPE,
     stderr=self.PIPE,
     text=True,
     cwd=os.path.dirname(os.path.abspath(__file__)),  # CRITICAL: Working directory
@@ -636,34 +639,4 @@ Apply this pattern when silencing expected and non-critical exceptions, particul
 
 #### Recursive Visibility Fixer
 
-When forcing visibility of nested dashboard controls, use `contextlib.suppress` within the recursive function to handle potential errors during property access and updates. This ensures that the process continues even if specific controls raise exceptions.
-
-```python
-import contextlib
-
-def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
-    if ctrl is None:
-        return
-
-    # Prefer contextlib.suppress for concise suppressed-exception blocks
-    with contextlib.suppress(Exception):
-        if hasattr(ctrl, 'visible') and ctrl.visible is False:
-            ctrl.visible = True
-
-    with contextlib.suppress(Exception):
-        if hasattr(ctrl, 'opacity') and ctrl.opacity is not None and ctrl.opacity != 1.0:
-            ctrl.opacity = 1.0
-
-    with contextlib.suppress(Exception):
-        if hasattr(ctrl, 'update'):
-            try:
-                ctrl.update()
-            except Exception:
-                # Keep the inner safety for update() call failures
-                pass
-
-    if depth >= max_depth:
-        return
-
-    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
-    with contextlib.
+When forcing visibility of nested dashboard controls, use `contextlib.suppress` within the recursive function to handle potential errors during property access and updates. This ensures that the

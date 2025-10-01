@@ -296,6 +296,42 @@ app = FletV2App(page, real_server=None)
 - Follow the existing patterns for logging and diagnostics
 - Ensure all new code is well-documented with docstrings
 
+### Logging Standards (October 2025)
+The codebase follows strict logging level standards documented in [server.py:82-97](python_server/server/server.py#L82):
+
+**Level Usage**:
+- **DEBUG**: Protocol details, packet parsing, reassembly status, detailed state changes (verbose diagnostics)
+- **INFO**: Client connections/disconnections, file transfers, successful operations, startup/shutdown (important events)
+- **WARNING**: Recoverable errors, validation failures, retries, deprecated usage (needs attention but non-blocking)
+- **ERROR**: Failed operations, database errors, crypto failures, network issues (prevents specific operations)
+- **CRITICAL**: System failures, startup failures, security violations (system-wide problems)
+
+**Best Practices**:
+1. Use DEBUG for verbose info disabled in production by default
+2. Use INFO for events that help understand system flow
+3. Use WARNING for issues that don't stop operation
+4. Include relevant context (client name, file name, operation type) in all messages
+5. Avoid duplicate logging (don't log same event at multiple levels)
+6. Never use `print()` for diagnostics - always use `logger` methods
+
+### Input Validation Pattern
+All user-facing methods must validate inputs before database operations:
+```python
+# Example from add_client() - server.py:681-707
+if not isinstance(name, str) or len(name) == 0:
+    return self._format_response(False, error="Invalid name")
+if len(name) > MAX_CLIENT_NAME_LENGTH:
+    return self._format_response(False, error=f"Name too long (max {MAX_CLIENT_NAME_LENGTH})")
+if '\x00' in name or '\n' in name:
+    return self._format_response(False, error="Invalid characters")
+```
+
+### Constants Management
+- Never duplicate constants - import from config.py
+- Use descriptive constant names: `DEFAULT_LOG_LINES_LIMIT` not magic number `100`
+- Document constant purpose inline: `SETTINGS_FILE = "server_settings.json"  # Settings persistence file`
+- Group related constants together (Logging, Settings, Protocol, etc.)
+
 ## Troubleshooting
 
 ### Common Issues
