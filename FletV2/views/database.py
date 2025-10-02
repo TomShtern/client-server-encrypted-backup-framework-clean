@@ -228,7 +228,11 @@ def create_database_view(
                 updated_record[key] = field.value
 
             try:
-                result = server_bridge.update_table_record(selected_table, updated_record)
+                bridge = server_bridge
+                if bridge is None or not hasattr(bridge, 'update_table_record'):
+                    show_error_message(page, "Server bridge not ready (update unavailable)")
+                    return
+                result = bridge.update_table_record(selected_table, updated_record)
                 if result.get('success'):
                     # Update local data with server-confirmed record
                     updated_record = result.get('data', updated_record)
@@ -264,7 +268,11 @@ def create_database_view(
 
         def confirm_delete(_e: ft.ControlEvent) -> None:
             try:
-                result = server_bridge.delete_table_record(selected_table, record.get('id'))
+                bridge = server_bridge
+                if bridge is None or not hasattr(bridge, 'delete_table_record'):
+                    show_error_message(page, "Server bridge not ready (delete unavailable)")
+                    return
+                result = bridge.delete_table_record(selected_table, record.get('id'))
                 if result.get('success'):
                     # Remove from local data after server confirms deletion
                     table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
@@ -316,7 +324,11 @@ def create_database_view(
                 new_record_data[key] = field.value
 
             try:
-                result = server_bridge.add_table_record(selected_table, new_record_data)
+                bridge = server_bridge
+                if bridge is None or not hasattr(bridge, 'add_table_record'):
+                    show_error_message(page, "Server bridge not ready (add unavailable)")
+                    return
+                result = bridge.add_table_record(selected_table, new_record_data)
                 if result.get('success'):
                     # Use server-returned record to ensure consistency
                     new_record = result.get('data', new_record_data)

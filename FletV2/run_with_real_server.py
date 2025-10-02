@@ -90,7 +90,8 @@ def launch_fletv2_with_server(backup_server=None):
 
         # Wrap main function with server
         async def app_with_server(page: ft.Page):
-            await fletv2_main(page, backup_server)
+            # fletv2_main (main.main) is synchronous; call without await
+            fletv2_main(page, backup_server)
 
         # Launch FletV2
         asyncio.run(ft.app_async(

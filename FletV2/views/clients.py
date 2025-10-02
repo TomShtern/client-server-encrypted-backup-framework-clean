@@ -454,20 +454,24 @@ def create_clients_view(
                 "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
 
-            if server_bridge:
-                try:
-                    result = server_bridge.update_client(client.get('id'), updated_client)
-                    if result.get('success'):
-                        show_success_message(page, f"Client {updated_client['name']} updated")
-                        load_clients_data()
-                    else:
-                        show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
-                except Exception as ex:
-                    show_error_message(page, f"Error: {ex}")
-            else:
-                # No server connection
+            if not server_bridge:
                 show_error_message(page, "Server not connected. Please start the backup server.")
                 return
+
+            client_id = updated_client.get('id') or client.get('id')
+            if client_id is None:
+                show_error_message(page, "Selected client has no ID; cannot update.")
+                return
+
+            try:
+                result = server_bridge.update_client(str(client_id), {"name": updated_client["name"]})
+                if result.get('success'):
+                    show_success_message(page, f"Client {updated_client['name']} updated")
+                    load_clients_data()
+                else:
+                    show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
+            except Exception as ex:
+                show_error_message(page, f"Error: {ex}")
 
             page.close(edit_dialog)
 

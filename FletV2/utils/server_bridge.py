@@ -41,47 +41,115 @@ def uuid_string_to_blob(uuid_str: str) -> bytes:
     except (ValueError, TypeError):
         return uuid.uuid4().bytes
 
+def _case_insensitive_get(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Fetch the first matching key from a dictionary using case-insensitive lookup."""
+    if not data:
+        return default
+
+    for key in keys:
+        if key in data:
+            return data[key]
+        if isinstance(key, str):
+            lowered = key.lower()
+            for actual_key, value in data.items():
+                if isinstance(actual_key, str) and actual_key.lower() == lowered:
+                    return value
+    return default
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {'1', 'true', 'yes', 'on'}:
+            return True
+        if lowered in {'0', 'false', 'no', 'off'}:
+            return False
+    return False
+
+
 def convert_backupserver_client_to_fletv2(client_data: dict[str, Any]) -> dict[str, Any]:
     """Convert BackupServer client format to FletV2 expected format."""
     if not client_data:
         return {}
 
-    # BackupServer format: {'id': bytes, 'name': str, 'last_seen': str}
-    # FletV2 format: {'id': str, 'name': str, 'last_seen': str, 'status': str, 'files_count': int}
-    converted = {
-        'id': blob_to_uuid_string(client_data.get('id', b'')) if isinstance(client_data.get('id'), bytes) else str(client_data.get('id', '')),
-        'name': client_data.get('name', ''),
-        'last_seen': client_data.get('last_seen', ''),
-        'status': 'Active' if client_data.get('last_seen') else 'Inactive',
-        'files_count': client_data.get('files_count', 0),
-        'ip_address': client_data.get('ip_address', 'Unknown'),
-        'platform': client_data.get('platform', 'Unknown'),
-        'version': client_data.get('version', '1.0')
+    raw_id = _case_insensitive_get(client_data, 'id', 'ID', 'client_id', 'ClientID', default=b'')
+    if isinstance(raw_id, bytes):
+        client_id = raw_id.hex()
+    else:
+        client_id = str(raw_id) if raw_id is not None else ''
+
+    raw_name = _case_insensitive_get(client_data, 'name', 'Name', default='')
+    last_seen = _case_insensitive_get(client_data, 'last_seen', 'LastSeen', default='')
+    files_count = _case_insensitive_get(client_data, 'files_count', 'FilesCount', default=0)
+    try:
+        files_count_int = int(files_count)
+    except (TypeError, ValueError):
+        files_count_int = 0
+
+    return {
+        'id': client_id,
+        'name': str(raw_name) if raw_name is not None else '',
+        'last_seen': str(last_seen) if last_seen is not None else '',
+        'status': 'Active' if last_seen else 'Inactive',
+        'files_count': files_count_int,
+        'ip_address': _case_insensitive_get(client_data, 'ip_address', 'IPAddress', default='Unknown'),
+        'platform': _case_insensitive_get(client_data, 'platform', default='Unknown'),
+        'version': _case_insensitive_get(client_data, 'version', default='1.0')
     }
-    return converted
+
 
 def convert_backupserver_file_to_fletv2(file_data: dict[str, Any]) -> dict[str, Any]:
     """Convert BackupServer file format to FletV2 expected format."""
     if not file_data:
         return {}
 
-    # BackupServer format: {'filename': str, 'client_id': bytes, 'size': int, 'verified': bool}
-    # FletV2 format: {'id': str, 'name': str, 'client_id': str, 'size': int, 'status': str}
-    converted = {
-        'id': str(uuid.uuid4()),  # Generate ID if not provided
-        'name': file_data.get('filename', file_data.get('name', '')),
-        'client_id': blob_to_uuid_string(file_data.get('client_id', b'')) if isinstance(file_data.get('client_id'), bytes) else str(file_data.get('client_id', '')),
-        'size': file_data.get('size', file_data.get('FileSize', 0)),
-        'status': 'Verified' if file_data.get('verified', False) else 'Pending',
-        'path': file_data.get('path', file_data.get('PathName', '')),
-        'hash': file_data.get('hash', ''),
-        'created': file_data.get('created', file_data.get('ModificationDate', '')),
-        'modified': file_data.get('modified', file_data.get('ModificationDate', '')),
-        'type': file_data.get('type', 'file'),
-        'backup_count': file_data.get('backup_count', 1),
-        'last_backup': file_data.get('last_backup', file_data.get('ModificationDate', ''))
+    raw_id = _case_insensitive_get(file_data, 'id', 'ID', default=None)
+    if isinstance(raw_id, bytes):
+        file_id = raw_id.hex()
+    elif raw_id is not None:
+        file_id = str(raw_id)
+    else:
+        file_id = str(uuid.uuid4())
+
+    raw_client_id = _case_insensitive_get(file_data, 'client_id', 'ClientID', default='')
+    if isinstance(raw_client_id, bytes):
+        client_id = raw_client_id.hex()
+    else:
+        client_id = str(raw_client_id) if raw_client_id is not None else ''
+
+    filename = _case_insensitive_get(file_data, 'filename', 'FileName', 'name', default='')
+    file_size = _case_insensitive_get(file_data, 'size', 'FileSize', default=0)
+    try:
+        file_size_int = int(file_size)
+    except (TypeError, ValueError):
+        file_size_int = 0
+
+    verified_value = _case_insensitive_get(file_data, 'verified', 'Verified', default=False)
+    verified = _coerce_bool(verified_value)
+
+    return {
+        'id': file_id,
+        'name': str(filename) if filename is not None else '',
+        'client_id': client_id,
+        'size': file_size_int,
+        'status': 'Verified' if verified else 'Pending',
+        'verified': verified,
+        'path': _case_insensitive_get(file_data, 'path', 'PathName', default=''),
+        'hash': _case_insensitive_get(file_data, 'hash', 'CRC', default=''),
+        'created': _case_insensitive_get(
+            file_data, 'created', 'Created', 'CreationDate', 'ModificationDate', default=''
+        ),
+        'modified': _case_insensitive_get(file_data, 'modified', 'ModificationDate', default=''),
+        'type': _case_insensitive_get(file_data, 'type', default='file'),
+        'backup_count': _case_insensitive_get(file_data, 'backup_count', 'BackupCount', default=1),
+        'last_backup': _case_insensitive_get(
+            file_data, 'last_backup', 'LastBackup', 'ModificationDate', default=''
+        )
     }
-    return converted
 
 def convert_fletv2_client_to_backupserver(client_data: dict[str, Any]) -> dict[str, Any]:
     """Convert FletV2 client format to BackupServer expected format."""
@@ -93,13 +161,12 @@ def convert_fletv2_client_to_backupserver(client_data: dict[str, Any]) -> dict[s
     if isinstance(client_id, str):
         client_id = uuid_string_to_blob(client_id)
 
-    converted = {
+    return {
         'id': client_id,
         'name': client_data.get('name', ''),
         'public_key': None,  # Will be set by BackupServer
         'aes_key': None      # Will be set by BackupServer
     }
-    return converted
 
 class ServerBridge:
     """ServerBridge delegating to a real server instance.
@@ -121,7 +188,11 @@ class ServerBridge:
 
     def is_connected(self) -> bool:
         """Return connection status based on real server availability."""
-        return bool(self.real_server and hasattr(self.real_server, 'is_connected') and self.real_server.is_connected())
+        return bool(
+            self.real_server
+            and hasattr(self.real_server, 'is_connected')
+            and self.real_server.is_connected()
+        )
 
     def _call_real_server_method(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Helper to call real server method with data conversion."""
@@ -129,7 +200,11 @@ class ServerBridge:
             return {'success': False, 'data': None, 'error': 'No real server configured'}
         try:
             if not hasattr(self.real_server, method_name):
-                return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
+                return {
+                    'success': False,
+                    'data': None,
+                    'error': f'Method {method_name} not available on server',
+                }
 
             result = getattr(self.real_server, method_name)(*args, **kwargs)
 
@@ -209,7 +284,11 @@ class ServerBridge:
             return {'success': False, 'data': None, 'error': 'No real server configured'}
         try:
             if not hasattr(self.real_server, method_name):
-                return {'success': False, 'data': None, 'error': f'Method {method_name} not available on server'}
+                return {
+                    'success': False,
+                    'data': None,
+                    'error': f'Method {method_name} not available on server',
+                }
 
             result = await getattr(self.real_server, method_name)(*args, **kwargs)
 
@@ -335,7 +414,9 @@ class ServerBridge:
 
     async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> dict[str, Any]:
         """Delete a file by client ID and filename (async)."""
-        return await self._call_real_server_method_async('delete_file_by_client_and_name_async', client_id, filename)
+        return await self._call_real_server_method_async(
+            'delete_file_by_client_and_name_async', client_id, filename
+        )
 
     def download_file(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Download a file to destination."""
@@ -557,9 +638,112 @@ class ServerBridge:
     # DATABASE OPERATIONS (for database view)
     # ============================================================================
 
+    def _normalize_table_row(self, table_name: str, row: dict[str, Any]) -> dict[str, Any]:
+        """Normalize table rows using known converters while preserving original data."""
+        if not isinstance(row, dict):
+            return row
+
+        normalized_row = dict(row)
+        table_name_lower = table_name.lower()
+
+        if table_name_lower == 'clients':
+            normalized_row.update(convert_backupserver_client_to_fletv2(row))
+        elif table_name_lower == 'files':
+            normalized_row.update(convert_backupserver_file_to_fletv2(row))
+        else:
+            for key, value in list(row.items()):
+                if isinstance(key, str):
+                    lowered = key.lower()
+                    if lowered not in normalized_row:
+                        normalized_row[lowered] = value
+
+        if 'id' not in normalized_row:
+            raw_id = row.get('id') or row.get('ID')
+            if isinstance(raw_id, bytes):
+                normalized_row['id'] = raw_id.hex()
+            elif raw_id is not None:
+                normalized_row['id'] = str(raw_id)
+
+        return normalized_row
+
+    def add_table_record(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
+        """Insert a new database record via the real server."""
+        if not record_data:
+            return {'success': False, 'data': None, 'error': 'No data provided'}
+
+        result = self._call_real_server_method('add_row', table_name, record_data)
+        if result.get('success') and isinstance(result.get('data'), dict):
+            result['data'] = self._normalize_table_row(table_name, result['data'])
+        return result
+
+    async def add_table_record_async(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
+        result = await self._call_real_server_method_async('add_row_async', table_name, record_data)
+        if result.get('success') and isinstance(result.get('data'), dict):
+            result['data'] = self._normalize_table_row(table_name, result['data'])
+        return result
+
+    def update_table_record(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing database record via the real server."""
+        if not record_data:
+            return {'success': False, 'data': None, 'error': 'No data provided'}
+
+        record_identifier = record_data.get('id') or record_data.get('ID')
+        if record_identifier is None:
+            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+
+        sanitized_data = dict(record_data)
+        sanitized_data.pop('id', None)
+        sanitized_data.pop('ID', None)
+
+        result = self._call_real_server_method('update_row', table_name, record_identifier, sanitized_data)
+        if result.get('success') and isinstance(result.get('data'), dict):
+            result['data'] = self._normalize_table_row(table_name, result['data'])
+        return result
+
+    async def update_table_record_async(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
+        if not record_data:
+            return {'success': False, 'data': None, 'error': 'No data provided'}
+
+        record_identifier = record_data.get('id') or record_data.get('ID')
+        if record_identifier is None:
+            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+
+        sanitized_data = dict(record_data)
+        sanitized_data.pop('id', None)
+        sanitized_data.pop('ID', None)
+
+        result = await self._call_real_server_method_async(
+            'update_row_async', table_name, record_identifier, sanitized_data
+        )
+        if result.get('success') and isinstance(result.get('data'), dict):
+            result['data'] = self._normalize_table_row(table_name, result['data'])
+        return result
+
+    def delete_table_record(self, table_name: str, record_identifier: Any) -> dict[str, Any]:
+        """Delete a database record via the real server."""
+        if record_identifier is None:
+            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+
+        if isinstance(record_identifier, dict):
+            record_identifier = record_identifier.get('id') or record_identifier.get('ID')
+
+        if record_identifier is None:
+            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+
+        return self._call_real_server_method('delete_row', table_name, record_identifier)
+
+    async def delete_table_record_async(self, table_name: str, record_identifier: Any) -> dict[str, Any]:
+        if isinstance(record_identifier, dict):
+            record_identifier = record_identifier.get('id') or record_identifier.get('ID')
+
+        if record_identifier is None:
+            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+
+        return await self._call_real_server_method_async('delete_row_async', table_name, record_identifier)
+
     def get_database_info(self) -> dict[str, Any]:
         """Get database information and statistics."""
-        if not hasattr(self.real_server, 'db_manager'):
+        if not self.real_server or not hasattr(self.real_server, 'db_manager'):
             return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
 
         try:
@@ -586,7 +770,7 @@ class ServerBridge:
 
     def get_table_names(self) -> dict[str, Any]:
         """Get list of database table names."""
-        if not hasattr(self.real_server, 'db_manager'):
+        if not self.real_server or not hasattr(self.real_server, 'db_manager'):
             return {'success': False, 'data': [], 'error': 'Database manager not available on server'}
 
         try:
@@ -599,24 +783,19 @@ class ServerBridge:
 
     def get_table_data(self, table_name: str) -> dict[str, Any]:
         """Get data from a specific database table."""
-        if not hasattr(self.real_server, 'db_manager'):
-            return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': 'Database manager not available on server'}
+        if not self.real_server or not hasattr(self.real_server, 'db_manager'):
+            return {
+                'success': False,
+                'data': {'columns': [], 'rows': []},
+                'error': 'Database manager not available on server',
+            }
 
         try:
             db_manager = self.real_server.db_manager
             columns, rows = db_manager.get_table_content(table_name)
 
             # Convert to format expected by FletV2
-            table_data = []
-            for row in rows:
-                # Apply data conversion based on table type
-                if table_name == 'clients':
-                    converted_row = convert_backupserver_client_to_fletv2(row)
-                elif table_name == 'files':
-                    converted_row = convert_backupserver_file_to_fletv2(row)
-                else:
-                    converted_row = row
-                table_data.append(converted_row)
+            table_data = [self._normalize_table_row(table_name, row) for row in rows]
 
             return {
                 'success': True,

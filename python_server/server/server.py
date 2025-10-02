@@ -1,12 +1,15 @@
 # GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
+import base64
 import contextlib
 import logging
 import os
+import shutil
 import socket
 import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 # Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
@@ -78,6 +81,9 @@ AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 # Logging Configuration
 DEFAULT_LOG_LINES_LIMIT = 100  # Default number of log lines to retrieve
 DEFAULT_ACTIVITY_LIMIT = 50  # Default number of activity entries to return
+MAX_INLINE_DOWNLOAD_BYTES = 10 * 1024 * 1024  # Limit for embedding file content in responses (10 MB)
+
+VALID_LOG_EXPORT_FORMATS = {"text", "json", "csv"}
 
 # Settings Configuration
 SETTINGS_FILE = "server_settings.json"  # Settings persistence file
@@ -329,6 +335,13 @@ class BackupServer:
 
         # Initialize GUI manager
         self.gui_manager = GUIManager(self)
+        self._storage_dir = Path(FILE_STORAGE_DIR)
+        with contextlib.suppress(OSError):
+            self._storage_dir.mkdir(parents=True, exist_ok=True)
+        self._last_files_cleaned_count: int = 0
+        self._last_partial_files_cleaned: int = 0
+        self._last_maintenance_timestamp: float | None = None
+        self._log_export_rate_limits: dict[str, float] = {}
         # Allow disabling integrated GUI when standalone GUI process will be launched
         disable_flag = os.environ.get("CYBERBACKUP_DISABLE_INTEGRATED_GUI")
         logger.info(f"[GUI] Embedded GUI disable flag value: {disable_flag!r}")
@@ -405,7 +418,7 @@ class BackupServer:
         self.gui_manager.update_client_stats({
             'connected': connected_clients,
             'total': total_clients,
-            'active_transfers': 0
+            'active_transfers': self._calculate_active_transfers()
         })
 
     def _update_gui_success(self, message: str):
@@ -480,6 +493,42 @@ class BackupServer:
     # Port configuration is now handled by NetworkServer
 
 
+    def _calculate_active_transfers(self) -> int:
+        """Return the number of currently active file transfers across clients."""
+        with self.clients_lock:
+            in_progress = sum(len(client.partial_files) for client in self.clients.values())
+
+        # Also account for global transfer manager state without double-counting
+        transfer_manager = getattr(self.request_handler, "file_transfer_manager", None)
+        if transfer_manager:
+            with contextlib.suppress(Exception):
+                with transfer_manager.transfer_lock:
+                    in_progress = max(in_progress, len(transfer_manager.active_transfers))
+
+        return in_progress
+
+    def _cleanup_stale_temp_files(self, cutoff_seconds: int = PARTIAL_FILE_TIMEOUT) -> int:
+        """Remove stale temporary files left behind by aborted transfers."""
+        if not self._storage_dir.exists():
+            return 0
+
+        cleanup_before = time.time() - max(cutoff_seconds, 0)
+        cleaned = 0
+
+        for temp_path in self._storage_dir.glob("*.tmp_EncryptedBackup"):
+            try:
+                if temp_path.stat().st_mtime <= cleanup_before:
+                    temp_path.unlink()
+                    cleaned += 1
+                    logger.info(f"Maintenance: Removed stale temp file '{temp_path.name}'")
+            except FileNotFoundError:
+                continue
+            except OSError as err:
+                logger.warning(f"Maintenance: Failed to remove temp file '{temp_path}': {err}")
+
+        return cleaned
+
+
     def _periodic_maintenance_job(self):
         """
         Runs periodically to perform maintenance and send status updates to the GUI.
@@ -506,16 +555,30 @@ class BackupServer:
                 client_obj.cleanup_stale_partial_files() for client_obj in active_clients_list
             )
 
+            stale_temp_files_cleaned_count = self._cleanup_stale_temp_files()
+            self._last_partial_files_cleaned = stale_partial_files_cleaned_count
+            self._last_files_cleaned_count = stale_temp_files_cleaned_count
+            self._last_maintenance_timestamp = time.time()
+
             # --- GUI Status Update ---
             if self.gui_manager.is_gui_ready():
-                self._update_gui_with_status_data(inactive_clients_removed_count, stale_partial_files_cleaned_count)
+                self._update_gui_with_status_data(
+                    inactive_clients_removed_count,
+                    stale_partial_files_cleaned_count,
+                    stale_temp_files_cleaned_count
+                )
 
         except Exception as e:
             logger.critical(f"Critical error in periodic maintenance job: {e}", exc_info=True)
             if self.gui_manager.is_gui_ready():
                 self.gui_manager.queue_update("log", f"ERROR: Maintenance job failed: {e}")
 
-    def _update_gui_with_status_data(self, inactive_clients_removed_count: int, stale_partial_files_cleaned_count: int):
+    def _update_gui_with_status_data(
+        self,
+        inactive_clients_removed_count: int,
+        stale_partial_files_cleaned_count: int,
+        stale_temp_files_cleaned_count: int
+    ) -> None:
         """Extract method to prepare and send status data to GUI."""
         # 1. Gather all status information into dictionaries
         status_data = {
@@ -526,17 +589,21 @@ class BackupServer:
             'error_message': self.network_server.last_error or ''
         }
 
+        active_transfers = self._calculate_active_transfers()
         client_stats_data = {
             'connected': self.network_server.get_connection_stats()['active_connections'],
             'total': self.db_manager.get_total_clients_count(),
-            'active_transfers': 0  # Placeholder, needs real logic
+            'active_transfers': active_transfers
         }
 
         maintenance_stats_data = {
-            'files_cleaned': 0,  # Placeholder
+            'files_cleaned': stale_temp_files_cleaned_count,
             'partial_files_cleaned': stale_partial_files_cleaned_count,
             'clients_cleaned': inactive_clients_removed_count,
-            'last_cleanup': datetime.now().isoformat()
+            'last_cleanup': (
+                datetime.fromtimestamp(self._last_maintenance_timestamp).isoformat()
+                if self._last_maintenance_timestamp else datetime.now().isoformat()
+            )
         }
 
         # 2. Put the gathered data into the GUI's queue
@@ -608,7 +675,7 @@ class BackupServer:
         self.gui_manager.update_client_stats({
             'connected': 0,
             'total': len(self.clients),
-            'active_transfers': 0
+            'active_transfers': self._calculate_active_transfers()
         })
 
         # Signal to the GUI that the initial data load is complete
@@ -862,6 +929,51 @@ class BackupServer:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.disconnect_client, client_id)
 
+    def _parse_file_identifier(self, file_id: str) -> tuple[str, str]:
+        """Validate and split a composite file identifier into client ID and filename."""
+        if not isinstance(file_id, str) or ':' not in file_id:
+            raise ValueError("Invalid file identifier. Expected 'client_id:filename'.")
+
+        client_part, filename = file_id.split(':', 1)
+        client_part = client_part.strip()
+        filename = filename.strip()
+
+        if not client_part or not filename:
+            raise ValueError("Invalid file identifier components.")
+
+        try:
+            bytes.fromhex(client_part)
+        except ValueError as exc:
+            raise ValueError("Invalid client ID provided.") from exc
+
+        if any(sep in filename for sep in ('/', '\\')) or '..' in filename:
+            raise ValueError("Invalid filename provided.")
+
+        return client_part, filename
+
+    def _resolve_storage_path(self, stored_path: str | None, filename: str) -> Path:
+        """Resolve a stored file path ensuring it resides under the storage directory."""
+        storage_root = self._storage_dir.resolve()
+        candidates: list[Path] = []
+
+        if stored_path:
+            candidate = Path(stored_path)
+            if not candidate.is_absolute():
+                candidate = (Path.cwd() / candidate).resolve(strict=False)
+            else:
+                candidate = candidate.resolve(strict=False)
+
+            if storage_root in candidate.parents or candidate.parent == storage_root:
+                candidates.append(candidate)
+
+        candidates.append((storage_root / filename).resolve(strict=False))
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        return candidates[-1]
+
     # --- File Operations ---
 
     def get_files(self) -> dict[str, Any]:
@@ -943,15 +1055,81 @@ class BackupServer:
         return await loop.run_in_executor(None, self.delete_file_by_client_and_name, client_id, filename)
 
     def download_file(self, file_id: str, destination_path: str) -> dict[str, Any]:
-        """Download a file (placeholder implementation)."""
+        """Download a stored file and optionally persist it to a destination path."""
         try:
-            # This would require implementation of actual file download logic
-            # For now, returning a placeholder response
-            logger.info(f"Download requested for file {file_id} to {destination_path}")
-            return self._format_response(False, error="Download functionality not yet implemented")
-        except Exception as e:
-            logger.error(f"Failed to download file {file_id}: {e}")
-            return self._format_response(False, error=str(e))
+            client_id_str, filename = self._parse_file_identifier(file_id)
+        except ValueError as exc:
+            return self._format_response(False, error=str(exc))
+
+        try:
+            file_info = self.db_manager.get_file_info(client_id_str, filename)
+        except Exception as db_error:
+            logger.error(f"Database error while retrieving file '{file_id}': {db_error}")
+            return self._format_response(False, error=f"Database error: {db_error}")
+
+        if not file_info:
+            logger.warning(f"Download requested for unknown file identifier '{file_id}'")
+            return self._format_response(False, error="File not found")
+
+        source_path = self._resolve_storage_path(file_info.get('path'), filename)
+
+        if not source_path.exists():
+            logger.error(f"Stored file missing for '{file_id}' (resolved path: {source_path})")
+            return self._format_response(False, error="Stored file data not found on server")
+
+        try:
+            file_stat = source_path.stat()
+        except OSError as stat_error:
+            logger.error(f"Failed to stat file '{source_path}': {stat_error}")
+            return self._format_response(False, error=f"Unable to access file metadata: {stat_error}")
+
+        response_payload: dict[str, Any] = {
+            'client_id': client_id_str,
+            'filename': filename,
+            'verified': bool(file_info.get('verified', False)),
+            'size_bytes': file_stat.st_size,
+            'source_path': str(source_path),
+            'client_name': file_info.get('client'),
+            'crc': file_info.get('crc')
+        }
+
+        destination_path = (destination_path or '').strip()
+        if destination_path:
+            dest_path = Path(destination_path).expanduser()
+            try:
+                if dest_path.exists() and dest_path.is_dir():
+                    dest_file_path = (dest_path / filename).resolve(strict=False)
+                else:
+                    dest_file_path = dest_path.resolve(strict=False)
+                    dest_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+                shutil.copy2(source_path, dest_file_path)
+                response_payload['destination_path'] = str(dest_file_path)
+                response_payload['copied_bytes'] = dest_file_path.stat().st_size
+            except Exception as copy_error:
+                logger.error(f"Failed to write downloaded file to '{destination_path}': {copy_error}")
+                return self._format_response(False, error=f"Failed to write to destination: {copy_error}")
+
+        try:
+            if file_stat.st_size <= MAX_INLINE_DOWNLOAD_BYTES:
+                with open(source_path, 'rb') as file_handle:
+                    file_bytes = file_handle.read()
+                response_payload['content_b64'] = base64.b64encode(file_bytes).decode('ascii')
+            else:
+                response_payload['content_b64'] = None
+                response_payload['note'] = (
+                    "File larger than 10 MB; content not embedded in response. "
+                    "Use destination download path instead."
+                )
+        except Exception as read_error:
+            logger.error(f"Failed to read file content for '{source_path}': {read_error}")
+            return self._format_response(False, error=f"Failed to read file content: {read_error}")
+
+        logger.info(
+            f"File download fulfilled for client='{client_id_str}' file='{filename}' size={file_stat.st_size} bytes"
+        )
+
+        return self._format_response(True, response_payload)
 
     async def download_file_async(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Async version of download_file()."""
@@ -960,14 +1138,89 @@ class BackupServer:
         return await loop.run_in_executor(None, self.download_file, file_id, destination_path)
 
     def verify_file(self, file_id: str) -> dict[str, Any]:
-        """Verify a file's integrity (placeholder implementation)."""
+        """Verify a stored file by comparing computed CRC32 with the recorded value."""
         try:
-            # This would require implementation of actual file verification logic
-            logger.info(f"Verification requested for file {file_id}")
-            return self._format_response(False, error="File verification functionality not yet implemented")
-        except Exception as e:
-            logger.error(f"Failed to verify file {file_id}: {e}")
-            return self._format_response(False, error=str(e))
+            client_id_str, filename = self._parse_file_identifier(file_id)
+        except ValueError as exc:
+            return self._format_response(False, error=str(exc))
+
+        try:
+            file_info = self.db_manager.get_file_info(client_id_str, filename)
+        except Exception as db_error:
+            logger.error(f"Database error while retrieving file info for '{file_id}': {db_error}")
+            return self._format_response(False, error=f"Database error: {db_error}")
+
+        if not file_info:
+            logger.warning(f"Verification requested for unknown file identifier '{file_id}'")
+            return self._format_response(False, error="File not found")
+
+        source_path = self._resolve_storage_path(file_info.get('path'), filename)
+        if not source_path.exists():
+            logger.error(f"Stored file missing for '{file_id}' (resolved path: {source_path})")
+            return self._format_response(False, error="Stored file data not found on server")
+
+        crc_value = 0
+        total_bytes = 0
+        chunk_size = 128 * 1024  # 128 KB chunks for verification
+
+        try:
+            with open(source_path, 'rb') as file_handle:
+                while chunk := file_handle.read(chunk_size):
+                    crc_value = self._calculate_crc(chunk, crc_value)
+                    total_bytes += len(chunk)
+        except Exception as read_error:
+            logger.error(f"Failed to read file '{source_path}' during verification: {read_error}")
+            return self._format_response(False, error=f"Failed to read file content: {read_error}")
+
+        computed_crc = self._finalize_crc(crc_value, total_bytes)
+        expected_crc = file_info.get('crc')
+
+        # Treat files without stored CRC as newly verified after computing it
+        verified_result = expected_crc is None or expected_crc == computed_crc
+
+        update_success = self.db_manager.update_file_verification(
+            client_id_str,
+            filename,
+            verified_result,
+            computed_crc
+        )
+
+        if not update_success:
+            logger.warning(f"Verification result for '{file_id}' could not be persisted to database")
+
+        status_text = 'verified' if verified_result else 'failed'
+        response_payload: dict[str, Any] = {
+            'client_id': client_id_str,
+            'filename': filename,
+            'verified': verified_result,
+            'status': status_text,
+            'size': total_bytes,
+            'modified': file_info.get('date'),
+            'hash': f"CRC32: 0x{computed_crc:08X}",
+            'computed_crc': f"0x{computed_crc:08X}",
+            'expected_crc': f"0x{expected_crc:08X}" if expected_crc is not None else None,
+            'storage_path': str(source_path)
+        }
+
+        if expected_crc is None:
+            response_payload['note'] = (
+                "No stored CRC was available; computed checksum has been persisted."
+            )
+        elif not verified_result:
+            response_payload['message'] = "Stored checksum does not match the computed value."
+
+        if not update_success:
+            response_payload['warning'] = "Could not persist verification result to database."
+
+        log_message = (
+            f"File verification {'succeeded' if verified_result else 'failed'} "
+            f"for client='{client_id_str}' file='{filename}' computed_crc=0x{computed_crc:08X}"
+        )
+        if expected_crc is not None:
+            log_message += f" expected_crc=0x{expected_crc:08X}"
+        logger.info(log_message)
+
+        return self._format_response(True, response_payload)
 
     async def verify_file_async(self, file_id: str) -> dict[str, Any]:
         """Async version of verify_file()."""
@@ -1014,25 +1267,293 @@ class BackupServer:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_table_data, table_name)
 
+    # ------------------------------------------------------------------
+    # Generic database editing helpers used by the Flet database view
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_table_name(table_name: str) -> str:
+        return table_name.strip().lower()
+
+    @staticmethod
+    def _supported_table_name(table_name: str) -> str | None:
+        table_mapping = {
+            'clients': 'clients',
+            'files': 'files'
+        }
+        normalized = BackupServer._normalize_table_name(table_name)
+        return table_mapping.get(normalized)
+
+    @staticmethod
+    def _convert_primary_key_value(column_info: dict[str, Any], value: str) -> tuple[Any, str]:
+        """Convert UI-provided identifier into the database representation."""
+        if value is None:
+            raise ValueError("Row identifier is required")
+
+        column_type = (column_info.get('type') or '').upper()
+        raw_value = str(value).strip()
+        if column_type.startswith('BLOB'):
+            sanitized = raw_value.replace('-', '').strip()
+            if sanitized == '':
+                raise ValueError("Row identifier is required")
+            if len(sanitized) % 2 != 0:
+                raise ValueError("Invalid identifier format provided")
+            try:
+                pk_bytes = bytes.fromhex(sanitized)
+            except ValueError as exc:
+                raise ValueError("Invalid identifier format provided") from exc
+            return pk_bytes, pk_bytes.hex()
+
+        if column_type.startswith('INT') or column_type.startswith('INTEGER'):
+            try:
+                pk_int = int(raw_value, 10)
+            except ValueError as exc:
+                raise ValueError("Invalid numeric identifier provided") from exc
+            return pk_int, str(pk_int)
+
+        if raw_value == '':
+            raise ValueError("Row identifier is required")
+        return raw_value, raw_value
+
+    @staticmethod
+    def _convert_column_input(column_info: dict[str, Any], value: Any) -> Any:
+        """Convert UI-provided value into a database-compatible format."""
+        column_type = (column_info.get('type') or '').upper()
+        column_name = column_info.get('name', '')
+
+        if value is None or (isinstance(value, str) and value.strip() == ''):
+            return None
+
+        if isinstance(value, memoryview):
+            value = bytes(value)
+
+        if column_type.startswith('BLOB'):
+            if isinstance(value, (bytes, bytearray)):
+                return bytes(value)
+            sanitized = str(value).strip().replace('-', '')
+            if sanitized == '':
+                return None
+            if len(sanitized) % 2 != 0:
+                raise ValueError(f"Value for column '{column_name}' must be hexadecimal")
+            try:
+                return bytes.fromhex(sanitized)
+            except ValueError as exc:
+                raise ValueError(f"Value for column '{column_name}' must be hexadecimal") from exc
+
+        truthy = {'1', 'true', 'yes', 'on'}
+        falsy = {'0', 'false', 'no', 'off'}
+
+        if 'BOOL' in column_type or 'BOOLEAN' in column_type or column_name.lower() in {'verified'}:
+            if isinstance(value, bool):
+                return 1 if value else 0
+            string_value = str(value).strip().lower()
+            if string_value in truthy:
+                return 1
+            if string_value in falsy:
+                return 0
+            raise ValueError(f"Value for column '{column_name}' must be boolean")
+
+        if column_type.startswith('INT') or column_type.startswith('INTEGER'):
+            if isinstance(value, bool):
+                return 1 if value else 0
+            try:
+                return int(float(str(value).strip()))
+            except ValueError as exc:
+                raise ValueError(f"Value for column '{column_name}' must be numeric") from exc
+
+        if column_type.startswith('REAL') or column_type.startswith('DOUBLE') or column_type.startswith('FLOAT'):
+            try:
+                return float(str(value).strip())
+            except ValueError as exc:
+                raise ValueError(f"Value for column '{column_name}' must be numeric") from exc
+
+        return str(value)
+
     def update_row(self, table_name: str, row_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
-        """Update a row in a table (placeholder implementation)."""
+        """Update a row in a supported database table."""
         try:
-            # This would require more sophisticated implementation based on the actual schema
-            logger.info(f"Update requested for table {table_name}, row {row_id}")
-            return self._format_response(False, error="Row update functionality not yet implemented")
+            actual_table = self._supported_table_name(table_name)
+            if not actual_table:
+                return self._format_response(False, error=f"Table '{table_name}' is not supported for updates")
+
+            schema = self.db_manager.get_table_schema(actual_table)
+            if not schema:
+                return self._format_response(False, error=f"Table schema for '{table_name}' unavailable")
+
+            schema_map = {column['name'].lower(): column for column in schema}
+            primary_columns = [column for column in schema if column.get('pk')]
+            if len(primary_columns) != 1:
+                return self._format_response(False, error="Only tables with a single-column primary key are supported")
+
+            primary_column_info = primary_columns[0]
+            try:
+                primary_value, primary_hex = self._convert_primary_key_value(primary_column_info, row_id)
+            except ValueError as exc:
+                return self._format_response(False, error=str(exc))
+
+            updates: dict[str, Any] = {}
+            original_values: dict[str, Any] = {}
+            for key, value in (updated_data or {}).items():
+                if key is None:
+                    continue
+                column_info = schema_map.get(str(key).lower())
+                if not column_info:
+                    continue
+                # Never allow updates to the primary key
+                if column_info['name'].lower() == primary_column_info['name'].lower():
+                    continue
+                original_values[column_info['name']] = value
+                try:
+                    updates[column_info['name']] = self._convert_column_input(column_info, value)
+                except ValueError as conversion_error:
+                    return self._format_response(False, error=str(conversion_error))
+
+            if actual_table == 'clients':
+                client_payload: dict[str, Any] = {}
+
+                if 'Name' in original_values:
+                    proposed_name = str(original_values['Name']).strip()
+                    if not proposed_name:
+                        return self._format_response(False, error="Client name is required")
+                    if len(proposed_name) > MAX_CLIENT_NAME_LENGTH:
+                        return self._format_response(False, error=f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
+                    if any(char in proposed_name for char in ('\x00', '\n', '\r')):
+                        return self._format_response(False, error="Client name contains invalid characters")
+                    try:
+                        existing = self.db_manager.get_client_by_name(proposed_name)
+                        if existing and existing[0] != primary_value:
+                            return self._format_response(False, error=f"Client name '{proposed_name}' already exists")
+                    except Exception as uniqueness_error:
+                        logger.warning(f"Could not verify client name uniqueness: {uniqueness_error}")
+                    client_payload['name'] = proposed_name
+                    updates.pop('Name', None)
+
+                if 'PublicKey' in updates:
+                    client_payload['public_key'] = updates.pop('PublicKey', None)
+
+                if client_payload:
+                    client_response = self.update_client(primary_hex, client_payload)
+                    if not client_response.get('success', False):
+                        return client_response
+
+            # Apply remaining direct column updates if needed
+            if updates:
+                update_success = self.db_manager.update_table_row(
+                    actual_table,
+                    primary_column_info['name'],
+                    primary_value,
+                    updates
+                )
+                if not update_success:
+                    return self._format_response(False, error="Failed to update database row")
+
+            refreshed_row = self.db_manager.get_row_by_primary_key(
+                actual_table,
+                primary_column_info['name'],
+                primary_value
+            )
+            if not refreshed_row:
+                return self._format_response(False, error="Updated row could not be retrieved")
+            return self._format_response(True, refreshed_row)
         except Exception as e:
             logger.error(f"Failed to update row {row_id} in table {table_name}: {e}")
             return self._format_response(False, error=str(e))
 
     def delete_row(self, table_name: str, row_id: str) -> dict[str, Any]:
-        """Delete a row from a table (placeholder implementation)."""
+        """Delete a row from a supported database table."""
         try:
-            # This would require more sophisticated implementation based on the actual schema
-            logger.info(f"Delete requested for table {table_name}, row {row_id}")
-            return self._format_response(False, error="Row deletion functionality not yet implemented")
+            actual_table = self._supported_table_name(table_name)
+            if not actual_table:
+                return self._format_response(False, error=f"Table '{table_name}' is not supported for deletion")
+
+            schema = self.db_manager.get_table_schema(actual_table)
+            if not schema:
+                return self._format_response(False, error=f"Table schema for '{table_name}' unavailable")
+
+            primary_columns = [column for column in schema if column.get('pk')]
+            if len(primary_columns) != 1:
+                return self._format_response(False, error="Only tables with a single-column primary key are supported")
+
+            primary_column_info = primary_columns[0]
+            try:
+                primary_value, primary_hex = self._convert_primary_key_value(primary_column_info, row_id)
+            except ValueError as exc:
+                return self._format_response(False, error=str(exc))
+
+            normalized = self._normalize_table_name(table_name)
+            if normalized == 'clients':
+                return self.delete_client(primary_hex)
+
+            if normalized == 'files':
+                file_row = self.db_manager.get_row_by_primary_key(actual_table, primary_column_info['name'], primary_value)
+                if not file_row:
+                    return self._format_response(False, error="File not found")
+
+                client_identifier = file_row.get('ClientID') or file_row.get('client_id')
+                filename = file_row.get('FileName') or file_row.get('filename')
+                if not client_identifier or not filename:
+                    return self._format_response(False, error="File metadata incomplete; cannot delete")
+
+                return self.delete_file_by_client_and_name(str(client_identifier), str(filename))
+
+            delete_success = self.db_manager.delete_table_row(actual_table, primary_column_info['name'], primary_value)
+            if not delete_success:
+                return self._format_response(False, error="Row not found or could not be deleted")
+
+            return self._format_response(True, {'deleted': True})
         except Exception as e:
             logger.error(f"Failed to delete row {row_id} from table {table_name}: {e}")
             return self._format_response(False, error=str(e))
+
+    def add_row(self, table_name: str, row_data: dict[str, Any]) -> dict[str, Any]:
+        """Insert a new row into a supported table."""
+        try:
+            actual_table = self._supported_table_name(table_name)
+            if not actual_table:
+                return self._format_response(False, error=f"Table '{table_name}' is not supported for inserts")
+
+            if actual_table == 'clients':
+                proposed_name = str(row_data.get('name') or row_data.get('Name') or '').strip()
+                if not proposed_name:
+                    return self._format_response(False, error="Client name is required")
+
+                add_response = self.add_client({'name': proposed_name})
+                if not add_response.get('success', False):
+                    return add_response
+
+                client_id = add_response.get('data', {}).get('id')
+                if client_id:
+                    try:
+                        client_bytes = bytes.fromhex(client_id)
+                        refreshed_row = self.db_manager.get_row_by_primary_key('clients', 'ID', client_bytes)
+                        if refreshed_row:
+                            return self._format_response(True, refreshed_row)
+                    except ValueError:
+                        logger.warning("Failed to fetch inserted client row for return payload")
+                return add_response
+
+            if actual_table == 'files':
+                return self._format_response(False, error="Adding files via GUI is not supported")
+
+            return self._format_response(False, error=f"Table '{table_name}' does not support inserts")
+        except Exception as e:
+            logger.error(f"Failed to add row to table {table_name}: {e}")
+            return self._format_response(False, error=str(e))
+
+    async def update_row_async(self, table_name: str, row_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.update_row, table_name, row_id, updated_data)
+
+    async def delete_row_async(self, table_name: str, row_id: str) -> dict[str, Any]:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.delete_row, table_name, row_id)
+
+    async def add_row_async(self, table_name: str, row_data: dict[str, Any]) -> dict[str, Any]:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.add_row, table_name, row_data)
 
     # --- Server Status & Monitoring ---
 
@@ -1109,7 +1630,7 @@ class BackupServer:
                     'total_registered': total_clients
                 },
                 'database': {
-                    'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0
+                    'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
                 }
             }
 
@@ -1196,14 +1717,14 @@ class BackupServer:
             test_data = {
                 'server_accessible': self.running,
                 'database_accessible': True,
-                'response_time_ms': 0  # Placeholder
+                'response_time_ms': None
             }
 
             # Basic database connectivity test
-            start_time = time.time()
+            start_time = time.perf_counter()
             try:
                 self.db_manager.get_total_clients_count()
-                test_data['response_time_ms'] = (time.time() - start_time) * 1000
+                test_data['response_time_ms'] = round((time.perf_counter() - start_time) * 1000, 2)
             except Exception as e:
                 test_data['database_accessible'] = False
                 test_data['database_error'] = str(e)
@@ -1256,7 +1777,7 @@ class BackupServer:
         try:
             analytics_data = {
                 'total_clients': self.db_manager.get_total_clients_count(),
-                'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0,
+                'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0,
                 'server_uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
                 'database_stats': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
             }
@@ -1277,8 +1798,8 @@ class BackupServer:
             metrics_data = {
                 'active_connections': len(self.clients),
                 'database_response_time_ms': 0,
-                'memory_usage_mb': 0,
-                'cpu_usage_percent': 0
+                'memory_usage_mb': 0.0,
+                'cpu_usage_percent': 0.0
             }
 
             # Test database response time
@@ -1326,7 +1847,7 @@ class BackupServer:
                 'server_status': 'running' if self.running else 'stopped',
                 'total_clients': self.db_manager.get_total_clients_count(),
                 'connected_clients': len(self.clients),
-                'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0,
+                'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0,
                 'server_version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
                 'uptime': time.time() - self.network_server.start_time if self.running else 0
             }
@@ -1356,7 +1877,7 @@ class BackupServer:
                     'currently_connected': len(self.clients)
                 },
                 'files': {
-                    'total_files': len(self.db_manager.get_all_files()) if hasattr(self.db_manager, 'get_all_files') else 0
+                    'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
                 },
                 'database': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
             }
@@ -1657,9 +2178,16 @@ class BackupServer:
             import asyncio
             import json
 
+            normalized_format = (export_format or "").lower()
+            if normalized_format not in VALID_LOG_EXPORT_FORMATS:
+                return self._format_response(
+                    False,
+                    error=f"Invalid format. Supported formats: {sorted(VALID_LOG_EXPORT_FORMATS)}"
+                )
+
             # Run in executor to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self._export_logs_sync, export_format, filters or {})
+            result = await loop.run_in_executor(None, self._export_logs_sync, normalized_format, filters or {})
 
             return result
         except Exception as e:
@@ -1687,22 +2215,24 @@ class BackupServer:
             limit = filters.get('limit', 1000)
 
             # Read and filter log entries
-            filtered_entries = []
+            filtered_entries: list[str] = []
             try:
                 with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
                     for line in f:
-                        # Apply filters
+                        stripped = line.strip()
+                        if not stripped:
+                            continue
+                        lower_line = stripped.lower()
                         if level_filter and level_filter not in line:
                             continue
-                        if search_term and search_term not in line.lower():
+                        if search_term and search_term not in lower_line:
                             continue
-                        # Date filtering would require parsing timestamp - simplified for now
-                        filtered_entries.append(line.strip())
-
+                        # (Date filtering simplified for now)
+                        filtered_entries.append(stripped)
                         if len(filtered_entries) >= limit:
                             break
-            except Exception as e:
-                return self._format_response(False, error=f"Error reading log file: {e}")
+            except Exception as read_exc:
+                return self._format_response(False, error=f"Error reading log file: {read_exc}")
 
             # Generate export filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1729,21 +2259,16 @@ class BackupServer:
                         json.dump(log_entries, f, indent=2, ensure_ascii=False)
 
                 elif export_format == "csv":
-                    # Export as CSV
                     import csv
                     with open(export_filename, 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f)
                         writer.writerow(['Timestamp', 'Thread', 'Level', 'Message'])
-                        for line in filtered_entries:
-                            parts = line.split(' - ', 3)
-                            if len(parts) >= 4:
-                                writer.writerow(parts)
-                            else:
-                                writer.writerow(['', '', '', line])
-
+                        for entry in filtered_entries:
+                            parts = entry.split(' - ', 3)
+                            writer.writerow(parts if len(parts) >= 4 else ['', '', '', entry])
                 else:  # text format (default)
                     with open(export_filename, 'w', encoding='utf-8') as f:
-                        f.write('\n'.join(filtered_entries))
+                        f.write('\n'.join(filtered_entries) + ('\n' if filtered_entries else ''))
 
                 logger.info(f"Logs exported to {export_filename}: {len(filtered_entries)} entries")
                 return self._format_response(True, {

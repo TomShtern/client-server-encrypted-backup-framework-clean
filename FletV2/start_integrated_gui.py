@@ -259,8 +259,8 @@ class IntegratedServerManager:
                     # Set up shutdown handler
                     page.on_window_event = self._create_window_event_handler(page)
 
-                    # Call the main function with our BackupServer instance
-                    await flet_main(page, real_server=self.backup_server)
+                    # Call the synchronous main() entry (not awaitable) with BackupServer instance
+                    flet_main(page, backup_server=self.backup_server)
 
                     # Log integration status
                     if self.backup_server:

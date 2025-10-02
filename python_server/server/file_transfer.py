@@ -92,7 +92,7 @@ __FTM_VERSION__ = "2025-08-06a"
 class FileTransferManager:
     """
     Manages file transfer operations for the backup server.
-    
+
     This class handles the complete file transfer workflow including:
     - Multi-packet file transfer reassembly
     - Encryption/decryption using AES
@@ -141,7 +141,7 @@ class FileTransferManager:
     def __init__(self, server_instance: Any) -> None:
         """
         Initialize the FileTransferManager.
-        
+
         Args:
             server_instance: Reference to the main server instance for accessing
                            shared resources (database, GUI, client management, etc.)
@@ -157,12 +157,12 @@ class FileTransferManager:
         """
         Handles a file transfer packet (Code 1028) from a client.
         Manages multi-packet reassembly, decryption, CRC calculation, and storage.
-        
+
         Args:
             sock: The client's socket connection
             client: The resolved Client object containing session information
             payload: The request payload containing file transfer data
-            
+
         Payload Structure:
           uint32_t encrypted_size;    // Size of 'content[]' in this specific packet
           uint32_t original_size;     // Total original (decrypted) file size
@@ -179,7 +179,7 @@ class FileTransferManager:
             )
 
         try:
-            self._extracted_from_handle_send_file_28(payload, client, sock)  # type: ignore
+            self._process_file_transfer_packet(payload, client, sock)  # type: ignore
         except (ProtocolError, FileError, ClientError) as e:
             logger.error(f"File transfer error for client '{client.name}': {e}")
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
@@ -188,8 +188,7 @@ class FileTransferManager:
                           exc_info=True)
             self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
-    # TODO Rename this here and in `handle_send_file`
-    def _extracted_from_handle_send_file_28(self, payload, client, sock):
+    def _process_file_transfer_packet(self, payload, client, sock):
         # Parse and validate the file transfer metadata
         metadata = self._parse_file_transfer_metadata(payload)
 
@@ -230,13 +229,13 @@ class FileTransferManager:
     def _parse_file_transfer_metadata(self, payload: bytes) -> dict[str, Any]:
         """
         Parses file transfer metadata from the payload.
-        
+
         Args:
             payload: The raw payload bytes
-            
+
         Returns:
             Dictionary containing parsed metadata
-            
+
         Raises:
             ProtocolError: If the payload format is invalid
         """
@@ -291,13 +290,13 @@ class FileTransferManager:
                                    packet_number: int, total_packets: int) -> None:
         """
         Validates file transfer metadata for security and sanity.
-        
+
         Args:
             encrypted_size: Size of encrypted content in this packet
             original_size: Total original file size
             packet_number: Current packet number
             total_packets: Total number of packets
-            
+
         Raises:
             ProtocolError: If any metadata is invalid
         """
@@ -322,11 +321,11 @@ class FileTransferManager:
     def _handle_packet_reassembly(self, client: Any, metadata: dict[str, Any]) -> bool:
         """
         Handles multi-packet file reassembly logic.
-        
+
         Args:
             client: The client object containing partial file state
             metadata: Parsed file transfer metadata
-            
+
         Returns:
             True if all packets have been received, False otherwise
         """
@@ -387,7 +386,7 @@ class FileTransferManager:
                               filename: str, aes_key: bytes) -> None:
         """
         Processes a complete file transfer (all packets received).
-        
+
         Args:
             sock: Client socket for sending responses
             client: Client object
@@ -450,13 +449,13 @@ class FileTransferManager:
     def _reassemble_encrypted_data(self, file_state: dict[str, Any]) -> bytes:
         """
         Reassembles encrypted data from all received packets.
-        
+
         Args:
             file_state: File transfer state containing received chunks
-            
+
         Returns:
             Complete encrypted data
-            
+
         Raises:
             ServerError: If reassembly fails
         """
@@ -483,14 +482,14 @@ class FileTransferManager:
     def _decrypt_file_data(self, encrypted_data: bytes, aes_key: bytes) -> bytes:
         """
         Decrypts file data using AES-CBC with zero IV.
-        
+
         Args:
             encrypted_data: The encrypted file data
             aes_key: AES decryption key
-            
+
         Returns:
             Decrypted file data
-            
+
         Raises:
             FileError: If decryption fails
         """
@@ -511,14 +510,14 @@ class FileTransferManager:
     def _save_file_to_storage(self, filename: str, data: bytes) -> tuple[str, str]:
         """
         Atomically saves file data to storage.
-        
+
         Args:
             filename: Name of the file
             data: File content to save
-            
+
         Returns:
             A tuple containing the final file path and the modification date as an ISO 8601 string.
-            
+
         Raises:
             FileError: If file save fails
         """
@@ -542,13 +541,13 @@ class FileTransferManager:
                                  final_path: str, filename: str) -> tuple[str, str]:
         """
         Performs atomic file save operation.
-        
+
         Args:
             temp_path: Path to temporary file
             data: File data to write
             final_path: Final destination path
             filename: Name of the file
-            
+
         Returns:
             Tuple of (final_path, mod_date)
         """
@@ -576,7 +575,7 @@ class FileTransferManager:
                                filename: str, encrypted_size: int, crc_value: int) -> None:
         """
         Sends file CRC response to client.
-        
+
         Args:
             sock: Client socket
             client: Client object
@@ -630,10 +629,10 @@ class FileTransferManager:
     def _is_valid_filename_for_storage(self, filename: str) -> bool:
         """
         Validates a filename for secure storage.
-        
+
         Args:
             filename: The filename to validate
-            
+
         Returns:
             True if filename is valid and safe
         """
@@ -670,7 +669,7 @@ class FileTransferManager:
     def _update_gui_stats(self, filename: str, client_name: str, bytes_transferred: int) -> None:
         """
         Updates GUI with transfer statistics.
-        
+
         Args:
             filename: Name of transferred file
             client_name: Name of client
@@ -685,7 +684,7 @@ class FileTransferManager:
     def _send_response(self, sock: socket.socket, code: int, payload: bytes = b'') -> None:
         """
         Sends a response to the client.
-        
+
         Args:
             sock: Client socket
             code: Response code
@@ -709,10 +708,10 @@ class FileTransferManager:
         _ = timeout_seconds  # Currently unused but preserved for API compatibility
         """
         Cleans up stale file transfers that have been inactive.
-        
+
         Args:
             timeout_seconds: Timeout in seconds for considering transfers stale
-            
+
         Returns:
             Number of transfers cleaned up
         """
@@ -728,7 +727,7 @@ class FileTransferManager:
     def get_transfer_statistics(self) -> dict[str, Any]:
         """
         Gets current transfer statistics.
-        
+
         Returns:
             Dictionary containing transfer statistics
         """

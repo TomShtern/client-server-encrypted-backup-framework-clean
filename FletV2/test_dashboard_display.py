@@ -31,10 +31,11 @@ def test_dashboard(page: ft.Page):
 
     try:
         # Create dashboard with no server bridge (triggers Lorem ipsum mode)
+        # Updated signature expects 'state_manager' (not _state_manager)
         dashboard_control = create_dashboard_view(
             server_bridge=None,
             page=page,
-            _state_manager=None
+            state_manager=None
         )
 
         print(f"Dashboard created successfully: {type(dashboard_control)}")

@@ -22,6 +22,18 @@ from typing import Any, cast
 
 # Third-party imports
 import flet as ft
+def main(page: ft.Page, backup_server: Any | None = None) -> None:
+    """Entry point for Flet when running `flet run main.py` or importing.
+
+    This thin wrapper constructs the `FletV2App` with an optional already
+    provisioned real server instance (used by integration scripts) and mounts
+    it to the page. Previously this symbol was missing which caused import
+    errors in startup scripts and tests expecting `from main import main`.
+    """
+    app = FletV2App(page, real_server=backup_server)
+    page.add(app)
+    page.update()
+
 
 
 def _bootstrap_paths() -> tuple[str, str, str, str]:
