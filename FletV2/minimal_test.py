@@ -31,5 +31,9 @@ def minimal_test(page: ft.Page):
     print("Minimal test content added to page")
 
 if __name__ == "__main__":
-    print("Starting absolutely minimal Flet test...")
-    ft.app(target=minimal_test, view=ft.AppView.FLET_APP)
+    import os
+    print("Starting absolutely minimal Flet test (WEB_BROWSER mode)...")
+    print("Env Flags:")
+    for k in ["CYBERBACKUP_DISABLE_INTEGRATED_GUI", "CYBERBACKUP_DISABLE_GUI", "FLET_DASHBOARD_DEBUG"]:
+        print(f"  {k}={os.environ.get(k)}")
+    ft.app(target=minimal_test, view=ft.AppView.WEB_BROWSER, port=8560)

@@ -91,7 +91,7 @@ python scripts/one_click_build_and_run.py
 - **Error Handling**: Try/except with specific exceptions, log errors with context. Use `contextlib.suppress(Exception)` for concise suppressed-exception blocks.
 - **Async**: Use async/await for I/O operations, avoid blocking calls
 - **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
-- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow. Address all sourcery warnings in the `#file:main.py`.
+- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow. Address all sourcery warnings in the `#file:main.py`.
 - **Problems View**: The Problems view in VS Code groups problems by source (e.g., extensions, linters) in tree view mode. Multiple groups can appear for the same file if multiple tools are enabled. Use the `problems.defaultViewMode` setting to switch to table view for a flat list. Pylance (Microsoft's Python language server) groups its findings by type in the Problems panel:
     1. **Syntax Errors** - Parse/compilation issues
     2. **Type Errors** - Type checking violations
@@ -232,6 +232,25 @@ python scripts/one_click_build_and_run.py
   - **Reordering**: Reorder the uncompleted items and renumber them, updating small sections as needed.
 - **Issue Prioritization**: When reordering issues in `#file:Server_Issues_01.10.2025.md`, order them from the easiest and most impactful to apply (top) to the hardest and least impactful (bottom). Ensure that the text of each issue is preserved exactly.
 - **Database Parameter Handling**: When calling the `execute` method in `database.py`, do not include the `return_cursor` parameter. The method returns a cursor by default, and specifying `return_cursor` is unnecessary and incorrect.
+- **VS Code Release Notes**: To view the release notes of the latest VS Code update:
+  1. Use the "Show release notes" command in VS Code (open the Command Palette with Ctrl + Shift + P and run Show release notes) to view the latest update notes inside the editor.
+  2. Or view them online at https://code.visualstudio.com/updates.
+- **Flet GUI Integration Troubleshooting**: When integrating the Python server and SQLite3 database into the FletV2 GUI and encountering issues such as broken navigation or views not displaying:
+  - Use ultrathink to systematically analyze the issues and identify the root causes.
+  - Prioritize fixing the problems while ensuring not to introduce further issues or break existing functionality. The system was working before the integration, so focus on changes made during the integration process.
+  - Employ all appropriate tools to diagnose and resolve the issues effectively.
+- **VS Code Language Server**: Be aware that VS Code language server analysis might show errors from temporary chat editing buffers that are not present in the actual saved files. Always verify the actual saved file for errors.
+- **Virtual Environment**: When working in the `flet_venv` virtual environment, ensure that the environment is activated before running any Python scripts.
+- **Flet GUI State**: When the Flet GUI shows loaded data briefly before breaking and exhibiting navigation and glitching issues, use ultrathink to find the root cause and fix it without introducing new problems.
+- **Playwright MCP**: When using Playwright MCP, run the Flet GUI in webview mode to take screenshots and automatically verify fixes.
+- **Context7 MCP**: When unsure about anything Flet-related, use context7 MCP to get official, up-to-date context. If context7 does not provide an answer, perform web searches.
+- **Running `main.py`**: When running `main.py` directly, ensure the file has an `if __name__ == "__main__":` block to actually call `main()` or start the app. Use `ft.app(target=main)` inside the `if __name__ == "__main__":` block.
+- **Async Setup Functions**: When calling `setup_func()` for a view, check if it's an async coroutine. If it is, use `await setup_func()` to ensure it's properly awaited.
+- **Flet Launch Verification**: After launching the Flet app, verify that the Flet backend server process is running and that the WebSocket endpoint is available. Check for WebSocket connection failures in the browser console.
+- **Environment Flags Check**: When launching the Flet GUI, check the environment flags `CYBERBACKUP_DISABLE_GUI` and `INTEGRATED_GUI` to ensure they are correctly configured and not interfering with Flet's internal spawning when using WEB_BROWSER mode.
+- **Lazy Server Initialization**: When using lazy server initialization, ensure that the `BackupServer` instance is created in the main thread to avoid `ValueError: signal only works in main thread of the main interpreter`.
+- **GUI-Only Standalone Mode**: Be aware that the GUI may start in GUI-only standalone mode without the server bridge if `main.py` is run directly. In this mode, data operations will show empty states. Use `python start_with_server.py` for full server integration.
+- **Embedded GUI Conflicts**: The embedded GUI in `BackupServer` should be disabled to prevent conflicts when running the Flet GUI with the server integration.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -352,73 +371,4 @@ When addressing server issues, prioritize the following based on the summary of 
     *   Add simple `@retry` decorator with configurable attempts/backoff and apply to DB operations.
 19. **Inconsistent Error Response Format Across ServerBridge:**
     *   Location: ServerBridge methods (multiple)
-    *   Audit ServerBridge methods and ensure `_format_response(False, error=...)` is always used.
-20. **No Timeout for Long-Running Operations:**
-    *   Location: `server.py` (related to 8)
-    *   Offload to executor with timeout and fail gracefully.
-21. **Validate `export_format` Parameter:**
-    *   Location: `server.py` (lines 86 and 2182-2185)
-    *   Status: Already implemented — no action required.
-
-**Duplicates / Items to Consider Removing**:
-
-*   \#22 (`stop()` missing cleanup) is the same as #5 — merge them.
-*   \#23 (historical data mock) is the same as #13 — merge them.
-*   \#25 (atomic client creation) overlaps with #7 — consider merging and marking DB-constraint mitigation.
-*   \#4 (response time placeholder) and #17 (response time placeholder) appear to reference the same missing metric — treat as single item.
-
----
-
-# FletV2 Development Guide (Concise)
-
-This AI Development Guide should be read in conjunction with the `#file:AI-Context` folder (for extremely important documentation, data, information, and rules) and the `#file:important_docs` folder (for important information and documentation).
-
-This guide codifies the essential rules to generate high-quality, compatible, and efficient code for this repository, focused on the FletV2 application. It consolidates prior guidance into a single DRY reference.
-
-CRITICAL: Work exclusively in `FletV2/`. The legacy `flet_server_gui/` is obsolete and kept only as a reference for anti-patterns to avoid. When in doubt, prefer Flet built-ins and patterns shown here. See `FletV2/important_docs/` for examples.
-
-**CRITICAL**: Follow these exact import patterns to ensure proper module resolution and avoid import errors.
-
-#### Parent Directory Path Management
-```python
-# Standard pattern for FletV2 files that need Shared imports
-import os
-import sys
-
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
-```
-
-#### Import Organization (STRICT ORDER)
-```python
-# 1. Standard library imports (alphabetical)
-import asyncio
-import contextlib # ADDED: for contextlib.suppress
-import logging
-import os
-import sys
-from typing import Any, Callable, Dict, Optional, Set, Tuple, cast
-
-import flet as ft
-
-# 3. Local imports - utilities first
-from utils.debug_setup import setup_terminal_debugging
-
-# 4. ALWAYS import UTF-8 solution for subprocess/console I/O
-import Shared.utils.utf8_solution as _  # noqa: F401,E402
-
-# 5. Initialize logging BEFORE any logger usage
-logger = setup_terminal_debugging(logger_name="module_name")
-
-# 6. Local imports - application modules
-from theme import setup_modern_theme
-from utils.server_bridge import create_server_bridge
-```
-
-#### Import Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Star imports
-from utils.server_bridge import *
-
-# ❌ WRONG: Delayed UTF-8 import (causes encoding issues)
-# Import at top level,
+    *   Audit ServerBridge methods and ensure `_

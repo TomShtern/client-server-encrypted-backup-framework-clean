@@ -22,18 +22,6 @@ from typing import Any, cast
 
 # Third-party imports
 import flet as ft
-def main(page: ft.Page, backup_server: Any | None = None) -> None:
-    """Entry point for Flet when running `flet run main.py` or importing.
-
-    This thin wrapper constructs the `FletV2App` with an optional already
-    provisioned real server instance (used by integration scripts) and mounts
-    it to the page. Previously this symbol was missing which caused import
-    errors in startup scripts and tests expecting `from main import main`.
-    """
-    app = FletV2App(page, real_server=backup_server)
-    page.add(app)
-    page.update()
-
 
 
 def _bootstrap_paths() -> tuple[str, str, str, str]:
@@ -335,6 +323,8 @@ class FletV2App(ft.Row):
         self._background_tasks: set[Any] = set()
         self._loading_view: bool = False  # Guard against concurrent view loads
         self._startup_profile: list[tuple[str, float]] = []
+        # Track last view loading error for diagnostics UI
+        self._last_view_error: str | None = None
 
         # Startup profiling helpers (opt-in via FLET_STARTUP_PROFILER=1)
         def _profile_enabled() -> bool:
@@ -474,6 +464,15 @@ class FletV2App(ft.Row):
         logger.info("Setting up page connection handler")
         page.on_connect = self._on_page_connect
 
+        # Add disconnect cleanup to release resources and return DB connections
+        def _on_disconnect(e: ft.ControlEvent | None = None):
+            try:
+                logger.info("Page disconnect detected - disposing app resources")
+                self.dispose()
+            except Exception as disconnect_err:
+                logger.warning(f"Page disconnect cleanup error: {disconnect_err}")
+        page.on_disconnect = _on_disconnect
+
         # Add dashboard loading management flags
         self._dashboard_loading = False
         self._dashboard_loaded = False
@@ -481,34 +480,9 @@ class FletV2App(ft.Row):
         # Dashboard will be loaded after page connection to ensure AnimatedSwitcher is attached
         logger.info("Dashboard will be loaded after page connection is established")
 
-        # If integrated GUI embedding is disabled (browser-only mode), some environments may not
-        # trigger page.on_connect before the process exits. Proactively load the dashboard to
-        # replace the placeholder immediately in that mode.
-        proactive_disabled = os.environ.get('FLET_DISABLE_PROACTIVE_LOAD') == '1'
-        # Fixed: Re-enable proactive loading with safer async mechanism
-        print("🔧 ENABLING SAFE DASHBOARD LOADING MECHANISM")
-        if os.environ.get('CYBERBACKUP_DISABLE_INTEGRATED_GUI') == '1' and not proactive_disabled:
-            try:
-                logger.info("Integrated GUI disabled - proactively loading dashboard view immediately")
-                print("🚀🚀🚀 MAIN APP: LOADING DASHBOARD PROACTIVELY 🚀🚀🚀")
-                async def _proactive_load_dashboard() -> None:
-                    try:
-                        await asyncio.sleep(0.1)
-                        if not self._dashboard_loading and not self._dashboard_loaded:
-                            self._dashboard_loading = True
-                            self._perform_view_loading("dashboard")
-                            self._dashboard_loaded = True
-                            print("🚀🚀🚀 MAIN APP: DASHBOARD LOAD CALLED 🚀🚀🚀")
-                    except Exception as immediate_err:
-                        logger.error(f"Immediate dashboard load failed in proactive task: {immediate_err}")
-                        print(f"🚀🚀🚀 MAIN APP: DASHBOARD LOAD FAILED: {immediate_err} 🚀🚀🚀")
-                    finally:
-                        self._dashboard_loading = False
-
-                # Run the async task
-                self.page.run_task(_proactive_load_dashboard)
-            except Exception as e:
-                logger.error(f"Proactive dashboard loading failed: {e}")
+        # DISABLED: Proactive loading causing multiple instantiation issues
+        # The page.on_connect handler will load the dashboard properly
+        logger.info("Proactive dashboard loading disabled - using page.on_connect instead")
 
         # Post-update adjustments handled in _post_content_update
 
@@ -527,6 +501,43 @@ class FletV2App(ft.Row):
         except ImportError as e:
             logger.warning(f"Could not import state manager: {e}")
             self.state_manager = None
+
+    def dispose(self) -> None:
+        """Clean up resources when app is disposed."""
+        try:
+            logger.info("🧹 Disposing FletV2App resources...")
+
+            # Dispose current view
+            if self._current_view_dispose:
+                try:
+                    self._current_view_dispose()
+                    logger.debug("Disposed current view")
+                except Exception as e:
+                    logger.warning(f"Error disposing current view: {e}")
+
+            # Cancel background tasks
+            for task in self._background_tasks:
+                try:
+                    if hasattr(task, 'cancel'):
+                        task.cancel()
+                except Exception as e:
+                    logger.debug(f"Error canceling background task: {e}")
+            self._background_tasks.clear()
+
+            # Clear loaded views
+            self._loaded_views.clear()
+
+            # Cleanup state manager
+            if self.state_manager and hasattr(self.state_manager, 'cleanup'):
+                try:
+                    self.state_manager.cleanup()
+                    logger.debug("State manager cleaned up")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up state manager: {e}")
+
+            logger.info("✅ FletV2App resources disposed successfully")
+        except Exception as e:
+            logger.error(f"Error during FletV2App disposal: {e}")
 
     def _get_view_config(self, view_name: str) -> tuple[str, str, str]:
         """Get view configuration for dynamic import."""
@@ -757,6 +768,9 @@ class FletV2App(ft.Row):
 
     async def initialize(self) -> None:
         """Initialize the application."""
+        if getattr(self, '_initialized', False):
+            logger.debug("initialize() called more than once; ignoring subsequent call")
+            return
         try:
             # Apply theme
             setup_modern_theme(self.page)
@@ -773,6 +787,7 @@ class FletV2App(ft.Row):
 
             # Update the page
             self.page.update()
+            self._initialized = True
 
             logger.info("✅ FletV2 application initialized successfully")
         except Exception as e:
@@ -834,9 +849,33 @@ class FletV2App(ft.Row):
             logger.error(f"❌ Error during view creation for {view_name}: {e}")
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Store last error for UI diagnostics
+            self._last_view_error = f"{view_name}: {e}"
             # Special handling: if dashboard fails, attempt stub
             if view_name != "dashboard":
-                raise
+                # Provide inline error diagnostics UI instead of raising to avoid blank screen
+                error_details = getattr(e, 'args', [''])[0]
+                error_tb = traceback.format_exc(limit=5)
+                logger.warning(f"Rendering inline error panel for failed view '{view_name}'")
+                content = ft.Container(
+                    content=ft.Column([
+                        ft.Text(f"❌ Failed to load view: {view_name}", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
+                        ft.Text(str(error_details), size=14, color=ft.Colors.ERROR),
+                        ft.Text("Traceback (truncated):", size=12, weight=ft.FontWeight.W_600),
+                        ft.Text(error_tb, selectable=True, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Divider(),
+                        ft.Text("This is a diagnostics panel. Navigate to another view to continue.", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                    ], spacing=8, scroll=ft.ScrollMode.ALWAYS),
+                    padding=20,
+                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),
+                    border_radius=12,
+                )
+                dispose_func = lambda: None  # noqa: E731
+            else:
+                # For dashboard keep existing stub fallback path
+                # (original logic continues below)
+                pass
             try:
                 logger.warning("Attempting fallback stub dashboard due to failure")
                 from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
@@ -898,7 +937,11 @@ class FletV2App(ft.Row):
                 try:
                     await asyncio.sleep(0.1)  # Let Flet complete rendering
                     logger.info(f"Calling delayed setup function for {view_name}")
-                    setup_func()
+                    # Check if setup_func is async and await it if so
+                    if asyncio.iscoroutinefunction(setup_func):
+                        await setup_func()
+                    else:
+                        setup_func()
                 except Exception as setup_err:
                     logger.warning(f"Setup function failed for {view_name}: {setup_err}")
 
@@ -987,57 +1030,28 @@ class FletV2App(ft.Row):
                         waited = 0.0
                         attached = False
                         while waited < timeout:
-                            # Use contextlib.suppress to avoid noisy try/except
                             with contextlib.suppress(Exception):
                                 if hasattr(content, 'page') and content.page:
                                     attached = True
-                                elif hasattr(self, 'content_area') and self.content_area:
-                                    container = self.content_area
-                                    if hasattr(container, 'content') and container.content:
-                                        inner = container.content
-                                        if hasattr(inner, 'page') and inner.page:
-                                            attached = True
-                                # compact check for the animated switcher
-                                animated = getattr(self, '_animated_switcher', None)
-                                if not attached and animated and hasattr(animated, 'page') and animated.page:
+                                elif hasattr(self, 'content_area') and self.content_area and getattr(self.content_area, 'page', None):
                                     attached = True
-
                             if attached:
                                 break
                             await asyncio.sleep(interval)
                             waited += interval
-
-                        if not attached:
-                            logger.warning(
-                                "Setup subscriptions: content not attached after %ss, proceeding anyway",
-                                timeout,
-                            )
-
                         try:
                             if asyncio.iscoroutinefunction(setup_cb):
                                 await setup_cb()
                             else:
-                                result = setup_cb()
-                                if asyncio.iscoroutine(result):
-                                    await result
+                                r = setup_cb()
+                                if asyncio.iscoroutine(r):
+                                    await r
                             logger.debug(f"Set up subscriptions for {view_name} view")
-                            logger.warning(
-                                "[CONTENT_DIAG] _setup_subscriptions executed for %s (waiter)",
-                                view_name,
-                            )
                         except Exception as setup_error:
-                            logger.warning(f"Subscription setup failed in waiter: {setup_error}")
+                            logger.warning(f"Subscription setup failed: {setup_error}")
                     except Exception as outer_error:
                         logger.warning(f"Subscription waiter failed: {outer_error}")
-
                 self.page.run_task(_wait_and_setup)
         except Exception as sub_error:
             logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
-
-    def _extract_content_and_dispose(
-        self,
-        result_t: tuple[Any, ...],
-    ) -> tuple[Any, Callable[[], None] | None]:
-        """Extract content and dispose function from result tuple."""
-        return result_t[0], cast(Callable[[], None] | None, result_t[1])
 
