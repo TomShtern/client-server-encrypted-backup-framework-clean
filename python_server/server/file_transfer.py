@@ -67,6 +67,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+# Import observability components
+from Shared.observability import get_metrics_collector
+
 # Import crypto components through compatibility layer
 # Import configuration constants
 from .config import (
@@ -393,6 +396,9 @@ class FileTransferManager:
             filename: Name of the transferred file
             aes_key: AES key for decryption
         """
+        # Start timing the complete file processing operation
+        processing_start = time.time()
+
         with client.lock:
             file_state = client.partial_files.get(filename)
             if not file_state:
@@ -441,6 +447,15 @@ class FileTransferManager:
 
                 logger.info(f"Client '{client.name}': File '{filename}' processed successfully. "
                            f"CRC: {crc_value}, Size: {len(decrypted_data)} bytes")
+
+                # Record metrics for successful file upload
+                processing_duration_ms = (time.time() - processing_start) * 1000
+                size_mb = len(decrypted_data) / (1024 * 1024)
+                get_metrics_collector().record_counter("file.uploads.total",
+                                                      tags={'client_id': client.id.hex()})
+                get_metrics_collector().record_timer("file.upload.duration",
+                                                    processing_duration_ms,
+                                                    tags={'size_mb': f'{size_mb:.2f}'})
 
             finally:
                 # Always clean up partial file state

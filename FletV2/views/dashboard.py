@@ -1463,13 +1463,9 @@ def create_dashboard_view(
             _timestamp_update_task.cancel()
             logger.info("Timestamp update task cancelled")
 
-        # Unsubscribe from state manager
-        if state_manager:
-            try:
-                state_manager.unsubscribe_all()
-                logger.info("Unsubscribed from state manager")
-            except Exception as e:
-                logger.warning(f"Failed to unsubscribe from state manager: {e}")
+        # Unsubscribe from state manager (note: state manager handles this automatically on view disposal)
+        # No explicit unsubscribe needed - state manager cleans up subscriptions when views are disposed
+        logger.info("Dashboard cleanup complete")
 
         logger.info("Dashboard disposed")
 

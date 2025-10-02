@@ -13,13 +13,37 @@ from typing import Any
 
 import aiofiles
 import flet as ft
-from utils.debug_setup import get_logger
-from utils.server_bridge import ServerBridge
-from utils.state_manager import StateManager
-from utils.ui_components import themed_button
-from utils.user_feedback import show_error_message, show_success_message
 
-from config import SETTINGS_FILE
+# Use absolute imports to avoid path resolution issues
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:
+    from utils.debug_setup import get_logger
+
+try:
+    from FletV2.utils.server_bridge import ServerBridge
+except ImportError:
+    from utils.server_bridge import ServerBridge
+
+try:
+    from FletV2.utils.state_manager import StateManager
+except ImportError:
+    from utils.state_manager import StateManager
+
+try:
+    from FletV2.utils.ui_components import themed_button
+except ImportError:
+    from utils.ui_components import themed_button
+
+try:
+    from FletV2.utils.user_feedback import show_error_message, show_success_message
+except ImportError:
+    from utils.user_feedback import show_error_message, show_success_message
+
+try:
+    from FletV2.config import SETTINGS_FILE
+except ImportError:
+    from config import SETTINGS_FILE
 
 logger = get_logger(__name__)
 

@@ -15,6 +15,9 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA256
 from Crypto.Random import get_random_bytes
 
+# Import observability components
+from Shared.observability import get_metrics_collector
+
 # Import configuration constants
 from .config import (
     AES_KEY_SIZE_BYTES,
@@ -150,6 +153,9 @@ class RequestHandler:
 
             logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
 
+            # Record metrics for client registration
+            get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
+
             # Update GUI with new client registration
             self.server._update_gui_client_count()
             self.server._update_gui_success(f"New client '{client_name}' registered successfully")
@@ -261,6 +267,9 @@ class RequestHandler:
             response_payload = client.id + encrypted_aes_key
             self._send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
             logger.info(f"Client '{client.name}' reconnected successfully. A new AES session key has been sent (encrypted).")
+
+            # Record metrics for client reconnection
+            get_metrics_collector().record_counter("client.reconnections.total", tags={'client_id': client.id.hex()})
 
         except ProtocolError as e:
             logger.error(f"Reconnect protocol error for client '{client.name}': {e}")

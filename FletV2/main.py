@@ -260,121 +260,39 @@ if 'create_server_bridge' not in globals():  # pragma: no cover - rare path
 # Exported runtime flags for tests and integration checks (real server required unless GUI-only override)
 REAL_SERVER_AVAILABLE = False
 
-# Try to import and initialize the real BackupServer
+# CRITICAL: Do NOT initialize BackupServer at module load time
+# BackupServer sets up signal handlers which can only run in main thread
+# Server initialization must happen via start_with_server.py launcher
 real_server_instance = None
-try:
-    # Disable BackupServer's embedded GUI to prevent conflicts with FletV2 GUI
-    os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'
-    os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'
-    logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
 
-    # Use __file__ for reliable path resolution instead of os.getcwd()
-    fletv2_root = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(fletv2_root)
-    main_db_path = os.path.join(project_root, "defensive.db")
+# Prepare environment for potential server integration (but don't create instance yet)
+os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'
+os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'
+logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
 
-    # Add project_root to sys.path BEFORE import to ensure python_server module is found
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-        logger.info(f"Added project root to sys.path: {project_root}")
+# Set up paths and environment for server IF it gets initialized later
+fletv2_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(fletv2_root)
+main_db_path = os.path.join(project_root, "defensive.db")
 
-    # Set environment variable BEFORE importing BackupServer to ensure proper initialization
-    os.environ['BACKUP_DATABASE_PATH'] = main_db_path
-    logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
+# Add project_root to sys.path for python_server module
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+    logger.info(f"Added project root to sys.path: {project_root}")
 
-    # Import the BackupServer AFTER setting environment variables and path
-    from python_server.server.server import BackupServer
-    logger.info("BackupServer class imported successfully")
+# Set database path environment variable (used if BackupServer is created)
+os.environ['BACKUP_DATABASE_PATH'] = main_db_path
+logger.info(f"Set BACKUP_DATABASE_PATH environment variable to: {main_db_path}")
 
-    # Check if the main database exists and has data
-    if os.path.exists(main_db_path):
-        import sqlite3
-        conn = sqlite3.connect(main_db_path)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT COUNT(*) FROM clients")
-            client_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM files")
-            file_count = cursor.fetchone()[0]
-            logger.info(f"Main database contains {client_count} clients and {file_count} files")
-        except Exception as db_error:
-            logger.warning(f"Database query failed: {db_error}")
-        finally:
-            conn.close()
-    else:
-        logger.error(f"CRITICAL: Main database file not found: {main_db_path}")
-        logger.error("Application will start in placeholder mode")
-        raise FileNotFoundError(f"Database file not found: {main_db_path}")
-
-    # Initialize the real server instance
-    logger.info("Initializing BackupServer instance...")
-    real_server_instance = BackupServer()
-
-    # Validate that the server is using the correct database
-    actual_db_path = getattr(real_server_instance.db_manager, 'db_name', 'Unknown')
-    logger.info(f"BackupServer initialized with database: {actual_db_path}")
-
-    # Comprehensive database connection test
-    if hasattr(real_server_instance.db_manager, 'execute'):
-        try:
-            # Test client count
-            clients_result = real_server_instance.db_manager.execute(
-                "SELECT COUNT(*) FROM clients", fetchone=True
-            )
-            client_count = clients_result[0] if clients_result else 0
-
-            # Test files count
-            files_result = real_server_instance.db_manager.execute(
-                "SELECT COUNT(*) FROM files", fetchone=True
-            )
-            file_count = files_result[0] if files_result else 0
-
-            logger.info(f"Database connection test successful: {client_count} clients, {file_count} files")
-
-            # Validate database integrity
-            integrity_result = real_server_instance.db_manager.execute(
-                "PRAGMA integrity_check", fetchone=True
-            )
-            if integrity_result and integrity_result[0] == 'ok':
-                logger.info("Database integrity check passed")
-            else:
-                logger.warning(f"Database integrity check result: {integrity_result}")
-
-        except Exception as e:
-            logger.error(f"Database connection test failed: {e}")
-            raise e
-
-    # Test server methods compatibility
-    try:
-        if hasattr(real_server_instance, 'get_clients'):
-            logger.info("Server has get_clients method - compatible with ServerBridge")
-        else:
-            logger.warning("Server missing get_clients method - may have compatibility issues")
-    except Exception as e:
-        logger.warning(f"Server method test failed: {e}")
-
-    REAL_SERVER_AVAILABLE = True
-    # Removed legacy BRIDGE_TYPE constant (deprecated). Single runtime variable 'bridge_type' retained.
-    logger.info("✅ Real BackupServer initialized successfully and verified")
-
-except ImportError as e:
-    logger.error(f"Could not import BackupServer - check if python_server is available: {e}")
-    logger.warning(
-        "Real server unavailable. Set FLET_GUI_ONLY_MODE=1 for limited GUI-only mode or fix import."
-    )
-    real_server_instance = None
-except FileNotFoundError as e:
-    logger.error(f"Database file not found: {e}")
-    logger.warning(
-        "Real server startup blocked by missing database. Provide database or set FLET_GUI_ONLY_MODE=1."
-    )
-    real_server_instance = None
-except Exception as e:
-    logger.error(f"Failed to initialize BackupServer: {e}")
-    logger.warning(
-        "Real server initialization failed. Use FLET_GUI_ONLY_MODE=1 for GUI-only diagnostics if needed."
-    )
-    real_server_instance = None
+# Log the server mode
+logger.info("""
+=======================================================================
+FletV2 GUI Initialization Mode:
+- Standalone Mode: Use 'flet run main.py' for GUI development (no server)
+- Integrated Mode: Use 'python start_with_server.py' for full functionality
+- Server instance will be passed via FletV2App constructor if available
+=======================================================================
+""")
 
 # Direct server integration support (no adapter layer needed)
 # The BackupServer has built-in ServerBridge compatibility
@@ -434,21 +352,14 @@ class FletV2App(ft.Row):
         global bridge_type, real_server_available, real_server_instance
         try:
             if real_server is not None:
-                # Direct server injection (from integrated startup script)
+                # Direct server injection (from integrated startup script like start_with_server.py)
                 logger.info("🎯 Using directly provided real server (direct injection)")
                 self.server_bridge = create_server_bridge(real_server=real_server)
                 bridge_type = "Direct BackupServer Integration"
                 real_server_available = True
                 logger.info("✅ Direct BackupServer integration activated!")
-            elif real_server_instance is not None:
-                # Use the real server instance we created at startup
-                logger.info("🎯 Using global real server instance")
-                self.server_bridge = create_server_bridge(real_server=real_server_instance)
-                bridge_type = "Real BackupServer Integration"
-                real_server_available = True
-                logger.info("✅ Real BackupServer integration activated!")
 
-                # Test server bridge functionality immediately
+                # Test server bridge functionality
                 try:
                     test_result = self.server_bridge.get_clients()
                     if isinstance(test_result, list):
@@ -460,34 +371,21 @@ class FletV2App(ft.Row):
                         logger.warning(f"Server bridge test returned unexpected format: {type(test_result)}")
                 except Exception as test_error:
                     logger.error(f"Server bridge test failed: {test_error}")
-                    logger.error(
-                        "CRITICAL: Real server integration failed - this may indicate compatibility issues"
-                    )
-                    # Don't fall back to placeholder since ServerBridge now requires real server
-                    raise test_error
+                    logger.warning("Server integration may have compatibility issues")
             else:
-                # No real server available - check for GUI-only mode
-                gui_only_mode = os.environ.get('FLET_GUI_ONLY_MODE', '0') == '1'
-                if gui_only_mode:
-                    logger.warning("⚠️ Starting in GUI-only mode without server bridge")
-                    logger.warning("GUI will be functional but data operations will show empty states")
-                    self.server_bridge = None
-                    bridge_type = "GUI-Only Mode (No Server)"
-                    real_server_available = False
-                else:
-                    logger.error("❌ No real server available - ServerBridge requires real server instance")
-                    logger.error(
-                        "Set FLET_GUI_ONLY_MODE=1 to start GUI without server, or provide a real "
-                        "server instance"
-                    )
-                    raise RuntimeError(
-                        "ServerBridge requires real server instance. Use FLET_GUI_ONLY_MODE=1 for "
-                        "GUI-only mode."
-                    )
+                # No real server available - default to GUI-only standalone mode
+                logger.warning("⚠️ Starting in GUI-only standalone mode without server bridge")
+                logger.warning("GUI will be functional but data operations will show empty states")
+                logger.warning("Use 'python start_with_server.py' for full server integration")
+                self.server_bridge = None
+                bridge_type = "GUI-Only Standalone Mode (No Server)"
+                real_server_available = False
         except Exception as bridge_ex:
             logger.error(f"❌ Server bridge initialization failed: {bridge_ex}")
-            logger.error("Application cannot continue without properly configured server bridge")
-            raise bridge_ex
+            logger.warning("Falling back to GUI-only mode")
+            self.server_bridge = None
+            bridge_type = "GUI-Only Mode (Server Init Failed)"
+            real_server_available = False
 
         logger.info(f"Final server bridge configuration: {bridge_type}")
         logger.info(f"Real server available: {real_server_available}")
@@ -617,7 +515,13 @@ class FletV2App(ft.Row):
     def _initialize_state_manager(self) -> None:
         """Initialize the state manager for reactive UI updates."""
         try:
-            from utils.state_manager import create_state_manager
+            try:
+                # Try package-relative import first
+                from FletV2.utils.state_manager import create_state_manager
+            except ImportError:
+                # Fallback to direct import
+                from utils.state_manager import create_state_manager
+
             self.state_manager = create_state_manager(self.server_bridge)
             logger.info("✅ State manager initialized successfully")
         except ImportError as e:

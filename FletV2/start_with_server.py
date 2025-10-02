@@ -56,45 +56,30 @@ print("\n[2/4] Importing Flet...")
 import flet as ft
 import main
 
-# Initialize BackupServer in a separate thread
+# Initialize BackupServer in MAIN thread (signal handlers require main thread)
 print("\n[3/4] Initializing BackupServer...")
 server_instance = None
-server_thread = None
-server_ready = threading.Event()
 
-def run_server():
-    """Run BackupServer in background thread."""
-    global server_instance
-    try:
-        server_instance = BackupServer()
-        print("[OK] BackupServer instance created")
+try:
+    # Create BackupServer instance in main thread (required for signal handlers)
+    print("[INIT] Creating BackupServer instance...")
+    server_instance = BackupServer()
+    print("[OK] BackupServer instance created")
 
-        # Server is ready for GUI integration
-        server_ready.set()
+    # Note: We don't call server.start() here because:
+    # 1. We're using it for GUI integration only (not network operations)
+    # 2. server.start() would block the main thread
+    # 3. The GUI needs the server instance for data access, not network listening
 
-        # Start the server (this will block in this thread)
-        print("[NET] Starting BackupServer network listener...")
-        server_instance.start()
+    print("[OK] Server initialized and ready for GUI integration")
+    print("[INFO] Network server NOT started (GUI integration mode)")
 
-    except Exception as e:
-        print(f"[ERROR] Server initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
-        server_ready.set()  # Unblock even on failure
-
-# Start server in background thread
-server_thread = threading.Thread(target=run_server, daemon=True, name="BackupServer")
-server_thread.start()
-
-# Wait for server to be ready
-print("[WAIT] Waiting for server initialization...")
-server_ready.wait(timeout=10)
-
-if not server_instance:
-    print("\n[ERROR] Server failed to initialize. Starting GUI in mock-only mode...")
+except Exception as e:
+    print(f"[ERROR] Server initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    print("\n[ERROR] Server failed to initialize. Starting GUI in standalone mode...")
     server_instance = None
-else:
-    print("[OK] Server initialized and ready")
 
 # Launch Flet GUI with server instance
 print("\n[4/4] Launching Flet GUI...")

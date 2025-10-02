@@ -832,10 +832,10 @@ class DatabaseManager:
             dict: {'orphaned_count': int, 'cleaned': int, 'action': str}
         """
         orphaned_count = self._check_orphaned_files()
-        
+
         if orphaned_count == 0:
             return {'orphaned_count': 0, 'cleaned': 0, 'action': 'none'}
-        
+
         if auto_fix:
             try:
                 self.execute(
@@ -879,6 +879,18 @@ class DatabaseManager:
                 CRC INTEGER,
                 ClientID BLOB(16) NOT NULL,
                 FOREIGN KEY (ClientID) REFERENCES clients(ID) ON DELETE CASCADE
+            )
+        ''', commit=True)
+
+        # Metrics History Table: Stores time-series metrics for analytics and monitoring.
+        # Simple design: timestamp + metric_name + value for flexible querying.
+        # Automatic cleanup keeps only last 7 days of data.
+        self.execute('''
+            CREATE TABLE IF NOT EXISTS metrics_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                metric_name VARCHAR(100) NOT NULL,
+                value REAL NOT NULL
             )
         ''', commit=True)
 
@@ -938,6 +950,12 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_files_filesize ON files(FileSize)
             ''', commit=True)
             logger.debug("Created index on files.FileSize")
+
+            # Composite index on metrics_history(metric_name, timestamp) for time-series queries
+            self.execute('''
+                CREATE INDEX IF NOT EXISTS idx_metrics_name_time ON metrics_history(metric_name, timestamp)
+            ''', commit=True)
+            logger.debug("Created composite index on metrics_history(metric_name, timestamp)")
 
             logger.info("Database performance indexes created successfully")
 
@@ -1574,7 +1592,7 @@ class DatabaseManager:
             # Count before insert for accurate reporting
             before_count = self.execute("SELECT COUNT(*) FROM clients", fetchone=True)
             before_count = before_count[0] if before_count else 0
-            
+
 
             # Use executemany for efficient bulk insert
             success = self.execute_many(
@@ -1605,6 +1623,107 @@ class DatabaseManager:
             return 0
         except Exception as e:
             logger.error(f"Database error while getting total bytes transferred: {e}")
+            return 0
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # Metrics Persistence Methods
+    # ═══════════════════════════════════════════════════════════════════════════════
+
+    def record_metric(self, metric_name: str, value: float) -> bool:
+        """
+        Record a single metric sample to the database.
+
+        Args:
+            metric_name: Name of the metric (e.g., "connections", "files", "bandwidth")
+            value: Numeric value of the metric
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            timestamp = datetime.now(UTC).isoformat()
+            self.execute(
+                "INSERT INTO metrics_history (timestamp, metric_name, value) VALUES (?, ?, ?)",
+                (timestamp, metric_name, value),
+                commit=True
+            )
+            logger.debug(f"Recorded metric '{metric_name}' = {value}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to record metric '{metric_name}': {e}")
+            return False
+
+    def get_metrics_history(self, metric_name: str, hours: int = 24) -> list[dict[str, Any]]:
+        """
+        Retrieve historical metrics data for a specific metric.
+
+        Args:
+            metric_name: Name of the metric to retrieve
+            hours: Number of hours of history to retrieve (default: 24)
+
+        Returns:
+            list[dict]: List of {'timestamp': str, 'value': float} samples
+        """
+        try:
+            # Calculate cutoff time
+            cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff = cutoff.replace(hour=cutoff.hour - hours)
+            cutoff_iso = cutoff.isoformat()
+
+            # Query metrics within time range
+            rows = self.execute(
+                """
+                SELECT timestamp, value
+                FROM metrics_history
+                WHERE metric_name = ? AND timestamp >= ?
+                ORDER BY timestamp ASC
+                """,
+                (metric_name, cutoff_iso),
+                fetchall=True
+            )
+
+            if not rows:
+                return []
+
+            return [{'timestamp': row[0], 'value': row[1]} for row in rows]
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve metrics history for '{metric_name}': {e}")
+            return []
+
+    def cleanup_old_metrics(self, days_to_keep: int = 7) -> int:
+        """
+        Remove metrics older than specified days to prevent unbounded growth.
+
+        Args:
+            days_to_keep: Number of days of metrics to keep (default: 7)
+
+        Returns:
+            int: Number of rows deleted
+        """
+        try:
+            # Calculate cutoff timestamp
+            cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff = cutoff.replace(day=cutoff.day - days_to_keep)
+            cutoff_iso = cutoff.isoformat()
+
+            # Delete old metrics
+            cursor = self.execute(
+                "DELETE FROM metrics_history WHERE timestamp < ?",
+                (cutoff_iso,),
+                commit=True
+            )
+
+            rows_deleted = cursor.rowcount if cursor else 0
+            if rows_deleted > 0:
+                logger.info(f"Cleaned up {rows_deleted} old metric samples (older than {days_to_keep} days)")
+            else:
+                logger.debug("No old metrics to clean up")
+
+            return rows_deleted
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup old metrics: {e}")
             return 0
 
     @contextmanager
@@ -2561,6 +2680,7 @@ class DatabaseManager:
 
         except Exception as e:
             logger.error(f"Error getting table content for {table_name}: {e}")
+            return [], []
             return [], []
 
 

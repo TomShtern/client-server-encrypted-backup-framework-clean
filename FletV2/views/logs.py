@@ -115,29 +115,29 @@ def create_logs_view(
             rows=[
                 ft.DataRow(
                     cells=[
-                        ft.DataCell(ft.Text(log.get("time", ""), size=12)),
+                        ft.DataCell(ft.Text(log.get("time", "") if isinstance(log, dict) else str(log), size=12)),
                         ft.DataCell(
                             ft.Container(
                                 content=ft.Row([
                                     ft.Icon(
-                                        LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("icon", ft.Icons.INFO),
+                                        LEVEL_CONFIG.get(log.get("level", "INFO") if isinstance(log, dict) else "INFO", {}).get("icon", ft.Icons.INFO),
                                         size=16,
-                                        color=LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500)
+                                        color=LEVEL_CONFIG.get(log.get("level", "INFO") if isinstance(log, dict) else "INFO", {}).get("color", ft.Colors.BLUE_500)
                                     ),
                                     ft.Text(
-                                        log.get("level", "INFO"),
+                                        log.get("level", "INFO") if isinstance(log, dict) else "INFO",
                                         size=12,
                                         weight=ft.FontWeight.W_600,
-                                        color=LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500)
+                                        color=LEVEL_CONFIG.get(log.get("level", "INFO") if isinstance(log, dict) else "INFO", {}).get("color", ft.Colors.BLUE_500)
                                     )
                                 ], spacing=6, tight=True),
                                 padding=ft.padding.symmetric(horizontal=8, vertical=4),
                                 border_radius=12,
-                                bgcolor=ft.Colors.with_opacity(0.1, LEVEL_CONFIG.get(log.get("level", "INFO"), {}).get("color", ft.Colors.BLUE_500))
+                                bgcolor=ft.Colors.with_opacity(0.1, LEVEL_CONFIG.get(log.get("level", "INFO") if isinstance(log, dict) else "INFO", {}).get("color", ft.Colors.BLUE_500))
                             )
                         ),
-                        ft.DataCell(ft.Text(log.get("component", ""), size=12)),
-                        ft.DataCell(ft.Text(log.get("message", ""), size=12)),
+                        ft.DataCell(ft.Text(log.get("component", "") if isinstance(log, dict) else "", size=12)),
+                        ft.DataCell(ft.Text(log.get("message", "") if isinstance(log, dict) else str(log), size=12)),
                     ]
                 )
                 for log in logs

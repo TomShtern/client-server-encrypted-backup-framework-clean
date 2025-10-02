@@ -1,6 +1,12 @@
 
 # Client-Server Encrypted Backup Framework - Claude Instructions
 
+After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
+
+When given a very long task, so it may be beneficial to plan out your work clearly. It's encouraged to spend your entire output context working on the task - just make sure you don't run out of context with significant uncommitted work. Continue working systematically until you have completed this task.
+
+After completing a task that involves tool use, provide a quick summary of the work you've done.
+
 IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
 
 ## Project Overview
@@ -278,10 +284,103 @@ app = FletV2App(page, real_server=None)
 - Data format conversion handled by ServerBridge (BLOB UUIDs ↔ strings)
 
 ### Database Operations
+
+**CRITICAL: Database Best Practices (Updated January 10, 2025)**
+
+#### Connection Pool Management
+- **Always use finally blocks**: Ensure connections are returned to pool even on exceptions
+- **Track all connections**: Including emergency connections created during pool exhaustion
+- **Use time.monotonic() for durations**: NEVER use time.time() for age/duration calculations
+  - `time.time()` is affected by system clock changes (NTP, DST)
+  - `time.monotonic()` is clock-independent and designed for elapsed time
+  - Example: `age = time.monotonic() - info.created_time`
+- **Prevent double-return**: Use flags to track if connection already handled in error paths
+- **Example pattern**:
+```python
+conn_returned = False
+try:
+    conn = self.connection_pool.get_connection()
+    # ... operations
+    return result
+except Exception:
+    with suppress(Exception):
+        conn.close()
+    conn_returned = True
+    raise
+finally:
+    if conn and not conn_returned:
+        with suppress(Exception):
+            self.connection_pool.return_connection(conn)
+```
+
+#### Transaction Handling
+- **Use transaction() context manager**: For atomic multi-step operations
+- **Check for nested transactions**: Use `conn.in_transaction` before BEGIN
+- **Example**:
+```python
+with self.db_manager.transaction() as conn:
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM clients WHERE ID = ?", (client_id,))
+    cursor.execute("DELETE FROM files WHERE ClientID = ?", (client_id,))
+    # Automatic commit or rollback on exception
+```
+
+#### Thread Safety
+- **Always protect shared state with locks**: Caches, connection tracking, metrics
+- **Use threading.Lock**: For cache read/write operations
+- **Example**:
+```python
+with self._cache_lock:
+    if self._cache['data'] and not_expired:
+        return self._cache['data']
+```
+
+#### Query Correctness
+- **Verify column names in WHERE clauses**: Common bug - using ID instead of ClientID
+- **Always use parameterized queries**: NEVER string interpolation for values
+- **Validate table/column names**: If dynamically constructed, use whitelists
+- **Example bug to avoid**:
+```python
+# WRONG - searches by file ID instead of client ID
+"SELECT * FROM files WHERE ID = ?"
+# CORRECT - searches by client ID
+"SELECT * FROM files WHERE ClientID = ?"
+```
+
+#### Resource Leak Prevention
+- **Track emergency connections**: Store in dict, clean up on shutdown
+- **Validate connections before return**: Test with "SELECT 1", handle errors
+- **Close connections on validation failure**: Don't return bad connections to pool
+- **Clean up partial operations**: Remove incomplete backup files, temp data
+
+#### Error Handling
+- **Catch specific exceptions**: sqlite3.OperationalError, sqlite3.DatabaseError
+- **Use contextlib.suppress()**: For cleanup operations that may fail
+- **Log with appropriate levels**: DEBUG for protocol, INFO for operations, WARNING for recoverable errors
+- **Return structured responses**: `{'success': bool, 'data': Any, 'error': str}`
+
+#### Performance Patterns
+- **Use COUNT(*) for counting**: Not len(get_all_records())
+- **Implement caching with TTL**: 30-second cache for frequently-accessed stats
+- **Create appropriate indexes**: On frequently queried columns
+- **Use executemany()**: For bulk inserts (10-100x faster)
+
+#### Common Pitfalls to Avoid
+1. **❌ Mixed time bases**: Using both time.time() and time.monotonic()
+2. **❌ Untracked resources**: Emergency connections, temporary files
+3. **❌ Race conditions**: Unprotected cache access in multi-threaded code
+4. **❌ Wrong column names**: ID vs ClientID in WHERE clauses
+5. **❌ Nested transaction errors**: Not checking if already in transaction
+6. **❌ Connection leaks**: Not returning connections in all code paths
+7. **❌ Inaccurate metrics**: Reporting attempted operations as successful
+8. **❌ Missing validation**: Assuming WAL mode or other features work
+
+#### Schema Patterns
 - Use the existing DatabaseManager for all database interactions
 - Follow the established schema patterns for client and file records
-- Implement proper transaction handling for data consistency
+- Understand CASCADE behavior: Deleting client deletes all associated files
 - Include appropriate error handling for database operations
+- Foreign key constraints are enforced - maintain referential integrity
 
 ### Performance Considerations
 - Optimize for frequent UI updates with minimal redraw operations
@@ -331,6 +430,218 @@ if '\x00' in name or '\n' in name:
 - Use descriptive constant names: `DEFAULT_LOG_LINES_LIMIT` not magic number `100`
 - Document constant purpose inline: `SETTINGS_FILE = "server_settings.json"  # Settings persistence file`
 - Group related constants together (Logging, Settings, Protocol, etc.)
+
+### Code Simplicity & Pragmatism (January 2025)
+**CRITICAL: Optimization Philosophy for This Project**
+
+This project is designed for **50-500 users maximum** at small-to-medium scale. All implementation decisions should prioritize:
+
+1. **Simplicity over sophistication**
+   - Favor straightforward solutions that "just work"
+   - Avoid over-engineering for edge cases that won't occur at this scale
+   - SQLite can handle millions of rows - don't optimize prematurely
+
+2. **Pragmatic data retention**
+   - Current metrics: 60-second samples, 7-day retention = ~10,000 points/metric
+   - Database size: ~1.5 MB after 7 days (negligible)
+   - **This is appropriate** - SQLite handles this effortlessly
+   - **Don't reduce unless user explicitly requests it**
+
+3. **Avoid unnecessary complexity**
+   - If a feature works reliably, leave it alone
+   - Don't add configuration knobs "just in case"
+   - Trust SQLite's capabilities at this scale
+
+4. **When in doubt, ask about scale**
+   - If implementing something that might be "too much", verify with user
+   - User prefers simple, working solutions over complex, "enterprise" ones
+   - Example: "Is 10,000 data points too much?" → No, it's tiny for SQLite
+
+5. **Retry patterns**
+   - Retry decorator is available (server.py:131-185) for transient failures
+   - Apply it incrementally to methods that actually encounter errors
+   - Don't preemptively add retries everywhere - add where needed
+
+6. **Performance at this scale**
+   - 500 users × typical usage = trivial load for SQLite
+   - No need for connection pooling beyond basic implementation
+   - No need for caching beyond simple 30-second TTL for stats
+   - No need for sharding, replication, or distributed systems
+
+**Key Takeaway**: Build for the actual use case (50-500 users), not imaginary enterprise scale. Simple, reliable code beats complex, "scalable" code every time at this scale.
+
+## Critical Coding Patterns & Anti-Patterns (January 2025)
+
+### ✅ Required Patterns - ALWAYS Follow These
+
+#### 1. **Centralized Validation Pattern**
+**Rule**: Never duplicate validation logic. Create a single validation method and reuse it.
+
+**Example - Client Name Validation**:
+```python
+def _validate_client_name(self, name: str) -> tuple[bool, str]:
+    """Centralized client name validation."""
+    if not name or not isinstance(name, str):
+        return False, "Client name is required and must be a string"
+    if len(name) > MAX_CLIENT_NAME_LENGTH:
+        return False, f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)"
+    if any(c in name for c in ('\x00', '\n', '\r', '\t')):
+        return False, "Client name contains invalid characters"
+    return True, ""
+
+# Then use it everywhere:
+is_valid, error_msg = self._validate_client_name(name)
+if not is_valid:
+    return self._format_response(False, error=error_msg)
+```
+
+**Location**: server.py:857-877 (reference implementation)
+
+#### 2. **Database-First Deletion Pattern**
+**Rule**: For operations that modify both database AND memory, ALWAYS modify database first, then memory.
+
+**Why**: If database fails, memory is still consistent. Reverse order creates phantom records.
+
+**Pattern**:
+```python
+# CORRECT - Database first
+success = self.db_manager.delete_client(client_id_bytes)
+if not success:
+    return self._format_response(False, error="Database deletion failed")
+
+# THEN remove from memory (only if DB succeeded)
+with self.clients_lock:
+    if client := self.clients.pop(client_id_bytes, None):
+        self.clients_by_name.pop(client.name, None)
+```
+
+**Location**: server.py:1002-1020 (reference implementation)
+
+#### 3. **Universal Retry Decorator Pattern**
+**Rule**: ALL database operations MUST have retry protection for `sqlite3.OperationalError`.
+
+**Why**: Multi-threaded access (GUI + network + maintenance) causes database locks. Retry prevents crashes.
+
+**Pattern**:
+```python
+@retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
+def any_database_method(self, ...):
+    """Method that accesses database."""
+    # Database operation here
+```
+
+**Apply to**: ALL methods that call `self.db_manager.*` or execute SQL queries
+
+**Locations**:
+- Decorator definition: server.py:139-186
+- Applied to 16 methods: server.py (search for `@retry`)
+
+#### 4. **Comprehensive Health Check Pattern**
+**Rule**: Health checks must VALIDATE critical states, not just READ them.
+
+**Pattern**:
+```python
+# Don't just read metrics - VALIDATE them
+if not pool_status.get('cleanup_thread_alive', False):
+    health_data['errors'].append("Connection pool cleanup thread is dead")
+    health_data['status'] = 'degraded'
+
+# Check for resource leaks
+if hasattr(pool, 'emergency_connections'):
+    leak_count = len(pool.emergency_connections)
+    if leak_count > 0:
+        health_data['errors'].append(f"{leak_count} emergency connections leaked")
+        health_data['status'] = 'degraded'
+```
+
+**Location**: server.py:1920-1932 (reference implementation)
+
+#### 5. **Rate Limiting Pattern**
+**Rule**: Resource-intensive operations (exports, large queries) need per-resource rate limiting.
+
+**Pattern**:
+```python
+# Per-resource rate limiting (not global)
+session_key = f"resource_{identifier}"
+with self._rate_limit_lock:
+    current_time = time.time()
+    last_access = self._last_access_time.get(session_key, 0)
+
+    if current_time - last_access < MIN_INTERVAL:
+        remaining = MIN_INTERVAL - (current_time - last_access)
+        return self._format_response(False, error=f"Rate limit: wait {remaining:.1f}s")
+
+    self._last_access_time[session_key] = current_time
+```
+
+**Locations**:
+- Log export: server.py:2431-2442
+- Database export: server.py:1458-1471
+
+### ❌ Anti-Patterns - NEVER Do These
+
+#### 1. **❌ Memory-First Deletion**
+```python
+# WRONG - Creates phantom records on DB failure
+with self.clients_lock:
+    self.clients.pop(client_id_bytes, None)
+success = self.db_manager.delete_client(client_id_bytes)  # May fail!
+```
+
+#### 2. **❌ Duplicate Validation Logic**
+```python
+# WRONG - Validation duplicated in 4 places
+if len(name) > MAX_CLIENT_NAME_LENGTH:
+    return error  # Repeated everywhere!
+```
+
+#### 3. **❌ Unprotected Database Operations**
+```python
+# WRONG - No retry protection
+def get_data(self):
+    return self.db_manager.query()  # Will crash on database lock!
+```
+
+#### 4. **❌ Passive Health Checks**
+```python
+# WRONG - Just reading status without validation
+health_data['cleanup_thread'] = pool_status.get('cleanup_thread_alive')
+# What if it's False? No action taken!
+```
+
+#### 5. **❌ Global Rate Limiting**
+```python
+# WRONG - Single rate limit for all resources
+if current_time - self._last_export < 10:
+    return error  # Blocks unrelated exports!
+```
+
+### 🔧 Refactoring Checklist
+
+When adding new database operations:
+- [ ] Apply `@retry` decorator with `sqlite3.OperationalError`
+- [ ] Use centralized validation (create helper if needed)
+- [ ] Follow database-first pattern for dual updates
+- [ ] Add rate limiting if resource-intensive
+- [ ] Update health checks with validation logic
+- [ ] Add metrics collection (`metrics_collector.record_*`)
+- [ ] Use structured logging (DEBUG/INFO/WARNING/ERROR/CRITICAL)
+- [ ] Return consistent format: `_format_response(success, data, error)`
+
+### 📚 Reference Implementations
+
+**Perfect Examples to Copy**:
+1. **Validation**: `_validate_client_name()` - server.py:857-877
+2. **Database-First**: `delete_client()` - server.py:999-1023
+3. **Retry Pattern**: Any method with `@retry` decorator
+4. **Health Check**: `get_server_health()` - server.py:1877-1938
+5. **Rate Limiting**: `get_table_data()` - server.py:1458-1471
+
+**Code to Learn From**:
+- Retry decorator: server.py:139-186
+- Metrics collection: server.py:168-172, 644-668
+- Connection pooling: database.py (reference for thread safety)
+- Structured responses: `_format_response()` - server.py:849-855
 
 ## Troubleshooting
 

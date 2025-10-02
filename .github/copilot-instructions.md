@@ -91,7 +91,7 @@ python scripts/one_click_build_and_run.py
 - **Error Handling**: Try/except with specific exceptions, log errors with context. Use `contextlib.suppress(Exception)` for concise suppressed-exception blocks.
 - **Async**: Use async/await for I/O operations, avoid blocking calls
 - **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
-- **Sourcery**: Address all sourcery warnings in the `#file:main.py`.
+- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow. Address all sourcery warnings in the `#file:main.py`.
 - **Problems View**: The Problems view in VS Code groups problems by source (e.g., extensions, linters) in tree view mode. Multiple groups can appear for the same file if multiple tools are enabled. Use the `problems.defaultViewMode` setting to switch to table view for a flat list. Pylance (Microsoft's Python language server) groups its findings by type in the Problems panel:
     1. **Syntax Errors** - Parse/compilation issues
     2. **Type Errors** - Type checking violations
@@ -114,9 +114,9 @@ python scripts/one_click_build_and_run.py
 - **Reasoning**: Apply sequential thinking MCP (Meta-Cognitive Programming) as much as possible to identify all problems/issues before attempting fixes. Use websearch and context7 MCP when you need up to date context and docs.
 - **Proactivity**: The AI should be proactive in identifying and fixing issues, not just running tests without understanding the results. Use sequential thinking MCP every 5 tool calls to ensure a thorough understanding of the situation before proceeding with fixes.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
-- **Problem Management**: Make sure to not cause more problems than you solve.
+- **Problem Management**: Make sure to not cause more problems than you solve. **Make sure you are not creating new problems instead of solving of solving them.**
 - **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder 'loren ipsum' instead of mock data. **NEVER use mock data.**
-- **Bug Fixing**: When fixing errors, focus on syntax errors without changing functionality. Ensure that the code remains unbroken and that no new problems are introduced.
+- **Bug Fixing**: When fixing errors, focus on syntax errors without changing functionality. Ensure that the code remains unbroken and that no new problems are introduced. **Don't assume anything, always make sure.**
 - **Code Quality**: Make sure there are no code/functions duplications and no redundencies.
 - **Flet Version**: Ensure you are doing things with Flet 0.28.3 idioms in mind. Always avoid costume complex long solutions where there is a Flet native better and simpler way. Use context7 if you are not sure about something, it has instructions for everything.
 - **Ruff**: When addressing Ruff issues, ensure you are not breaking the code and not removing functionality, and make sure to not create more problems than you solve.
@@ -186,10 +186,10 @@ python scripts/one_click_build_and_run.py
   - **Async Loading**: Investigate potential async loading problems with skeleton placeholders.
   - **Overlay or Stack ordering**: A loading overlay may be placed on top of the content and left visible or opaque, blocking user content (most common cause when views show a gray surface only). Ensure that the content is the first child and the overlay is the last child in a Stack (Stack renders children in order; last on top). Example: ensure `Stack(children=[content_container, overlay])` so the overlay is placed above the content only when needed. Toggle the overlay child `visible` and `opacity` instead of only toggling a top-level `visible` flag.
   - **Controls Visibility**: Controls may be set to visible=False or opacity=0 and never re-enabled, possibly via refs or async loading code that never completes or fails silently.
-  - **Refs and Deferred Updates**: Code may be updating controls before they are attached, or using controls reference wrongly (e.g., expecting .controls to exist when it's None), so nothing gets added to the UI. Ensure that after any `.controls` modification you call `.update()` on that parent control. Ensure the ref is not None before using; add a small wait (`page.run_task`) to populate after attachment or add safe guards like `if ref.current is None: skip update and log a warning, then schedule a retry`. Wrap dynamic control population in a small function and call it with `page.run_task` or schedule via `page.add_post_frame_callback` equivalent (Flet has `page.add_auto_close`? If not, call `page.update` after adding).
+  - **Refs and Deferred Updates**: Code may be updating controls before they are attached, or using controls reference wrongly (e.g., expecting .controls to exist when it's None), so nothing gets added to the UI. Ensure that after any `.controls` modification you call `.update()` on that parent control. Ensure the ref is not None before using; add a small wait (`page.run_task`) to populate after attachment or add safe guards like `if ref.current is None: skip update and log a warning, then schedule a retry`. Wrap dynamic control population in a small function and call it with `page.run_task` or schedule via `page.add_post_frame_frame_callback` equivalent (Flet has `page.add_auto_close`? If not, call `page.update` after adding).
   - **Layout Structure**: Using Container vs Column vs Stack incorrectly may cause scroll or layout to be collapsed to zero height.
   - **Suppressed Exceptions**: Exceptions swallowed by `with contextlib.suppress(Exception)` in critical places, may be hiding the real error (a later AI/engineer should disable suppression to see the real stacktrace while debugging). Replace broad `contextlib.suppress(Exception)` with `logging.exception` to capture real errors during debug.
-  - **Logs View Attachment Diagnostic**: Add a small diagnostic log + `page.update` in `logs.py`'s `setup_subscriptions` to verify that the Logs view is attaching correctly.
+  - **Logs View Attachment Diagnostic**: Add a small diagnostic log + `page.update` in `logs.py`s `setup_subscriptions` to verify that the Logs view is attaching correctly.
 - **Embedded GUI**: To enable the embedded GUI set `CYBERBACKUP_DISABLE_INTEGRATED_GUI=0`. The server checks the environment flag incorrectly; the condition should treat only `'1'` as disable.
 - **Data Type Handling in Logs View**: When handling data in the logs view, especially data received from the server, ensure that variables declared as lists are not inadvertently reassigned to dictionaries. Use temporary variables to inspect the server response and normalize the data into a consistent list format before further processing. This avoids static type checker errors and ensures that list operations are performed on valid list objects.
 - **Flet GUI Startup**: The Flet GUI is now running! The GUI should now be accessible in the web browser. The application is running with:
@@ -199,8 +199,39 @@ python scripts/one_click_build_and_run.py
   The Flet GUI should open automatically in the default web browser. If it doesn't appear, you can typically access it at `http://localhost:8550` (or ports 8551/8552 if 8550 is occupied).
 - **FletV2 Analysis**: Before making any changes to `FletV2`, analyze the folder for issues, problems, flaws, wrongs, anti-patterns, and bad practices using context7 MCP for up-to-date official context, documentation, and information to verify that all is going the way it should be going.
 - **Database Connection Management**: When updating client information in the database, ensure proper handling of connection acquisition and release, especially when using connection pooling. Mirror the pattern used in the `execute` method for connection management. Add checks for whether connection pooling is enabled (`self.use_pool` and `self.connection_pool`). Use manual connection management (get, use, return) when pooling is enabled, and a direct `sqlite3.connect` context manager when pooling is disabled. Ensure the connection is committed and returned properly to avoid resource leaks or database locks.
-- **Codacy Instructions**: When working with `codacy.instructions.md`, ensure that the instructions do not contain references to files or folders that do not exist in the repository (e.g., `#file:AI-Context` or `#file:important_docs`). Remove such references to avoid "File not found" errors.
+- **Codacy Instructions**: When working with `codacy.instructions.md`, ensure that the instructions do not contain references to files or folders that do not exist in the repository (e.g., `#file:AI-Context` or `#file:important_docs`). Remove such references to avoid "File not found" errors. **Ignore the two warnings in codacy instructions. Address the remaining issues. Figure out what caused them to show suddenly and fix them. Make sure you are not braking the code. Ensure functionality stays the same or better. Think harder and check if you solved the problems. If you introduce problems, you must figure out what you did that caused it and fix it.**
 - **File and Folder References**: In this project's documentation convention, the syntax `#file:` is used to reference both individual files and folders (e.g., `#file:AI-Context` for the AI-Context folder). There isn't a separate `#folder:` keyword.
+- **Pylance AI-Assisted Code Actions**: This refers to the configuration settings for AI-powered code actions in the Python extension (Pylance) for Visual Studio Code. It controls various automated code improvements, such as generating docstrings, adding missing imports, organizing imports, and suggesting type annotations. Each key (e.g., `"generateDocstring": true`) enables or disables specific AI-assisted features. Adjust these settings to customize how the extension assists with code editing. Refer to the VS Code Python extension documentation for more details.
+  - **Available Keys and Their Effects**
+    - `"generateDocstring"`: Automatically generates docstrings for functions, classes, and methods.
+    - `"implementAbstractClasses"`: Suggests implementations for abstract methods in subclasses.
+    - `"generateSymbol"`: Creates stubs for referenced but missing symbols (e.g., undefined functions or classes).
+    - `"convertFormatString"`: Converts old-style string formatting (e.g., `%` or `.format()`) to f-strings.
+    - `"addMissingImports"`: Suggests and adds missing import statements based on code usage.
+    - `"organizeImports"`: Sorts and removes unused imports.
+    - `"suggestTypeAnnotations"`: Proposes type hints for variables, parameters, and return types.
+    - `"fixTypeErrors"`: Automatically fixes detected type errors (use cautiously, as it may introduce changes).
+  - **Optional/Advanced Keys (Not in your current config)**
+    - `"autoApplyEdits"`: If supported, applies edits automatically without confirmation (set to `false` for manual review).
+    - `"fixLintIssues"`: Auto-fixes common linting issues (e.g., style violations).
+    - `"applyRefactorings"`: Enables AI-driven code refactorings (e.g., renaming, extracting methods).
+  - **Usage Tips**
+    - Start with conservative settings (like your current ones) to avoid unwanted changes.
+    - Enable `"fixTypeErrors"` only after reviewing suggestions, as it can alter code.
+    - These actions appear as lightbulb icons in the editor or via quick fixes (Ctrl+.).
+    - For more details, check the Pylance documentation or VS Code Python extension settings. If you enable aggressive options, test your code thoroughly to ensure no regressions.
+- **Server Issues**: When addressing the issues outlined in `#file:Server_Issues_01.10.2025.md` and the `#file:server.py`, focus on resolving all identified problems and flaws within the server component of the system. When addressing issues in `server.py`, use context7 and sequential thinking tools. When addressing issues outlined in `#file:Server_Issues_01.10.2025.md`, ensure every problem is covered and ready for prioritization before starting implementation. Search for the `update_row` method.
+- **Error Handling**: If new problems or errors arise after recent changes, immediately investigate the cause and fix them, ensuring that the system's functionality remains the same or improves. **Make sure you are not breaking the code.** Ensure functionality stays the same or better. Think harder and check if you solved the problems. If you introduce problems, you **must** figure out what you did that caused it and fix it.
+- **Pylance**: When addressing Pylance issues, ensure that the code remains unbroken and that no new problems are introduced. **Don't assume anything, always make sure.**
+- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow.
+- **Task Prioritization from Server Issues Document**: When addressing server issues, prioritize based on the summary in `#file:Server_Issues_01.10.2025.md`. High/Medium-High priority tasks should be addressed first.
+- **Server Issues Document Editing**: User has delegated the following responsibilities to the AI regarding the `#file:Server_Issues_01.10.2025.md` document:
+  - **Duplicate Removal**: Remove duplicate entries from the document.
+  - **Re-numbering**: Re-number items in the document to maintain sequential order after duplicate removal.
+  - **Completed Items**: Move items marked with a green checkmark (✅) to a "Completed items" section at the bottom of the document.
+  - **Reordering**: Reorder the uncompleted items and renumber them, updating small sections as needed.
+- **Issue Prioritization**: When reordering issues in `#file:Server_Issues_01.10.2025.md`, order them from the easiest and most impactful to apply (top) to the hardest and least impactful (bottom). Ensure that the text of each issue is preserved exactly.
+- **Database Parameter Handling**: When calling the `execute` method in `database.py`, do not include the `return_cursor` parameter. The method returns a cursor by default, and specifying `return_cursor` is unnecessary and incorrect.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -213,7 +244,6 @@ python scripts/one_click_build_and_run.py
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
 - **Problem Management**: Make sure you are not causing more problems than you are solving.
 - **Code Removal**: Remove bad/unused/wrong/not appropriate/falty/duplicated/ redunded /unwanted/unnedded code, if this could be done without braking the system and not changing functionality.
-- **Tri-Style Design**: Maintain the tri-style design (Material Design 3 + Neumorphism + Glassmorphism) when modifying the UI.
 
 ### Testing Strategy
 - Integration tests verify end-to-end flows
@@ -231,7 +261,7 @@ self.backup_process = subprocess.Popen(
     [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
     stdin=self.PIPE,
     stdout=the self.PIPE,
-    stderr=self.PIPE,
+    stderr=the self.PIPE,
     text=True,
     cwd=os.path.dirname(os.path.abspath(__file__)),  # CRITICAL: Working directory
     env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
@@ -253,6 +283,89 @@ def _generate_transfer_info(self, server_ip, server_port, username, file_path):
         f.write(f"{username}\n")                 # Line 2: username
         f.write(f"{file_path}\n")                # Line 3: absolute file path
 ```
+
+#### Server Issue Resolution
+
+When addressing server issues, prioritize the following based on the summary of unresolved issues and recommendations from `Server_Issues_01.10.2025.md`:
+
+**High / Medium-High Priority Tasks**:
+
+1.  **Settings Validation (`save_settings` & `load_settings`):**
+    *   Location: `server.py` (lines ~1650, 2291-2394)
+    *   Implement `_validate_settings()` with schema (types, ranges, allowed keys) and call it from both save and load. Reject or fallback to defaults on invalid data.
+2.  **Emergency DB Connections Cleanup:**
+    *   Location: `server.py` (around line ~310) and `database.py` (lines ~306-317)
+    *   Track emergency connections separately and ensure they are closed/returned after use.
+3.  **Metrics Integration / Observability:**
+    *   Location: Throughout `server.py` (hooks missing), Shared/observability available
+    *   Add counters for connections/uploads/downloads and gauges for active clients/transfers; instrument a few high-value code paths.
+4.  **Rate Limiting for Log Export:**
+    *   Location: `server.py` (around line ~1640 / export logs code)
+    *   Track last export timestamp per session and enforce 10s minimum interval.
+5.  **Server Shutdown Cleanup (`stop()`):**
+    *   Location: `server.py` (lines ~618-628 / `stop()`)
+    *   On `stop()`, acquire `clients_lock`, call cleanup on each client, clear `clients` and `clients_by_name`, then proceed with shutdown.
+6.  **Client AES Key Access Thread-Safety:**
+    *   Location: `` class (lines ~199-204), callers at ~485
+    *   Wrap access in `with self.lock:` or equivalent thread-safe getter.
+7.  **Atomic Client Creation Race-Window (`add_client`):**
+    *   Location: `server.py` (around 712-721)
+    *   Use DB transaction or catch unique constraint errors and return friendly error; consider short critical section around memory insert. DB UNIQUE constraint already mitigates it.
+
+**Medium / Medium-Low Priority Tasks**:
+
+8.  **Timeout on File Export Operations:**
+    *   Location: `server.py` (`_export_logs_sync()` around 1669)
+    *   Read in chunks, enforce maximum allowed size, and fail after configured timeout.
+9.  **Centralize `SERVER_VERSION` Usage:**
+    *   Location: Multiple files referencing `SERVER_VERSION` with `globals()` checks (lines ~595, 1072, 1330, 1349, 1671)
+    *   Import `SERVER_VERSION` from `config.py` everywhere and remove `globals()` checks.
+10. **Replace Inline Repeated `asyncio` Imports:**
+    *   Location: `server.py` (many async wrappers)
+    *   Add `import asyncio` at module top and remove inline imports.
+11. **Duplicate/Triple File-Read Logic for Logs:**
+    *   Location: `server.py` (lines ~2075-2089 in `get_logs()`)
+    *   Extract helper `_read_log_file(filepath, limit)` and reuse.
+12. **Partial File Timeout Uses Wrong Time Base (Consistency):**
+    *   Location: `server.py` (lines ~237-242) and `file_transfer.py`
+    *   Standardize on monotonic time everywhere for these operations.
+13. **`get_historical_data()` Uses Mock/Random Data:**
+    *   Location: `server.py` (lines ~2014-2051, ~2032-2045)
+    *   Add docstring warning that data is mock.
+14. **No Input Validation on `get_historical_data()`:**
+    *   Location: `server.py` (lines ~2014-2051)
+    *   Add `VALID_METRICS` check and range validation for `hours`.
+15. **Broad Exception Handlers Used Widely:**
+    *   Location: Many places in `server.py` (58 instances)
+    *   Replace with targeted exception types where possible; add `exc_info=True` to unexpected captures. Tackle opportunistically when editing related functions.
+16. **Ensure `client.last_seen` Updated for Every Request:**
+    *   Location: request handlers (note placed around `request_handlers.py:97`)
+    *   Call `client.update_last_seen()` centrally in request dispatch before specific handler logic.
+
+**Low Priority / Polish Tasks**:
+
+17. **Response Time Placeholder:**
+    *   Location: Issue referenced at line ~1199 (placeholder)
+    *   Remove the placeholder.
+18. **Retry Logic Refactor (Decorator):**
+    *   Location: Multiple methods (get_clients, save_settings, etc.)
+    *   Add simple `@retry` decorator with configurable attempts/backoff and apply to DB operations.
+19. **Inconsistent Error Response Format Across ServerBridge:**
+    *   Location: ServerBridge methods (multiple)
+    *   Audit ServerBridge methods and ensure `_format_response(False, error=...)` is always used.
+20. **No Timeout for Long-Running Operations:**
+    *   Location: `server.py` (related to 8)
+    *   Offload to executor with timeout and fail gracefully.
+21. **Validate `export_format` Parameter:**
+    *   Location: `server.py` (lines 86 and 2182-2185)
+    *   Status: Already implemented — no action required.
+
+**Duplicates / Items to Consider Removing**:
+
+*   \#22 (`stop()` missing cleanup) is the same as #5 — merge them.
+*   \#23 (historical data mock) is the same as #13 — merge them.
+*   \#25 (atomic client creation) overlaps with #7 — consider merging and marking DB-constraint mitigation.
+*   \#4 (response time placeholder) and #17 (response time placeholder) appear to reference the same missing metric — treat as single item.
 
 ---
 
@@ -308,335 +421,4 @@ from utils.server_bridge import create_server_bridge
 from utils.server_bridge import *
 
 # ❌ WRONG: Delayed UTF-8 import (causes encoding issues)
-# Import at top level, not inside functions
-
-# ❌ WRONG: Inconsistent sys.path management
-# Always use the parent_dir pattern shown above
-
-### Component Architecture Patterns
-
-**CRITICAL**: Use function-based components that return `ft.Control`, not classes. This ensures composability and follows Flet best practices.
-
-#### View Component Structure
-```python
-import flet as ft
-from utils.ui_components import themed_button
-from utils.user_feedback import show_error_message
-
-def create_view(page: ft.Page, server_bridge, state_manager) -> ft.Control:
-    # local state + handlers
-    def on_refresh(e):
-        try:
-            data = server_bridge.get_data()
-            items.controls = [ft.Text(d["title"]) for d in data]
-            items.update()  # Prefer control.update() for perf
-        except Exception as ex:
-            show_error_message(page, f"Refresh failed: {ex}")
-
-    refresh_btn = themed_button(text="Refresh", on_click=on_refresh, icon=ft.Icons.REFRESH)
-    items = ft.Column(scroll=ft.ScrollMode=ft.ScrollMode.AUTO)
-    return ft.Container(content=ft.Column([ft.Row([ft.Text("Example"), refresh_btn]), items]), padding=20)
-```
-
-#### Flet Component Development Best Practices
-
-When creating UI components for Flet, follow these best practices:
-
-##### 1. Single Inheritance Pattern
-Always inherit from a single Flet control class:
-```python
-# ✅ CORRECT - Single inheritance
-class EnhancedButton(ft.FilledButton):
-    def __init__(self, text="", **kwargs):
-        super().__init__(text=text, **kwargs)
-        # Add custom functionality
-
-# ❌ INCORRECT - Multiple inheritance
-class BadButton(ft.FilledButton, ft.TextButton):
-    def __init__(self, text="", **kwargs):
-        super().__init__(text=text, **kwargs)
-```
-
-##### 2. Proper Initialization
-Always call `super().__init__()` properly:
-```python
-class MyComponent(ft.Container):
-    def __init__(self, content=None, **kwargs):
-        # Pass Flet-native parameters to parent class
-        super().__init__(content=content, **kwargs)
-
-        # Set custom properties AFTER parent initialization
-        self.custom_property = "value"
-```
-
-##### 3. Component Composition Over Complex Inheritance
-Use composition when a single component isn't sufficient:
-```python
-class StatCard(ft.Card):
-    def __init__(self, title, value, **kwargs):
-        # Create content using Flet controls
-        content = ft.Column([
-            ft.Text(title, size=16, weight=ft.FontWeight.W_500),
-            ft.Text(str(value), size=24, weight=ft.FontWeight.W_300)
-        ])
-
-        # Initialize parent with composed content
-        super().__init__(content=content, **kwargs)
-```
-
-##### 4. Flet-Native Properties
-Leverage Flet's built-in properties instead of custom implementations where possible:
-```python
-# ✅ CORRECT - Use Flet's built-in properties
-class MyButton(ft.FilledButton):
-    def __init__(self, text="", **kwargs):
-        super().__init__(text=text, **kwargs)
-        self.bgcolor = ft.Colors.PRIMARY  # Use Flet's color constants
-        self.height = 40  # Direct property assignment
-
-# ❌ INCORRECT - Custom property management
-class MyButton:
-    def __init__(self, text="", **kwargs):
-        self._bgcolor = None
-        self._height = None
-        # Custom property management is unnecessary
-```
-
-##### 5. Event Handling Patterns
-Use Flet's event system properly:
-```python
-class ClickableCard(ft.Card):
-    def __init__(self, on_click=None, **kwargs):
-        super().__init__(**kwargs)
-        self.on_click = on_click  # Set event handler directly
-
-    def handle_click(self, e):
-        if self.on_click:
-            self.on_click(e)
-```
-
-##### 6. State Management
-Manage component state using Flet's update mechanism:
-```python
-class StatefulButton(ft.FilledButton):
-    def __init__(self, text="", **kwargs):
-        super().__init__(text=text, **kwargs)
-        self._state = "enabled"
-
-    def set_state(self, state):
-        self._state = state
-        if state == "loading":
-            self.disabled = True
-            self.text = "Loading..."
-        elif state == "disabled":
-            self.disabled = True
-        else:
-            self.disabled = False
-            self.text = "Click me"
-        self.update()  # Trigger UI update
-```
-
-### Async Programming Patterns
-
-## ⚡ Async Programming
-
-Never block the UI thread. Use `page.run_task()` and `run_in_executor()` for blocking work.
-```python
-# Minimal patterns
-async def handle_backup_start(e):
-    # Update UI immediately
-    start_button.disabled = True
-    start_button.text = "Starting..."
-    page.update()
-
-    try:
-        # Run blocking operation in thread pool
-        result = await asyncio.get_event_loop().run_in_executor(
-            None, perform_backup_operation, backup_config
-        )
-
-        # Update UI with results
-        show_success_message(page, f"Backup completed: {result}")
-        update_backup_status(result)
-
-    except Exception as ex:
-        logger.error(f"Backup failed: {ex}")
-        show_error_message(page, f"Backup failed: {str(ex)}")
-
-    finally:
-        # Always restore UI state
-        start_button.disabled = False
-        start_button.text = "Start Backup"
-        page.update()
-```
-
-#### Background Tasks with page.run_task()
-```python
-# ✅ CORRECT: Use page.run_task() for background operations
-def start_background_monitoring(e):
-    """Start background monitoring task."""
-    async def monitor_task():
-        while monitoring_active:
-            try:
-                # Perform monitoring operation
-                status = await server_bridge.get_status()
-                update_monitoring_display(status)
-                # Wait before next check
-                await asyncio.sleep(5)
-
-            except Exception as ex:
-                logger.error(f"Monitoring error: {ex}")
-                break
-
-    # Start the background task
-    page.run_task(monitor_task)
-```
-
-#### Threading for CPU-bound Operations
-```python
-import concurrent.futures
-
-# ✅ CORRECT: Use ThreadPoolExecutor for CPU-bound work
-def handle_data_processing(e):
-    """Process large dataset without blocking UI."""
-    async def process_async():
-        def cpu_intensive_work():
-            # CPU-bound processing here
-            return process_large_dataset(data)
-
-            result = await asyncio.get_event_loop().run_in_executor(None, cpu_intensive_work)
-
-        display_results(result)
-        page.update()
-
-    page.run_task(process_async)
-```
-
-#### Async Anti-Patterns (AVOID)
-```python
-# ❌ WRONG: Blocking operations in async handlers
-async def bad_handler(e):
-    result = blocking_file_operation()  # Blocks event loop!
-    await update_ui(result)  # Never reached
-
-# ❌ WRONG: Incorrect async UI updates
-async def bad_ui_update(e):
-    await page.update_async()  # update_async() doesn't exist in Flet
-
-# ❌ WRONG: Mixing sync and async incorrectly
-def sync_function():
-    asyncio.run(async_operation())  # Don't do this in event handlers
-```
-
-#### Flet Async Task Management Patterns
-```python
-# Pattern 1: Simple async method calls
-# ❌ INCORRECT - Calling the coroutine instead of passing it
-self.page.run_task(self.action_handlers.clear_logs())
-
-# ✅ CORRECT - Pass the coroutine function itself
-self.page.run_task(self.action_handlers.clear_logs)
-
-# Pattern 2: Parameterized async method calls
-# ❌ INCORRECT - Calling the coroutine with parameters
-self.page.run_task(self.action_handlers.export_logs(filter_level, filter_component, search_query))
-
-# ✅ CORRECT - Create a wrapper function to capture parameters
-async def export_logs_wrapper():
-    await self.action_handlers.export_logs(filter_level, filter_component, search_query)
-self.page.run_task(export_logs_wrapper)
-```
-
-### Error Handling Patterns
-
-**CRITICAL**: Implement proper error handling with user feedback and logging.
-
-#### User Feedback with SnackBar
-```python
-from utils.user_feedback import show_success_message, show_error_message
-
-def handle_operation(e):
-    """Handle operation with proper error handling and user feedback."""
-    try:
-        # Perform operation
-        result = perform_operation()
-
-        # Show success message
-        show_success_message(page, f"Operation completed successfully: {result}")
-
-        # Update UI
-        update_display(result)
-
-    except ValueError as ex:
-        # Handle validation errors
-        logger.warning(f"Validation error: {ex}")
-        show_error_message(page, f"Invalid input: {str(ex)}")
-
-    except ConnectionError as ex:
-        # Handle connection errors
-        logger.error(f"Connection failed: {ex}")
-        show_error_message(page, "Connection failed. Please check network settings.")
-
-    except Exception as ex:
-        # Handle unexpected errors
-        logger.error(f"Unexpected error: {ex}", exc_info=True)
-        show_error_message(page, f"An unexpected error occurred: {str(ex)}")
-```
-
-#### Async Error Handling
-```python
-async def handle_async_operation(e):
-    """Handle async operation with proper error handling."""
-    # Update UI to show loading state
-    button.disabled = True
-    button.text = "Processing..."
-    page.update()
-
-    try:
-        # Perform async operation
-        result = await perform_async_operation()
-
-        # Show success
-        show_success_message(page, "Operation completed successfully")
-        update_ui_with_result(result)
-
-    except asyncio.TimeoutError:
-        logger.error("Operation timed out")
-        show_error_message(page, "Operation timed out. Please check your network connection or try again later.")
-
-    except Exception as ex:
-        logger.error(f"Operation failed: {ex}", exc_info=True)
-        show_error_message(page, f"Operation failed: {str(ex)}")
-
-    finally:
-        # Restore UI state
-        button.disabled = False
-        button.text = "Start Operation"
-        page.update()
-```
-
-#### contextlib.suppress Usage
-
-Prefer `contextlib.suppress(Exception)` for concise suppressed-exception blocks. This improves code readability and addresses Sourcery warnings related to bare `try/except` blocks that simply pass.
-
-Example:
-
-```python
-import contextlib
-
-# Instead of:
-try:
-    some_operation()
-except Exception:
-    pass
-
-# Use:
-with contextlib.suppress(Exception):
-    some_operation()
-```
-
-Apply this pattern when silencing expected and non-critical exceptions, particularly in UI update and subscription setup routines.
-
-#### Recursive Visibility Fixer
-
-When forcing visibility of nested dashboard controls, use `contextlib.suppress` within the recursive function to handle potential errors during property access and updates. This ensures that the
+# Import at top level,

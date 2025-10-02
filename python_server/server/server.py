@@ -1,10 +1,13 @@
 # GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
+import asyncio
 import base64
 import contextlib
+import functools
 import logging
 import os
 import shutil
 import socket
+import sqlite3
 import sys
 import threading
 import time
@@ -67,7 +70,7 @@ from .server_singleton import ensure_single_server_instance
 CLIENT_SOCKET_TIMEOUT = 60.0  # Timeout for individual socket operations with a client
 CLIENT_SESSION_TIMEOUT = 10 * 60  # Overall inactivity timeout for a client session (10 minutes)
 PARTIAL_FILE_TIMEOUT = 15 * 60 # Timeout for incomplete multi-packet file transfers (15 minutes)
-MAINTENANCE_INTERVAL = 60.0 # How often to run maintenance tasks (seconds)
+MAINTENANCE_INTERVAL = 20.0 # How often to run maintenance tasks (seconds)
 MAX_PAYLOAD_READ_LIMIT = (16 * 1024 * 1024) + 1024  # Max size for a single payload read (16MB chunk + headers)
 MAX_ORIGINAL_FILE_SIZE = 4 * 1024 * 1024 * 1024 # Max original file size (e.g., 4GB) - for sanity checking
 MAX_CONCURRENT_CLIENTS = 50 # Max number of concurrent client connections
@@ -82,6 +85,8 @@ AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 DEFAULT_LOG_LINES_LIMIT = 100  # Default number of log lines to retrieve
 DEFAULT_ACTIVITY_LIMIT = 50  # Default number of activity entries to return
 MAX_INLINE_DOWNLOAD_BYTES = 10 * 1024 * 1024  # Limit for embedding file content in responses (10 MB)
+MAX_LOG_EXPORT_SIZE = 100 * 1024 * 1024  # Maximum log file size to export (100 MB) - prevents hang on huge logs
+MAX_LOG_EXPORT_LINES = 50000  # Maximum number of lines to read from log file during export - prevents hang on huge logs
 
 VALID_LOG_EXPORT_FORMATS = {"text", "json", "csv"}
 
@@ -125,6 +130,66 @@ logger, backup_log_file = setup_dual_logging(
 structured_logger = create_enhanced_logger("backup-server", logger)
 metrics_collector = get_metrics_collector()
 system_monitor = get_system_monitor()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Retry Decorator for Transient Failures
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def retry(max_attempts: int = 3, backoff_base: float = 0.5, exceptions: tuple = (Exception,)):
+    """
+    Decorator to retry a function on transient failures with exponential backoff.
+
+    Args:
+        max_attempts: Maximum number of retry attempts (default: 3)
+        backoff_base: Base delay in seconds for exponential backoff (default: 0.5)
+        exceptions: Tuple of exception types to catch and retry (default: all Exception)
+
+    Example:
+        @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
+        def get_clients(self):
+            return self.db_manager.get_all_clients()
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+
+                    # Don't retry on last attempt
+                    if attempt == max_attempts:
+                        break
+
+                    # Record retry metric
+                    metrics_collector.record_counter(
+                        "database.retry.attempts",
+                        tags={'function': func.__name__, 'attempt': str(attempt)}
+                    )
+
+                    # Calculate exponential backoff delay
+                    delay = backoff_base * (2 ** (attempt - 1))
+
+                    # Log retry attempt (use WARNING level per logging standards)
+                    logger.warning(
+                        f"Attempt {attempt}/{max_attempts} failed for {func.__name__}: {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+
+                    time.sleep(delay)
+
+            # All retries exhausted, log error and re-raise
+            logger.error(
+                f"All {max_attempts} attempts failed for {func.__name__}: {last_exception}"
+            )
+            raise last_exception
+
+        return wrapper
+    return decorator
 
 # Maintain compatibility: also log to the original server.log file
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
@@ -197,11 +262,10 @@ class Client:
                  raise ProtocolError(f"Invalid RSA public key format provided by client '{self.name}' (failed to import).")
 
     def get_aes_key(self) -> bytes | None:
-        """Returns the current session AES key."""
-        # This might be accessed by the client's handler thread only after being set.
-        # If other threads could modify/read it, a lock would be good practice.
-        # For now, assuming primary access is serialized by client handler.
-        return self.aes_key
+        """Returns the current session AES key (thread-safe)."""
+        # Thread-safe access: Called cross-thread from _save_client_to_db()
+        with self.lock:
+            return self.aes_key
 
     def set_aes_key(self, aes_key_data: bytes):
         """
@@ -314,6 +378,12 @@ class BackupServer:
         self.clients_by_name: dict[str, bytes] = {} # In-memory store: client_name_str -> client_id_bytes
         self.clients_lock: threading.Lock = threading.Lock() # Protects access to clients and clients_by_name
 
+        # Rate limiting for log exports
+        self._last_log_export_time: dict[str, float] = {}  # Track by session key
+        self._log_export_lock: threading.Lock = threading.Lock()
+        self._last_db_export_time: dict[str, float] = {}  # Track database export rate limiting
+        self._db_export_lock: threading.Lock = threading.Lock()
+
         # Use default port for now
         self.port = DEFAULT_PORT
         self.running = False
@@ -405,7 +475,7 @@ class BackupServer:
         self.network_server.send_response(sock, code, payload)
 
     def _update_gui_client_count(self) -> None:
-        """Delegates updating the client count on the GUI."""
+        """Delegates updating the client count on the GUI (thread-safe)."""
         with self.clients_lock:
             connected_clients = len(self.clients)
             # Get total clients from database if available
@@ -415,10 +485,13 @@ class BackupServer:
                     total_from_db = len(self.db_manager.get_all_clients())
                     total_clients = max(total_from_db, connected_clients)
 
+            # Calculate active transfers while holding lock for consistency
+            active_transfers = self._calculate_active_transfers()
+
         self.gui_manager.update_client_stats({
             'connected': connected_clients,
             'total': total_clients,
-            'active_transfers': self._calculate_active_transfers()
+            'active_transfers': active_transfers
         })
 
     def _update_gui_success(self, message: str):
@@ -560,6 +633,64 @@ class BackupServer:
             self._last_files_cleaned_count = stale_temp_files_cleaned_count
             self._last_maintenance_timestamp = time.time()
 
+            # --- Record Gauge Metrics ---
+            # Calculate real-time metrics for observability
+            active_transfers = self._calculate_active_transfers()
+            num_active_clients = len(active_clients_list)
+
+            # Record gauge metrics with real values
+            metrics_collector.record_gauge("server.clients.active", num_active_clients)
+            metrics_collector.record_gauge("server.transfers.active", active_transfers)
+
+            # Record memory usage using psutil (available through observability module)
+            try:
+                import psutil
+                process_memory = psutil.Process().memory_info().rss
+                metrics_collector.record_gauge("server.memory.usage_bytes", process_memory)
+            except Exception as mem_err:
+                logger.debug(f"Could not record memory metric: {mem_err}")
+
+            # --- Persist Metrics to Database ---
+            # Record key metrics every maintenance cycle for historical tracking
+            if hasattr(self, 'db_manager') and self.db_manager:
+                try:
+                    logger.debug(f"Recording metrics to database (interval: {MAINTENANCE_INTERVAL}s)")
+
+                    # Record active clients count
+                    self.db_manager.record_metric("connections", num_active_clients)
+                    logger.debug(f"  ✓ Recorded connections metric: {num_active_clients}")
+
+                    # Record total files backed up
+                    total_files = self.db_manager.get_total_files_count()
+                    self.db_manager.record_metric("files", total_files)
+                    logger.debug(f"  ✓ Recorded files metric: {total_files}")
+
+                    # Record bandwidth (total bytes transferred)
+                    total_bytes = self.db_manager.get_total_bytes_transferred()
+                    bandwidth_mb = total_bytes / (1024 * 1024)  # Convert to MB
+                    self.db_manager.record_metric("bandwidth", bandwidth_mb)
+                    logger.debug(f"  ✓ Recorded bandwidth metric: {bandwidth_mb:.2f} MB")
+
+                    logger.debug(f"Successfully persisted all metrics: {num_active_clients} connections, {total_files} files, {bandwidth_mb:.2f} MB bandwidth")
+                except Exception as metrics_err:
+                    logger.warning(f"Failed to persist metrics to database: {metrics_err}")
+
+            # --- Clean Up Old Metrics (once per day) ---
+            # Only run cleanup once per day (86400 seconds)
+            current_time = time.time()
+            if not hasattr(self, '_last_metrics_cleanup_time'):
+                self._last_metrics_cleanup_time = 0
+
+            if (current_time - self._last_metrics_cleanup_time) >= 86400:  # 24 hours
+                if hasattr(self, 'db_manager') and self.db_manager:
+                    try:
+                        rows_deleted = self.db_manager.cleanup_old_metrics(days_to_keep=7)
+                        self._last_metrics_cleanup_time = current_time
+                        if rows_deleted > 0:
+                            logger.info(f"Daily metrics cleanup: removed {rows_deleted} old samples")
+                    except Exception as cleanup_err:
+                        logger.warning(f"Failed to cleanup old metrics: {cleanup_err}")
+
             # --- GUI Status Update ---
             if self.gui_manager.is_gui_ready():
                 self._update_gui_with_status_data(
@@ -689,6 +820,23 @@ class BackupServer:
             return
 
         logger.warning("Server shutdown sequence initiated...")
+
+        # Clean up client sessions and resources
+        with self.clients_lock:
+            # Clear all partial file transfers for each client
+            for client in self.clients.values():
+                try:
+                    client.clear_all_partial_files()
+                except Exception as e:
+                    logger.debug(f"Error clearing partial files for client '{client.name}': {e}")
+
+            # Clear in-memory client tracking
+            num_clients = len(self.clients)
+            self.clients.clear()
+            self.clients_by_name.clear()
+            logger.info(f"Cleaned up {num_clients} client session(s) from memory")
+
+        # Shutdown GUI and network components
         self.gui_manager.shutdown()
         self.network_server.stop()
         self.running = False
@@ -706,12 +854,49 @@ class BackupServer:
             'error': error
         }
 
+    def _validate_client_name(self, name: str) -> tuple[bool, str]:
+        """
+        Centralized client name validation.
+
+        Args:
+            name: Client name to validate
+
+        Returns:
+            tuple: (is_valid: bool, error_message: str)
+        """
+        if not name or not isinstance(name, str):
+            return False, "Client name is required and must be a string"
+
+        if len(name) > MAX_CLIENT_NAME_LENGTH:
+            return False, f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)"
+
+        # Check for invalid control characters
+        if any(c in name for c in ('\x00', '\n', '\r', '\t')):
+            return False, "Client name contains invalid characters"
+
+        return True, ""
+
     # --- Client Operations ---
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_clients(self) -> dict[str, Any]:
-        """Get all clients - delegates to db_manager.get_all_clients()."""
+        """
+        Get all clients - delegates to db_manager.get_all_clients().
+
+        Automatically retries up to 3 times on database lock errors (sqlite3.OperationalError)
+        with exponential backoff (0.5s, 1.0s, 2.0s delays).
+        """
         try:
+            # Time the database query
+            query_start = time.time()
             clients_data = self.db_manager.get_all_clients()
+            query_duration_ms = (time.time() - query_start) * 1000
+
+            # Record database query timing metric
+            metrics_collector.record_timer("database.query.duration",
+                                          query_duration_ms,
+                                          tags={'operation': 'get_all_clients'})
+
             return self._format_response(True, clients_data)
         except Exception as e:
             logger.error(f"Failed to get clients: {e}")
@@ -719,10 +904,10 @@ class BackupServer:
 
     async def get_clients_async(self) -> dict[str, Any]:
         """Async version of get_clients()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_clients)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_client_details(self, client_id: str) -> dict[str, Any]:
         """Get details for a specific client by ID."""
         try:
@@ -741,27 +926,23 @@ class BackupServer:
             logger.error(f"Failed to get client details for {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def add_client(self, client_data: dict[str, Any]) -> dict[str, Any]:
-        """Add a new client using existing client creation logic."""
+        """
+        Add a new client using existing client creation logic.
+
+        Automatically retries up to 3 times on database lock errors (sqlite3.OperationalError)
+        with exponential backoff (0.5s, 1.0s, 2.0s delays).
+        """
         try:
             import uuid
             client_id = uuid.uuid4().bytes
             name = client_data.get('name', '')
 
-            # Validate name field
-            if not name:
-                return self._format_response(False, error="Client name is required")
-
-            if not isinstance(name, str):
-                return self._format_response(False, error="Client name must be a string")
-
-            # Check name length
-            if len(name) > MAX_CLIENT_NAME_LENGTH:
-                return self._format_response(False, error=f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
-
-            # Check for invalid characters (basic validation)
-            if '\x00' in name or '\n' in name or '\r' in name:
-                return self._format_response(False, error="Client name contains invalid characters")
+            # Validate name using centralized validation
+            is_valid, error_msg = self._validate_client_name(name)
+            if not is_valid:
+                return self._format_response(False, error=error_msg)
 
             # Check if client name already exists in memory
             with self.clients_lock:
@@ -784,8 +965,15 @@ class BackupServer:
                 self.clients[client_id] = client
                 self.clients_by_name[name] = client_id
 
-            # Save to database
+            # Save to database with timing
+            query_start = time.time()
             self._save_client_to_db(client)
+            query_duration_ms = (time.time() - query_start) * 1000
+
+            # Record database write timing metric
+            metrics_collector.record_timer("database.query.duration",
+                                          query_duration_ms,
+                                          tags={'operation': 'save_client_to_db'})
 
             return self._format_response(True, {
                 'id': client_id.hex(),
@@ -798,40 +986,55 @@ class BackupServer:
 
     async def add_client_async(self, client_data: dict[str, Any]) -> dict[str, Any]:
         """Async version of add_client()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.add_client, client_data)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def delete_client(self, client_id: str) -> dict[str, Any]:
-        """Delete a client - delegates to db_manager.delete_client()."""
+        """
+        Delete a client - delegates to db_manager.delete_client().
+
+        Automatically retries up to 3 times on database lock errors (sqlite3.OperationalError)
+        with exponential backoff (0.5s, 1.0s, 2.0s delays).
+        """
         try:
             client_id_bytes = bytes.fromhex(client_id)
 
-            # Remove from in-memory store
+            # Delete from database FIRST with timing
+            query_start = time.time()
+            success = self.db_manager.delete_client(client_id_bytes)
+            query_duration_ms = (time.time() - query_start) * 1000
+
+            # Record database write timing metric
+            metrics_collector.record_timer("database.query.duration",
+                                          query_duration_ms,
+                                          tags={'operation': 'delete_client'})
+
+            if not success:
+                return self._format_response(False, error="Failed to delete client from database")
+
+            # THEN remove from in-memory store (only if database deletion succeeded)
             with self.clients_lock:
                 if client := self.clients.pop(client_id_bytes, None):
                     self.clients_by_name.pop(client.name, None)
 
-            # Delete from database
-            success = self.db_manager.delete_client(client_id_bytes)
-
-            if success:
-                return self._format_response(True, {'deleted': True})
-            else:
-                return self._format_response(False, error="Failed to delete client from database")
+            return self._format_response(True, {'deleted': True})
         except Exception as e:
             logger.error(f"Failed to delete client {client_id}: {e}")
             return self._format_response(False, error=str(e))
 
     async def delete_client_async(self, client_id: str) -> dict[str, Any]:
         """Async version of delete_client()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_client, client_id)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def update_client(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
         """
         Update client information.
+
+        Automatically retries up to 3 times on database lock errors (sqlite3.OperationalError)
+        with exponential backoff (0.5s, 1.0s, 2.0s delays).
 
         Args:
             client_id: Client UUID as hex string
@@ -852,10 +1055,9 @@ class BackupServer:
 
             # Validate name if provided
             if name is not None:
-                if not isinstance(name, str) or len(name) == 0:
-                    return self._format_response(False, error="Invalid name: must be non-empty string")
-                if len(name) > MAX_CLIENT_NAME_LENGTH:
-                    return self._format_response(False, error=f"Name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
+                is_valid, error_msg = self._validate_client_name(name)
+                if not is_valid:
+                    return self._format_response(False, error=error_msg)
 
                 # Check if new name conflicts with existing client
                 with self.clients_lock:
@@ -864,8 +1066,15 @@ class BackupServer:
                         if existing_id != client_id_bytes:
                             return self._format_response(False, error=f"Client name '{name}' already exists")
 
-            # Update in database
+            # Update in database with timing
+            query_start = time.time()
             success = self.db_manager.update_client(client_id_bytes, name, public_key)
+            query_duration_ms = (time.time() - query_start) * 1000
+
+            # Record database write timing metric
+            metrics_collector.record_timer("database.query.duration",
+                                          query_duration_ms,
+                                          tags={'operation': 'update_client'})
 
             if not success:
                 return self._format_response(False, error="Failed to update client in database")
@@ -902,7 +1111,6 @@ class BackupServer:
 
     async def update_client_async(self, client_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
         """Async version of update_client()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.update_client, client_id, updated_data)
 
@@ -925,7 +1133,6 @@ class BackupServer:
 
     async def disconnect_client_async(self, client_id: str) -> dict[str, Any]:
         """Async version of disconnect_client()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.disconnect_client, client_id)
 
@@ -976,10 +1183,25 @@ class BackupServer:
 
     # --- File Operations ---
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_files(self) -> dict[str, Any]:
-        """Get all files - delegates to db_manager.get_all_files()."""
+        """
+        Get all files - delegates to db_manager.get_all_files().
+
+        Automatically retries up to 3 times on database lock errors (sqlite3.OperationalError)
+        with exponential backoff (0.5s, 1.0s, 2.0s delays).
+        """
         try:
+            # Time the database query
+            query_start = time.time()
             files_data = self.db_manager.get_all_files()
+            query_duration_ms = (time.time() - query_start) * 1000
+
+            # Record database query timing metric
+            metrics_collector.record_timer("database.query.duration",
+                                          query_duration_ms,
+                                          tags={'operation': 'get_all_files'})
+
             # Normalize client_id to hex string if it's bytes
             for file_data in files_data:
                 if 'client_id' in file_data and isinstance(file_data['client_id'], bytes):
@@ -991,10 +1213,10 @@ class BackupServer:
 
     async def get_files_async(self) -> dict[str, Any]:
         """Async version of get_files()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_files)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_client_files(self, client_id: str) -> dict[str, Any]:
         """Get files for a specific client - delegates to db_manager.get_files_for_client()."""
         try:
@@ -1010,10 +1232,10 @@ class BackupServer:
 
     async def get_client_files_async(self, client_id: str) -> dict[str, Any]:
         """Async version of get_client_files()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_client_files, client_id)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def delete_file(self, file_id: str) -> dict[str, Any]:
         """Delete a file - delegates to db_manager.delete_file()."""
         try:
@@ -1030,6 +1252,7 @@ class BackupServer:
             logger.error(f"Failed to delete file {file_id}: {e}")
             return self._format_response(False, error=str(e))
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def delete_file_by_client_and_name(self, client_id: str, filename: str) -> dict[str, Any]:
         """Delete a file by client ID and filename."""
         try:
@@ -1044,13 +1267,11 @@ class BackupServer:
 
     async def delete_file_async(self, file_id: str) -> dict[str, Any]:
         """Async version of delete_file()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_file, file_id)
 
     async def delete_file_by_client_and_name_async(self, client_id: str, filename: str) -> dict[str, Any]:
         """Async version of delete_file_by_client_and_name()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_file_by_client_and_name, client_id, filename)
 
@@ -1129,11 +1350,14 @@ class BackupServer:
             f"File download fulfilled for client='{client_id_str}' file='{filename}' size={file_stat.st_size} bytes"
         )
 
+        # Record metrics for successful file download
+        metrics_collector.record_counter("file.downloads.total",
+                                        tags={'client_id': client_id_str})
+
         return self._format_response(True, response_payload)
 
     async def download_file_async(self, file_id: str, destination_path: str) -> dict[str, Any]:
         """Async version of download_file()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.download_file, file_id, destination_path)
 
@@ -1224,12 +1448,12 @@ class BackupServer:
 
     async def verify_file_async(self, file_id: str) -> dict[str, Any]:
         """Async version of verify_file()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.verify_file, file_id)
 
     # --- Database Operations ---
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_database_info(self) -> dict[str, Any]:
         """Get database information - delegates to db_manager.get_database_stats()."""
         try:
@@ -1241,13 +1465,27 @@ class BackupServer:
 
     async def get_database_info_async(self) -> dict[str, Any]:
         """Async version of get_database_info()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_database_info)
 
     def get_table_data(self, table_name: str) -> dict[str, Any]:
-        """Get data from a specific table (basic implementation)."""
+        """Get data from a specific table (basic implementation) with rate limiting."""
         try:
+            # Rate limiting check (10 second minimum interval per table)
+            session_key = f"table_{table_name.lower()}"
+            with self._db_export_lock:
+                current_time = time.time()
+                last_export = self._last_db_export_time.get(session_key, 0)
+
+                if current_time - last_export < 10:
+                    remaining = 10 - (current_time - last_export)
+                    return self._format_response(
+                        False,
+                        error=f"Rate limit exceeded for table '{table_name}'. Please wait {remaining:.1f} seconds..."
+                    )
+
+                self._last_db_export_time[session_key] = current_time
+
             # This is a basic implementation - in a real system you'd want more sophisticated querying
             if table_name.lower() == 'clients':
                 data = self.db_manager.get_all_clients()
@@ -1263,7 +1501,6 @@ class BackupServer:
 
     async def get_table_data_async(self, table_name: str) -> dict[str, Any]:
         """Async version of get_table_data()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_table_data, table_name)
 
@@ -1369,6 +1606,7 @@ class BackupServer:
 
         return str(value)
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def update_row(self, table_name: str, row_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
         """Update a row in a supported database table."""
         try:
@@ -1413,12 +1651,9 @@ class BackupServer:
 
                 if 'Name' in original_values:
                     proposed_name = str(original_values['Name']).strip()
-                    if not proposed_name:
-                        return self._format_response(False, error="Client name is required")
-                    if len(proposed_name) > MAX_CLIENT_NAME_LENGTH:
-                        return self._format_response(False, error=f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)")
-                    if any(char in proposed_name for char in ('\x00', '\n', '\r')):
-                        return self._format_response(False, error="Client name contains invalid characters")
+                    is_valid, error_msg = self._validate_client_name(proposed_name)
+                    if not is_valid:
+                        return self._format_response(False, error=error_msg)
                     try:
                         existing = self.db_manager.get_client_by_name(proposed_name)
                         if existing and existing[0] != primary_value:
@@ -1459,6 +1694,7 @@ class BackupServer:
             logger.error(f"Failed to update row {row_id} in table {table_name}: {e}")
             return self._format_response(False, error=str(e))
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def delete_row(self, table_name: str, row_id: str) -> dict[str, Any]:
         """Delete a row from a supported database table."""
         try:
@@ -1505,6 +1741,7 @@ class BackupServer:
             logger.error(f"Failed to delete row {row_id} from table {table_name}: {e}")
             return self._format_response(False, error=str(e))
 
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def add_row(self, table_name: str, row_data: dict[str, Any]) -> dict[str, Any]:
         """Insert a new row into a supported table."""
         try:
@@ -1541,17 +1778,14 @@ class BackupServer:
             return self._format_response(False, error=str(e))
 
     async def update_row_async(self, table_name: str, row_id: str, updated_data: dict[str, Any]) -> dict[str, Any]:
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.update_row, table_name, row_id, updated_data)
 
     async def delete_row_async(self, table_name: str, row_id: str) -> dict[str, Any]:
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.delete_row, table_name, row_id)
 
     async def add_row_async(self, table_name: str, row_data: dict[str, Any]) -> dict[str, Any]:
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.add_row, table_name, row_data)
 
@@ -1590,7 +1824,7 @@ class BackupServer:
                 'host': getattr(self.network_server, 'host', '0.0.0.0'),
                 'uptime_seconds': uptime,
                 'uptime_formatted': f"{int(uptime//3600)}h {int((uptime%3600)//60)}m {int(uptime%60)}s",
-                'version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'version': SERVER_VERSION,
                 'last_error': getattr(self.network_server, 'last_error', '') or ''
             }
             return self._format_response(True, status_data)
@@ -1600,7 +1834,6 @@ class BackupServer:
 
     async def get_server_status_async(self) -> dict[str, Any]:
         """Async version of get_server_status()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_status)
 
@@ -1641,12 +1874,11 @@ class BackupServer:
 
     async def get_detailed_server_status_async(self) -> dict[str, Any]:
         """Async version of get_detailed_server_status()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_detailed_server_status)
 
     def get_server_health(self) -> dict[str, Any]:
-        """Get server health metrics."""
+        """Get server health metrics including connection pool status."""
         try:
             health_data = {
                 'status': 'healthy' if self.running else 'stopped',
@@ -1664,6 +1896,45 @@ class BackupServer:
                 health_data['errors'].append(f"Database error: {e!s}")
                 health_data['status'] = 'unhealthy'
 
+            # Add connection pool metrics if database is accessible
+            if health_data['database_accessible'] and hasattr(self, 'db_manager'):
+                try:
+                    pool_status = self.db_manager.connection_pool.get_pool_status()
+                    health_data['connection_pool'] = {
+                        'active': pool_status.get('active_connections', 0),
+                        'available': pool_status.get('available_connections', 0),
+                        'total': pool_status.get('total_connections', 0),
+                        'peak_active': pool_status.get('peak_active_connections', 0),
+                        'exhaustion_events': pool_status.get('pool_exhaustion_events', 0),
+                        'cleanup_thread_alive': pool_status.get('cleanup_thread_alive', False)
+                    }
+
+                    # Check for pool exhaustion issues
+                    if pool_status.get('pool_exhaustion_events', 0) > 0:
+                        health_data['errors'].append(
+                            f"Connection pool exhausted {pool_status['pool_exhaustion_events']} times"
+                        )
+                        if health_data['status'] == 'healthy':
+                            health_data['status'] = 'degraded'
+
+                    # Check cleanup thread health
+                    if not pool_status.get('cleanup_thread_alive', False):
+                        health_data['errors'].append("Connection pool cleanup thread is dead")
+                        if health_data['status'] == 'healthy':
+                            health_data['status'] = 'degraded'
+
+                    # Check for emergency connection leaks
+                    if hasattr(self.db_manager.connection_pool, 'emergency_connections'):
+                        leak_count = len(self.db_manager.connection_pool.emergency_connections)
+                        if leak_count > 0:
+                            health_data['errors'].append(f"{leak_count} emergency connections leaked")
+                            if health_data['status'] == 'healthy':
+                                health_data['status'] = 'degraded'
+
+                except Exception as pool_err:
+                    logger.debug(f"Could not get connection pool metrics: {pool_err}")
+                    health_data['connection_pool'] = {'error': str(pool_err)}
+
             return self._format_response(True, health_data)
         except Exception as e:
             logger.error(f"Failed to get server health: {e}")
@@ -1671,7 +1942,6 @@ class BackupServer:
 
     async def get_server_health_async(self) -> dict[str, Any]:
         """Async version of get_server_health()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_health)
 
@@ -1689,7 +1959,6 @@ class BackupServer:
 
     async def start_server_async(self) -> dict[str, Any]:
         """Async version of start_server()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.start_server)
 
@@ -1707,7 +1976,6 @@ class BackupServer:
 
     async def stop_server_async(self) -> dict[str, Any]:
         """Async version of stop_server()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.stop_server)
 
@@ -1736,7 +2004,6 @@ class BackupServer:
 
     async def test_connection_async(self) -> dict[str, Any]:
         """Async version of test_connection()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.test_connection)
 
@@ -1768,7 +2035,6 @@ class BackupServer:
 
     async def get_system_status_async(self) -> dict[str, Any]:
         """Async version of get_system_status()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_system_status)
 
@@ -1788,7 +2054,6 @@ class BackupServer:
 
     async def get_analytics_data_async(self) -> dict[str, Any]:
         """Async version of get_analytics_data()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_analytics_data)
 
@@ -1836,7 +2101,6 @@ class BackupServer:
 
     async def get_performance_metrics_async(self) -> dict[str, Any]:
         """Async version of get_performance_metrics()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_performance_metrics)
 
@@ -1848,7 +2112,7 @@ class BackupServer:
                 'total_clients': self.db_manager.get_total_clients_count(),
                 'connected_clients': len(self.clients),
                 'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0,
-                'server_version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'server_version': SERVER_VERSION,
                 'uptime': time.time() - self.network_server.start_time if self.running else 0
             }
             return self._format_response(True, dashboard_data)
@@ -1858,7 +2122,6 @@ class BackupServer:
 
     async def get_dashboard_summary_async(self) -> dict[str, Any]:
         """Async version of get_dashboard_summary()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_dashboard_summary)
 
@@ -1867,7 +2130,7 @@ class BackupServer:
         try:
             stats_data = {
                 'server': {
-                    'version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                    'version': SERVER_VERSION,
                     'running': self.running,
                     'uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
                     'port': self.port
@@ -1888,7 +2151,6 @@ class BackupServer:
 
     async def get_server_statistics_async(self) -> dict[str, Any]:
         """Async version of get_server_statistics()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_server_statistics)
 
@@ -1907,7 +2169,6 @@ class BackupServer:
                 - 'message': Human-readable message
                 - 'details': Optional additional context
         """
-        import asyncio
 
         try:
             # Run log parsing in executor to avoid blocking
@@ -2017,48 +2278,92 @@ class BackupServer:
         return 'info'
 
     def get_historical_data(self, metric: str = "connections", hours: int = 24) -> dict[str, Any]:
-        """Get historical data for metrics."""
+        """
+        Get historical data for metrics from persistent storage.
+
+        Retrieves time-series metrics data from the metrics_history database table.
+        Metrics are automatically collected every maintenance cycle (default: 20 seconds).
+
+        Args:
+            metric: Metric type to retrieve ("connections", "files", or "bandwidth")
+            hours: Number of hours of history (1-168, max 1 week)
+
+        Returns:
+            dict: {'success': bool, 'data': dict with 'points': [{'timestamp': str, 'value': float}], 'error': str}
+        """
         try:
-            # Generate mock historical data points
-            import random
-            from datetime import datetime, timedelta
+            # Validate metric parameter
+            VALID_METRICS = {"connections", "files", "bandwidth"}
+            if metric not in VALID_METRICS:
+                return self._format_response(
+                    False,
+                    error=f"Invalid metric '{metric}'. Supported metrics: {sorted(VALID_METRICS)}"
+                )
 
-            points = []
-            now = datetime.now()
+            # Validate hours parameter
+            if not isinstance(hours, int) or hours < 1 or hours > 168:  # Max 1 week
+                return self._format_response(
+                    False,
+                    error="Hours must be an integer between 1 and 168 (1 week maximum)"
+                )
 
-            # Generate data points for the specified time range
-            for i in range(hours):
-                timestamp = now - timedelta(hours=i)
-                # Generate mock values based on metric type
-                if metric == "connections":
-                    value = random.randint(0, 50)
-                elif metric == "files":
-                    value = random.randint(0, 100)
-                elif metric == "bandwidth":
-                    value = random.randint(0, 1000)
-                else:
-                    value = random.randint(0, 100)
+            # Retrieve real historical data from database
+            if not hasattr(self, 'db_manager') or not self.db_manager:
+                logger.warning("Database manager not available for historical data")
+                return self._format_response(
+                    False,
+                    error="Database not available for metrics history"
+                )
 
-                points.append({
-                    'timestamp': timestamp.isoformat(),
-                    'value': value
-                })
+            points = self.db_manager.get_metrics_history(metric, hours)
 
-            # Reverse to show oldest first
-            points.reverse()
+            # If no data available, return empty points with note
+            if not points:
+                logger.debug(f"No historical data available for metric '{metric}' (last {hours} hours)")
+                return self._format_response(
+                    True,
+                    {
+                        'points': [],
+                        'note': f'No data yet. Metrics recorded every {MAINTENANCE_INTERVAL:.0f} seconds starting from server start. First data point will appear in {MAINTENANCE_INTERVAL:.0f}s.'
+                    }
+                )
 
+            logger.debug(f"Retrieved {len(points)} historical data points for '{metric}' (last {hours} hours)")
             return self._format_response(True, {'points': points})
+
         except Exception as e:
             logger.error(f"Failed to get historical data: {e}")
             return self._format_response(False, error=str(e))
 
     async def get_historical_data_async(self, metric: str = "connections", hours: int = 24) -> dict[str, Any]:
         """Async version of get_historical_data()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_historical_data, metric, hours)
 
     # --- Log Operations ---
+
+    def _read_log_file(self, filepath: str, limit: int = DEFAULT_LOG_LINES_LIMIT) -> list[str]:
+        """
+        Read last N lines from a log file.
+
+        Args:
+            filepath: Path to the log file
+            limit: Maximum number of lines to return
+
+        Returns:
+            List of log lines (stripped), or empty list if file doesn't exist
+        """
+        if not os.path.exists(filepath):
+            return []
+
+        try:
+            with open(filepath, encoding='utf-8') as f:
+                lines = f.readlines()
+                recent_lines = lines[-limit:] if len(lines) > limit else lines
+                return [line.strip() for line in recent_lines]
+        except Exception as e:
+            logger.debug(f"Error reading log file '{filepath}': {e}")
+            return []
 
     def get_logs(self) -> dict[str, Any]:
         """Get system logs (basic implementation)."""
@@ -2069,26 +2374,19 @@ class BackupServer:
                 'note': 'Log retrieval functionality requires implementation of log storage/retrieval system'
             }
 
-            # Try to read recent log entries if log file exists
-            try:
-                # Check self.backup_log_file first, then module variable, then fallback to server.log
-                if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
-                    with open(self.backup_log_file, encoding='utf-8') as f:
-                        lines = f.readlines()
-                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
-                        log_data['logs'] = [line.strip() for line in recent_lines]
-                elif os.path.exists(backup_log_file):  # Fallback to module variable
-                    with open(backup_log_file, encoding='utf-8') as f:
-                        lines = f.readlines()
-                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
-                        log_data['logs'] = [line.strip() for line in recent_lines]
-                elif os.path.exists('server.log'):
-                    with open('server.log', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        recent_lines = lines[-DEFAULT_LOG_LINES_LIMIT:] if len(lines) > DEFAULT_LOG_LINES_LIMIT else lines
-                        log_data['logs'] = [line.strip() for line in recent_lines]
-            except Exception as read_error:
-                log_data['read_error'] = str(read_error)
+            # Try multiple log file locations in priority order
+            log_paths = [
+                getattr(self, 'backup_log_file', None),  # Instance variable
+                backup_log_file,  # Module variable
+                'server.log'  # Fallback
+            ]
+
+            for log_path in log_paths:
+                if log_path:  # Skip None values
+                    logs = self._read_log_file(log_path)
+                    if logs:
+                        log_data['logs'] = logs
+                        break
 
             return self._format_response(True, log_data)
         except Exception as e:
@@ -2097,7 +2395,6 @@ class BackupServer:
 
     async def get_logs_async(self) -> dict[str, Any]:
         """Async version of get_logs()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_logs)
 
@@ -2108,7 +2405,6 @@ class BackupServer:
         Instead of deleting logs, this creates a backup and starts fresh log files.
         """
         try:
-            import asyncio
 
             # Run in executor to avoid blocking
             loop = asyncio.get_event_loop()
@@ -2175,8 +2471,22 @@ class BackupServer:
             dict: {'success': bool, 'data': dict with 'file_path' and 'entries_exported', 'error': str}
         """
         try:
-            import asyncio
             import json
+
+            # Rate limiting check (10 second minimum interval)
+            session_key = "global"  # Global rate limit for now
+            with self._log_export_lock:
+                current_time = time.time()
+                last_export = self._last_log_export_time.get(session_key, 0)
+
+                if current_time - last_export < 10:  # 10 second minimum interval
+                    remaining = 10 - (current_time - last_export)
+                    return self._format_response(
+                        False,
+                        error=f"Rate limit exceeded. Please wait {remaining:.1f} seconds before exporting again."
+                    )
+
+                self._last_log_export_time[session_key] = current_time
 
             normalized_format = (export_format or "").lower()
             if normalized_format not in VALID_LOG_EXPORT_FORMATS:
@@ -2207,6 +2517,20 @@ class BackupServer:
             if not os.path.exists(log_file):
                 return self._format_response(False, error="Log file not found")
 
+            # Check file size to prevent hang on huge logs
+            try:
+                file_size = os.path.getsize(log_file)
+                if file_size > MAX_LOG_EXPORT_SIZE:
+                    size_mb = file_size / (1024 * 1024)
+                    max_mb = MAX_LOG_EXPORT_SIZE / (1024 * 1024)
+                    return self._format_response(
+                        False,
+                        error=f"Log file too large ({size_mb:.1f} MB). Maximum: {max_mb:.0f} MB"
+                    )
+            except OSError as size_err:
+                logger.warning(f"Could not check log file size: {size_err}")
+                # Continue anyway - file exists, so size check failure shouldn't block export
+
             # Extract filter parameters
             level_filter = filters.get('level', '').upper()
             start_date = filters.get('start_date', '')
@@ -2216,9 +2540,20 @@ class BackupServer:
 
             # Read and filter log entries
             filtered_entries: list[str] = []
+            lines_read = 0
             try:
                 with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
                     for line in f:
+                        lines_read += 1
+
+                        # Hard cap on total lines read to prevent processing huge files
+                        if lines_read > MAX_LOG_EXPORT_LINES:
+                            logger.warning(
+                                f"Log export stopped at {MAX_LOG_EXPORT_LINES} lines. "
+                                f"File has more lines, use more specific filters."
+                            )
+                            break
+
                         stripped = line.strip()
                         if not stripped:
                             continue
@@ -2288,6 +2623,76 @@ class BackupServer:
 
     # --- Settings Management ---
 
+    def _validate_settings(self, settings: dict[str, Any]) -> tuple[bool, str]:
+        """
+        Validate settings structure and value ranges.
+
+        Args:
+            settings: Settings dictionary to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Define settings schema with (type, min_value, max_value) or (type, allowed_values)
+        SETTINGS_SCHEMA = {
+            # Server settings (int with ranges)
+            'server_port': (int, 1024, 65535),
+            'max_concurrent_clients': (int, 1, 1000),
+            'client_timeout': (int, 60, 7200),  # 1 min to 2 hours
+
+            # Interface settings (str with allowed values)
+            'theme': (str, ['light', 'dark', 'system']),
+            'language': (str, ['en', 'es', 'fr', 'de', 'zh']),
+
+            # Monitoring settings
+            'enable_monitoring': (bool,),
+            'metrics_retention_days': (int, 1, 365),
+
+            # Logging settings
+            'log_level': (str, ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']),
+            'log_to_file': (bool,),
+            'log_rotation_size_mb': (int, 1, 1000),
+
+            # Security settings
+            'encryption_enabled': (bool,),
+            'key_size': (int, [1024, 2048, 4096]),  # Only specific key sizes
+
+            # Backup settings
+            'auto_backup_interval': (int, 300, 86400),  # 5 min to 24 hours
+            'backup_retention_days': (int, 1, 3650),  # 1 day to 10 years
+            'compression_enabled': (bool,)
+        }
+
+        for key, value in settings.items():
+            # Skip unknown keys (forward compatibility)
+            if key not in SETTINGS_SCHEMA:
+                continue
+
+            schema = SETTINGS_SCHEMA[key]
+            expected_type = schema[0]
+
+            # Type validation
+            if not isinstance(value, expected_type):
+                return False, f"Invalid type for '{key}': expected {expected_type.__name__}, got {type(value).__name__}"
+
+            # Range/enum validation
+            if expected_type == int and len(schema) == 3:
+                min_val, max_val = schema[1], schema[2]
+                if not (min_val <= value <= max_val):
+                    return False, f"Value for '{key}' out of range: must be between {min_val} and {max_val}, got {value}"
+
+            elif expected_type == str and len(schema) == 2:
+                allowed_values = schema[1]
+                if value not in allowed_values:
+                    return False, f"Invalid value for '{key}': must be one of {allowed_values}, got '{value}'"
+
+            elif expected_type == int and len(schema) == 2 and isinstance(schema[1], list):
+                allowed_values = schema[1]
+                if value not in allowed_values:
+                    return False, f"Invalid value for '{key}': must be one of {allowed_values}, got {value}"
+
+        return True, ""
+
     def save_settings(self, settings_data: dict[str, Any]) -> dict[str, Any]:
         """
         Save application settings to JSON file.
@@ -2305,11 +2710,17 @@ class BackupServer:
             if not isinstance(settings_data, dict):
                 return self._format_response(False, error="Settings must be a dictionary")
 
+            # Validate settings values
+            is_valid, error_msg = self._validate_settings(settings_data)
+            if not is_valid:
+                logger.warning(f"Settings validation failed: {error_msg}")
+                return self._format_response(False, error=f"Invalid settings: {error_msg}")
+
             # Add metadata
             settings_with_metadata = {
                 'version': '1.0',
                 'saved_at': datetime.now().isoformat(),
-                'server_version': SERVER_VERSION if 'SERVER_VERSION' in globals() else 'Unknown',
+                'server_version': SERVER_VERSION,
                 'settings': settings_data
             }
 
@@ -2343,7 +2754,6 @@ class BackupServer:
 
     async def save_settings_async(self, settings_data: dict[str, Any]) -> dict[str, Any]:
         """Async version of save_settings()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.save_settings, settings_data)
 
@@ -2382,6 +2792,12 @@ class BackupServer:
             # Merge with defaults to ensure all keys exist
             default_settings = self._get_default_settings()
             merged_settings = {**default_settings, **settings}
+
+            # Validate loaded settings
+            is_valid, error_msg = self._validate_settings(merged_settings)
+            if not is_valid:
+                logger.warning(f"Invalid settings in file, using defaults: {error_msg}")
+                return self._format_response(True, default_settings)
 
             logger.info(f"Settings loaded successfully from {SETTINGS_FILE}")
             return self._format_response(True, merged_settings)
@@ -2431,7 +2847,6 @@ class BackupServer:
 
     async def load_settings_async(self) -> dict[str, Any]:
         """Async version of load_settings()."""
-        import asyncio
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.load_settings)
 
