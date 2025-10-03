@@ -15,6 +15,7 @@ import asyncio
 import logging
 import os
 import sys
+import inspect  # <-- added
 
 # Add project paths
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,10 +89,23 @@ def launch_fletv2_with_server(backup_server=None):
 
         logger.info("🚀 Starting FletV2 GUI with real server integration...")
 
-        # Wrap main function with server
+        # Wrap main function with server; be signature-aware and support coroutine or sync main()
         async def app_with_server(page: ft.Page):
-            # fletv2_main (main.main) is synchronous; call without await
-            fletv2_main(page, backup_server)
+            try:
+                sig = inspect.signature(fletv2_main)
+                kwargs: dict = {}
+                if 'backup_server' in sig.parameters:
+                    kwargs['backup_server'] = backup_server
+
+                if inspect.iscoroutinefunction(fletv2_main):
+                    await fletv2_main(page, **kwargs)
+                else:
+                    fletv2_main(page, **kwargs)
+
+            except Exception as run_e:
+                logger.error(f"❌ Error running FletV2 main: {run_e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
         # Launch FletV2
         asyncio.run(ft.app_async(

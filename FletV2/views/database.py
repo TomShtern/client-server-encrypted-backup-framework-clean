@@ -58,7 +58,8 @@ def create_database_view(
     _state_manager: StateManager | None = None
 ) -> Any:
     """Simple database view using Flet's built-in components."""
-    logger.info("Creating simplified database view")
+    print("🚨🚨🚨 create_database_view() FUNCTION ENTERED 🚨🚨🚨")
+    logger.info("🔵 [DATABASE] Creating simplified database view")
 
     # Simple state management
     selected_table = "clients"
@@ -67,20 +68,24 @@ def create_database_view(
     search_query = ""
 
     # Helper for a no-data placeholder table
-    def load_data() -> None:
-        """Load database data using server bridge."""
+    async def load_data_async() -> None:
+        """Load database data using server bridge (async version - NON-BLOCKING)."""
         nonlocal table_data, filtered_data
+        logger.info("🔵 [DATABASE] load_data_async() CALLED")
 
         if not server_bridge:
-            logger.error("Server bridge not available")
-            show_error_message(page, "Server not connected. Please start the backup server.")
+            logger.debug("Server bridge not available (GUI-only mode)")
+            # Don't show error message in GUI-only mode - just use empty data
             table_data = []
             filtered_data = []
             update_table()
             return
 
         try:
-            result = server_bridge.get_table_data(selected_table)
+            logger.info(f"🔵 [DATABASE] Fetching data for table: {selected_table}")
+            # Use NEW async method to prevent blocking the UI thread
+            result = await server_bridge.get_table_data_async(selected_table)
+            logger.info(f"🔵 [DATABASE] get_table_data_async returned: success={result.get('success')}")
             if not result.get('success'):
                 logger.error(f"Failed to fetch data for {selected_table}: {result.get('error', 'Unknown error')}")
                 show_error_message(page, f"Failed to load {selected_table} table: {result.get('error', 'Unknown error')}")
@@ -89,14 +94,17 @@ def create_database_view(
             else:
                 # Ensure we handle both dict and list results consistently
                 table_data = result.get('data', {}).get('rows', []) if isinstance(result.get('data'), dict) else result.get('data', [])
-                logger.info(f"Loaded {len(table_data)} records for {selected_table}")
+                logger.info(f"🔵 [DATABASE] Loaded {len(table_data)} records for {selected_table}")
         except Exception as ex:
             logger.error(f"Exception while loading {selected_table} data: {ex}")
+            logger.error(f"Full traceback:", exc_info=True)
             show_error_message(page, f"Error loading {selected_table} table: {str(ex)}")
             table_data = []
 
         filtered_data = table_data.copy()
+        logger.info(f"🔵 [DATABASE] About to call update_table() with {len(filtered_data)} records")
         update_table()
+        logger.info(f"🔵 [DATABASE] update_table() completed")
 
     # Apply search filter
     def apply_search() -> None:
@@ -126,84 +134,69 @@ def create_database_view(
         }
         return status_mapping.get(status.lower(), "default")
 
-    # Create DataTable using Flet's built-in functionality with enhanced header
-    database_table = ft.DataTable(
-        columns=[
-            ft.DataColumn(ft.Text("No Data")),
-            ft.DataColumn(ft.Text("Actions"))
+    # ULTRA-SIMPLE records display using just Column and Text (no Cards, no ListView!)
+    # This is the MINIMAL approach to avoid browser crashes
+    records_column = ft.Column(
+        controls=[
+            ft.Container(
+                content=ft.Text("Loading records...", size=14, color=ft.Colors.GREY),
+                padding=20,
+            )
         ],
-        rows=[
-            ft.DataRow(cells=[
-                ft.DataCell(ft.Text("Loading...")),
-                ft.DataCell(ft.Text(""))
-            ])
-        ],
-        heading_row_color="#212121",  # Enhanced darker header as specified in document
-        border_radius=12,
-        expand=True
+        spacing=10,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )
 
     def update_table() -> None:
-        """Update table using Flet's simple patterns."""
+        """Update records display using ultra-simple Text controls."""
+        logger.info(f"🔵 [DATABASE] update_table() CALLED with {len(filtered_data)} records")
+
+        # Clear existing records
+        records_column.controls.clear()
+
         if not filtered_data:
-            # Always keep at least one column to prevent DataTable errors
-            database_table.columns = [
-                ft.DataColumn(ft.Text("No Data")),
-                ft.DataColumn(ft.Text("Actions"))
-            ]
-            database_table.rows = [
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text("No data available")),
-                    ft.DataCell(ft.Text(""))
-                ])
-            ]
-            return
-
-        # Set columns based on first row
-        first_row = filtered_data[0]
-        database_table.columns = [
-            ft.DataColumn(ft.Text(str(key).title())) for key in first_row.keys()
-        ]
-
-        # Always add Actions column
-        database_table.columns.append(ft.DataColumn(ft.Text("Actions")))
-
-        # Set rows with status pill support
-        database_table.rows = []
-        for row in filtered_data:
-            cells = []
-            for key, value in row.items():
-                if key.lower() == "status":
-                    # Apply status pill for status columns
-                    cells.append(ft.DataCell(create_status_pill(str(value), get_status_type(str(value)))))
-                else:
-                    # Regular text for other columns
-                    cells.append(ft.DataCell(ft.Text(str(value))))
-
-            # Add action button to each row
-            cells.append(
-                ft.DataCell(
-                    ft.PopupMenuButton(
-                        icon=ft.Icons.MORE_VERT,
-                        items=[
-                            ft.PopupMenuItem(text="Edit", icon=ft.Icons.EDIT, on_click=lambda e, r=row: edit_record(r)),
-                            ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE, on_click=lambda e, r=row: delete_record(r)),
-                        ]
-                    )
+            # Show empty state
+            records_column.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Icon(ft.Icons.INBOX_OUTLINED, size=48, color=ft.Colors.GREY),
+                        ft.Text("No data available", size=16, color=ft.Colors.GREY),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                    padding=20,
                 )
             )
-
-            database_table.rows.append(ft.DataRow(cells=cells))
-
-        # Add Actions column if not present
-        if len(database_table.columns) == len(first_row.keys()):
-            database_table.columns.append(ft.DataColumn(ft.Text("Actions")))
-
-        # Only update if table is attached to page (prevents glitches during initial load)
-        if hasattr(database_table, 'page') and database_table.page:
-            database_table.update()
         else:
-            logger.debug("Table not yet attached to page, skipping update")
+            # Show simple text records (MINIMAL approach)
+            records_column.controls.append(
+                ft.Text(f"Found {len(filtered_data)} records:", size=14, weight=ft.FontWeight.W_500)
+            )
+
+            # Show first 10 records only to avoid overwhelming browser
+            for i, row in enumerate(filtered_data[:10]):
+                # Simple text representation
+                record_text = " | ".join([f"{k}: {v}" for k, v in row.items()])
+                records_column.controls.append(
+                    ft.Container(
+                        content=ft.Text(record_text, size=12, selectable=True),
+                        padding=8,
+                        bgcolor=ft.Colors.SURFACE_VARIANT if i % 2 == 0 else None,
+                        border_radius=4,
+                    )
+                )
+
+            if len(filtered_data) > 10:
+                records_column.controls.append(
+                    ft.Text(f"... and {len(filtered_data) - 10} more records",
+                           size=12, color=ft.Colors.GREY, italic=True)
+                )
+
+        # Update the column
+        if hasattr(records_column, 'page') and records_column.page:
+            logger.info(f"🔵 [DATABASE] Updating records_column")
+            records_column.update()
+        else:
+            logger.warning(f"🔴 [DATABASE] records_column not attached to page yet")
 
     # Edit record dialog using Flet's AlertDialog
     def edit_record(record: dict[str, Any]) -> None:
@@ -225,7 +218,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_changes(_e: ft.ControlEvent) -> None:
+        async def save_changes(_e: ft.ControlEvent) -> None:
             """Save edited record via server bridge."""
             updated_record = record.copy()
             for key, field in fields.items():
@@ -233,10 +226,10 @@ def create_database_view(
 
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'update_table_record'):
+                if bridge is None or not hasattr(bridge, 'update_table_record_async'):
                     show_error_message(page, "Server bridge not ready (update unavailable)")
                     return
-                result = bridge.update_table_record(selected_table, updated_record)
+                result = await bridge.update_table_record_async(selected_table, updated_record)
                 if result.get('success'):
                     # Update local data with server-confirmed record
                     updated_record = result.get('data', updated_record)
@@ -270,13 +263,13 @@ def create_database_view(
             show_error_message(page, "Server not connected. Please start the backup server.")
             return
 
-        def confirm_delete(_e: ft.ControlEvent) -> None:
+        async def confirm_delete(_e: ft.ControlEvent) -> None:
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'delete_table_record'):
+                if bridge is None or not hasattr(bridge, 'delete_table_record_async'):
                     show_error_message(page, "Server bridge not ready (delete unavailable)")
                     return
-                result = bridge.delete_table_record(selected_table, record.get('id'))
+                result = await bridge.delete_table_record_async(selected_table, record.get('id'))
                 if result.get('success'):
                     # Remove from local data after server confirms deletion
                     table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
@@ -320,7 +313,7 @@ def create_database_view(
                 fields[key] = field
                 field_controls.append(field)
 
-        def save_new_record(_e: ft.ControlEvent) -> None:
+        async def save_new_record(_e: ft.ControlEvent) -> None:
             """Save new record via server bridge."""
             # Prepare new record data
             new_record_data = {}
@@ -329,10 +322,10 @@ def create_database_view(
 
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'add_table_record'):
+                if bridge is None or not hasattr(bridge, 'add_table_record_async'):
                     show_error_message(page, "Server bridge not ready (add unavailable)")
                     return
-                result = bridge.add_table_record(selected_table, new_record_data)
+                result = await bridge.add_table_record_async(selected_table, new_record_data)
                 if result.get('success'):
                     # Use server-returned record to ensure consistency
                     new_record = result.get('data', new_record_data)
@@ -361,7 +354,11 @@ def create_database_view(
         """Handle table selection change."""
         nonlocal selected_table
         selected_table = e.control.value
-        load_data()
+        # Use async pattern to avoid blocking UI
+        if hasattr(page, 'run_task'):
+            page.run_task(load_data_async)
+        else:
+            logger.warning("page.run_task not available, table change may block UI")
 
     table_dropdown = ft.Dropdown(
         label="Select Table",
@@ -421,7 +418,7 @@ def create_database_view(
         ft.Container(expand=True),  # Spacer
         themed_button("Add Record", lambda _e: add_record(), "filled", ft.Icons.ADD),
         themed_button("Export", export_data, "outlined", ft.Icons.DOWNLOAD),
-        themed_button("Refresh", lambda _e: load_data(), "outlined", ft.Icons.REFRESH),
+        themed_button("Refresh", lambda _e: page.run_task(load_data_async) if hasattr(page, 'run_task') else None, "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
     # Database stats - Initialize with placeholder data (will be updated in setup_subscriptions)
@@ -434,7 +431,8 @@ def create_database_view(
     size_card = themed_metric_card("Size", db_status["size"], ft.Icons.FOLDER)
 
     # Enhanced table with layered card design
-    table_card = themed_card(database_table, "Database Records", page)
+    # Note: Using simple Column with Text instead of DataTable/ListView (which are unstable in Flet 0.28.3)
+    table_card = themed_card(records_column, "Database Records", page)
 
     # Main layout with responsive design and scrollbar
     main_content = ft.Column([
@@ -453,16 +451,17 @@ def create_database_view(
     # Create the main container with theme support
     database_container = themed_card(main_content, None, page)  # No title since we have one in content
 
-    def load_database_stats() -> None:
-        """Load database statistics from server and update metric cards."""
+    async def load_database_stats_async() -> None:
+        """Load database statistics from server and update metric cards (async version - NON-BLOCKING)."""
         nonlocal db_status
 
         if not server_bridge:
-            logger.error("Server bridge not available for database info")
+            logger.debug("Server bridge not available for database info (GUI-only mode)")
             return
 
         try:
-            info_res = server_bridge.get_database_info()
+            # Use NEW async method to prevent blocking the UI thread
+            info_res = await server_bridge.get_database_info_async()
             if not info_res.get('success'):
                 logger.error(f"Failed to fetch database info: {info_res.get('error', 'Unknown error')}")
                 db_status["status"] = "Database info unavailable"
@@ -511,16 +510,25 @@ def create_database_view(
                     if hasattr(status_card, 'page') and status_card.page:
                         status_card.update()
 
-    def setup_subscriptions() -> None:
+    async def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
-        # Load database statistics first
-        load_database_stats()
-        # Then load table data
-        load_data()
+        logger.info("🔵 [DATABASE] setup_subscriptions() CALLED")
+        # Small delay to ensure view is fully attached (prevents race condition)
+        import asyncio
+        await asyncio.sleep(0.05)
+
+        logger.info("🔵 [DATABASE] About to launch background tasks for data loading")
+        # Load data asynchronously using TRUE async functions (NOT fake wrappers!)
+        # These now properly await the async ServerBridge methods
+        page.run_task(load_database_stats_async)
+        page.run_task(load_data_async)
+        logger.info("🔵 [DATABASE] Background tasks launched")
 
     def dispose() -> None:
         """Clean up subscriptions and resources."""
         logger.debug("Disposing database view")
         # No subscriptions to clean up currently
 
+    print("🚨🚨🚨 create_database_view() RETURNING 🚨🚨🚨")
+    logger.info("🔵 [DATABASE] Returning database view components")
     return database_container, dispose, setup_subscriptions

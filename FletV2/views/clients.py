@@ -93,7 +93,7 @@ def create_clients_view(
     def _fetch_clients_sync() -> list[dict[str, Any]]:
         """Retrieve clients synchronously from real server only."""
         if not server_bridge:
-            logger.error("Server bridge not available - cannot fetch clients")
+            logger.debug("Server bridge not available (GUI-only mode)")
             return []
 
         try:

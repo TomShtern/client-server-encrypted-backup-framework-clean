@@ -562,7 +562,7 @@ class FletV2App(ft.Row):
             "dashboard": ("views.dashboard", "create_dashboard_view", "dashboard"),
             "clients": ("views.clients", "create_clients_view", "clients"),
             "files": ("views.files", "create_files_view", "files"),
-            "database": ("views.database", "create_database_view", "database"),
+            "database": ("views.database_simple", "create_database_view", "database"),  # Simple view to avoid browser crashes
             "analytics": ("views.analytics", "create_analytics_view", "analytics"),
             "logs": ("views.logs", "create_logs_view", "logs"),
             "settings": ("views.settings", "create_settings_view", "settings"),
@@ -582,26 +582,46 @@ class FletV2App(ft.Row):
 
     def navigate_to(self, view_name: str) -> None:
         """Navigate to a specific view and sync navigation rail."""
-        try:
-            # Update navigation rail selected index
-            view_names = [
-                "dashboard", "clients", "files", "database",
-                "analytics", "logs", "settings", "experimental"
-            ]
-            if view_name in view_names:
-                new_index = view_names.index(view_name)
-                if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
-                    self._nav_rail_control.selected_index = new_index
-                    try:
-                        self._nav_rail_control.update()
-                    except Exception:
-                        pass  # Ignore update errors if control not attached yet
+        print(f"🟡 [NAVIGATE_TO] FUNCTION CALLED WITH view_name='{view_name}'")
+        print(f"🟡 [NAVIGATE_TO] About to call logger.info")
+        logger.info(f"🟡 [NAVIGATE_TO] FUNCTION ENTERED with view_name='{view_name}'")
+        print(f"🟡 [NAVIGATE_TO] logger.info completed successfully")
+        # Update navigation rail selected index
+        view_names = [
+            "dashboard", "clients", "files", "database",
+            "analytics", "logs", "settings", "experimental"
+        ]
+        print(f"🟡 [NAVIGATE_TO] Created view_names list")
+        logger.info(f"🔵 [NAV_DEBUG] Checking if '{view_name}' in view_names")
+        print(f"🟡 [NAVIGATE_TO] After first NAV_DEBUG logger.info")
+        if view_name in view_names:
+            print(f"🟡 [NAVIGATE_TO] view_name found in list")
+            logger.info(f"🔵 [NAV_DEBUG] Found '{view_name}' at index {view_names.index(view_name)}")
+            print(f"🟡 [NAVIGATE_TO] After second NAV_DEBUG logger.info")
+            new_index = view_names.index(view_name)
+            if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
+                print(f"🟡 [NAVIGATE_TO] Has nav_rail_control, updating")
+                logger.info(f"🔵 [NAV_DEBUG] Updating nav_rail_control to index {new_index}")
+                self._nav_rail_control.selected_index = new_index
+                print(f"🟡 [NAVIGATE_TO] Set selected_index, about to update")
+                try:
+                    self._nav_rail_control.update()
+                    print(f"🟡 [NAVIGATE_TO] nav_rail_control.update() completed")
+                    logger.info(f"🔵 [NAV_DEBUG] nav_rail_control.update() completed")
+                except Exception as rail_err:
+                    print(f"🟡 [NAVIGATE_TO] nav_rail_control.update() EXCEPTION: {rail_err}")
+                    logger.warning(f"🔵 [NAV_DEBUG] nav_rail_control.update() failed: {rail_err}")
+            else:
+                print(f"🟡 [NAVIGATE_TO] No nav_rail_control available")
+                logger.info(f"🔵 [NAV_DEBUG] No nav_rail_control available yet")
 
-            # Load the view
-            self._perform_view_loading(view_name)
-            logger.info(f"Navigated to {view_name}")
-        except Exception as e:
-            logger.error(f"Navigation to {view_name} failed: {e}")
+        # Load the view
+        print(f"🟡 [NAVIGATE_TO] About to call _perform_view_loading")
+        logger.info(f"🔵 [NAV_DEBUG] About to call _perform_view_loading('{view_name}')")
+        print(f"🟡 [NAVIGATE_TO] After logger.info, before _perform_view_loading call")
+        self._perform_view_loading(view_name)
+        print(f"🟡 [NAVIGATE_TO] _perform_view_loading returned")
+        logger.info(f"🔵 [NAV_DEBUG] _perform_view_loading returned, navigated to {view_name}")
 
     def _create_navigation_rail(self) -> ft.Container:
         """Create collapsible navigation rail with premium neumorphic design (40-45% intensity)."""
@@ -793,40 +813,72 @@ class FletV2App(ft.Row):
     async def initialize(self) -> None:
         """Initialize the application."""
         print("🔴 [CRITICAL DEBUG] initialize() method ENTERED")
-        logger.info("🚀 FletV2 application initialization started")
-        if getattr(self, '_initialized', False):
-            logger.debug("initialize() called more than once; ignoring subsequent call")
-            return
         try:
+            print("🔴 [DEBUG] About to call logger.info()")
+            logger.info("🚀 FletV2 application initialization started")
+            print("🔴 [DEBUG] logger.info() completed")
+
+            print("🔴 [DEBUG] Checking _initialized flag")
+            if getattr(self, '_initialized', False):
+                logger.debug("initialize() called more than once; ignoring subsequent call")
+                return
+            print("🔴 [DEBUG] _initialized check passed")
+
+            print("🔴 [DEBUG] About to call setup_modern_theme()")
             # Apply theme
             setup_modern_theme(self.page)
+            print("🔴 [DEBUG] setup_modern_theme() completed")
             logger.debug("Theme setup complete")
 
+            print("🔴 [DEBUG] About to add app to page")
             # Add the app to the page
             self.page.add(self)
+            print("🔴 [DEBUG] self.page.add(self) completed")
 
+            print("🔴 [DEBUG] Setting page properties")
             # Set page properties
             self.page.title = "FletV2 - Encrypted Backup Framework"
-            self.page.window.width = 1200
-            self.page.window.height = 800
-            self.page.window.min_width = 800
-            self.page.window.min_height = 600
+            print("🔴 [DEBUG] page.title set")
 
+            # Window properties only work in FLET_APP mode, not WEB_BROWSER
+            try:
+                if hasattr(self.page, 'window') and self.page.window:
+                    self.page.window.width = 1200
+                    self.page.window.height = 800
+                    self.page.window.min_width = 800
+                    self.page.window.min_height = 600
+                    print("🔴 [DEBUG] window properties set")
+                else:
+                    print("🔴 [DEBUG] page.window not available (running in web mode)")
+            except Exception as win_err:
+                logger.debug(f"Could not set window properties (web mode?): {win_err}")
+                print(f"🔴 [DEBUG] window property error: {win_err}")
+
+            print("🔴 [DEBUG] About to call page.update()")
             # Update the page
             self.page.update()
+            print("🔴 [DEBUG] page.update() completed")
             self._initialized = True
+            print("🔴 [DEBUG] _initialized flag set to True")
 
             logger.info("✅ FletV2 application initialized successfully")
+            print("🔴 [DEBUG] About to load dashboard")
 
             # Load initial dashboard view (page.on_connect won't fire since page is already connected)
             try:
                 logger.info("📊 Loading initial dashboard view...")
+                print("🔴 [DEBUG] Calling navigate_to('dashboard')")
                 self.navigate_to("dashboard")
+                print("🔴 [DEBUG] navigate_to returned")
                 logger.info("✅ Dashboard navigation completed")
             except Exception as dash_err:
+                print(f"🔴 [DEBUG] Dashboard navigation raised exception: {dash_err}")
                 logger.error(f"❌ Failed to load dashboard: {dash_err}")
                 import traceback
                 logger.error(f"Dashboard load traceback: {traceback.format_exc()}")
+                print(f"🔴 [DEBUG] Traceback: {traceback.format_exc()}")
+
+            print("🔴 [DEBUG] End of initialize() method reached")
 
             # Optional internal navigation smoke test
             if os.environ.get("FLET_NAV_SMOKE") == '1':
@@ -849,6 +901,7 @@ class FletV2App(ft.Row):
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
+        print(f"🚨🚨🚨 _perform_view_loading ENTERED for '{view_name}' 🚨🚨🚨")
         logger.info(f"🔄 Loading view: {view_name}")
 
         # Comment 12: Dispose of current view before loading new one
@@ -886,6 +939,7 @@ class FletV2App(ft.Row):
                 dispose_func = lambda: None  # noqa: E731
                 self._current_view_setup = None
             logger.info(f"✅ View content created for '{view_name}'")
+            print(f"🟣 [PERFORM_VIEW] logger.info executed successfully for '{view_name}'")
         except Exception as e:
             logger.error(f"❌ Error loading view '{view_name}': {e}")
             import traceback
@@ -946,24 +1000,38 @@ class FletV2App(ft.Row):
 
     def _update_content_area(self, animated_switcher, content, view_name: str) -> bool:
         """Safely update the content area with simplified view loading"""
+        print(f"🔵 [UPDATE_CONTENT] ENTERED for view '{view_name}'")
         # Store reference for diagnostics that need to inspect attachment state later
         self._animated_switcher = animated_switcher
         try:
+            print(f"🔵 [UPDATE_CONTENT] About to set content.key")
             # Unique and stable key for AnimatedSwitcher
             content.key = f"{view_name}_view_{int(time.time() * 1000)}"
+            print(f"🔵 [UPDATE_CONTENT] Key set successfully")
 
             # Single, atomic content update
             if isinstance(animated_switcher, ft.AnimatedSwitcher):
+                print(f"🔵 [UPDATE_CONTENT] AnimatedSwitcher detected, updating content")
                 animated_switcher.content = content
+                print(f"🔵 [UPDATE_CONTENT] Content assigned, setting transition")
                 animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
+                print(f"🔵 [UPDATE_CONTENT] About to call animated_switcher.update()")
                 animated_switcher.update()
+                print(f"🔵 [UPDATE_CONTENT] animated_switcher.update() completed")
 
             # Post-update visibility and subscription management
+            print(f"🔵 [UPDATE_CONTENT] About to call _post_content_update")
             self._post_content_update(content, view_name)
+            print(f"🔵 [UPDATE_CONTENT] _post_content_update completed")
 
+            print(f"🟣 [UPDATE_CONTENT] About to call logger.info for '{view_name}'")
             logger.info(f"Successfully updated content area with {view_name}")
+            print(f"🟣 [UPDATE_CONTENT] logger.info completed, about to return True")
             return True
         except Exception as e:
+            print(f"🔴 [UPDATE_CONTENT] EXCEPTION CAUGHT: {e}")
+            import traceback
+            print(f"🔴 [UPDATE_CONTENT] Traceback:\n{traceback.format_exc()}")
             logger.error(f"Content area update failed for {view_name}: {e}")
             return False
         finally:
@@ -987,7 +1055,8 @@ class FletV2App(ft.Row):
             async def delayed_setup():
                 """Delay setup until controls are fully attached to page tree."""
                 try:
-                    await asyncio.sleep(0.1)  # Let Flet complete rendering
+                    # Wait for AnimatedSwitcher transition to complete (160ms) + safety margin
+                    await asyncio.sleep(0.25)  # Let Flet complete rendering and transition
                     logger.info(f"Calling delayed setup function for {view_name}")
                     # Guard against None/non-callable and handle both sync and async functions
                     if setup_func and callable(setup_func):
@@ -1070,52 +1139,9 @@ class FletV2App(ft.Row):
             except Exception as vis_err:
                 logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
 
-        # Schedule subscription setup once control is attached to the page
-        setup_cb = getattr(content, '_setup_subscriptions', None)
-        if not callable(setup_cb):
-            logger.debug(
-                f"Skipping subscription setup for {view_name}: _setup_subscriptions is not callable "
-                f"(type={type(setup_cb).__name__})"
-            )
-            return
+        # Note: Subscription setup is handled by delayed_setup() above (lines 987-1005)
+        # The setup_func from the view's return tuple is called after transition completes
 
-        try:
-            if hasattr(self.page, 'run_task'):
-                async def _wait_and_setup() -> None:
-                    try:
-                        timeout = 2.0
-                        interval = 0.05
-                        waited = 0.0
-                        attached = False
-                        while waited < timeout:
-                            with contextlib.suppress(Exception):
-                                if hasattr(content, 'page') and content.page:
-                                    attached = True
-                                elif (
-                                    hasattr(self, 'content_area') and
-                                    self.content_area and
-                                    getattr(self.content_area, 'page', None)
-                                ):
-                                    attached = True
-                            if attached:
-                                break
-                            await asyncio.sleep(interval)
-                            waited += interval
-                        try:
-                            if asyncio.iscoroutinefunction(setup_cb):
-                                await setup_cb()
-                            else:
-                                r = setup_cb()
-                                if asyncio.iscoroutine(r):
-                                    await r
-                            logger.debug(f"Set up subscriptions for {view_name} view")
-                        except Exception as setup_error:
-                            logger.warning(f"Subscription setup failed: {setup_error}")
-                    except Exception as outer_error:
-                        logger.warning(f"Subscription waiter failed: {outer_error}")
-                self.page.run_task(_wait_and_setup)
-        except Exception as sub_error:
-            logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
 
     async def _run_nav_smoke_test(self) -> None:
         """Cycle through all views to surface hidden loading errors.
@@ -1153,21 +1179,34 @@ class FletV2App(ft.Row):
 
 if __name__ == "__main__":
     import flet as ft
+    import sys
 
     def main(page: ft.Page) -> None:
         """Main entry point for GUI-only mode (no server integration)."""
-        logger.info("🚀 Launching FletV2 in GUI-only mode (no server)")
-        # Create app without server bridge (will use placeholder data)
-        app = FletV2App(page, real_server=None)
-        page.run_task(app.initialize)
+        try:
+            logger.info("🚀 Launching FletV2 in GUI-only mode (no server)")
+            # Create app without server bridge (will use placeholder data)
+            app = FletV2App(page, real_server=None)
+            page.run_task(app.initialize)
+        except Exception as e:
+            print(f"❌ FATAL ERROR in main(): {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
     # Launch in web browser mode with port fallback
     try:
+        print("🌐 Attempting to start Flet app on port 8550...")
         ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550)
-    except OSError:
-        logger.warning("Port 8550 in use, trying 8551...")
+    except OSError as e:
+        logger.warning(f"Port 8550 in use ({e}), trying 8551...")
         try:
             ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8551)
-        except OSError:
-            logger.warning("Port 8551 in use, trying 8552...")
+        except OSError as e2:
+            logger.warning(f"Port 8551 in use ({e2}), trying 8552...")
             ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8552)
+    except Exception as e:
+        print(f"❌ FATAL ERROR starting Flet app: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

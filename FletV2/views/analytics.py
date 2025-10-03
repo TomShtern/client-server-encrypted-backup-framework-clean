@@ -6,6 +6,7 @@ Shows backup statistics with charts and metrics.
 
 import os
 import sys
+from collections.abc import Coroutine
 from typing import Any, Callable
 
 import flet as ft
@@ -32,8 +33,15 @@ def create_analytics_view(
     page: ft.Page,
     state_manager: Any | None,
     navigate_callback: Callable[[str], None] | None = None
-) -> tuple[ft.Control, Callable[[], None], Callable[[], None]]:
-    """Create analytics view with charts and metrics."""
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+    """Create analytics view with charts and metrics.
+
+    Returns:
+        tuple: (main_container, dispose_func, setup_subscriptions_async_func)
+            - main_container: The main UI control for the analytics view
+            - dispose_func: Cleanup function (synchronous)
+            - setup_subscriptions_async_func: Async setup function for data loading
+    """
 
     # Initialize with placeholder data (will load async in setup_subscriptions)
     metrics = {'total_backups': 0, 'total_storage_gb': 0, 'success_rate': 0.0, 'avg_backup_size_gb': 0.0}
@@ -299,17 +307,18 @@ def create_analytics_view(
         expand=True,
     )
 
-    def load_analytics_data() -> None:
-        """Load analytics data from server and update UI controls."""
+    async def load_analytics_data_async() -> None:
+        """Load analytics data from server and update UI controls (async version - NON-BLOCKING)."""
         nonlocal metrics, backup_trend_data, client_storage_data, file_type_data
 
-        if not server_bridge or not hasattr(server_bridge, 'get_analytics_data'):
+        if not server_bridge:
             # No server bridge available, keep placeholder data
             return
 
         try:
-            # Fetch analytics data from server
-            server_data = server_bridge.get_analytics_data()
+            # Fetch analytics data from server using BackupServer's async method
+            # This avoids connection pool exhaustion issues
+            server_data = await server_bridge._call_real_server_method_async('get_analytics_data_async')
             if not isinstance(server_data, dict) or not server_data.get('success'):
                 # Server call failed, keep placeholder data
                 return
@@ -379,7 +388,9 @@ def create_analytics_view(
                 for i, val in enumerate(backup_trend_data[:7] if backup_trend_data else [])
             ], alignment=ft.MainAxisAlignment.SPACE_EVENLY)
 
-            if hasattr(backup_trend_bars, 'controls') and len(backup_trend_bars.controls) > 0:
+            # Safely update backup trend bars only if fully attached
+            if (hasattr(backup_trend_bars, 'controls') and len(backup_trend_bars.controls) > 0
+                and hasattr(backup_trend_bars, 'page') and backup_trend_bars.page):
                 backup_trend_bars.controls[0] = new_bars
 
             # Update storage bars
@@ -398,7 +409,9 @@ def create_analytics_view(
                         [ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.AMBER_400]
                     ))
                 ]
-                if hasattr(storage_bars, 'controls'):
+                # Safely update only if attached to page
+                if (hasattr(storage_bars, 'controls')
+                    and hasattr(storage_bars, 'page') and storage_bars.page):
                     storage_bars.controls = new_storage_bars
 
             # Update file type visualization
@@ -415,7 +428,9 @@ def create_analytics_view(
                     )
                 ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, wrap=True)
 
-                if hasattr(file_type_viz, 'controls') and len(file_type_viz.controls) > 0:
+                # Safely update only if attached to page
+                if (hasattr(file_type_viz, 'controls') and len(file_type_viz.controls) > 0
+                    and hasattr(file_type_viz, 'page') and file_type_viz.page):
                     file_type_viz.controls[0] = new_file_type_viz
 
             # Update all controls if attached to page
@@ -435,8 +450,13 @@ def create_analytics_view(
         """Cleanup."""
         pass
 
-    def setup_subscriptions():
+    async def setup_subscriptions():
         """Setup - Load analytics data asynchronously after view is attached."""
-        load_analytics_data()
+        # Longer delay to ensure view is fully attached to page (prevents "Control must be added to page first" error)
+        import asyncio
+        await asyncio.sleep(0.2)  # Increased from 0.05 to 0.2 seconds
+
+        # Load data asynchronously using TRUE async function (NOT fake wrapper!)
+        page.run_task(load_analytics_data_async)
 
     return main_container, dispose, setup_subscriptions

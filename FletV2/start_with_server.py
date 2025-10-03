@@ -29,6 +29,7 @@ for _path in (_flet_v2_root, _repo_root):
 # Configure environment for GUI integration
 os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'  # Disable server's embedded GUI
 os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'  # Use standalone FletV2 GUI instead
+os.environ['PYTHONNOUSERSITE'] = '1'  # Prevent package conflicts from user site-packages
 
 # Enable debugging
 os.environ['FLET_DASHBOARD_DEBUG'] = '1'

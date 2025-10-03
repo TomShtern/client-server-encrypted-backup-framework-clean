@@ -67,24 +67,40 @@ def create_files_view(
     type_filter = "all"
     files_data = []
 
-    # Load file data from server
-    def load_files_data() -> None:
-        """Load file data using server bridge."""
-        nonlocal files_data
+    # Load file data from server - ASYNC VERSION to prevent UI blocking
+    async def _fetch_files_async():
+        """Fetch files from server asynchronously."""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _fetch_files_sync)
 
+    def _fetch_files_sync():
+        """Synchronous files fetch (called in executor)."""
         if not server_bridge:
-            logger.error("Server bridge not available - cannot fetch files")
-            files_data = []
-            return
-
+            return []
         try:
             result = server_bridge.get_files()
-            files_data = result if isinstance(result, list) else []
+            return result if isinstance(result, list) else []
         except Exception as ex:
             logger.error(f"Failed to fetch files from server: {ex}")
-            files_data = []
+            return []
 
-        update_table()
+    def load_files_data() -> None:
+        """Load file data using async pattern to avoid blocking UI."""
+        nonlocal files_data
+
+        async def _load_and_apply() -> None:
+            nonlocal files_data
+            new_files = await _fetch_files_async()
+            files_data = new_files
+            update_table()
+
+        if hasattr(page, "run_task"):
+            page.run_task(_load_and_apply)
+        else:
+            # Fallback for environments without run_task
+            files_data = _fetch_files_sync()
+            update_table()
 
     def format_file_size(size_bytes: int) -> str:
         """Format file size in human readable format."""

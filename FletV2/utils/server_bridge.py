@@ -768,6 +768,40 @@ class ServerBridge:
             logger.error(f"Error getting database info: {e}")
             return {'success': False, 'data': None, 'error': str(e)}
 
+    async def get_database_info_async(self) -> dict[str, Any]:
+        """Get database information and statistics (async version)."""
+        if not self.real_server or not hasattr(self.real_server, 'db_manager'):
+            return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
+
+        try:
+            # Call BackupServer's async method
+            result = await self._call_real_server_method_async('get_database_info_async')
+
+            if not result.get('success'):
+                return result
+
+            # Transform BackupServer format to DatabaseView format
+            server_data = result.get('data', {})
+            db_manager = self.real_server.db_manager
+            health = db_manager.get_database_health()
+
+            return {
+                'success': True,
+                'data': {
+                    'status': 'Connected' if health.get('integrity_check') else 'Error',
+                    'tables': health.get('table_count', 0),
+                    'total_records': server_data.get('total_clients', 0) + server_data.get('total_files', 0),
+                    'size': f"{server_data.get('database_size_bytes', 0) / (1024*1024):.1f} MB",
+                    'integrity_check': health.get('integrity_check', False),
+                    'foreign_key_check': health.get('foreign_key_check', False),
+                    'connection_pool_healthy': health.get('connection_pool_healthy', True)
+                },
+                'error': None
+            }
+        except Exception as e:
+            logger.error(f"Error getting database info async: {e}")
+            return {'success': False, 'data': None, 'error': str(e)}
+
     def get_table_names(self) -> dict[str, Any]:
         """Get list of database table names."""
         if not self.real_server or not hasattr(self.real_server, 'db_manager'):
@@ -808,6 +842,11 @@ class ServerBridge:
         except Exception as e:
             logger.error(f"Error getting table data for {table_name}: {e}")
             return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': str(e)}
+
+    async def get_table_data_async(self, table_name: str) -> dict[str, Any]:
+        """Get data from a specific database table (async version)."""
+        # Call BackupServer's async method directly to avoid connection pool issues
+        return await self._call_real_server_method_async('get_table_data_async', table_name)
 
 
 # ============================================================================

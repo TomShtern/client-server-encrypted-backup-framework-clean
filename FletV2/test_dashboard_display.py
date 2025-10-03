@@ -21,7 +21,7 @@ import Shared.utils.utf8_solution
 import flet as ft
 from views.dashboard import create_dashboard_view
 
-def test_dashboard(page: ft.Page):
+def test_dashboard(page: ft.Page):  # sourcery skip: extract-method
     """Test dashboard creation and display."""
     print("Testing dashboard creation...")
 

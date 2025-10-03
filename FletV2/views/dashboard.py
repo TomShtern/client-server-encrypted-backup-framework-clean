@@ -263,16 +263,17 @@ def create_dashboard_view(
     def show_user_feedback(message: str, is_error: bool = False):
         """Show user feedback via snackbar - OPTIMIZED: targeted update."""
         try:
-            if hasattr(page, 'snack_bar'):
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text(message),
-                    bgcolor=ft.Colors.ERROR if is_error else ft.Colors.PRIMARY
-                )
-                page.snack_bar.open = True
-                # PHASE 6: Performance optimization - use snack_bar.update() instead of page.update()
-                page.snack_bar.update()
+            # Create and show SnackBar
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(message),
+                bgcolor=ft.Colors.ERROR if is_error else ft.Colors.PRIMARY
+            )
+            page.snack_bar.open = True
+
+            # Always use page.update() - it's safer and ensures SnackBar is properly attached
+            page.update()
         except Exception as e:
-            logger.error(f"Failed to show user feedback: {e}")
+            logger.debug(f"Failed to show user feedback: {e}")
 
     def toggle_theme_mode():
         """Cycle through theme modes: LIGHT → DARK → SYSTEM."""

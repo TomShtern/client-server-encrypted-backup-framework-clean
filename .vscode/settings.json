@@ -59,5 +59,10 @@
       "envManager": "ms-python.python:venv",
       "packageManager": "ms-python.python:pip"
     }
-  ]
+  ],
+  "editor.experimentalGpuAcceleration": "on",
+  "python.analysis.aiHoverSummaries": true,
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
+  "editor.guides.bracketPairs": "active",
+  "python.analysis.typeCheckingMode": "basic"
 }
