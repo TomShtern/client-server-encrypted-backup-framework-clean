@@ -769,14 +769,20 @@ def AppCard(
     body = content
     header_controls: list[ft.Control] = []
     if title is not None or actions:
-        header_controls.append(
-            ft.Row([
-                ft.Text(title or "", size=16, weight=ft.FontWeight.W_600),
-                ft.Container(expand=True),
-                *(actions or [])
-            ])
+        header_controls.extend(
+            (
+                ft.Row(
+                    [
+                        ft.Text(
+                            title or "", size=16, weight=ft.FontWeight.W_600
+                        ),
+                        ft.Container(expand=True),
+                        *(actions or []),
+                    ]
+                ),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE),
+            )
         )
-        header_controls.append(ft.Divider(height=1, color=ft.Colors.OUTLINE))
     return ft.Container(
         content=ft.Column([
             *header_controls,

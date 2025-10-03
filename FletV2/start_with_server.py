@@ -18,9 +18,6 @@ Features:
 
 import os
 import sys
-import asyncio
-import threading
-import time
 
 # Add repository root to path for imports
 _flet_v2_root = os.path.dirname(os.path.abspath(__file__))
@@ -53,8 +50,8 @@ except ImportError as e:
 
 # Import Flet
 print("\n[2/4] Importing Flet...")
-import flet as ft
-import main
+import flet as ft  # noqa: E402 - Import after environment setup
+import main  # noqa: E402 - Import after environment setup
 
 # Initialize BackupServer in MAIN thread (signal handlers require main thread)
 print("\n[3/4] Initializing BackupServer (main thread)...")
@@ -90,7 +87,11 @@ def gui_with_server_main(page: ft.Page):
     """
     global _app_instance
 
-    print(f"\n[PAGE CONNECT] New page connection established")
+    print("🟢 [START] gui_with_server_main function ENTERED")
+    print(f"🟢 [START] Page object: {page}")
+    print(f"🟢 [START] Server instance available: {server_instance is not None}")
+
+    print("\n[PAGE CONNECT] New page connection established")
 
     # Server already initialized (or failed) before ft.app launch
     print(f"   Server Instance: {'[OK] Connected' if server_instance else '[WARN]  Mock Mode'}")
@@ -100,7 +101,7 @@ def gui_with_server_main(page: ft.Page):
 
     # Set up cleanup handler for when page disconnects
     def cleanup_on_disconnect(e):
-        print(f"\n[PAGE DISCONNECT] Cleaning up resources...")
+        print("\n[PAGE DISCONNECT] Cleaning up resources...")
         try:
             # Call dispose function if it exists
             if hasattr(app, 'dispose') and callable(app.dispose):
@@ -114,10 +115,15 @@ def gui_with_server_main(page: ft.Page):
 
     page.on_disconnect = cleanup_on_disconnect
 
-    # Use synchronous initialization
+    # Initialize the app using Flet's task runner
     async def async_init():
         try:
+            print("[INIT] Starting async initialization...")
+            print(f"[DEBUG] App object: {app}")
+            print(f"[DEBUG] App.initialize callable? {callable(getattr(app, 'initialize', None))}")
+            print(f"[DEBUG] About to await app.initialize()...")
             await app.initialize()
+            print(f"[DEBUG] app.initialize() returned successfully")
             print(f"\n{'=' * 70}")
             print(f"{'[READY] FletV2 GUI is Running':^70}")
             if server_instance:
@@ -130,8 +136,10 @@ def gui_with_server_main(page: ft.Page):
             import traceback
             traceback.print_exc()
 
-    # Run async initialization
+    #  Schedule initialization
+    print("[DEBUG] Scheduling async initialization task...")
     page.run_task(async_init)
+    print("[DEBUG] Task scheduled")
 
 if __name__ == "__main__":
     preferred_ports = [8570, 8571, 8572]

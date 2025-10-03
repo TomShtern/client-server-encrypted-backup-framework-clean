@@ -1,26 +1,8 @@
 #!/usr/bin/env python3
 """
 Enhanced State Manager for FletV2
-Framework-h        # Track change for debugging
-        change_record = {
-            'key': key,
-            'old_value': old_value,
-            'new_value': value,
-            'source': source,
-            'timestamp': time.time()
-        }
-        self._change_history.append(change_record)
 
-        # Trim history to last 100 changes
-        if len(self._change_history) > 100:
-            self._change_history = self._change_history[-100:]
-
-        # Update deduplication tracking (Comment 10: Fix duplicate event notifications)
-        self._last_update_source[key] = source
-        self._update_counter[key] = self._update_counter.get(key, 0) + 1
-        current_count = self._update_counter[key]
-
-        logger.debug(f"State updated: {key} = {value} (source: {source}, count: {current_count})") management with reactive patterns and async support.
+Framework-harmonious state management with reactive patterns and async support.
 
 Enhanced for server integration with:
 - Async state operations for server-mediated updates
@@ -30,15 +12,20 @@ Enhanced for server integration with:
 - Event-driven architecture for real-time responsiveness
 """
 
+print("🟢 [DEBUG] state_manager.py module loading started")
+
 import asyncio
 import contextlib
+import logging
 import os
 import sys
 import time
 from collections.abc import Callable
 from typing import Any
 
+print("🟢 [DEBUG] About to import flet")
 import flet as ft
+print("🟢 [DEBUG] Flet imported successfully")
 
 # --- PATH SETUP (allow direct execution / editor open) ---
 _utils_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,12 +35,14 @@ for _p in (_flet_v2_root, _repo_root):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-try:
-    from FletV2.utils.debug_setup import setup_terminal_debugging  # type: ignore
-except Exception:  # noqa: BLE001
-    from .debug_setup import setup_terminal_debugging  # type: ignore
-
-logger = setup_terminal_debugging(logger_name="FletV2.state_manager")
+# CRITICAL FIX: Do NOT call setup_terminal_debugging() at module level!
+# This was causing circular import deadlock when importing state_manager.
+# The debug_setup tries to configure all loggers including dashboard logger,
+# which imports dashboard module, which imports state_manager = DEADLOCK!
+print("🟢 [DEBUG] Setting up logger without debug_setup to avoid circular import")
+logger = logging.getLogger("FletV2.state_manager")
+print("🟢 [DEBUG] state_manager.py module loaded successfully")
+print("🟢 [DEBUG] About to define StateManager class")
 
 
 class StateManager:
@@ -1034,3 +1023,5 @@ def create_state_manager(page: ft.Page, server_bridge=None) -> StateManager:
     return state_manager
 
 
+
+print('🟢 [DEBUG] END OF state_manager.py - module fully loaded')

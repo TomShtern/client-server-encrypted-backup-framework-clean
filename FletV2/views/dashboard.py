@@ -339,8 +339,8 @@ def create_dashboard_view(
             # GUI status is always operational (always green)
             # No update needed as it's static
 
-            # Update server status indicator
-            if server_status_ref.current:
+            # Update server status indicator (with page attachment check)
+            if server_status_ref.current and hasattr(server_status_ref.current, 'page') and server_status_ref.current.page:
                 # Only show green if REAL server is connected (not mock data)
                 server_connected = connected and is_real_server_connected()
                 status_color = ft.Colors.GREEN_400 if server_connected else ft.Colors.GREY_500
@@ -366,21 +366,21 @@ def create_dashboard_view(
     def update_dashboard_data(data: dict):
         """Update all dashboard components with new data - optimized with targeted updates."""
         try:
-            # Update metric values
-            if clients_count_ref.current:
+            # Update metric values (with page attachment check)
+            if clients_count_ref.current and hasattr(clients_count_ref.current, 'page') and clients_count_ref.current.page:
                 clients_count_ref.current.value = str(data.get('clients_connected', 0))
                 clients_count_ref.current.update()
 
-            if files_count_ref.current:
+            if files_count_ref.current and hasattr(files_count_ref.current, 'page') and files_count_ref.current.page:
                 files_count_ref.current.value = str(data.get('total_files', 0))
                 files_count_ref.current.update()
 
-            if storage_value_ref.current:
+            if storage_value_ref.current and hasattr(storage_value_ref.current, 'page') and storage_value_ref.current.page:
                 storage_gb = data.get('storage_used_gb', 0)
                 storage_value_ref.current.value = f"{storage_gb:.1f} GB"
                 storage_value_ref.current.update()
 
-            if uptime_value_ref.current:
+            if uptime_value_ref.current and hasattr(uptime_value_ref.current, 'page') and uptime_value_ref.current.page:
                 uptime_value_ref.current.value = data.get('uptime_formatted', 'N/A')
                 uptime_value_ref.current.update()
 
@@ -388,6 +388,10 @@ def create_dashboard_view(
             def update_gauge_with_status(progress_ref, container, value, label):
                 """Update circular gauge with gradient colors, status indicators, and percentage display."""
                 if not progress_ref.current or not container:
+                    return
+
+                # Check if control is attached to page before updating
+                if not hasattr(progress_ref.current, 'page') or not progress_ref.current.page:
                     return
 
                 # Update main progress ring with VALUE and GRADIENT COLOR
@@ -401,22 +405,25 @@ def create_dashboard_view(
 
                 # Update percentage display
                 if hasattr(container, 'percentage_ref') and container.percentage_ref.current:
-                    container.percentage_ref.current.value = f"{int(value)}%"
-                    container.percentage_ref.current.update()
+                    if hasattr(container.percentage_ref.current, 'page') and container.percentage_ref.current.page:
+                        container.percentage_ref.current.value = f"{int(value)}%"
+                        container.percentage_ref.current.update()
 
                 # Update status indicators based on threshold
                 if hasattr(container, 'get_threshold_status'):
                     icon, color, text = container.get_threshold_status(value)
 
                     if hasattr(container, 'status_icon_ref') and container.status_icon_ref.current:
-                        container.status_icon_ref.current.name = icon
-                        container.status_icon_ref.current.color = color
-                        container.status_icon_ref.current.update()
+                        if hasattr(container.status_icon_ref.current, 'page') and container.status_icon_ref.current.page:
+                            container.status_icon_ref.current.name = icon
+                            container.status_icon_ref.current.color = color
+                            container.status_icon_ref.current.update()
 
                     if hasattr(container, 'status_text_ref') and container.status_text_ref.current:
-                        container.status_text_ref.current.value = text
-                        container.status_text_ref.current.color = color
-                        container.status_text_ref.current.update()
+                        if hasattr(container.status_text_ref.current, 'page') and container.status_text_ref.current.page:
+                            container.status_text_ref.current.value = text
+                            container.status_text_ref.current.color = color
+                            container.status_text_ref.current.update()
 
             # Update all performance gauges with enhanced status
             storage_usage = data.get('storage_percentage', 0)
@@ -431,8 +438,8 @@ def create_dashboard_view(
             activities = data.get('recent_activities', [])
             update_activity_stream(activities)
 
-            # Update last refresh time
-            if last_update_ref.current:
+            # Update last refresh time (with page attachment check)
+            if last_update_ref.current and hasattr(last_update_ref.current, 'page') and last_update_ref.current.page:
                 last_update_ref.current.value = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
                 last_update_ref.current.update()
 
@@ -447,6 +454,10 @@ def create_dashboard_view(
         """PHASE 4.2: Update the premium activity timeline with enhanced data."""
         try:
             if not activity_list_ref.current:
+                return
+
+            # Check if control is attached to page before updating
+            if not hasattr(activity_list_ref.current, 'page') or not activity_list_ref.current.page:
                 return
 
             # Clear existing activities

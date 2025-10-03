@@ -27,7 +27,7 @@ This is a **production-grade 5-layer encrypted backup system** with hybrid web-t
 Web UI → Flask API Bridge → C++ Client (subprocess) → Python Server → Flet Desktop GUI
   ↓           ↓                    ↓                     ↓
 HTTP      RealBackupExecutor    --batch mode       Custom Binary TCP   Material Design 3
-requests  process management   + transfer.info     Custom Binary TCP   Server Management
+requests  process management   + transfer.info     Custom Binary TCP   Material Design 3
 ```
 
 **Critical Components**:
@@ -91,7 +91,7 @@ python scripts/one_click_build_and_run.py
 - **Error Handling**: Try/except with specific exceptions, log errors with context. Use `contextlib.suppress(Exception)` for concise suppressed-exception blocks.
 - **Async**: Use async/await for I/O operations, avoid blocking calls
 - **Indentation**: Correct any unexpected indentation issues by ensuring code blocks are properly scoped. Run linters (e.g., `ruff check .`) to verify code style.
-- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow. Address all sourcery warnings in the `#file:main.py`.
+- **Sourcery**: Apply only safe, behavior‑preserving refactors (inline immediately-returned vars, simplify empty list comparisons, remove unnecessary casts, safe list comprehension/extend substitutions) and explicitly justify skipping higher‑risk “extract-method” or structural changes that could drop comments or subtly alter flow. Address all sourcery warnings in the `#file:main.py`.
 - **Problems View**: The Problems view in VS Code groups problems by source (e.g., extensions, linters) in tree view mode. Multiple groups can appear for the same file if multiple tools are enabled. Use the `problems.defaultViewMode` setting to switch to table view for a flat list. Pylance (Microsoft's Python language server) groups its findings by type in the Problems panel:
     1. **Syntax Errors** - Parse/compilation issues
     2. **Type Errors** - Type checking violations
@@ -114,7 +114,7 @@ python scripts/one_click_build_and_run.py
 - **Reasoning**: Apply sequential thinking MCP (Meta-Cognitive Programming) as much as possible to identify all problems/issues before attempting fixes. Use websearch and context7 MCP when you need up to date context and docs.
 - **Proactivity**: The AI should be proactive in identifying and fixing issues, not just running tests without understanding the results. Use sequential thinking MCP every 5 tool calls to ensure a thorough understanding of the situation before proceeding with fixes.
 - **System Integrity**: Make sure you are not breaking the system and removing functionality.
-- **Problem Management**: Make sure to not cause more problems than you solve. **Make sure you are not creating new problems instead of solving of solving them.**
+- **Problem Management**: Make sure you are not causing more problems than you solve. **Make sure you are not creating new problems instead of solving of solving them.**
 - **Data Source**: **ALWAYS USE REAL DATA FROM THE SERVER/DATABASE!** You can, optionally, add also a fallback to placeholder 'loren ipsum' instead of mock data. **NEVER use mock data.**
 - **Bug Fixing**: When fixing errors, focus on syntax errors without changing functionality. Ensure that the code remains unbroken and that no new problems are introduced. **Don't assume anything, always make sure.**
 - **Code Quality**: Make sure there are no code/functions duplications and no redundencies.
@@ -128,7 +128,7 @@ python scripts/one_click_build_and_run.py
   - `contentGenerator.timeout`: This key is not present in your repository files, but it is referenced repeatedly in Qwen Code issues and the Qwen Code docs as the configuration property to increase the streaming/setup timeout for content generation (i.e., streaming responses).
   - Place a settings file at either:
     - Project-level: `<project-root>/.qwen/settings.json`
-    - User-level: `%USERPROFILE%\.qwen\settings.json` (on Windows; equivalently `~/.qwen/settings.json`)
+    - User-level: `%USERPROFILE%\.qwen.settings.json` (on Windows; equivalently `~/.qwen/.settings.json`)
   - The timeout is a request timeout for the content generator (the CLI’s model/API calls).
   - Units: milliseconds (the settings schema says "Request timeout in milliseconds.").
   - Semantics: the maximum wall‑clock time allowed for a single generation request to complete. If a request exceeds this time the client will abort/consider it failed. It’s a total request timeout, not a per‑token inactivity timeout.
@@ -251,6 +251,37 @@ python scripts/one_click_build_and_run.py
 - **Lazy Server Initialization**: When using lazy server initialization, ensure that the `BackupServer` instance is created in the main thread to avoid `ValueError: signal only works in main thread of the main interpreter`.
 - **GUI-Only Standalone Mode**: Be aware that the GUI may start in GUI-only standalone mode without the server bridge if `main.py` is run directly. In this mode, data operations will show empty states. Use `python start_with_server.py` for full server integration.
 - **Embedded GUI Conflicts**: The embedded GUI in `BackupServer` should be disabled to prevent conflicts when running the Flet GUI with the server integration.
+- **Inline Diagnostics Panel**: Implement an inline diagnostics panel for non-dashboard view load failures in `main.py` to prevent blank/gray screens. Track the most recent view loading error using the `_last_view_error` attribute.
+- **Navigation Smoke Test**: Implement a navigation smoke test that automatically cycles through every view and logs success or any captured errors. To run the smoke test, launch the app with the environment variable `FLET_NAV_SMOKE=1`.
+- **Dashboard Update Guard**: When updating the dashboard, add a guard to prevent updating controls that aren't yet attached to the page. This prevents errors during the initial data refresh.
+- **Dashboard Loading**: The dashboard view should load correctly after the GUI initializes. If the dashboard is not loading, ensure that the `navigate_to("dashboard")` call is present at the end of the `initialize()` method and that the `initialize()` method is being called successfully. Debug output should be added to the `_perform_view_loading` method to identify any issues during view switching. Sentry SDK initialization should be disabled temporarily to rule out any crashes during module import.
+- **`setup_func` Callability**: When calling `setup_func()` , add a defensive guard ensuring `setup_func` is callable before invoking it. If in an async context, handle coroutine functions while keeping changes minimal and avoiding alterations to existing behavior.
+- **Database View Glitches**: If the app starts having fatal glitches after navigating to the database page, ensure that `database_table.update()` is not called before the table is attached to the page.
+- **Problematic Charts**: Be aware that the analytics view has chart components (`LineChart`, `BarChart`, `PieChart`) that are complex Flet controls and may cause issues. If the analytics page is broken, these may be the cause. Replace them with simpler UI primitives if necessary.
+- **Initial `state_manager.py` Errors**: If the application hangs during state manager initialization, check for corrupted Python code or syntax errors in the `state_manager.py` file, particularly within the docstring.
+- **Circular Import Deadlocks**: Circular import deadlocks can occur when the `setup_terminal_debugging()` function, called at module import time in `state_manager.py`, triggers an import of the dashboard module, which then imports `state_manager` again. To prevent this, avoid calling `setup_terminal_debugging()` at the module level in `state_manager.py`.
+- **Analytics Page Issues**: If the analytics page breaks the GUI, it's likely due to issues with the Flet chart components (`LineChart`, `BarChart`, `PieChart`). Replace them with simpler UI primitives if necessary.
+- **Navigation and View Loading**: If navigation breaks and views don't load, check for async/await issues in setup functions, and ensure the Flet app is properly initialized and the server bridge is connected. Ensure `page.on_connect` is being called, and if not, call `navigate_to("dashboard")` directly after initialization. The `initialize()` method should be called successfully.
+- **Database Page Issues**: If the database page breaks the GUI, it's likely due to issues with the `ft.DataTable` component. Replace `ft.DataTable` with a simpler `ListView` of `Cards`.
+- **Analyze Before Changing**: Before making any changes, analyze the code for potential issues and use ultrathink to identify the root cause of problems before attempting fixes.
+- **Avoid Assumptions**: Before making changes, ensure a thorough understanding of the code and the problem to be solved. Don't assume anything, verify everything.
+- **Flet Component Instability**: Be aware that complex Flet components like `ft.DataTable`, `LineChart`, `BarChart`, and `PieChart` might be unstable in Flet version 0.28.3 and can cause browser crashes. If encountering issues with these components, consider replacing them with simpler UI primitives.
+- **Database View Blocking**: Avoid making synchronous server calls during view construction. Instead, use placeholder data and load data asynchronously after the view is attached.
+- **Database View Async Data Loading**: When implementing asynchronous data loading in database and analytics views, ensure that the data is fetched and loaded after the view is attached, preventing UI blocking and improving responsiveness. Initialize with placeholder data to provide immediate feedback to the user.
+- **Flet GUI Launch in Webview Mode**: Use Playwright MCP to launch the Flet GUI in webview mode to take screenshots and automatically verify fixes.
+- **Debug Prints Preservation**: Save the important debug prints that will help in the future for similar problems, but remove excessive debug statements that clutter the code.
+- **Docstring Position**: Ensure that the docstring is the first statement after the function definition to avoid parsing errors.
+- **Module-Level Code**: Avoid calling functions with potential side effects, especially those that might trigger imports, at the module level. These calls can lead to circular import deadlocks.
+- **Asynchronous Data Loading**: When facing issues with UI freezing or crashing, particularly in the database and analytics pages, the root cause is often synchronous calls to the server bridge during view construction.
+  - **Solution**: Apply an asynchronous data loading pattern:
+    1.  **Fast View Construction**: Construct the view quickly with placeholder data.
+    2.  **Lazy Data Loading**: After the view is attached (typically within `setup_subscriptions`), initiate an asynchronous call to fetch the actual data.
+    3.  **Defensive Updates**: Ensure that updates to the UI are performed only after verifying that the relevant controls are attached to the page.
+- **Flet Component Instability**: Certain Flet components, including `ft.DataTable`, `LineChart`, `BarChart`, and `PieChart`, may be unstable in version 0.28.3 and can cause browser crashes. If encountering issues with these components, consider replacing them with simpler UI primitives such as `ListView` or `Card`.
+- **View Loading Issues**: When debugging issues with view loading, start by checking if the `page.on_connect` handler is being called. If it is not, ensure that the `navigate_to()` method is called directly after initialization. Add debug output to the `_perform_view_loading` method to identify any issues during view switching. Temporarily disable Sentry SDK initialization to rule out any crashes during module import.
+- **Circular Import Deadlocks**: Circular import deadlocks can occur when the `setup_terminal_debugging()` function, called at module import time in `state_manager.py`, triggers an import of the dashboard module, which then imports `state_manager` again. To prevent this, avoid calling `setup_terminal_debugging()` at the module level in `state_manager.py`.
+- **Fault Isolation**: When debugging complex issues, isolate the fault by commenting out sections of code, especially during view construction. Use incremental development to identify the minimum amount of code that is necessary to cause the error.
+- **Log Analysis**: When analyzing logs, be aware that VS Code language server analysis might show errors from temporary chat editing buffers that are not present in the actual saved files. Always verify the actual saved file for errors.
 
 ### Key Principles
 - **FletV2 First**: Use `FletV2/` directory exclusively (modern implementation)
@@ -277,98 +308,4 @@ python scripts/one_click_build_and_run.py
 # Flask API → RealBackupExecutor → C++ client (with --batch flag)
 # File Lifecycle: SynchronizedFileManager prevents race conditions
 self.backup_process = subprocess.Popen(
-    [self.client_exe, "--batch"],  # --batch prevents hanging in subprocess
-    stdin=self.PIPE,
-    stdout=the self.PIPE,
-    stderr=the self.PIPE,
-    text=True,
-    cwd=os.path.dirname(os.path.abspath(__file__)),  # CRITICAL: Working directory
-    env=Shared.utils.utf8_solution.get_env()  # UTF-8 environment
-)
-```
-
-#### File Transfer Verification (CRITICAL)
-Always verify file transfers by checking actual files in `received_files/` directory:
-- Compare file sizes
-- Compare SHA256 hashes
-- Verify network activity on port 1256
-
-#### Configuration Generation Pattern
-```python
-# transfer.info must be generated per operation (3-line format)
-def _generate_transfer_info(self, server_ip, server_port, username, file_path):
-    with open("transfer.info", 'w') as f:
-        f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
-        f.write(f"{username}\n")                 # Line 2: username
-        f.write(f"{file_path}\n")                # Line 3: absolute file path
-```
-
-#### Server Issue Resolution
-
-When addressing server issues, prioritize the following based on the summary of unresolved issues and recommendations from `Server_Issues_01.10.2025.md`:
-
-**High / Medium-High Priority Tasks**:
-
-1.  **Settings Validation (`save_settings` & `load_settings`):**
-    *   Location: `server.py` (lines ~1650, 2291-2394)
-    *   Implement `_validate_settings()` with schema (types, ranges, allowed keys) and call it from both save and load. Reject or fallback to defaults on invalid data.
-2.  **Emergency DB Connections Cleanup:**
-    *   Location: `server.py` (around line ~310) and `database.py` (lines ~306-317)
-    *   Track emergency connections separately and ensure they are closed/returned after use.
-3.  **Metrics Integration / Observability:**
-    *   Location: Throughout `server.py` (hooks missing), Shared/observability available
-    *   Add counters for connections/uploads/downloads and gauges for active clients/transfers; instrument a few high-value code paths.
-4.  **Rate Limiting for Log Export:**
-    *   Location: `server.py` (around line ~1640 / export logs code)
-    *   Track last export timestamp per session and enforce 10s minimum interval.
-5.  **Server Shutdown Cleanup (`stop()`):**
-    *   Location: `server.py` (lines ~618-628 / `stop()`)
-    *   On `stop()`, acquire `clients_lock`, call cleanup on each client, clear `clients` and `clients_by_name`, then proceed with shutdown.
-6.  **Client AES Key Access Thread-Safety:**
-    *   Location: `` class (lines ~199-204), callers at ~485
-    *   Wrap access in `with self.lock:` or equivalent thread-safe getter.
-7.  **Atomic Client Creation Race-Window (`add_client`):**
-    *   Location: `server.py` (around 712-721)
-    *   Use DB transaction or catch unique constraint errors and return friendly error; consider short critical section around memory insert. DB UNIQUE constraint already mitigates it.
-
-**Medium / Medium-Low Priority Tasks**:
-
-8.  **Timeout on File Export Operations:**
-    *   Location: `server.py` (`_export_logs_sync()` around 1669)
-    *   Read in chunks, enforce maximum allowed size, and fail after configured timeout.
-9.  **Centralize `SERVER_VERSION` Usage:**
-    *   Location: Multiple files referencing `SERVER_VERSION` with `globals()` checks (lines ~595, 1072, 1330, 1349, 1671)
-    *   Import `SERVER_VERSION` from `config.py` everywhere and remove `globals()` checks.
-10. **Replace Inline Repeated `asyncio` Imports:**
-    *   Location: `server.py` (many async wrappers)
-    *   Add `import asyncio` at module top and remove inline imports.
-11. **Duplicate/Triple File-Read Logic for Logs:**
-    *   Location: `server.py` (lines ~2075-2089 in `get_logs()`)
-    *   Extract helper `_read_log_file(filepath, limit)` and reuse.
-12. **Partial File Timeout Uses Wrong Time Base (Consistency):**
-    *   Location: `server.py` (lines ~237-242) and `file_transfer.py`
-    *   Standardize on monotonic time everywhere for these operations.
-13. **`get_historical_data()` Uses Mock/Random Data:**
-    *   Location: `server.py` (lines ~2014-2051, ~2032-2045)
-    *   Add docstring warning that data is mock.
-14. **No Input Validation on `get_historical_data()`:**
-    *   Location: `server.py` (lines ~2014-2051)
-    *   Add `VALID_METRICS` check and range validation for `hours`.
-15. **Broad Exception Handlers Used Widely:**
-    *   Location: Many places in `server.py` (58 instances)
-    *   Replace with targeted exception types where possible; add `exc_info=True` to unexpected captures. Tackle opportunistically when editing related functions.
-16. **Ensure `client.last_seen` Updated for Every Request:**
-    *   Location: request handlers (note placed around `request_handlers.py:97`)
-    *   Call `client.update_last_seen()` centrally in request dispatch before specific handler logic.
-
-**Low Priority / Polish Tasks**:
-
-17. **Response Time Placeholder:**
-    *   Location: Issue referenced at line ~1199 (placeholder)
-    *   Remove the placeholder.
-18. **Retry Logic Refactor (Decorator):**
-    *   Location: Multiple methods (get_clients, save_settings, etc.)
-    *   Add simple `@retry` decorator with configurable attempts/backoff and apply to DB operations.
-19. **Inconsistent Error Response Format Across ServerBridge:**
-    *   Location: ServerBridge methods (multiple)
-    *   Audit ServerBridge methods and ensure `_
+    [self.client_exe, "--batch"],

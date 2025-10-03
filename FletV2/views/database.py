@@ -199,7 +199,11 @@ def create_database_view(
         if len(database_table.columns) == len(first_row.keys()):
             database_table.columns.append(ft.DataColumn(ft.Text("Actions")))
 
-        database_table.update()
+        # Only update if table is attached to page (prevents glitches during initial load)
+        if hasattr(database_table, 'page') and database_table.page:
+            database_table.update()
+        else:
+            logger.debug("Table not yet attached to page, skipping update")
 
     # Edit record dialog using Flet's AlertDialog
     def edit_record(record: dict[str, Any]) -> None:
@@ -420,25 +424,14 @@ def create_database_view(
         themed_button("Refresh", lambda _e: load_data(), "outlined", ft.Icons.REFRESH),
     ], spacing=10)
 
-    # Database stats from server with error handling
-    db_status = {"status": "Server not connected", "tables": 0, "total_records": 0, "size": "--"}
-    if not server_bridge:
-        logger.error("Server bridge not available for database info")
-        show_error_message(page, "Server not connected. Cannot retrieve database statistics.")
-    else:
-        try:
-            info_res = server_bridge.get_database_info()
-            if not info_res.get('success'):
-                logger.error(f"Failed to fetch database info: {info_res.get('error', 'Unknown error')}")
-                show_error_message(page, f"Could not retrieve database statistics: {info_res.get('error', 'Unknown error')}")
-                db_status["status"] = "Database info unavailable"
-            else:
-                db_status = info_res.get('data', db_status)
-                logger.info(f"Database info retrieved successfully: {db_status}")
-        except Exception as ex:
-            logger.error(f"Exception while fetching database info: {ex}")
-            show_error_message(page, f"Error retrieving database statistics: {str(ex)}")
-            db_status["status"] = "Error fetching info"
+    # Database stats - Initialize with placeholder data (will be updated in setup_subscriptions)
+    db_status = {"status": "Loading...", "tables": 0, "total_records": 0, "size": "--"}
+
+    # Create metric cards with placeholder data
+    status_card = themed_metric_card("Status", db_status["status"], ft.Icons.STORAGE)
+    tables_card = themed_metric_card("Tables", str(db_status["tables"]), ft.Icons.TABLE_CHART)
+    records_card = themed_metric_card("Records", str(db_status["total_records"]), ft.Icons.STORAGE)
+    size_card = themed_metric_card("Size", db_status["size"], ft.Icons.FOLDER)
 
     # Enhanced table with layered card design
     table_card = themed_card(database_table, "Database Records", page)
@@ -448,14 +441,10 @@ def create_database_view(
         ft.Text("Database Management", size=28, weight=ft.FontWeight.BOLD),
         # Responsive stats row
         ft.ResponsiveRow([
-            ft.Column([themed_metric_card("Status", db_status["status"], ft.Icons.STORAGE)],
-                     col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Tables", str(db_status["tables"]), ft.Icons.TABLE_CHART)],
-                     col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Records", str(db_status["total_records"]), ft.Icons.STORAGE)],
-                     col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Column([themed_metric_card("Size", db_status["size"], ft.Icons.FOLDER)],
-                     col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([status_card], col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([tables_card], col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([records_card], col={"sm": 12, "md": 6, "lg": 3}),
+            ft.Column([size_card], col={"sm": 12, "md": 6, "lg": 3}),
         ]),
         actions_row,
         table_card
@@ -464,8 +453,69 @@ def create_database_view(
     # Create the main container with theme support
     database_container = themed_card(main_content, None, page)  # No title since we have one in content
 
+    def load_database_stats() -> None:
+        """Load database statistics from server and update metric cards."""
+        nonlocal db_status
+
+        if not server_bridge:
+            logger.error("Server bridge not available for database info")
+            return
+
+        try:
+            info_res = server_bridge.get_database_info()
+            if not info_res.get('success'):
+                logger.error(f"Failed to fetch database info: {info_res.get('error', 'Unknown error')}")
+                db_status["status"] = "Database info unavailable"
+            else:
+                db_status = info_res.get('data', db_status)
+                logger.info(f"Database info retrieved successfully: {db_status}")
+
+            # Update metric cards with new data
+            # Structure: ft.Card(content=ft.Container(content=ft.Column([Row, Text])))
+            # The value Text is at card.content.content.controls[1]
+            if hasattr(status_card, 'content') and hasattr(status_card.content, 'content'):
+                column = status_card.content.content
+                if hasattr(column, 'controls') and len(column.controls) > 1:
+                    column.controls[1].value = db_status["status"]
+
+            if hasattr(tables_card, 'content') and hasattr(tables_card.content, 'content'):
+                column = tables_card.content.content
+                if hasattr(column, 'controls') and len(column.controls) > 1:
+                    column.controls[1].value = str(db_status.get("tables", 0))
+
+            if hasattr(records_card, 'content') and hasattr(records_card.content, 'content'):
+                column = records_card.content.content
+                if hasattr(column, 'controls') and len(column.controls) > 1:
+                    column.controls[1].value = str(db_status.get("total_records", 0))
+
+            if hasattr(size_card, 'content') and hasattr(size_card.content, 'content'):
+                column = size_card.content.content
+                if hasattr(column, 'controls') and len(column.controls) > 1:
+                    column.controls[1].value = db_status.get("size", "--")
+
+            # Update the cards if they're attached to the page
+            if hasattr(status_card, 'page') and status_card.page:
+                status_card.update()
+                tables_card.update()
+                records_card.update()
+                size_card.update()
+
+        except Exception as ex:
+            logger.error(f"Exception while fetching database info: {ex}")
+            db_status["status"] = "Error fetching info"
+            # Update status card to show error
+            if hasattr(status_card, 'content') and hasattr(status_card.content, 'content'):
+                column = status_card.content.content
+                if hasattr(column, 'controls') and len(column.controls) > 1:
+                    column.controls[1].value = db_status["status"]
+                    if hasattr(status_card, 'page') and status_card.page:
+                        status_card.update()
+
     def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
+        # Load database statistics first
+        load_database_stats()
+        # Then load table data
         load_data()
 
     def dispose() -> None:

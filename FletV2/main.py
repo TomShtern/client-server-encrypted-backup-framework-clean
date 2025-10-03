@@ -382,8 +382,10 @@ class FletV2App(ft.Row):
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
         print("🔧 About to initialize state manager...")
-        self._initialize_state_manager()
-        print("✅ State manager initialized")
+        # TEMPORARILY DISABLED: State manager causes circular import with dashboard module
+        # self._initialize_state_manager()
+        self.state_manager = None  # Disable state manager for now
+        print("✅ State manager DISABLED (circular import fix)")
         self._profile_mark('state_manager:initialized')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
@@ -488,19 +490,34 @@ class FletV2App(ft.Row):
 
     def _initialize_state_manager(self) -> None:
         """Initialize the state manager for reactive UI updates."""
+        print("🔴 [CRITICAL] _initialize_state_manager method ENTERED")
         try:
+            print("🔴 [CRITICAL] About to import create_state_manager")
             try:
                 # Try package-relative import first
                 from FletV2.utils.state_manager import create_state_manager
+                print("🔴 [CRITICAL] Imported from FletV2.utils.state_manager")
             except ImportError:
                 # Fallback to direct import
                 from utils.state_manager import create_state_manager
+                print("🔴 [CRITICAL] Imported from utils.state_manager")
 
+            print("🔴 [CRITICAL] Import successful, checking create_state_manager function...")
+            print(f"🔴 [CRITICAL] create_state_manager type: {type(create_state_manager)}")
+            print(f"🔴 [CRITICAL] create_state_manager callable: {callable(create_state_manager)}")
+            print("🔴 [CRITICAL] About to call create_state_manager()")
             self.state_manager = create_state_manager(self.server_bridge)
+            print("🔴 [CRITICAL] create_state_manager() returned successfully")
             logger.info("✅ State manager initialized successfully")
         except ImportError as e:
+            print(f"🔴 [CRITICAL] ImportError: {e}")
             logger.warning(f"Could not import state manager: {e}")
             self.state_manager = None
+        except Exception as e:
+            print(f"🔴 [CRITICAL] Exception during state manager init: {e}")
+            import traceback
+            print(f"🔴 [CRITICAL] Traceback: {traceback.format_exc()}")
+            raise
 
     def dispose(self) -> None:
         """Clean up resources when app is disposed."""
@@ -567,7 +584,10 @@ class FletV2App(ft.Row):
         """Navigate to a specific view and sync navigation rail."""
         try:
             # Update navigation rail selected index
-            view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings", "experimental"]
+            view_names = [
+                "dashboard", "clients", "files", "database",
+                "analytics", "logs", "settings", "experimental"
+            ]
             if view_name in view_names:
                 new_index = view_names.index(view_name)
                 if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
@@ -585,12 +605,15 @@ class FletV2App(ft.Row):
 
     def _create_navigation_rail(self) -> ft.Container:
         """Create collapsible navigation rail with premium neumorphic design (40-45% intensity)."""
-        from theme import PRONOUNCED_NEUMORPHIC_SHADOWS, GLASS_MODERATE
+        from theme import GLASS_MODERATE, PRONOUNCED_NEUMORPHIC_SHADOWS
 
         def on_nav_change(e: ft.ControlEvent) -> None:
             try:
                 selected_index = e.control.selected_index
-                view_names = ["dashboard", "clients", "files", "database", "analytics", "logs", "settings", "experimental"]
+                view_names = [
+                    "dashboard", "clients", "files", "database",
+                    "analytics", "logs", "settings", "experimental"
+                ]
                 if 0 <= selected_index < len(view_names):
                     view_name = view_names[selected_index]
                     self.navigate_to(view_name)
@@ -606,7 +629,8 @@ class FletV2App(ft.Row):
                 # Update toggle button icon (access nested IconButton inside container)
                 toggle_button_inner = toggle_button_container.content
                 toggle_button_inner.icon = ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU
-                toggle_button_inner.tooltip = "Collapse sidebar" if self.nav_rail_extended else "Expand sidebar"
+                tooltip_text = "Collapse sidebar" if self.nav_rail_extended else "Expand sidebar"
+                toggle_button_inner.tooltip = tooltip_text
 
                 # Animate container width change
                 nav_container.width = 200 if self.nav_rail_extended else 100
@@ -768,12 +792,15 @@ class FletV2App(ft.Row):
 
     async def initialize(self) -> None:
         """Initialize the application."""
+        print("🔴 [CRITICAL DEBUG] initialize() method ENTERED")
+        logger.info("🚀 FletV2 application initialization started")
         if getattr(self, '_initialized', False):
             logger.debug("initialize() called more than once; ignoring subsequent call")
             return
         try:
             # Apply theme
             setup_modern_theme(self.page)
+            logger.debug("Theme setup complete")
 
             # Add the app to the page
             self.page.add(self)
@@ -790,6 +817,21 @@ class FletV2App(ft.Row):
             self._initialized = True
 
             logger.info("✅ FletV2 application initialized successfully")
+
+            # Load initial dashboard view (page.on_connect won't fire since page is already connected)
+            try:
+                logger.info("📊 Loading initial dashboard view...")
+                self.navigate_to("dashboard")
+                logger.info("✅ Dashboard navigation completed")
+            except Exception as dash_err:
+                logger.error(f"❌ Failed to load dashboard: {dash_err}")
+                import traceback
+                logger.error(f"Dashboard load traceback: {traceback.format_exc()}")
+
+            # Optional internal navigation smoke test
+            if os.environ.get("FLET_NAV_SMOKE") == '1':
+                with contextlib.suppress(Exception):
+                    self.page.run_task(self._run_nav_smoke_test)
         except Exception as e:
             logger.error(f"❌ Application initialization failed: {e}")
             raise
@@ -807,25 +849,23 @@ class FletV2App(ft.Row):
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
-        logger.info(f"🔄 Starting view loading for: {view_name}")
+        logger.info(f"🔄 Loading view: {view_name}")
 
         # Comment 12: Dispose of current view before loading new one
         self._dispose_current_view(view_name)
 
         # Get view configuration
         module_name, function_name, actual_view_name = self._get_view_config(view_name)
-        logger.info(f"📦 View config - module: {module_name}, function: {function_name}")
+        logger.debug(f"View config - module: {module_name}, function: {function_name}")
 
         # Dynamic import and view creation
         try:
-            logger.debug(f"Attempting dynamic import for view module '{module_name}'")
+            logger.debug(f"Importing view module '{module_name}'")
             module = __import__(module_name, fromlist=[function_name])
-            logger.info(f"✅ Successfully imported module: {module_name}")
 
             if not hasattr(module, function_name):
                 raise AttributeError(f"Module '{module_name}' missing '{function_name}'")
             view_function = getattr(module, function_name)
-            logger.info(f"✅ Successfully got view function: {function_name}")
 
             # Call the view function directly with required arguments
             # Dashboard needs navigate_callback for hero card clicks
@@ -833,6 +873,7 @@ class FletV2App(ft.Row):
                 result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
             else:
                 result = view_function(self.server_bridge, self.page, self.state_manager)
+
             # Handle different return types: tuple (content, dispose, setup) or just content
             if isinstance(result, tuple) and len(result) >= 2:
                 content = result[0]
@@ -844,9 +885,9 @@ class FletV2App(ft.Row):
                 content = result
                 dispose_func = lambda: None  # noqa: E731
                 self._current_view_setup = None
-            logger.info(f"✅ Successfully created view content, type: {type(content)}")
+            logger.info(f"✅ View content created for '{view_name}'")
         except Exception as e:
-            logger.error(f"❌ Error during view creation for {view_name}: {e}")
+            logger.error(f"❌ Error loading view '{view_name}': {e}")
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             # Store last error for UI diagnostics
@@ -859,12 +900,18 @@ class FletV2App(ft.Row):
                 logger.warning(f"Rendering inline error panel for failed view '{view_name}'")
                 content = ft.Container(
                     content=ft.Column([
-                        ft.Text(f"❌ Failed to load view: {view_name}", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
+                        ft.Text(
+                            f"❌ Failed to load view: {view_name}",
+                            size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR
+                        ),
                         ft.Text(str(error_details), size=14, color=ft.Colors.ERROR),
                         ft.Text("Traceback (truncated):", size=12, weight=ft.FontWeight.W_600),
                         ft.Text(error_tb, selectable=True, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                         ft.Divider(),
-                        ft.Text("This is a diagnostics panel. Navigate to another view to continue.", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+                        ft.Text(
+                            "This is a diagnostics panel. Navigate to another view to continue.",
+                            size=12, color=ft.Colors.ON_SURFACE_VARIANT
+                        )
                     ], spacing=8, scroll=ft.ScrollMode.ALWAYS),
                     padding=20,
                     bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
@@ -928,7 +975,12 @@ class FletV2App(ft.Row):
             return
 
         # Call setup function asynchronously (AFTER content is rendered)
-        if hasattr(self, '_current_view_setup') and self._current_view_setup and callable(self._current_view_setup):
+        setup_check = (
+            hasattr(self, '_current_view_setup') and
+            self._current_view_setup and
+            callable(self._current_view_setup)
+        )
+        if setup_check:
             setup_func = self._current_view_setup
             self._current_view_setup = None  # Clear immediately to prevent double-calling
 
@@ -937,11 +989,17 @@ class FletV2App(ft.Row):
                 try:
                     await asyncio.sleep(0.1)  # Let Flet complete rendering
                     logger.info(f"Calling delayed setup function for {view_name}")
-                    # Check if setup_func is async and await it if so
-                    if asyncio.iscoroutinefunction(setup_func):
-                        await setup_func()
+                    # Guard against None/non-callable and handle both sync and async functions
+                    if setup_func and callable(setup_func):
+                        try:
+                            if asyncio.iscoroutinefunction(setup_func):
+                                await setup_func()
+                            else:
+                                setup_func()
+                        except Exception as setup_err:
+                            logger.warning(f"Setup function execution failed: {setup_err}")
                     else:
-                        setup_func()
+                        logger.debug("No setup_func to execute (None or not callable); skipping")
                 except Exception as setup_err:
                     logger.warning(f"Setup function failed for {view_name}: {setup_err}")
 
@@ -1033,7 +1091,11 @@ class FletV2App(ft.Row):
                             with contextlib.suppress(Exception):
                                 if hasattr(content, 'page') and content.page:
                                     attached = True
-                                elif hasattr(self, 'content_area') and self.content_area and getattr(self.content_area, 'page', None):
+                                elif (
+                                    hasattr(self, 'content_area') and
+                                    self.content_area and
+                                    getattr(self.content_area, 'page', None)
+                                ):
                                     attached = True
                             if attached:
                                 break
@@ -1055,3 +1117,57 @@ class FletV2App(ft.Row):
         except Exception as sub_error:
             logger.warning(f"Failed to schedule subscription setup for {view_name}: {sub_error}")
 
+    async def _run_nav_smoke_test(self) -> None:
+        """Cycle through all views to surface hidden loading errors.
+
+        Triggered only when env var FLET_NAV_SMOKE=1.
+        """
+        if getattr(self, '_nav_smoke_test_running', False):  # Guard
+            return
+        self._nav_smoke_test_running = True
+        view_names = [
+            "dashboard", "clients", "files", "database",
+            "analytics", "logs", "settings", "experimental"
+        ]
+        logger.info("[SMOKE] Starting navigation smoke test across %d views", len(view_names))
+        errors: list[str] = []
+        for name in view_names:
+            try:
+                logger.info(f"[SMOKE] Navigating to {name} ...")
+                self.navigate_to(name)
+                await asyncio.sleep(0.35)  # Allow rendering & setup
+                if self._last_view_error and self._last_view_error.startswith(name):
+                    errors.append(self._last_view_error)
+            except Exception as nav_err:  # noqa: PERF203 - explicit logging
+                err_msg = f"{name}: {nav_err}"
+                errors.append(err_msg)
+                logger.error(f"[SMOKE] Error navigating to {name}: {nav_err}")
+        if errors:
+            logger.warning("[SMOKE] Completed with %d view errors", len(errors))
+            for e in errors:
+                logger.warning(f"[SMOKE][ERROR] {e}")
+        else:
+            logger.info("[SMOKE] All views loaded without detected errors")
+        self._nav_smoke_test_running = False
+
+
+if __name__ == "__main__":
+    import flet as ft
+
+    def main(page: ft.Page) -> None:
+        """Main entry point for GUI-only mode (no server integration)."""
+        logger.info("🚀 Launching FletV2 in GUI-only mode (no server)")
+        # Create app without server bridge (will use placeholder data)
+        app = FletV2App(page, real_server=None)
+        page.run_task(app.initialize)
+
+    # Launch in web browser mode with port fallback
+    try:
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550)
+    except OSError:
+        logger.warning("Port 8550 in use, trying 8551...")
+        try:
+            ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8551)
+        except OSError:
+            logger.warning("Port 8551 in use, trying 8552...")
+            ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8552)

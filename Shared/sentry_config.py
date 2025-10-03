@@ -5,7 +5,7 @@ Shared Sentry Configuration for CyberBackup Framework
 
 Centralized Sentry setup for consistent error monitoring across all Python components:
 - Flask API Server
-- Python Backup Server  
+- Python Backup Server
 - Server GUI (already integrated)
 - Launch scripts
 
@@ -35,7 +35,7 @@ def init_sentry(
 ) -> bool:
     """
     Initialize Sentry error monitoring for a component.
-    
+
     Args:
         component_name: Name of the component (e.g., "api-server", "backup-server")
         dsn: Optional custom DSN (defaults to SENTRY_DSN)
@@ -43,10 +43,13 @@ def init_sentry(
         debug: Enable Sentry debug mode
         sample_rate: Error sampling rate (1.0 = all errors)
         traces_sample_rate: Performance tracing sample rate
-        
+
     Returns:
         bool: True if Sentry was successfully initialized, False otherwise
     """
+    # TEMPORARY: Disable Sentry to debug FletV2 GUI initialization issues
+    return False
+
     try:
         import sentry_sdk
         from sentry_sdk.integrations.logging import LoggingIntegration
@@ -140,7 +143,7 @@ def _get_release_version() -> str:
 def capture_error(error: Exception, component: str, extra_context: dict[str, Any] | None = None) -> None:
     """
     Capture an error with additional context.
-    
+
     Args:
         error: The exception to capture
         component: Component where the error occurred
@@ -167,7 +170,7 @@ def capture_error(error: Exception, component: str, extra_context: dict[str, Any
 def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: dict[str, Any] | None = None) -> None:
     """
     Capture a message with additional context.
-    
+
     Args:
         message: Message to capture
         level: Message level (debug, info, warning, error, fatal)

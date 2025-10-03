@@ -35,24 +35,11 @@ def create_analytics_view(
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], None]]:
     """Create analytics view with charts and metrics."""
 
-    # Fetch data from server
-    if server_bridge and hasattr(server_bridge, 'get_analytics_data'):
-        try:
-            server_data = server_bridge.get_analytics_data()
-            if isinstance(server_data, dict) and server_data.get('success'):
-                data = server_data.get('data', {})
-                metrics = {
-                    'total_backups': data.get('total_backups', 0),
-                    'total_storage_gb': data.get('total_storage_gb', 0),
-                    'success_rate': data.get('success_rate', 0.0),
-                    'avg_backup_size_gb': data.get('avg_backup_size_gb', 0.0)
-                }
-            else:
-                metrics = {'total_backups': 0, 'total_storage_gb': 0, 'success_rate': 0.0, 'avg_backup_size_gb': 0.0}
-        except Exception:
-            metrics = {'total_backups': 0, 'total_storage_gb': 0, 'success_rate': 0.0, 'avg_backup_size_gb': 0.0}
-    else:
-        metrics = {'total_backups': 0, 'total_storage_gb': 0, 'success_rate': 0.0, 'avg_backup_size_gb': 0.0}
+    # Initialize with placeholder data (will load async in setup_subscriptions)
+    metrics = {'total_backups': 0, 'total_storage_gb': 0, 'success_rate': 0.0, 'avg_backup_size_gb': 0.0}
+    backup_trend_data = []
+    client_storage_data = []
+    file_type_data = []
 
     # Metric card helper
     def create_metric_card(title: str, value: str, icon: str, color: str, is_empty: bool = False) -> ft.Container:
@@ -146,143 +133,73 @@ def create_analytics_view(
         ),
     ], spacing=16)
 
-    # Backup trend chart - handle empty or server data
-    backup_trend_data = []
-    if server_bridge and hasattr(server_bridge, 'get_analytics_data'):
-        try:
-            trend_data = server_bridge.get_analytics_data()
-            if trend_data and trend_data.get('success'):
-                backup_trend_data = trend_data.get('data', {}).get('backup_trend', [])
-        except Exception:
-            pass
+    # Backup trend chart - SIMPLIFIED to prevent browser crashes
+    # Complex charts (LineChart) cause fatal glitches in Flet 0.28.3
+    # backup_trend_data initialized at top with empty list, will be loaded async
 
-    backup_trend_chart = (
-        ft.LineChart(
-            data_series=[
-                ft.LineChartData(
-                    data_points=[
-                        ft.LineChartDataPoint(x, y)
-                        for x, y in enumerate(backup_trend_data[:7])
-                    ] if backup_trend_data else [],
-                    stroke_width=3,
-                    color=ft.Colors.BLUE_400,
-                    curved=True,
-                    stroke_cap_round=True,
-                )
-            ] if backup_trend_data else [],
-            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
-            horizontal_grid_lines=ft.ChartGridLines(
-                interval=10,
-                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
-                width=1,
-            ),
-            vertical_grid_lines=ft.ChartGridLines(
-                interval=1,
-                color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
-                width=1,
-            ),
-            left_axis=ft.ChartAxis(
-                labels_size=40,
-                title=ft.Text("Backups", size=12),
-            ),
-            bottom_axis=ft.ChartAxis(
-                labels_size=32,
-                title=ft.Text("Days", size=12),
-            ),
-            tooltip_bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.SURFACE),
-            min_y=0,
-            max_y=max(backup_trend_data) if backup_trend_data else 50,
-            min_x=0,
-            max_x=len(backup_trend_data) - 1 if backup_trend_data else 6,
-        )
-    )
-
-    # Storage by client chart
-    client_storage_data = []
-    if server_bridge and hasattr(server_bridge, 'get_analytics_data'):
-        try:
-            storage_data = server_bridge.get_analytics_data()
-            if storage_data and storage_data.get('success'):
-                client_storage_data = storage_data.get('data', {}).get('client_storage', [])
-        except Exception:
-            pass
-
-    storage_chart = ft.BarChart(
-        bar_groups=[
-            ft.BarChartGroup(
-                x=x,
-                bar_rods=[
-                    ft.BarChartRod(
-                        from_y=0,
-                        to_y=storage,
-                        width=40,
-                        color=color,
-                        border_radius=4
-                    )
-                ]
+    # Simple bar visualization instead of LineChart
+    backup_trend_bars = ft.Column([
+        ft.Row([
+            ft.Container(
+                width=40,
+                height=max(1, int(val * 3)) if backup_trend_data else 20,  # Scale height
+                bgcolor=ft.Colors.BLUE_400,
+                border_radius=4,
+                tooltip=f"Day {i+1}: {val} backups" if backup_trend_data else "",
             )
-            for x, (storage, color) in enumerate(
-                zip(
-                    client_storage_data[:4],
-                    [ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.AMBER_400]
-                )
-            )
-        ] if client_storage_data else [],
-        border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
-        horizontal_grid_lines=ft.ChartGridLines(
-            interval=200,
-            color=ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE),
-            width=1,
-        ),
-        left_axis=ft.ChartAxis(
-            labels_size=40,
-            title=ft.Text("Storage (GB)", size=12),
-        ),
-        bottom_axis=ft.ChartAxis(
-            labels=[
-                ft.ChartAxisLabel(value=x, label=ft.Text(f"Client {x+1}", size=10))
-                for x in range(len(client_storage_data[:4]))
-            ] if client_storage_data else [],
-            labels_size=32,
-        ),
-        tooltip_bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.SURFACE),
-        max_y=max(client_storage_data) if client_storage_data else 1400,
-    )
+            for i, val in enumerate(backup_trend_data[:7] if backup_trend_data else [10, 20, 15, 25, 30, 22, 28])
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+        ft.Row([
+            ft.Text(f"{i+1}", size=10, color=ft.Colors.GREY)
+            for i in range(7)
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+    ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
-    # File type distribution chart
-    file_type_data = []
-    if server_bridge and hasattr(server_bridge, 'get_analytics_data'):
-        try:
-            type_data = server_bridge.get_analytics_data()
-            if type_data and type_data.get('success'):
-                file_type_data = type_data.get('data', {}).get('file_type_distribution', [])
-        except Exception:
-            pass
+    # Storage by client chart - SIMPLIFIED to prevent crashes
+    # client_storage_data initialized at top with empty list, will be loaded async
+
+    # Simple progress bars instead of BarChart
+    storage_bars = ft.Column([
+        ft.Row([
+            ft.Text(f"Client {i+1}", size=12, width=80),
+            ft.Container(
+                content=ft.ProgressBar(value=val/1400 if client_storage_data else 0.3, color=color, bgcolor=ft.Colors.with_opacity(0.2, color)),
+                expand=True,
+            ),
+            ft.Text(f"{val} GB" if client_storage_data else f"{int(val*1000)} GB", size=12, width=80),
+        ], spacing=12)
+        for i, (val, color) in enumerate(zip(
+            client_storage_data[:4] if client_storage_data else [0.8, 0.6, 0.4, 0.5],
+            [ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.AMBER_400]
+        ))
+    ], spacing=16)
+
+    # File type distribution chart - SIMPLIFIED to prevent crashes
+    # file_type_data initialized at top with empty list, will be loaded async
 
     colors = [ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.AMBER_400]
     default_labels = ['Documents', 'Images', 'Videos', 'Other']
+    default_values = [40, 30, 20, 10]
 
-    file_type_chart = ft.PieChart(
-        sections=[
-            ft.PieChartSection(
-                value=value,
-                title=label,
-                color=color,
-                radius=80,
-            )
-            for (value, label), color in zip(
+    # Simple circular progress indicators instead of PieChart
+    file_type_viz = ft.Column([
+        ft.Row([
+            ft.Column([
+                ft.ProgressRing(value=val/100, color=color, width=80, height=80, stroke_width=8),
+                ft.Text(label, size=12, text_align=ft.TextAlign.CENTER),
+                ft.Text(f"{val}%", size=10, color=ft.Colors.GREY),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+            for (val, label), color in zip(
                 zip(
-                    file_type_data if file_type_data else [40, 30, 20, 10],
+                    file_type_data if file_type_data else default_values,
                     file_type_data and len(file_type_data) >= 4
                     and ['Custom1', 'Custom2', 'Custom3', 'Custom4']
                     or default_labels
                 ),
                 colors
             )
-        ],
-        sections_space=2,
-        center_space_radius=0,
-    )
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, wrap=True),
+    ], spacing=16, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
     charts_row = ft.ResponsiveRow([
         # Backup trends
@@ -290,7 +207,7 @@ def create_analytics_view(
             content=ft.Column([
                 ft.Text("Backup Trends" if backup_trend_data else "No Backup Trends", size=18, weight=ft.FontWeight.W_600),
                 ft.Container(
-                    content=backup_trend_chart if backup_trend_data else ft.Column([
+                    content=backup_trend_bars if backup_trend_data else ft.Column([
                         ft.Icon(ft.Icons.SHOW_CHART, size=64, color=ft.Colors.GREY),
                         ft.Text("No backup trend data available", color=ft.Colors.GREY)
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -309,7 +226,7 @@ def create_analytics_view(
             content=ft.Column([
                 ft.Text("File Type Distribution" if file_type_data else "No File Type Distribution", size=18, weight=ft.FontWeight.W_600),
                 ft.Container(
-                    content=file_type_chart if file_type_data else ft.Column([
+                    content=file_type_viz if file_type_data else ft.Column([
                         ft.Icon(ft.Icons.PIE_CHART_OUTLINE, size=64, color=ft.Colors.GREY),
                         ft.Text("No file type data available", color=ft.Colors.GREY)
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -330,7 +247,7 @@ def create_analytics_view(
         content=ft.Column([
             ft.Text("Storage by Client" if client_storage_data else "No Client Storage Data", size=18, weight=ft.FontWeight.W_600),
             ft.Container(
-                content=storage_chart if client_storage_data else ft.Column([
+                content=storage_bars if client_storage_data else ft.Column([
                     ft.Icon(ft.Icons.STORAGE, size=64, color=ft.Colors.GREY),
                     ft.Text("No storage data available", color=ft.Colors.GREY)
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -382,12 +299,144 @@ def create_analytics_view(
         expand=True,
     )
 
+    def load_analytics_data() -> None:
+        """Load analytics data from server and update UI controls."""
+        nonlocal metrics, backup_trend_data, client_storage_data, file_type_data
+
+        if not server_bridge or not hasattr(server_bridge, 'get_analytics_data'):
+            # No server bridge available, keep placeholder data
+            return
+
+        try:
+            # Fetch analytics data from server
+            server_data = server_bridge.get_analytics_data()
+            if not isinstance(server_data, dict) or not server_data.get('success'):
+                # Server call failed, keep placeholder data
+                return
+
+            data = server_data.get('data', {})
+
+            # Update metrics
+            metrics = {
+                'total_backups': data.get('total_backups', 0),
+                'total_storage_gb': data.get('total_storage_gb', 0),
+                'success_rate': data.get('success_rate', 0.0),
+                'avg_backup_size_gb': data.get('avg_backup_size_gb', 0.0)
+            }
+
+            # Update chart data
+            backup_trend_data = data.get('backup_trend', [])
+            client_storage_data = data.get('client_storage', [])
+            file_type_data = data.get('file_type_distribution', [])
+
+            # Rebuild metric cards with new data
+            metrics_empty = metrics['total_backups'] == 0 and metrics['total_storage_gb'] == 0
+            new_metrics = [
+                create_metric_card(
+                    "Total Backups" if not metrics_empty else "No Backups Found",
+                    str(metrics['total_backups']) if not metrics_empty else "",
+                    ft.Icons.BACKUP if not metrics_empty else ft.Icons.INFO_OUTLINE,
+                    ft.Colors.BLUE_400 if not metrics_empty else ft.Colors.GREY,
+                    is_empty=metrics_empty
+                ),
+                create_metric_card(
+                    "Total Storage" if not metrics_empty else "No Storage Data",
+                    f"{metrics['total_storage_gb']} GB" if not metrics_empty else "",
+                    ft.Icons.STORAGE if not metrics_empty else ft.Icons.INFO_OUTLINE,
+                    ft.Colors.GREEN_400 if not metrics_empty else ft.Colors.GREY,
+                    is_empty=metrics_empty
+                ),
+                create_metric_card(
+                    "Success Rate" if not metrics_empty else "No Success Data",
+                    f"{metrics['success_rate']}%" if not metrics_empty else "",
+                    ft.Icons.CHECK_CIRCLE if not metrics_empty else ft.Icons.INFO_OUTLINE,
+                    ft.Colors.PURPLE_400 if not metrics_empty else ft.Colors.GREY,
+                    is_empty=metrics_empty
+                ),
+                create_metric_card(
+                    "Avg Backup Size" if not metrics_empty else "No Backup Size Data",
+                    f"{metrics['avg_backup_size_gb']} GB" if not metrics_empty else "",
+                    ft.Icons.PIE_CHART if not metrics_empty else ft.Icons.INFO_OUTLINE,
+                    ft.Colors.AMBER_400 if not metrics_empty else ft.Colors.GREY,
+                    is_empty=metrics_empty
+                ),
+            ]
+
+            # Update metrics row controls
+            if hasattr(metrics_row, 'controls') and len(metrics_row.controls) == 4:
+                for i, new_card in enumerate(new_metrics):
+                    metrics_row.controls[i].content = new_card
+
+            # Update backup trend bars
+            new_bars = ft.Row([
+                ft.Container(
+                    width=40,
+                    height=max(1, int(val * 3)),
+                    bgcolor=ft.Colors.BLUE_400,
+                    border_radius=4,
+                    tooltip=f"Day {i+1}: {val} backups",
+                )
+                for i, val in enumerate(backup_trend_data[:7] if backup_trend_data else [])
+            ], alignment=ft.MainAxisAlignment.SPACE_EVENLY)
+
+            if hasattr(backup_trend_bars, 'controls') and len(backup_trend_bars.controls) > 0:
+                backup_trend_bars.controls[0] = new_bars
+
+            # Update storage bars
+            if client_storage_data:
+                new_storage_bars = [
+                    ft.Row([
+                        ft.Text(f"Client {i+1}", size=12, width=80),
+                        ft.Container(
+                            content=ft.ProgressBar(value=val/1400, color=color, bgcolor=ft.Colors.with_opacity(0.2, color)),
+                            expand=True,
+                        ),
+                        ft.Text(f"{val} GB", size=12, width=80),
+                    ], spacing=12)
+                    for i, (val, color) in enumerate(zip(
+                        client_storage_data[:4],
+                        [ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.AMBER_400]
+                    ))
+                ]
+                if hasattr(storage_bars, 'controls'):
+                    storage_bars.controls = new_storage_bars
+
+            # Update file type visualization
+            if file_type_data and len(file_type_data) >= 4:
+                new_file_type_viz = ft.Row([
+                    ft.Column([
+                        ft.ProgressRing(value=val/100, color=color, width=80, height=80, stroke_width=8),
+                        ft.Text(label, size=12, text_align=ft.TextAlign.CENTER),
+                        ft.Text(f"{val}%", size=10, color=ft.Colors.GREY),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+                    for (val, label), color in zip(
+                        zip(file_type_data[:4], ['Type 1', 'Type 2', 'Type 3', 'Type 4']),
+                        colors
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, wrap=True)
+
+                if hasattr(file_type_viz, 'controls') and len(file_type_viz.controls) > 0:
+                    file_type_viz.controls[0] = new_file_type_viz
+
+            # Update all controls if attached to page
+            if hasattr(metrics_row, 'page') and metrics_row.page:
+                metrics_row.update()
+                backup_trend_bars.update()
+                storage_bars.update()
+                file_type_viz.update()
+
+        except Exception as ex:
+            # Log error but don't crash the UI
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to load analytics data: {ex}")
+
     def dispose():
         """Cleanup."""
         pass
 
     def setup_subscriptions():
-        """Setup."""
-        pass
+        """Setup - Load analytics data asynchronously after view is attached."""
+        load_analytics_data()
 
     return main_container, dispose, setup_subscriptions
