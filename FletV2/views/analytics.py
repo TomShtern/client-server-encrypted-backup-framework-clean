@@ -433,12 +433,30 @@ def create_analytics_view(
                     and hasattr(file_type_viz, 'page') and file_type_viz.page):
                     file_type_viz.controls[0] = new_file_type_viz
 
-            # Update all controls if attached to page
+            # Update all controls if attached to page (each control checked individually)
             if hasattr(metrics_row, 'page') and metrics_row.page:
-                metrics_row.update()
-                backup_trend_bars.update()
-                storage_bars.update()
-                file_type_viz.update()
+                try:
+                    metrics_row.update()
+                except Exception:
+                    pass  # Silently ignore if not yet attached
+
+            if hasattr(backup_trend_bars, 'page') and backup_trend_bars.page:
+                try:
+                    backup_trend_bars.update()
+                except Exception:
+                    pass
+
+            if hasattr(storage_bars, 'page') and storage_bars.page:
+                try:
+                    storage_bars.update()
+                except Exception:
+                    pass
+
+            if hasattr(file_type_viz, 'page') and file_type_viz.page:
+                try:
+                    file_type_viz.update()
+                except Exception:
+                    pass
 
         except Exception as ex:
             # Log error but don't crash the UI
@@ -452,9 +470,11 @@ def create_analytics_view(
 
     async def setup_subscriptions():
         """Setup - Load analytics data asynchronously after view is attached."""
-        # Longer delay to ensure view is fully attached to page (prevents "Control must be added to page first" error)
+        # CRITICAL: Delay to ensure view is fully attached to page AND AnimatedSwitcher transition completed
+        # Total delay chain: main.py (250ms) + this (500ms) = 750ms total
+        # This prevents "Control must be added to page first" errors
         import asyncio
-        await asyncio.sleep(0.2)  # Increased from 0.05 to 0.2 seconds
+        await asyncio.sleep(0.5)  # Increased from 0.2 to 0.5 seconds for robust page attachment
 
         # Load data asynchronously using TRUE async function (NOT fake wrapper!)
         page.run_task(load_analytics_data_async)

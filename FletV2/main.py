@@ -913,19 +913,30 @@ class FletV2App(ft.Row):
 
         # Dynamic import and view creation
         try:
+            print(f"🔴 [IMPORT] About to import module '{module_name}' for view '{view_name}'")
             logger.debug(f"Importing view module '{module_name}'")
             module = __import__(module_name, fromlist=[function_name])
+            print(f"🔴 [IMPORT] Module imported successfully: {module}")
 
+            print(f"🔴 [IMPORT] Checking if module has function '{function_name}'")
             if not hasattr(module, function_name):
                 raise AttributeError(f"Module '{module_name}' missing '{function_name}'")
             view_function = getattr(module, function_name)
+            print(f"🔴 [IMPORT] Got view function: {view_function}")
 
             # Call the view function directly with required arguments
             # Dashboard needs navigate_callback for hero card clicks
+            print(f"🔴 [CALL] About to call view function for '{view_name}'")
             if view_name == "dashboard":
                 result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
             else:
                 result = view_function(self.server_bridge, self.page, self.state_manager)
+            print(f"🔴 [CALL] View function returned: {type(result)}")
+
+            # DEBUG: Log result structure
+            logger.info(f"🔍 [{view_name.upper()}] Result type: {type(result)}, is tuple: {isinstance(result, tuple)}, len: {len(result) if isinstance(result, tuple) else 'N/A'}")
+            if isinstance(result, tuple) and len(result) >= 2:
+                logger.info(f"🔍 [{view_name.upper()}] result[0] type: {type(result[0])}, result[1] callable: {callable(result[1])}, result[2] exists: {len(result) > 2}, result[2] callable: {callable(result[2]) if len(result) > 2 else 'N/A'}")
 
             # Handle different return types: tuple (content, dispose, setup) or just content
             if isinstance(result, tuple) and len(result) >= 2:
@@ -934,6 +945,7 @@ class FletV2App(ft.Row):
                 setup_func = result[2] if len(result) > 2 else None
                 # Store setup function to be called AFTER content is added to page
                 self._current_view_setup = setup_func
+                logger.info(f"🔍 [{view_name.upper()}] Stored setup_func: {setup_func}, callable: {callable(setup_func) if setup_func else False}")
             else:
                 content = result
                 dispose_func = lambda: None  # noqa: E731
@@ -941,9 +953,13 @@ class FletV2App(ft.Row):
             logger.info(f"✅ View content created for '{view_name}'")
             print(f"🟣 [PERFORM_VIEW] logger.info executed successfully for '{view_name}'")
         except Exception as e:
+            print(f"🔴 [ERROR] Exception caught for view '{view_name}': {e}")
+            print(f"🔴 [ERROR] Exception type: {type(e)}")
             logger.error(f"❌ Error loading view '{view_name}': {e}")
             import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            tb_str = traceback.format_exc()
+            print(f"🔴 [ERROR] Traceback:\n{tb_str}")
+            logger.error(f"Full traceback: {tb_str}")
             # Store last error for UI diagnostics
             self._last_view_error = f"{view_name}: {e}"
             # Special handling: if dashboard fails, attempt stub
@@ -1043,13 +1059,13 @@ class FletV2App(ft.Row):
             return
 
         # Call setup function asynchronously (AFTER content is rendered)
-        logger.debug(f"[POST_UPDATE] Checking setup for {view_name}, has attr: {hasattr(self, '_current_view_setup')}, value: {getattr(self, '_current_view_setup', 'NO_ATTR')}, callable: {callable(getattr(self, '_current_view_setup', None)) if hasattr(self, '_current_view_setup') else False}")
+        logger.info(f"[POST_UPDATE] Checking setup for {view_name}, has attr: {hasattr(self, '_current_view_setup')}, value: {getattr(self, '_current_view_setup', 'NO_ATTR')}, callable: {callable(getattr(self, '_current_view_setup', None)) if hasattr(self, '_current_view_setup') else False}")
         setup_check = (
             hasattr(self, '_current_view_setup') and
             self._current_view_setup and
             callable(self._current_view_setup)
         )
-        logger.debug(f"[POST_UPDATE] setup_check result for {view_name}: {setup_check}")
+        logger.info(f"[POST_UPDATE] setup_check result for {view_name}: {setup_check}")
         if setup_check:
             setup_func = self._current_view_setup
             self._current_view_setup = None  # Clear immediately to prevent double-calling

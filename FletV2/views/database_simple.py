@@ -70,7 +70,7 @@ DEFAULT_TABLE = "clients"
 DEFAULT_TABLE_OPTIONS: tuple[str, ...] = ("clients", "files", "logs", "settings", "backups")
 MAX_VISIBLE_RECORDS = 50
 MAX_EXPORT_RECORDS = 10_000
-SETUP_DELAY_SECONDS = 0.2
+SETUP_DELAY_SECONDS = 0.5  # Increased from 0.2 to ensure controls fully attached
 SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "key_material"}
 
 
@@ -81,7 +81,9 @@ def create_database_view(
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create lightweight database management view."""
 
-    logger.info("Initializing lightweight database view (ListView-based)")
+    print("🔴 [DATABASE_VIEW] Function ENTERED")
+    logger.info("🔴 [DATABASE_VIEW] Initializing lightweight database view (ListView-based)")
+    print("🔴 [DATABASE_VIEW] Logger.info completed")
 
     current_table = DEFAULT_TABLE
     available_tables: list[str] = list(DEFAULT_TABLE_OPTIONS)
@@ -136,7 +138,7 @@ def create_database_view(
         ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(ft.Icons.DATABASE, size=48, color=ft.Colors.GREY_500),
+                    ft.Icon(ft.Icons.DATASET, size=48, color=ft.Colors.GREY_500),
                     ft.Text("Database view is ready", size=16, color=ft.Colors.GREY_500),
                     ft.Text(
                         "Connect the backup server and choose a table to load records.",
@@ -196,6 +198,16 @@ def create_database_view(
                 loading_indicator.update()
 
     def update_database_info_ui() -> None:
+        print("🔵 [UPDATE_DB_INFO] Function called")
+        # CRITICAL: Only modify controls if ALL are attached to page
+        attached = all(_control_attached(c) for c in (db_status_value, db_tables_value, db_records_value, db_size_value, add_button))
+        print(f"🔵 [UPDATE_DB_INFO] All controls attached: {attached}")
+        if not attached:
+            logger.debug("Database info controls not yet attached, skipping update")
+            print("🔵 [UPDATE_DB_INFO] Returning early - controls not attached")
+            return
+        print("🔵 [UPDATE_DB_INFO] Controls attached, proceeding with update")
+
         db_status_value.value = db_info.get("status", "Unknown")
         status_lower = db_info.get("status", "").lower()
         if "connected" in status_lower:
@@ -210,14 +222,22 @@ def create_database_view(
         db_size_value.value = db_info.get("size", "0 MB")
 
         for control in (db_status_value, db_tables_value, db_records_value, db_size_value):
-            if _control_attached(control):
-                control.update()
+            control.update()
 
         add_button.disabled = not server_available()
-        if _control_attached(add_button):
-            add_button.update()
+        add_button.update()
 
     def update_table_dropdown() -> None:
+        print("🔵 [UPDATE_DROPDOWN] Function called")
+        # CRITICAL: Only modify dropdown if attached to page
+        attached = _control_attached(table_dropdown)
+        print(f"🔵 [UPDATE_DROPDOWN] Dropdown attached: {attached}")
+        if not attached:
+            logger.debug("Table dropdown not yet attached, skipping update")
+            print("🔵 [UPDATE_DROPDOWN] Returning early - dropdown not attached")
+            return
+        print("🔵 [UPDATE_DROPDOWN] Dropdown attached, proceeding with update")
+
         options = available_tables or list(DEFAULT_TABLE_OPTIONS)
         table_dropdown.options = [
             ft.dropdown.Option(table, table.replace("_", " ").title())
@@ -234,8 +254,7 @@ def create_database_view(
         else:
             table_dropdown.helper_text = "Server disconnected"
 
-        if _control_attached(table_dropdown):
-            table_dropdown.update()
+        table_dropdown.update()
 
     def build_record_tile(record: dict[str, Any], index: int) -> ft.Container:
         display_keys: list[str] = table_columns or list(record.keys())
@@ -308,6 +327,16 @@ def create_database_view(
         )
 
     def refresh_records_list() -> None:
+        print("🔵 [REFRESH_RECORDS] Function called")
+        # CRITICAL: Only modify ListView controls if attached to page
+        attached = _control_attached(records_list)
+        print(f"🔵 [REFRESH_RECORDS] Records list attached: {attached}")
+        if not attached:
+            logger.debug("Records list not yet attached, skipping update")
+            print("🔵 [REFRESH_RECORDS] Returning early - list not attached")
+            return
+        print("🔵 [REFRESH_RECORDS] List attached, proceeding with update")
+
         records_list.controls.clear()
 
         if not filtered_records:
@@ -349,8 +378,7 @@ def create_database_view(
                     )
                 )
 
-        if _control_attached(records_list):
-            records_list.update()
+        records_list.update()
 
     def apply_search_filter() -> None:
         nonlocal filtered_records
@@ -641,7 +669,9 @@ def create_database_view(
                 update_database_info_ui()
                 return
 
-            result = await bridge.get_database_info_async()
+            # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, bridge.get_database_info)
             if result.get("success") and result.get("data"):
                 db_info = result["data"]
             else:
@@ -705,7 +735,9 @@ def create_database_view(
                 table_columns = []
                 return
 
-            result = await bridge.get_table_data_async(current_table)
+            # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
             if result.get("success"):
                 data = result.get("data", {})
                 table_columns = list(data.get("columns", []))
@@ -853,9 +885,12 @@ def create_database_view(
     table_dropdown.on_change = on_table_change
     search_field.on_change = on_search_change
 
-    update_table_dropdown()
-    update_database_info_ui()
-    refresh_records_list()
+    # CRITICAL FIX: Do NOT update controls during view creation!
+    # These updates will freeze the UI if called before the view is attached to the page.
+    # All UI updates are now deferred to the setup() function.
+    # update_table_dropdown()     # ❌ REMOVED - causes freeze
+    # update_database_info_ui()   # ❌ REMOVED - causes freeze
+    # refresh_records_list()      # ❌ REMOVED - causes freeze
 
     # ------------------------------------------------------------------
     # LIFECYCLE HOOKS
@@ -863,13 +898,29 @@ def create_database_view(
     async def setup() -> None:
         """Setup function - load initial data."""
 
-        logger.info("Setting up database view (async)")
+        print("🔴 [DATABASE_SETUP] Setup function CALLED")
+        logger.info("🔴 [DATABASE_SETUP] Setting up database view (async)")
+        print("🔴 [DATABASE_SETUP] About to call update functions")
         try:
+            # CRITICAL: Initialize UI state AFTER view is attached to page
+            print("🔴 [DATABASE_SETUP] Calling update_table_dropdown()")
+            update_table_dropdown()
+            print("🔴 [DATABASE_SETUP] Calling update_database_info_ui()")
+            update_database_info_ui()
+            print("🔴 [DATABASE_SETUP] Calling refresh_records_list()")
+            refresh_records_list()
+            print("🔴 [DATABASE_SETUP] All update functions completed")
+
             # Allow AnimatedSwitcher transition to finish before loading data
+            print(f"🔴 [DATABASE_SETUP] About to sleep for {SETUP_DELAY_SECONDS}s")
             await asyncio.sleep(SETUP_DELAY_SECONDS)
+            print("🔴 [DATABASE_SETUP] Sleep completed, loading database info")
             await load_database_info_async()
+            print("🔴 [DATABASE_SETUP] Database info loaded, loading table names")
             await load_table_names_async()
+            print("🔴 [DATABASE_SETUP] Table names loaded, loading table data")
             await load_table_data_async()
+            print("🔴 [DATABASE_SETUP] All async loading completed successfully!")
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Database view setup failed: %s", exc)
 
@@ -878,4 +929,8 @@ def create_database_view(
 
         logger.debug("Disposing database view")
 
-    return main_container, dispose, setup
+    print(f"🔴 [DATABASE_VIEW] About to return tuple: (main_container={type(main_container)}, dispose={type(dispose)}, setup={type(setup)})")
+    logger.info(f"🔴 [DATABASE_VIEW] Returning view tuple with setup function: {setup}")
+    result = (main_container, dispose, setup)
+    print(f"🔴 [DATABASE_VIEW] Result tuple created, len={len(result)}, types={[type(x) for x in result]}")
+    return result

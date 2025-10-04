@@ -137,11 +137,11 @@ def create_*_view(
         """Cleanup subscriptions, cancel tasks."""
         pass
 
-    def setup_subscriptions():
+    def setup():
         """Initialize data loading, event handlers."""
         pass
 
-    return view_control, dispose, setup_subscriptions
+    return view_control, dispose, setup
 ```
 
 ### 3. Binary Protocol Structure
@@ -354,6 +354,8 @@ def convert_backupserver_client_to_fletv2(client_data: dict) -> dict:
 4. **View Setup Timing:** Calling `setup_func()` before view is attached to page causes null reference errors
 5. **Environment Flags:** Missing `CYBERBACKUP_DISABLE_INTEGRATED_GUI=1` launches duplicate GUIs
 6. **transfer.info Format:** C++ client expects exactly 3 lines (server:port, username, filepath)
+7. **Flet GUI Launch:** Failing to use the PowerShell launcher (`start_with_server.ps1`) results in `pydantic` import errors.
+8. **Flet App Still Stuck Loading:** The port is already in use from the previous session. The app is trying to start but can't bind to the port because the old instance is still running. Ensure the previous instance is fully closed.
 
 ## 📁 Key Files Reference
 
@@ -416,7 +418,7 @@ FLET_DASHBOARD_DEBUG=1                # Enable dashboard debugging
 - **Subprocess failures:** Verify `transfer.info` format (3 lines: server:port, username, filepath)
 
 ### Flet GUI Icon Replacement
-- In the database view, `ft.Icons.DATABASE` is not available in the current Flet version. Replace with `ft.Icons.DATASET`.
+- In the database view, `ft.Icons.DATABASE` is not available in the current Flet version. Replace with `ft.Icons.DATABASE` with `ft.Icons.DATASET`.
 
 ### Flet GUI Freezing Issues
 - If the Flet GUI freezes upon navigating to the database page, especially when using `flet==0.28.3` and Python 3.13.5 on Windows 11, consider the following:
@@ -427,10 +429,12 @@ FLET_DASHBOARD_DEBUG=1                # Enable dashboard debugging
 - When debugging Flet GUI issues, launch the Flet GUI in hot reload in the browser.
 
 ### Resolved Issues & Actions Taken (2025-10-04)
-- **Database View Freezing:** Resolved by replacing the DataTable with a ListView in `database_simple.py` to improve performance and prevent UI freezes during hot reload sessions.
+- **Database View Freezing:** Resolved by replacing the DataTable with a ListView in `database_simple.py` to improve performance and prevent UI freezes during hot reload sessions. Furthermore, the three function calls `update_table_dropdown()`, `update_database_info_ui()`, and `refresh_records_list()` were moved from view creation to the `setup()` function to prevent UI update calls before the view is attached to the page.
 - **Pylance Errors:** Addressed a spike in Pylance errors by reorganizing button wiring in `database_simple.py`, tightening server connection checks, and tweaking status/helper text handling. The errors were caused by event handlers being bound before their definitions and from optional `server_bridge` accesses that weren’t type-narrowed. A `get_active_bridge()` helper was added, along with stricter guards to ensure async bridge APIs are only called when the real server is present.
 - **Codacy Analysis:** The `codacy_cli_analyze` MCP tool was unavailable. To enable it, double-check Copilot MCP settings (GitHub Settings → Copilot → Enable MCP servers). If the issue persists, contact Codacy support to reconnect the repository.
 - **VS Code Settings Conflict:** Resolved a VS Code settings conflict by removing the workspace-level `"python.analysis.typeCheckingMode"` setting from `.vscode/settings.json`. Pyright's configuration (either in `pyrightconfig.json` or `pyproject.toml`) should be used to control type checking. If project-level overrides are necessary, configure type checking within `pyrightconfig.json` or the appropriate section in `pyproject.toml`.
+- **Flet Launch Errors:** If you encounter errors like `cannot import name 'validate_core_schema' from 'pydantic_core'`, this indicates a dependency conflict or version incompatibility with the `pydantic` library. This can prevent the Flet GUI from launching. Ensure that your `pydantic` version is compatible with your Flet version.
+- **Analytics View Error:** If the analytics page is not loading and shows an error like `Failed to load analytics data: Column Control must be added to the page first`, it suggests an issue with the asynchronous data loading or UI component initialization. Ensure that the necessary UI components are added to the page before attempting to load the data. Also, check for correct usage and placement of asynchronous calls.
 
 ### Server Retry Decorator
 - The `retry` decorator in `server.py` has been updated to prevent raising `None` exceptions, which can cause static analysis errors. The decorator now ensures that if no exception is captured during retry attempts, a `RuntimeError` is raised with a clear message.
@@ -509,3 +513,45 @@ To stop the application, close the terminal or press `Ctrl+C` in the running ter
 ### New Errors & Troubleshooting (2025-10-04)
 
 - **Flet Launch Errors:** If you encounter errors like `cannot import name 'validate_core_schema' from 'pydantic_core'`, this indicates a dependency conflict or version incompatibility with the `pydantic` library. This can prevent the Flet GUI from launching. Ensure that your `pydantic` version is compatible with your Flet version.
+- **Database View Error:** If the Flet GUI shows an error related to `ft.Icons.DATABASE`, it indicates that the icon is not available in the current Flet version. Replace `ft.Icons.DATABASE` with `ft.Icons.DATASET`.
+- **Analytics View Error:** If the analytics page is not loading and shows an error like `Failed to load analytics data: Column Control must be added to the page first`, it suggests an issue with the asynchronous data loading or UI component initialization. Ensure that the necessary UI components are added to the page before attempting to load the data. Also, check for correct usage and placement of asynchronous calls.
+- **Flet App Still Stuck Loading:** The port is already in use from the previous session. The app is trying to start but can't bind to the port because the old instance is still running. Ensure the previous instance is fully closed.
+
+### Flet View Lifecycle Deadlock Pattern
+
+The crash can be caused by a subtle but critical violation of Flet's view lifecycle. When controls call `.update()` before being attached to the page, Flet enters a deadlock. This is a timing-based deadlock, not a code error, which is why it produces no stack traces.
+
+### Flet View Lifecycle Golden Rule
+
+Flet views follow a strict 3-phase lifecycle:
+1. Creation: Build control tree (NO updates allowed)
+2. Attachment: AnimatedSwitcher adds to page (160ms + 250ms delay)
+3. Setup: ONLY NOW can you safely call control.update()
+
+Think of it like construction: You can't paint a wall (update) before it's installed
+(attached to page). The `setup` function pattern leverages Flet's lifecycle hooks to guarantee attachment
+before updates, eliminating an entire class of freeze bugs. Always follow this checklist when creating new views:
+
+```python
+def create_new_view(server_bridge, page, state_manager=None):
+    # ✅ DO: Create controls
+    control = ft.Text("Hello")
+
+    # ✅ DO: Set event handlers (not updates)
+    button.on_click = my_handler
+
+    # ❌ DON'T: Call .update() on controls
+    # control.update()  # WRONG - causes freeze!
+
+    # ❌ DON'T: Call functions that update controls
+    # populate_list()   # WRONG if it calls .update()!
+
+    async def setup():
+        # ✅ DO: Update controls here (after page attachment)
+        control.update()
+        populate_list()  # Now safe!
+
+    return view_container, dispose, setup
+```
+
+It's critical that Flet's async architecture requires controls to be in the page tree before updates. This isn't a bug—it's by design. The framework needs a reference to the page object to know WHERE to render updates. Without page attachment, there's no render target, causing the blocking wait.
