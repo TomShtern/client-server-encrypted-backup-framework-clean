@@ -63,6 +63,5 @@
   "editor.experimentalGpuAcceleration": "on",
   "python.analysis.aiHoverSummaries": true,
   "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
-  "editor.guides.bracketPairs": "active",
-  "python.analysis.typeCheckingMode": "basic"
+  "editor.guides.bracketPairs": "active"
 }

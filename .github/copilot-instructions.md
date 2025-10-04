@@ -1,4 +1,21 @@
 ---
+description: AI rules derived by SpecStory from the project AI interaction history
+globs: *
+---
+
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
+---
 description: AI Development Guide for Client-Server Encrypted Backup Framework
 globs: *
 ---
@@ -23,6 +40,7 @@ This is a **production-grade 5-layer encrypted backup system** implementing RSA-
 │ C++ Client (EncryptedBackupClient.exe --batch mode)               │
 │ • Reads transfer.info (server:port, username, filepath)           │
 │ • RSA-1024 key exchange → AES-256-CBC file encryption             │
+│ • Custom binary protocol (23-byte header + payload)               │
 │ • Custom binary protocol (23-byte header + payload)               │
 │ • CRC32 verification                                               │
 └─────────────────────────────────────────────────────┬─────────────┘
@@ -229,12 +247,17 @@ vcpkg\vcpkg.exe install boost-iostreams:x64-windows
 # One-Click Build + Run Everything
 python scripts/one_click_build_and_run.py
 
-# FletV2 GUI with Real Server
-cd FletV2 && python start_with_server.py
+# FletV2 GUI with Real Server (RECOMMENDED - PowerShell Launcher)
+cd FletV2 && .\start_with_server.ps1
+
+# FletV2 GUI with Real Server (Alternative - Direct Python)
+cd FletV2 && python start_with_server.py  # May fail if user site-packages conflict
 
 # GUI-Only Mode (Mock Data)
 cd FletV2 && python main.py
 ```
+
+**CRITICAL**: Always use `start_with_server.ps1` (PowerShell launcher) to avoid pydantic import errors. The `.ps1` launcher sets `PYTHONNOUSERSITE=1` BEFORE Python starts and uses the `-s` flag to prevent user site-packages interference. Setting environment variables from within Python (`os.environ['PYTHONNOUSERSITE'] = '1'`) is **too late** and will NOT work.
 
 ## 📋 Code Style Guidelines
 
@@ -256,8 +279,34 @@ cd FletV2 && python main.py
 
 ### Launching FletV2 with Real Server
 
+**CRITICAL - USE POWERSHELL LAUNCHER**:
+```powershell
+# RECOMMENDED: PowerShell launcher with proper environment isolation
+cd FletV2
+.\start_with_server.ps1
+```
+
+**Why the PowerShell launcher is required**:
+- Sets `PYTHONNOUSERSITE=1` as environment variable **BEFORE** Python starts
+- Uses Python `-s` flag for additional user site-packages isolation
+- Prevents pydantic/pydantic-core import errors from user's global packages
+
+**Alternative (Manual - for debugging only)**:
+```powershell
+$env:PYTHONNOUSERSITE = "1"
+cd FletV2
+..\flet_venv\Scripts\python.exe -s start_with_server.py
+```
+
+**NEVER use** (will fail with pydantic import errors):
 ```python
-# FletV2/start_with_server.py pattern
+# ❌ WRONG - Setting environment variables from within Python is TOO LATE
+os.environ['PYTHONNOUSERSITE'] = '1'  # Already in running process, doesn't affect imports!
+```
+
+**Technical Details**:
+```python
+# FletV2/start_with_server.py pattern (managed by PowerShell launcher)
 os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'  # Disable server's GUI
 os.environ['PYTHONNOUSERSITE'] = '1'                    # Prevent package conflicts
 
@@ -345,7 +394,7 @@ def convert_backupserver_client_to_fletv2(client_data: dict) -> dict:
 - Execute queries via `db_manager.execute()` wrapper
 
 ### Known Issues & Workarounds
-- **Flet DataTable/Charts:** Complex components (`ft.DataTable`, `LineChart`, `BarChart`, `PieChart`) may crash in Flet 0.28.3. Replace with simpler primitives (`ListView`, `Card`) if issues occur
+- **Flet DataTable/Charts:** Complex components (`ft.DataTable`, `LineChart`, `BarChart`, `PieChart`) may crash in Flet 0.28.3. Replace with simpler primitives (`ListView`, `Card`) if issues occur. **The `database_simple.py` view was rewritten to use a `ListView` instead of `DataTable` to avoid UI freezes.**
 - **View Loading Race:** Add 250ms delay (`await asyncio.sleep(0.25)`) after `AnimatedSwitcher` transitions to prevent setup functions running before transition completes
 - **Async Data Loading:** Load data asynchronously in `setup_subscriptions()`, not during view construction, to prevent UI blocking
 - **Circular Imports:** Avoid calling imports at module level in `state_manager.py` to prevent deadlocks
@@ -365,3 +414,98 @@ FLET_DASHBOARD_DEBUG=1                # Enable dashboard debugging
 - **Database errors:** Ensure connection pooling pattern is followed
 - **Import errors:** Check UTF-8 initialization is first import
 - **Subprocess failures:** Verify `transfer.info` format (3 lines: server:port, username, filepath)
+
+### Flet GUI Icon Replacement
+- In the database view, `ft.Icons.DATABASE` is not available in the current Flet version. Replace with `ft.Icons.DATASET`.
+
+### Flet GUI Freezing Issues
+- If the Flet GUI freezes upon navigating to the database page, especially when using `flet==0.28.3` and Python 3.13.5 on Windows 11, consider the following:
+    - The `database_simple.py` view currently used might still have issues. **This issue was resolved by rewriting `database_simple.py` to use a `ListView` instead of `DataTable`.**
+    - Consult context7 MCP for up-to-date Flet documentation and implementation best practices.
+    - Investigate potential causes such as data loading issues, UI rendering problems, or database connection errors.
+    - Consider using Playwright MCP tools for UI testing and debugging when appropriate.
+- When debugging Flet GUI issues, launch the Flet GUI in hot reload in the browser.
+
+### Resolved Issues & Actions Taken (2025-10-04)
+- **Database View Freezing:** Resolved by replacing the DataTable with a ListView in `database_simple.py` to improve performance and prevent UI freezes during hot reload sessions.
+- **Pylance Errors:** Addressed a spike in Pylance errors by reorganizing button wiring in `database_simple.py`, tightening server connection checks, and tweaking status/helper text handling. The errors were caused by event handlers being bound before their definitions and from optional `server_bridge` accesses that weren’t type-narrowed. A `get_active_bridge()` helper was added, along with stricter guards to ensure async bridge APIs are only called when the real server is present.
+- **Codacy Analysis:** The `codacy_cli_analyze` MCP tool was unavailable. To enable it, double-check Copilot MCP settings (GitHub Settings → Copilot → Enable MCP servers). If the issue persists, contact Codacy support to reconnect the repository.
+- **VS Code Settings Conflict:** Resolved a VS Code settings conflict by removing the workspace-level `"python.analysis.typeCheckingMode"` setting from `.vscode/settings.json`. Pyright's configuration (either in `pyrightconfig.json` or `pyproject.toml`) should be used to control type checking. If project-level overrides are necessary, configure type checking within `pyrightconfig.json` or the appropriate section in `pyproject.toml`.
+
+### Server Retry Decorator
+- The `retry` decorator in `server.py` has been updated to prevent raising `None` exceptions, which can cause static analysis errors. The decorator now ensures that if no exception is captured during retry attempts, a `RuntimeError` is raised with a clear message.
+
+```python
+def retry(max_attempts: int = 3, backoff_base: float = 0.5, exceptions: tuple = (Exception,)):
+    """
+    Decorator to retry a function on transient failures with exponential backoff.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception: Exception | None = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+
+                    # Don't retry on last attempt
+                    if attempt == max_attempts:
+                        break
+
+                    # Record retry metric
+                    metrics_collector.record_counter(
+                        "database.retry.attempts",
+                        tags={'function': func.__name__, 'attempt': str(attempt)}
+                    )
+
+                    # Calculate exponential backoff delay
+                    delay = backoff_base * (2 ** (attempt - 1))
+
+                    # Log retry attempt (use WARNING level per logging standards)
+                    logger.warning(
+                        f"Attempt {attempt}/{max_attempts} failed for {func.__name__}: {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+
+                    time.sleep(delay)
+
+            # All retries exhausted, log error and re-raise
+            logger.error(
+                f"All {max_attempts} attempts failed for {func.__name__}: {last_exception}"
+            )
+
+            # Ensure we never attempt to raise None (static analyzers complain)
+            if last_exception is None:
+                raise RuntimeError(f"{func.__name__} failed after {max_attempts} attempts (no exception captured)")
+            raise last_exception
+
+        return wrapper
+    return decorator
+```
+
+### Running Flet GUI with Server Instructions
+
+To run the Flet GUI with the server, follow these steps:
+
+1.  Ensure the BackupServer is running. The server should be listening for client connections on TCP port 1256.
+2.  Launch the Flet GUI. It should automatically open in your default web browser. If it doesn't, you can access it at: `http://localhost:8570`.
+3.  Verify the integration. The GUI should be fully integrated with the server, providing access to real-time metrics, client management, file browsing, and database operations.
+4.  Check the status. Confirm that the server, GUI, and database are all running and connected.
+
+```
+- **Server Status**: ✅ Running (TCP port 1256 ready for client connections)
+- **GUI Status**: ✅ Running (Web interface active)
+- **Database**: ✅ Connected (clients accessible)
+- **Dashboard**: ✅ Loaded successfully
+```
+
+The system is now fully operational with end-to-end encryption (RSA-1024 + AES-256-CBC).
+
+To stop the application, close the terminal or press `Ctrl+C` in the running terminal.
+
+### New Errors & Troubleshooting (2025-10-04)
+
+- **Flet Launch Errors:** If you encounter errors like `cannot import name 'validate_core_schema' from 'pydantic_core'`, this indicates a dependency conflict or version incompatibility with the `pydantic` library. This can prevent the Flet GUI from launching. Ensure that your `pydantic` version is compatible with your Flet version.

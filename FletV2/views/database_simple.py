@@ -1,254 +1,881 @@
-"""
-Simple Database View - Minimal complexity to avoid browser crashes.
+#!/usr/bin/env python3
+"""Lightweight database management view tuned for Flet 0.28.3 web hot-reload.
 
-Design Philosophy:
-- Use ONLY simple Flet controls (Text, TextField, Dropdown, Button)
-- NO DataTable, NO ListView, NO complex nested Cards
-- Display records as simple Text lines
-- Pagination to limit records displayed
-- Async data loading to avoid UI blocking
+The previous implementation relied on ``ft.DataTable`` which caused heavy widget
+rebuilds on every update. In web mode that triggered long blocking layouts and
+made the entire GUI appear frozen even when no server was connected. This
+rewrite switches to a ``ListView`` based layout per the official Flet guidance
+(https://flet.dev/docs/controls/listview/) to use ListView/GridView for large or
+frequently refreshed collections. All updates now target individual controls,
+eliminating the freeze while retaining CRUD, search, and export capabilities.
 """
 
+from __future__ import annotations
+
+import asyncio
+import csv
+import io
+import json
+import os
+import sys
+from collections.abc import Coroutine
+from datetime import datetime
+from typing import Any, Callable, cast
+
+import aiofiles
 import flet as ft
-from typing import Any
-import logging
 
-logger = logging.getLogger(__name__)
+# Ensure repository and package roots are on sys.path before other imports
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# UTF-8 solution for subprocess/console I/O MUST remain first real import
+import Shared.utils.utf8_solution as _  # noqa: F401  pylint: disable=unused-import
+
+try:
+    from FletV2.utils.debug_setup import get_logger
+except ImportError:  # pragma: no cover - fallback logging for standalone runs
+    import logging
+
+    from FletV2 import config
+
+    def get_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            )
+            logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        return logger
+
+from FletV2.theme import (
+    create_glassmorphic_container,
+    create_neumorphic_container,
+    create_neumorphic_metric_card,
+)
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.ui_components import themed_button
+from FletV2.utils.user_feedback import show_error_message, show_success_message
+
+logger = get_logger(__name__)
+
+DEFAULT_TABLE = "clients"
+DEFAULT_TABLE_OPTIONS: tuple[str, ...] = ("clients", "files", "logs", "settings", "backups")
+MAX_VISIBLE_RECORDS = 50
+MAX_EXPORT_RECORDS = 10_000
+SETUP_DELAY_SECONDS = 0.2
+SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "key_material"}
 
 
 def create_database_view(
-    server_bridge: Any,
+    server_bridge: ServerBridge | None,
     page: ft.Page,
-    state_manager: Any = None
-) -> tuple:
-    """Create a simple database view that won't crash the browser."""
+    state_manager: StateManager | None = None,  # noqa: ARG001 - reserved for future use
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+    """Create lightweight database management view."""
 
-    # State management
-    current_table = "clients"
-    current_page_num = 0
-    records_per_page = 15
-    all_records = []
+    logger.info("Initializing lightweight database view (ListView-based)")
 
-    # UI components (will be updated dynamically)
+    current_table = DEFAULT_TABLE
+    available_tables: list[str] = list(DEFAULT_TABLE_OPTIONS)
+    all_records: list[dict[str, Any]] = []
+    filtered_records: list[dict[str, Any]] = []
+    table_columns: list[str] = []
+    search_query = ""
+    db_info: dict[str, Any] = {
+        "status": "Disconnected",
+        "tables": 0,
+        "total_records": 0,
+        "size": "0 MB",
+        "integrity_check": False,
+        "connection_pool_healthy": False,
+    }
+
+    def get_active_bridge() -> ServerBridge | None:
+        bridge = server_bridge
+        if bridge is None:
+            return None
+        return bridge if getattr(bridge, "real_server", None) else None
+
+    def server_available() -> bool:
+        return get_active_bridge() is not None
+
+    # ------------------------------------------------------------------
+    # UI CONTROLS
+    # ------------------------------------------------------------------
     status_text = ft.Text("Ready", size=14, color=ft.Colors.GREY_400)
+    loading_indicator = ft.ProgressRing(width=20, height=20, visible=False)
+
+    db_status_value = ft.Text("Disconnected", size=20, weight=ft.FontWeight.BOLD)
+    db_tables_value = ft.Text("0", size=20, weight=ft.FontWeight.BOLD)
+    db_records_value = ft.Text("0", size=20, weight=ft.FontWeight.BOLD)
+    db_size_value = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
+
     table_dropdown = ft.Dropdown(
-        label="Select Table",
-        value="clients",
-        options=[
-            ft.dropdown.Option("clients", "Clients"),
-            ft.dropdown.Option("files", "Files"),
-        ],
-        width=200,
+        label="Select table",
+        value=current_table,
+        width=220,
     )
+
     search_field = ft.TextField(
-        label="Search",
-        hint_text="Search records...",
-        width=300,
+        label="Search records",
+        prefix_icon=ft.Icons.SEARCH,
+        hint_text="Type to filter across all columns…",
+        width=320,
     )
-    records_display = ft.Column(
-        [ft.Text("Click 'Load Data' to display records", italic=True, color=ft.Colors.GREY_500)],
-        scroll=ft.ScrollMode.AUTO,
-        spacing=5,
+
+    records_list = ft.ListView(expand=True, spacing=12, padding=ft.Padding(0, 4, 0, 24))
+    records_list.controls.append(
+        ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.DATABASE, size=48, color=ft.Colors.GREY_500),
+                    ft.Text("Database view is ready", size=16, color=ft.Colors.GREY_500),
+                    ft.Text(
+                        "Connect the backup server and choose a table to load records.",
+                        size=12,
+                        color=ft.Colors.GREY_400,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                tight=True,
+                spacing=8,
+            ),
+            padding=ft.Padding(0, 36, 0, 36),
+        )
     )
-    page_indicator = ft.Text("Page 0 of 0", size=14, weight=ft.FontWeight.BOLD)
 
-    def update_records_display():
-        """Update the records display with simple Text controls."""
-        nonlocal records_display, page_indicator
+    add_button = cast(
+        ft.FilledButton, themed_button("Add Record", lambda _e: None, "filled", ft.Icons.ADD)
+    )
+    refresh_button = cast(
+        ft.OutlinedButton, themed_button("Refresh", lambda _e: None, "outlined", ft.Icons.REFRESH)
+    )
+    export_csv_button = cast(
+        ft.OutlinedButton, themed_button("Export CSV", lambda _e: None, "outlined", ft.Icons.DOWNLOAD)
+    )
+    export_json_button = cast(
+        ft.OutlinedButton, themed_button("Export JSON", lambda _e: None, "outlined", ft.Icons.DOWNLOAD)
+    )
 
-        if not all_records:
-            records_display.controls = [
-                ft.Text("No records found", italic=True, color=ft.Colors.GREY_500)
-            ]
-            page_indicator.value = "Page 0 of 0"
-            records_display.update()
-            page_indicator.update()
-            return
+    add_button.disabled = not server_available()
 
-        # Calculate pagination
-        total_pages = (len(all_records) - 1) // records_per_page + 1
-        start_idx = current_page_num * records_per_page
-        end_idx = min(start_idx + records_per_page, len(all_records))
-        page_records = all_records[start_idx:end_idx]
+    # ------------------------------------------------------------------
+    # HELPER FUNCTIONS
+    # ------------------------------------------------------------------
+    def _control_attached(control: ft.Control) -> bool:
+        return getattr(control, "page", None) is not None
 
-        # Create simple Text controls for each record
-        record_controls = []
-        for i, record in enumerate(page_records, start=start_idx + 1):
-            # Format record as simple text line
-            if current_table == "clients":
-                text = f"{i}. ID: {record.get('id', 'N/A')} | Name: {record.get('name', 'Unknown')} | IP: {record.get('ip_address', 'N/A')} | Last: {record.get('last_connection', 'Never')}"
-            else:  # files table
-                text = f"{i}. ID: {record.get('id', 'N/A')} | Name: {record.get('filename', 'Unknown')} | Size: {record.get('size', 0)} bytes | Client: {record.get('client_id', 'N/A')}"
+    def _stringify(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (bytes, bytearray)):
+            return value.hex()
+        if isinstance(value, datetime):
+            return value.isoformat(sep=" ", timespec="seconds")
+        return str(value)
 
-            record_controls.append(
-                ft.Text(
-                    text,
-                    size=13,
-                    selectable=True,
-                    color=ft.Colors.ON_SURFACE,
+    def set_status(message: str, color: str | None = None, loading: bool | None = None) -> None:
+        status_text.value = message
+        if color:
+            status_text.color = color
+        if _control_attached(status_text):
+            status_text.update()
+
+        if loading is not None:
+            loading_indicator.visible = loading
+            if _control_attached(loading_indicator):
+                loading_indicator.update()
+
+    def update_database_info_ui() -> None:
+        db_status_value.value = db_info.get("status", "Unknown")
+        status_lower = db_info.get("status", "").lower()
+        if "connected" in status_lower:
+            db_status_value.color = ft.Colors.GREEN
+        elif "error" in status_lower:
+            db_status_value.color = ft.Colors.ERROR
+        else:
+            db_status_value.color = ft.Colors.GREY
+
+        db_tables_value.value = str(db_info.get("tables", 0))
+        db_records_value.value = str(db_info.get("total_records", 0))
+        db_size_value.value = db_info.get("size", "0 MB")
+
+        for control in (db_status_value, db_tables_value, db_records_value, db_size_value):
+            if _control_attached(control):
+                control.update()
+
+        add_button.disabled = not server_available()
+        if _control_attached(add_button):
+            add_button.update()
+
+    def update_table_dropdown() -> None:
+        options = available_tables or list(DEFAULT_TABLE_OPTIONS)
+        table_dropdown.options = [
+            ft.dropdown.Option(table, table.replace("_", " ").title())
+            for table in options
+        ]
+        if current_table not in options:
+            table_dropdown.value = options[0]
+        else:
+            table_dropdown.value = current_table
+
+        table_dropdown.disabled = not server_available()
+        if server_available():
+            table_dropdown.helper_text = None
+        else:
+            table_dropdown.helper_text = "Server disconnected"
+
+        if _control_attached(table_dropdown):
+            table_dropdown.update()
+
+    def build_record_tile(record: dict[str, Any], index: int) -> ft.Container:
+        display_keys: list[str] = table_columns or list(record.keys())
+        rows: list[ft.Control] = []
+        shown = 0
+        for key in display_keys:
+            if not isinstance(key, str):
+                continue
+            if key.lower() in SENSITIVE_FIELDS:
+                continue
+            value = _stringify(record.get(key))
+            if not value and value != "0":
+                continue
+            rows.append(
+                ft.Row(
+                    [
+                        ft.Text(
+                            key.replace("_", " ").title(),
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            width=150,
+                        ),
+                        ft.Text(value, size=12, selectable=True, expand=True),
+                    ],
+                    spacing=10,
+                    vertical_alignment=ft.CrossAxisAlignment.START,
                 )
             )
+            shown += 1
+            if shown >= 8:
+                break
 
-        records_display.controls = record_controls
-        page_indicator.value = f"Page {current_page_num + 1} of {total_pages}"
+        if not rows:
+            rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500))
 
-        # Update UI
-        records_display.update()
-        page_indicator.update()
+        footer: ft.Control | None = None
+        if server_available():
+            footer = ft.Row(
+                [
+                    ft.IconButton(
+                        icon=ft.Icons.EDIT,
+                        tooltip="Edit record",
+                        icon_size=18,
+                        on_click=lambda _e, r=record: edit_record(r),
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.DELETE,
+                        tooltip="Delete record",
+                        icon_size=18,
+                        icon_color=ft.Colors.ERROR,
+                        on_click=lambda _e, r=record: delete_record(r),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.END,
+            )
 
-    async def load_data_async():
-        """Load data from server asynchronously."""
-        nonlocal all_records, current_page_num
+        tile_children: list[ft.Control] = [
+            ft.Text(f"{current_table.title()} #{index + 1}", size=14, weight=ft.FontWeight.BOLD),
+            ft.Column(rows, spacing=6, tight=True),
+        ]
 
-        status_text.value = f"Loading {current_table}..."
-        status_text.update()
+        if footer:
+            tile_children.append(footer)
 
-        try:
-            if not server_bridge:
-                all_records = []
-                status_text.value = "Server not connected (GUI-only mode)"
-                status_text.color = ft.Colors.ORANGE_400
-                status_text.update()
-                update_records_display()
-                return
+        return ft.Container(
+            content=ft.Column(tile_children, spacing=10, tight=True),
+            padding=ft.Padding(16, 12, 16, 12),
+            border_radius=14,
+            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.SURFACE_VARIANT),
+        )
 
-            # Fetch data from server
-            result = await server_bridge.get_table_data_async(current_table)
+    def refresh_records_list() -> None:
+        records_list.controls.clear()
 
-            if result.get('success'):
-                # Extract records (handle both dict and list formats)
-                data = result.get('data', {})
-                all_records = data.get('rows', []) if isinstance(data, dict) else data
-
-                # Reset to first page
-                current_page_num = 0
-
-                status_text.value = f"Loaded {len(all_records)} records from {current_table}"
-                status_text.color = ft.Colors.GREEN_400
-                logger.info(f"Successfully loaded {len(all_records)} records from {current_table}")
+        if not filtered_records:
+            if server_available():
+                message = f"No records found in '{current_table}'."
             else:
-                all_records = []
-                error_msg = result.get('error', 'Unknown error')
-                status_text.value = f"Error: {error_msg}"
-                status_text.color = ft.Colors.ERROR
-                logger.error(f"Failed to load {current_table}: {error_msg}")
+                message = "Connect the backup server to load data."
+            records_list.controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.INBOX_OUTLINED, size=40, color=ft.Colors.GREY_500),
+                            ft.Text(message, size=14, color=ft.Colors.GREY_500),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
+                    ),
+                    padding=ft.Padding(0, 28, 0, 28),
+                )
+            )
+        else:
+            summary = ft.Text(
+                f"Showing {min(len(filtered_records), MAX_VISIBLE_RECORDS)} of {len(filtered_records)} records",
+                size=13,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            )
+            records_list.controls.append(summary)
 
-        except Exception as e:
-            all_records = []
-            status_text.value = f"Exception: {str(e)}"
-            status_text.color = ft.Colors.ERROR
-            logger.exception(f"Exception loading {current_table}")
+            for index, record in enumerate(filtered_records[:MAX_VISIBLE_RECORDS]):
+                records_list.controls.append(build_record_tile(record, index))
 
-        status_text.update()
-        update_records_display()
+            if len(filtered_records) > MAX_VISIBLE_RECORDS:
+                records_list.controls.append(
+                    ft.Text(
+                        f"…and {len(filtered_records) - MAX_VISIBLE_RECORDS} more records",
+                        size=12,
+                        color=ft.Colors.GREY_500,
+                        italic=True,
+                    )
+                )
 
-    def on_table_change(e):
-        """Handle table selection change."""
-        nonlocal current_table
-        current_table = table_dropdown.value
-        page.run_task(load_data_async)
+        if _control_attached(records_list):
+            records_list.update()
 
-    table_dropdown.on_change = on_table_change
+    def apply_search_filter() -> None:
+        nonlocal filtered_records
 
-    def on_load_click(e):
-        """Handle load button click."""
-        page.run_task(load_data_async)
+        if not search_query.strip():
+            filtered_records = list(all_records)
+        else:
+            query = search_query.lower()
+            filtered_records = [
+                record
+                for record in all_records
+                if any(query in _stringify(value).lower() for value in record.values())
+            ]
 
-    def on_prev_page(e):
-        """Go to previous page."""
-        nonlocal current_page_num
-        if current_page_num > 0:
-            current_page_num -= 1
-            update_records_display()
+        refresh_records_list()
+        if search_query.strip():
+            set_status(
+                f"Found {len(filtered_records)} matches",
+                ft.Colors.BLUE if filtered_records else ft.Colors.GREY,
+                loading=None,
+            )
+        else:
+            set_status(
+                f"Loaded {len(filtered_records)} records",
+                ft.Colors.GREEN if filtered_records else ft.Colors.GREY,
+                loading=None,
+            )
 
-    def on_next_page(e):
-        """Go to next page."""
-        nonlocal current_page_num
-        total_pages = (len(all_records) - 1) // records_per_page + 1
-        if current_page_num < total_pages - 1:
-            current_page_num += 1
-            update_records_display()
+    def get_export_payload() -> tuple[list[str], list[dict[str, Any]]]:
+        if table_columns:
+            columns = table_columns[:]
+        else:
+            columns = sorted({key for record in filtered_records for key in record.keys() if isinstance(key, str)})
+        rows_to_export = filtered_records[:MAX_EXPORT_RECORDS]
+        return columns, rows_to_export
 
-    def on_search(e):
-        """Filter records based on search query."""
-        nonlocal all_records, current_page_num
-        query = search_field.value.lower().strip()
+    # ------------------------------------------------------------------
+    # EVENT HANDLERS
+    # ------------------------------------------------------------------
+    def on_table_change(event: ft.ControlEvent) -> None:
+        nonlocal current_table, search_query
 
-        if not query:
-            # Reset to show all records
-            page.run_task(load_data_async)
+        current_table = event.control.value or DEFAULT_TABLE
+        search_query = ""
+        search_field.value = ""
+        if _control_attached(search_field):
+            search_field.update()
+
+        if hasattr(page, "run_task"):
+            page.run_task(load_table_data_async())
+
+    def on_search_change(event: ft.ControlEvent) -> None:
+        nonlocal search_query
+        search_query = event.control.value or ""
+        apply_search_filter()
+
+    def on_refresh(_event: ft.ControlEvent) -> None:
+        if hasattr(page, "run_task"):
+            page.run_task(load_database_info_async())
+            page.run_task(load_table_names_async())
+            page.run_task(load_table_data_async())
+
+    # ------------------------------------------------------------------
+    # CRUD OPERATIONS
+    # ------------------------------------------------------------------
+    def add_record(_event: ft.ControlEvent) -> None:
+        bridge = get_active_bridge()
+        if bridge is None:
+            show_error_message(page, "Connect the backup server to add records.")
             return
 
-        # Simple text-based filtering
-        filtered = []
-        for record in all_records:
-            # Convert record to string and search
-            record_str = str(record).lower()
-            if query in record_str:
-                filtered.append(record)
+        editable_columns = [col for col in table_columns if col.lower() not in {"id", "uuid"}]
+        if not editable_columns:
+            show_error_message(page, "No editable columns available for this table.")
+            return
 
-        all_records = filtered
-        current_page_num = 0
-        status_text.value = f"Found {len(filtered)} matching records"
-        status_text.color = ft.Colors.BLUE_400
-        status_text.update()
-        update_records_display()
+        input_fields: dict[str, ft.TextField] = {}
+        for column in editable_columns:
+            field = ft.TextField(label=column.replace("_", " ").title())
+            input_fields[column] = field
 
-    search_field.on_submit = on_search
+        add_dialog = ft.AlertDialog(
+            title=ft.Text(f"Add record to {current_table.title()}"),
+            content=ft.Column(list(input_fields.values()), height=360, scroll=ft.ScrollMode.AUTO),
+        )
 
-    # Build the UI
-    content = ft.Container(
-        content=ft.Column([
-            # Header
-            ft.Text("Database Management", size=28, weight=ft.FontWeight.BOLD),
-            ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+        async def save_async() -> None:
+            try:
+                set_status("Saving record…", ft.Colors.BLUE, True)
+                payload = {column: field.value or None for column, field in input_fields.items()}
+                result = await bridge.add_table_record_async(current_table, payload)  # type: ignore[arg-type]
+                if result.get("success"):
+                    show_success_message(page, "Record added successfully")
+                    await load_table_data_async()
+                    page.close(add_dialog)
+                else:
+                    show_error_message(
+                        page,
+                        f"Failed to add record: {result.get('error', 'Unknown error')}",
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Error adding record: %s", exc)
+                show_error_message(page, f"Error adding record: {exc}")
+            finally:
+                set_status("Ready", ft.Colors.GREY_400, False)
 
-            # Status
-            status_text,
+        add_dialog.actions = [
+            ft.TextButton("Cancel", on_click=lambda _: page.close(add_dialog)),
+            ft.FilledButton("Add", on_click=lambda _: page.run_task(save_async())),
+        ]
 
-            # Controls row
-            ft.Row([
-                table_dropdown,
-                search_field,
-                ft.ElevatedButton("Load Data", on_click=on_load_click, icon=ft.Icons.REFRESH),
-            ], spacing=10),
+        page.open(add_dialog)
 
-            ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+    def edit_record(record: dict[str, Any]) -> None:
+        bridge = get_active_bridge()
+        if bridge is None:
+            show_error_message(page, "Connect the backup server to edit records.")
+            return
 
-            # Records display
-            ft.Container(
-                content=records_display,
-                height=400,
-                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-                border_radius=8,
-                padding=10,
+        editable_columns = [col for col in table_columns if col.lower() not in {"id", "uuid"}]
+        if not editable_columns:
+            show_error_message(page, "No editable columns available for this table.")
+            return
+
+        input_fields: dict[str, ft.TextField] = {}
+        for column in editable_columns:
+            input_fields[column] = ft.TextField(
+                label=column.replace("_", " ").title(),
+                value=_stringify(record.get(column, "")),
+            )
+
+        edit_dialog = ft.AlertDialog(
+            title=ft.Text(f"Edit record #{record.get('id', 'unknown')}"),
+            content=ft.Column(list(input_fields.values()), height=360, scroll=ft.ScrollMode.AUTO),
+        )
+
+        async def save_changes() -> None:
+            try:
+                payload = dict(record)
+                for column, field in input_fields.items():
+                    payload[column] = field.value or None
+
+                set_status("Updating record…", ft.Colors.BLUE, True)
+                result = await bridge.update_table_record_async(current_table, payload)  # type: ignore[arg-type]
+                if result.get("success"):
+                    show_success_message(page, "Record updated successfully")
+                    await load_table_data_async()
+                    page.close(edit_dialog)
+                else:
+                    show_error_message(
+                        page,
+                        f"Failed to update record: {result.get('error', 'Unknown error')}",
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Error updating record: %s", exc)
+                show_error_message(page, f"Error updating record: {exc}")
+            finally:
+                set_status("Ready", ft.Colors.GREY_400, False)
+
+        edit_dialog.actions = [
+            ft.TextButton("Cancel", on_click=lambda _: page.close(edit_dialog)),
+            ft.FilledButton("Save", on_click=lambda _: page.run_task(save_changes())),
+        ]
+
+        page.open(edit_dialog)
+
+    def delete_record(record: dict[str, Any]) -> None:
+        bridge = get_active_bridge()
+        if bridge is None:
+            show_error_message(page, "Connect the backup server to delete records.")
+            return
+
+        record_id = record.get("id") or record.get("ID")
+        if record_id is None:
+            show_error_message(page, "Record is missing an identifier; cannot delete.")
+            return
+
+        confirm_dialog = ft.AlertDialog(
+            title=ft.Text("Confirm delete"),
+            content=ft.Text(
+                f"Are you sure you want to delete record {record_id}? This action cannot be undone.",
+                selectable=True,
             ),
+        )
 
-            # Pagination controls
-            ft.Row([
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK,
-                    on_click=on_prev_page,
-                    tooltip="Previous page"
-                ),
-                page_indicator,
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_FORWARD,
-                    on_click=on_next_page,
-                    tooltip="Next page"
-                ),
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+        async def confirm_async() -> None:
+            try:
+                set_status("Deleting record…", ft.Colors.BLUE, True)
+                result = await bridge.delete_table_record_async(current_table, record_id)  # type: ignore[arg-type]
+                if result.get("success"):
+                    show_success_message(page, "Record deleted successfully")
+                    await load_table_data_async()
+                    page.close(confirm_dialog)
+                else:
+                    show_error_message(
+                        page,
+                        f"Failed to delete record: {result.get('error', 'Unknown error')}",
+                    )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Error deleting record: %s", exc)
+                show_error_message(page, f"Error deleting record: {exc}")
+            finally:
+                set_status("Ready", ft.Colors.GREY_400, False)
 
-        ], spacing=15, scroll=ft.ScrollMode.AUTO),
-        padding=20,
+        confirm_dialog.actions = [
+            ft.TextButton("Cancel", on_click=lambda _: page.close(confirm_dialog)),
+            ft.FilledButton(
+                "Delete",
+                on_click=lambda _: page.run_task(confirm_async()),
+                style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+            ),
+        ]
+
+        page.open(confirm_dialog)
+
+    # ------------------------------------------------------------------
+    # EXPORT FUNCTIONALITY
+    # ------------------------------------------------------------------
+    def export_data(fmt: str) -> None:
+        if not filtered_records:
+            show_error_message(page, "Nothing to export")
+            return
+
+        async def export_async() -> None:
+            columns, rows_to_export = get_export_payload()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{current_table}_{timestamp}.{fmt}"
+            filepath = os.path.join(_repo_root, filename)
+
+            try:
+                if fmt == "csv":
+                    buffer = io.StringIO()
+                    writer = csv.writer(buffer)
+                    writer.writerow(columns)
+                    for row in rows_to_export:
+                        writer.writerow([_stringify(row.get(column, "")) for column in columns])
+                    async with aiofiles.open(filepath, "w", encoding="utf-8", newline="") as handle:
+                        await handle.write(buffer.getvalue())
+                else:
+                    payload = [
+                        {column: _stringify(row.get(column, "")) for column in columns}
+                        for row in rows_to_export
+                    ]
+                    async with aiofiles.open(filepath, "w", encoding="utf-8") as handle:
+                        await handle.write(json.dumps(payload, indent=2, ensure_ascii=False))
+
+                show_success_message(
+                    page,
+                    f"Exported {len(rows_to_export)} records to {filename}",
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Error exporting data: %s", exc)
+                show_error_message(page, f"Export failed: {exc}")
+
+        if hasattr(page, "run_task"):
+            page.run_task(export_async())
+
+    # ------------------------------------------------------------------
+    # DATA LOADING HELPERS
+    # ------------------------------------------------------------------
+    async def load_database_info_async() -> None:
+        nonlocal db_info
+
+        if not server_available():
+            db_info = {
+                "status": "Disconnected",
+                "tables": 0,
+                "total_records": 0,
+                "size": "0 MB",
+                "integrity_check": False,
+                "connection_pool_healthy": False,
+            }
+            update_database_info_ui()
+            return
+
+        try:
+            set_status("Loading database info…", ft.Colors.BLUE, True)
+            bridge = get_active_bridge()
+            if bridge is None:
+                db_info = {
+                    "status": "Disconnected",
+                    "tables": 0,
+                    "total_records": 0,
+                    "size": "0 MB",
+                    "integrity_check": False,
+                    "connection_pool_healthy": False,
+                }
+                update_database_info_ui()
+                return
+
+            result = await bridge.get_database_info_async()
+            if result.get("success") and result.get("data"):
+                db_info = result["data"]
+            else:
+                error_msg = result.get("error", "Unknown error")
+                logger.warning("Failed to load database info: %s", error_msg)
+                db_info["status"] = f"Error: {error_msg}"
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Database info load failed: %s", exc)
+            db_info["status"] = f"Error: {exc}"
+        finally:
+            set_status("Ready", ft.Colors.GREY_400, False)
+            update_database_info_ui()
+
+    async def load_table_names_async() -> None:
+        nonlocal available_tables
+
+        if not server_available():
+            available_tables = list(DEFAULT_TABLE_OPTIONS)
+            update_table_dropdown()
+            return
+
+        try:
+            set_status("Fetching table list…", ft.Colors.BLUE, True)
+            bridge = get_active_bridge()
+            if bridge is None:
+                available_tables = list(DEFAULT_TABLE_OPTIONS)
+                return
+
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, bridge.get_table_names)
+            if result.get("success"):
+                data = result.get("data") or []
+                available_tables = data or list(DEFAULT_TABLE_OPTIONS)
+            else:
+                error_msg = result.get("error", "Unknown error")
+                logger.warning("Failed to load table names: %s", error_msg)
+                available_tables = list(DEFAULT_TABLE_OPTIONS)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Table name load failed: %s", exc)
+            available_tables = list(DEFAULT_TABLE_OPTIONS)
+        finally:
+            set_status("Ready", ft.Colors.GREY_400, False)
+            update_table_dropdown()
+
+    async def load_table_data_async() -> None:
+        nonlocal all_records, filtered_records, table_columns
+
+        if not server_available():
+            all_records = []
+            filtered_records = []
+            table_columns = []
+            refresh_records_list()
+            return
+
+        try:
+            set_status(f"Loading {current_table}…", ft.Colors.BLUE, True)
+            bridge = get_active_bridge()
+            if bridge is None:
+                all_records = []
+                filtered_records = []
+                table_columns = []
+                return
+
+            result = await bridge.get_table_data_async(current_table)
+            if result.get("success"):
+                data = result.get("data", {})
+                table_columns = list(data.get("columns", []))
+                all_records = list(data.get("rows", []))
+                filtered_records = list(all_records)
+            else:
+                error_msg = result.get("error", "Unknown error")
+                logger.warning("Failed to load table data: %s", error_msg)
+                all_records = []
+                filtered_records = []
+                table_columns = []
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Table data load failed: %s", exc)
+            all_records = []
+            filtered_records = []
+            table_columns = []
+        finally:
+            apply_search_filter()
+            set_status("Ready", ft.Colors.GREY_400, False)
+
+    # ------------------------------------------------------------------
+    # INITIAL LAYOUT COMPOSITION
+    # ------------------------------------------------------------------
+    info_cards = ft.ResponsiveRow(
+        [
+            ft.Container(
+                content=create_neumorphic_metric_card(
+                    ft.Column(
+                        [
+                            ft.Row([ft.Icon(ft.Icons.DATASET, size=24), ft.Text("Status", size=14)]),
+                            db_status_value,
+                        ],
+                        spacing=8,
+                    ),
+                    intensity="pronounced",
+                ),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_neumorphic_metric_card(
+                    ft.Column(
+                        [
+                            ft.Row([ft.Icon(ft.Icons.TABLE_CHART, size=24), ft.Text("Tables", size=14)]),
+                            db_tables_value,
+                        ],
+                        spacing=8,
+                    ),
+                    intensity="pronounced",
+                ),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_neumorphic_metric_card(
+                    ft.Column(
+                        [
+                            ft.Row([ft.Icon(ft.Icons.STORAGE, size=24), ft.Text("Records", size=14)]),
+                            db_records_value,
+                        ],
+                        spacing=8,
+                    ),
+                    intensity="pronounced",
+                ),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_neumorphic_metric_card(
+                    ft.Column(
+                        [
+                            ft.Row([ft.Icon(ft.Icons.FOLDER, size=24), ft.Text("Size", size=14)]),
+                            db_size_value,
+                        ],
+                        spacing=8,
+                    ),
+                    intensity="pronounced",
+                ),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+        ]
     )
 
-    def dispose():
-        """Cleanup resources."""
-        pass
+    controls_row = create_glassmorphic_container(
+        ft.Row(
+            [
+                table_dropdown,
+                search_field,
+                ft.Container(expand=True),
+                loading_indicator,
+                status_text,
+            ],
+            spacing=12,
+            alignment=ft.MainAxisAlignment.START,
+        ),
+        intensity="moderate",
+    )
 
-    async def setup():
+    actions_row = ft.Row(
+        [
+            add_button,
+            refresh_button,
+            export_csv_button,
+            export_json_button,
+        ],
+        spacing=12,
+    )
+
+    add_button.on_click = add_record
+    refresh_button.on_click = on_refresh
+    export_csv_button.on_click = lambda _e: export_data("csv")
+    export_json_button.on_click = lambda _e: export_data("json")
+
+    records_section = create_neumorphic_container(
+        ft.Column(
+            [
+                ft.Text("Database Records", size=28, weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    "Rendered with ListView to avoid DataTable freezes per Flet documentation.",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
+                ft.Container(content=records_list, expand=True),
+            ],
+            spacing=16,
+            expand=True,
+        ),
+        effect_type="raised",
+        intensity="pronounced",
+    )
+
+    main_content = ft.Column(
+        [
+            ft.Text("Database Management", size=32, weight=ft.FontWeight.BOLD),
+            info_cards,
+            controls_row,
+            actions_row,
+            records_section,
+        ],
+        expand=True,
+        spacing=24,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+    main_container = ft.Container(content=main_content, expand=True)
+
+    table_dropdown.on_change = on_table_change
+    search_field.on_change = on_search_change
+
+    update_table_dropdown()
+    update_database_info_ui()
+    refresh_records_list()
+
+    # ------------------------------------------------------------------
+    # LIFECYCLE HOOKS
+    # ------------------------------------------------------------------
+    async def setup() -> None:
         """Setup function - load initial data."""
-        await load_data_async()
 
-    return content, dispose, setup
+        logger.info("Setting up database view (async)")
+        try:
+            # Allow AnimatedSwitcher transition to finish before loading data
+            await asyncio.sleep(SETUP_DELAY_SECONDS)
+            await load_database_info_async()
+            await load_table_names_async()
+            await load_table_data_async()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Database view setup failed: %s", exc)
+
+    def dispose() -> None:
+        """Dispose hook."""
+
+        logger.debug("Disposing database view")
+
+    return main_container, dispose, setup

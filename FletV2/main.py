@@ -1043,11 +1043,13 @@ class FletV2App(ft.Row):
             return
 
         # Call setup function asynchronously (AFTER content is rendered)
+        logger.debug(f"[POST_UPDATE] Checking setup for {view_name}, has attr: {hasattr(self, '_current_view_setup')}, value: {getattr(self, '_current_view_setup', 'NO_ATTR')}, callable: {callable(getattr(self, '_current_view_setup', None)) if hasattr(self, '_current_view_setup') else False}")
         setup_check = (
             hasattr(self, '_current_view_setup') and
             self._current_view_setup and
             callable(self._current_view_setup)
         )
+        logger.debug(f"[POST_UPDATE] setup_check result for {view_name}: {setup_check}")
         if setup_check:
             setup_func = self._current_view_setup
             self._current_view_setup = None  # Clear immediately to prevent double-calling

@@ -186,7 +186,10 @@ def retry(max_attempts: int = 3, backoff_base: float = 0.5, exceptions: tuple = 
             logger.error(
                 f"All {max_attempts} attempts failed for {func.__name__}: {last_exception}"
             )
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            # If somehow no exception was captured, raise a generic error
+            raise RuntimeError(f"All {max_attempts} attempts failed for {func.__name__} with no exception captured")
 
         return wrapper
     return decorator
@@ -474,8 +477,8 @@ class BackupServer:
         """Delegates sending a response to the network server."""
         self.network_server.send_response(sock, code, payload)
 
-    def _update_gui_client_count(self) -> None:
-        """Delegates updating the client count on the GUI (thread-safe)."""
+    def _update_gui_client_stats(self):
+        """Updates GUI with current client statistics."""
         with self.clients_lock:
             connected_clients = len(self.clients)
             # Get total clients from database if available
@@ -1897,39 +1900,47 @@ class BackupServer:
                 health_data['status'] = 'unhealthy'
 
             # Add connection pool metrics if database is accessible
-            if health_data['database_accessible'] and hasattr(self, 'db_manager'):
+            if health_data['database_accessible'] and hasattr(self, 'db_manager') and self.db_manager:
                 try:
-                    pool_status = self.db_manager.connection_pool.get_pool_status()
-                    health_data['connection_pool'] = {
-                        'active': pool_status.get('active_connections', 0),
-                        'available': pool_status.get('available_connections', 0),
-                        'total': pool_status.get('total_connections', 0),
-                        'peak_active': pool_status.get('peak_active_connections', 0),
-                        'exhaustion_events': pool_status.get('pool_exhaustion_events', 0),
-                        'cleanup_thread_alive': pool_status.get('cleanup_thread_alive', False)
-                    }
+                    # Safely check if connection_pool exists and has the method
+                    if (hasattr(self.db_manager, 'connection_pool') and
+                        self.db_manager.connection_pool and
+                        hasattr(self.db_manager.connection_pool, 'get_pool_status')):
 
-                    # Check for pool exhaustion issues
-                    if pool_status.get('pool_exhaustion_events', 0) > 0:
-                        health_data['errors'].append(
-                            f"Connection pool exhausted {pool_status['pool_exhaustion_events']} times"
-                        )
-                        if health_data['status'] == 'healthy':
-                            health_data['status'] = 'degraded'
+                        pool_status = self.db_manager.connection_pool.get_pool_status()
+                        health_data['connection_pool'] = {
+                            'active': pool_status.get('active_connections', 0),
+                            'available': pool_status.get('available_connections', 0),
+                            'total': pool_status.get('total_connections', 0),
+                            'peak_active': pool_status.get('peak_active_connections', 0),
+                            'exhaustion_events': pool_status.get('pool_exhaustion_events', 0),
+                            'cleanup_thread_alive': pool_status.get('cleanup_thread_alive', False)
+                        }
 
-                    # Check cleanup thread health
-                    if not pool_status.get('cleanup_thread_alive', False):
-                        health_data['errors'].append("Connection pool cleanup thread is dead")
-                        if health_data['status'] == 'healthy':
-                            health_data['status'] = 'degraded'
-
-                    # Check for emergency connection leaks
-                    if hasattr(self.db_manager.connection_pool, 'emergency_connections'):
-                        leak_count = len(self.db_manager.connection_pool.emergency_connections)
-                        if leak_count > 0:
-                            health_data['errors'].append(f"{leak_count} emergency connections leaked")
+                        # Check for pool exhaustion issues
+                        if pool_status.get('pool_exhaustion_events', 0) > 0:
+                            health_data['errors'].append(
+                                f"Connection pool exhausted {pool_status['pool_exhaustion_events']} times"
+                            )
                             if health_data['status'] == 'healthy':
                                 health_data['status'] = 'degraded'
+
+                        # Check cleanup thread health
+                        if not pool_status.get('cleanup_thread_alive', False):
+                            health_data['errors'].append("Connection pool cleanup thread is dead")
+                            if health_data['status'] == 'healthy':
+                                health_data['status'] = 'degraded'
+
+                        # Check for emergency connection leaks
+                        if hasattr(self.db_manager.connection_pool, 'emergency_connections'):
+                            leak_count = len(self.db_manager.connection_pool.emergency_connections)
+                            if leak_count > 0:
+                                health_data['errors'].append(f"{leak_count} emergency connections leaked")
+                                if health_data['status'] == 'healthy':
+                                    health_data['status'] = 'degraded'
+                    else:
+                        # Connection pool not available or incomplete
+                        health_data['connection_pool'] = {'status': 'unavailable'}
 
                 except Exception as pool_err:
                     logger.debug(f"Could not get connection pool metrics: {pool_err}")
