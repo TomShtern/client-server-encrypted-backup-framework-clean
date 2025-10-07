@@ -1,38 +1,63 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Run FletV2 App",
-            "type": "shell",
-            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
-            "args": ["main.py"],
-            "options": {
-                "cwd": "${workspaceFolder}/FletV2"
-            },
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            }
-        },
-        {
-            "label": "Run Python Server",
-            "type": "shell",
-            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
-            "args": ["server/server.py"],
-            "options": {
-                "cwd": "${workspaceFolder}/python_server"
-            },
-            "group": "build"
-        },
-        {
-            "label": "Lint Python Code",
-            "type": "shell",
-            "command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
-            "args": ["-m", "pylint", "FletV2", "Shared", "python_server", "api_server"],
-            "group": "test"
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run FletV2 App",
+			"type": "shell",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"main.py"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/FletV2"
+			},
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			}
+		},
+		{
+			"label": "Run Python Server",
+			"type": "shell",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"server/server.py"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/python_server"
+			},
+			"group": "build"
+		},
+		{
+			"label": "Lint Python Code",
+			"type": "shell",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pylint",
+				"FletV2",
+				"Shared",
+				"python_server",
+				"api_server"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Run FletV2 with Server (PS1)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\FletV2\\start_with_server.ps1"
+			],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
 }

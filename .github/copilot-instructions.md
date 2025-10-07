@@ -192,7 +192,10 @@ card = ft.Container(
     content=...,
     shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
     border_radius=12,
-    bgcolor=ft.Colors.SURFACE_VARIANT
+    bgcolor=ft.Colors.SURFACE_VARIANT,
+    bgcolor=ft.Colors.SURFACE # Replaced SURFACE_VARIANT with SURFACE
+    border_radius=8,
+    padding=10,
 )
 
 # Glassmorphic overlay
@@ -279,6 +282,9 @@ cd FletV2 && python main.py
 
 ### Launching FletV2 with Real Server
 
+**CRITICAL - ALWAYS LAUNCH WITH SERVER**:
+The Flet GUI must always be launched with the server.
+
 **CRITICAL - USE POWERSHELL LAUNCHER**:
 ```powershell
 # RECOMMENDED: PowerShell launcher with proper environment isolation
@@ -356,6 +362,8 @@ def convert_backupserver_client_to_fletv2(client_data: dict) -> dict:
 6. **transfer.info Format:** C++ client expects exactly 3 lines (server:port, username, filepath)
 7. **Flet GUI Launch:** Failing to use the PowerShell launcher (`start_with_server.ps1`) results in `pydantic` import errors.
 8. **Flet App Still Stuck Loading:** The port is already in use from the previous session. The app is trying to start but can't bind to the port because the old instance is still running. Ensure the previous instance is fully closed.
+9. **Launching Flet GUI without Server:** The Flet GUI must always be launched with the server.
+10. **GUI Disconnect:** The GUI disconnects if the database view triggers a disconnect, likely due to an update-before-attachment or a blocking call.
 
 ## 📁 Key Files Reference
 
@@ -388,6 +396,11 @@ def convert_backupserver_client_to_fletv2(client_data: dict) -> dict:
 - Views should return `(control, dispose_func, setup_func)` tuple
 - Call `setup_func()` **after** view is attached to page
 - Handle async setup functions: check `inspect.iscoroutinefunction(setup_func)` before calling
+- **`ft.Column` DOES support the `scroll` property in Flet 0.28.3**
+  - Use string values for the `scroll` property:
+    -  `scroll="auto"`
+    -  `scroll="always"`
+  -  Do NOT use `ft.ScrollMode.AUTO` or `ft.ScrollMode.ALWAYS`
 
 ### Database Best Practices
 - Use `db_manager.get_connection()` context manager (never raw `sqlite3.connect()`)
@@ -435,6 +448,7 @@ FLET_DASHBOARD_DEBUG=1                # Enable dashboard debugging
 - **VS Code Settings Conflict:** Resolved a VS Code settings conflict by removing the workspace-level `"python.analysis.typeCheckingMode"` setting from `.vscode/settings.json`. Pyright's configuration (either in `pyrightconfig.json` or `pyproject.toml`) should be used to control type checking. If project-level overrides are necessary, configure type checking within `pyrightconfig.json` or the appropriate section in `pyproject.toml`.
 - **Flet Launch Errors:** If you encounter errors like `cannot import name 'validate_core_schema' from 'pydantic_core'`, this indicates a dependency conflict or version incompatibility with the `pydantic` library. This can prevent the Flet GUI from launching. Ensure that your `pydantic` version is compatible with your Flet version.
 - **Analytics View Error:** If the analytics page is not loading and shows an error like `Failed to load analytics data: Column Control must be added to the page first`, it suggests an issue with the asynchronous data loading or UI component initialization. Ensure that the necessary UI components are added to the page before attempting to load the data. Also, check for correct usage and placement of asynchronous calls.
+- **DataTable Initialization:** Ensure that `DataTable` controls are initialized with at least one placeholder column to prevent errors when the view is first loaded.
 
 ### Server Retry Decorator
 - The `retry` decorator in `server.py` has been updated to prevent raising `None` exceptions, which can cause static analysis errors. The decorator now ensures that if no exception is captured during retry attempts, a `RuntimeError` is raised with a clear message.
@@ -508,20 +522,84 @@ To run the Flet GUI with the server, follow these steps:
 
 The system is now fully operational with end-to-end encryption (RSA-1024 + AES-256-CBC).
 
+To run the Flet GUI with the server on Windows:
+
+1. Open the integrated terminal in VS Code (ensure it's set to PowerShell).
+2. Navigate to the FletV2 directory:  
+   `cd c:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2`
+3. Execute the PowerShell launcher:  
+   `.\start_with_server.ps1`
+
+This will start the server on TCP port 1256 and launch the GUI in your default web browser. If issues occur (e.g., pydantic import errors), ensure `PYTHONNOUSERSITE=1` is set and no previous instances are running. Close with Ctrl+C.
+
 To stop the application, close the terminal or press `Ctrl+C` in the running terminal.
 
-### New Errors & Troubleshooting (2025-10-04)
+### Validating Flet GUI with Server is Running
+
+The FletV2 GUI is now running with the real backup server connected. Here's the current status:
+
+### System Status:
+- ✅ **Server**: Running on TCP port 1256
+- ✅ **GUI**: Running on HTTP port 8570  
+- ✅ **Integration**: Real server connected with full CRUD operations
+- ✅ **Database**: 17 clients accessible
+
+### Access the GUI:
+The GUI should automatically open in your default web browser at: **http://localhost:8570**
+
+### What You Can Do:
+- **Dashboard**: Verify live metrics and cards switch
+- **Clients**: Manage registered backup clients  
+- **Files**: Browse and manage backed up files
+- **Database**: Use table selector to view rows; export if available
+- **Analytics**: Confirm charts render after a few navigations
+- **Settings**: Configure server and GUI settings
+
+### Navigation:
+Use the navigation rail on the left side to switch between different views. The system starts on the Dashboard by default.
+
+If the browser doesn't open automatically, you can manually navigate to `http://localhost:8570` in your web browser.
+
+The server will continue running in the background. To stop it, you can close the terminal or press `Ctrl+C` in the running PowerShell terminal.
+
+### Next Steps & Troubleshooting (2025-10-06)
+
+## Status
+- GUI: http://localhost:8570 (opened in your browser)
+- Server: Injected into Flet, real integration active
+- Navigation: Dashboard, Files, Database, Analytics all loading without freezes
+- Database: Connected (counts OK). “Size: N/A” just means size calculation isn’t wired yet
+
+## Try this
+- Dashboard: Verify live metrics and cards switch
+- Files: Browse backed-up files (list and actions)
+- Database: Use table selector to view rows; export if available
+- Analytics: Confirm charts render after a few navigations
+
+## Stop or restart
+- VS Code: Terminal → “Run FletV2 with Server (PS1)” → Terminate Task
+- PowerShell (force stop):
+```powershell
+Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
+```
+- Relaunch (task is set up and preferred):
+```powershell
+# in VS Code: run task "Run FletV2 with Server (PS1)"
+```
+
+## If anything gets stuck
+- Port busy: ensure previous instances are terminated, then relaunch
+- Browser doesn’t open: navigate manually to http://localhost:8570
+
+### New Errors & Troubleshooting (2025-10-06)
 
 - **Flet Launch Errors:** If you encounter errors like `cannot import name 'validate_core_schema' from 'pydantic_core'`, this indicates a dependency conflict or version incompatibility with the `pydantic` library. This can prevent the Flet GUI from launching. Ensure that your `pydantic` version is compatible with your Flet version.
 - **Database View Error:** If the Flet GUI shows an error related to `ft.Icons.DATABASE`, it indicates that the icon is not available in the current Flet version. Replace `ft.Icons.DATABASE` with `ft.Icons.DATASET`.
-- **Analytics View Error:** If the analytics page is not loading and shows an error like `Failed to load analytics data: Column Control must be added to the page first`, it suggests an issue with the asynchronous data loading or UI component initialization. Ensure that the necessary UI components are added to the page before attempting to load the data. Also, check for correct usage and placement of asynchronous calls.
+- **Analytics View Error:** If the analytics page is not loading and shows an error like `Failed to load analytics data: Column Control must be added to the page first`, it suggests an issue with the asynchronous data loading or UI component initialization. Ensure that the necessary UI components are added to the page before loading the data. Also, check for correct usage and placement of asynchronous calls.
 - **Flet App Still Stuck Loading:** The port is already in use from the previous session. The app is trying to start but can't bind to the port because the old instance is still running. Ensure the previous instance is fully closed.
+- **DataTable Initialization:** Ensure that `DataTable` controls are initialized with at least one placeholder column to prevent errors when the view is first loaded.
 
 ### Flet View Lifecycle Deadlock Pattern
-
-The crash can be caused by a subtle but critical violation of Flet's view lifecycle. When controls call `.update()` before being attached to the page, Flet enters a deadlock. This is a timing-based deadlock, not a code error, which is why it produces no stack traces.
-
-### Flet View Lifecycle Golden Rule
 
 Flet views follow a strict 3-phase lifecycle:
 1. Creation: Build control tree (NO updates allowed)
@@ -555,3 +633,66 @@ def create_new_view(server_bridge, page, state_manager=None):
 ```
 
 It's critical that Flet's async architecture requires controls to be in the page tree before updates. This isn't a bug—it's by design. The framework needs a reference to the page object to know WHERE to render updates. Without page attachment, there's no render target, causing the blocking wait.
+
+### Database View Troubleshooting (2025-10-06)
+
+- **Large Empty Gray Area:** If the `records_section` expands to fill available vertical space, ensure the `ft.Column` inside has `alignment=ft.MainAxisAlignment.START` in addition to `tight=True`. Verify no invisible widgets are present before the `records_listview` within the `ft.Stack`.
+- **Long Text Strings Causing Large Record Cards:** Truncate the display of long string values within the `build_record_card` function, similar to how byte arrays are handled. Limit the length of the displayed string and add an ellipsis if it exceeds a certain character count.
+
+## 🛠️ Debugging & Tooling
+
+### Updating Claude Code
+
+To update the Claude Code CLI tool, use the following command in your terminal:
+
+```bash
+claude code --update
+```
+
+Alternatively, if installed via npm, you can use:
+
+```bash
+npm update -g @anthropic/claude-code
+```
+
+However, the built-in update command (`claude code --update`) is recommended.
+
+### Node.js Architecture Troubleshooting
+
+If you encounter an "Unsupported architecture: ia32" error when using Claude Code, it indicates that Node.js is running in 32-bit mode instead of 64-bit. Claude Code requires a 64-bit Node.js installation.
+
+**To fix this issue:**
+
+1.  **Uninstall current Node.js:**
+    \- Go to Settings → Apps → Node.js → Uninstall
+2.  **Download 64-bit Node.js:**
+    \- Visit: [https://nodejs.org/](https://nodejs.org/)
+    \- Download the **Windows Installer (.msi)** for **x64** (not x86)
+    \- Install the LTS version (currently v22.x is fine)
+3.  **Verify after installation:**
+    \- Open a new terminal or PowerShell window.
+    \- Run: `node -p "process.arch"`
+    \- The output should be `x64`. If it still shows `ia32`, ensure you have completely uninstalled the previous version and installed the 64-bit version correctly.
+4.  **Reinstall Claude Code**:
+
+```powershell
+npm uninstall -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code
+```
+
+### Using `grep` in the Terminal
+
+`grep` is a command-line utility for searching text patterns in files or input streams. It's powerful for finding specific strings
+
+## 🛠️ Debugging & Tooling
+### Updating pip
+
+To update pip, use the following command:
+
+```bash
+pip install --upgrade pip
+```
+
+### Updating pip packages in a virtual environment
+
+Always update packages inside the venv used by the project to avoid global breaks. Here's how to manage pip packages

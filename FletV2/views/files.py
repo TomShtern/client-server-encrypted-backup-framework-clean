@@ -339,7 +339,7 @@ def create_files_view(
                     padding=8,
                     border_radius=4
                 ),
-            ], spacing=10, height=250, scroll=ft.ScrollMode.AUTO),
+            ], spacing=10, height=250, scroll="auto"),
             actions=[
                 ft.TextButton("Close", on_click=lambda _e: page.close(verification_dialog))
             ],
@@ -473,7 +473,7 @@ def create_files_view(
         stats_row,
         actions_row,
         table_card
-    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
+    ], expand=True, spacing=20, scroll="auto")
 
     # Create the main container with theme support
     files_container = themed_card(main_content, None, page)  # No title since we have one in content

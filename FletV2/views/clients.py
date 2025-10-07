@@ -294,7 +294,7 @@ def create_clients_view(
                 ft.Text(f"Last Seen: {client.get('last_seen', 'N/A')}"),
                 ft.Text(f"Files: {client.get('files_count', 'N/A')}"),
                 ft.Text(f"IP Address: {client.get('ip_address', 'N/A')}"),
-            ], height=200, scroll=ft.ScrollMode.AUTO),
+            ], height=200, scroll="auto"),
             actions=[
                 ft.TextButton("Close", on_click=lambda _e: page.close(details_dialog))
             ],
@@ -418,7 +418,7 @@ def create_clients_view(
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Client"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll="auto"),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(add_dialog)),
                 ft.FilledButton("Add", on_click=save_client),
@@ -477,7 +477,7 @@ def create_clients_view(
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll="auto"),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(edit_dialog)),
                 ft.FilledButton("Save", on_click=save_changes),
@@ -555,7 +555,7 @@ def create_clients_view(
         stats_row,
         actions_row,
         table_card
-    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
+    ], expand=True, spacing=20, scroll="auto")
 
     # Create the main container with theme support
     clients_container = themed_card(main_content, None, page)  # No title since we have one in content

@@ -66,6 +66,54 @@ This is a comprehensive encrypted file backup system that implements a robust cl
 
 ## FletV2 GUI Architecture Details
 
+### 🚨 CRITICAL: Flet Async/Sync Integration (January 2025)
+
+**MANDATORY READING**: See [FLET_INTEGRATION_GUIDE.md](FLET_INTEGRATION_GUIDE.md) and [FLET_QUICK_FIX_GUIDE.md](FLET_QUICK_FIX_GUIDE.md) for comprehensive async/sync integration patterns.
+
+#### The Golden Rule: NEVER Await Synchronous Methods
+
+**99% of Flet freezes come from one mistake**: `await`ing synchronous methods blocks the event loop **forever**.
+
+```python
+# ❌ WRONG - Causes permanent freeze (gray screen, no errors, no recovery)
+async def load_data():
+    result = await bridge.get_database_info()  # If sync, FREEZE!
+
+# ✅ CORRECT - Use run_in_executor for ALL synchronous server/database calls
+async def load_data():
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, bridge.get_database_info)
+```
+
+#### Critical Integration Patterns
+
+1. **ServerBridge Methods are SYNCHRONOUS** - Always wrap with `run_in_executor`:
+   ```python
+   loop = asyncio.get_running_loop()
+   result = await loop.run_in_executor(None, bridge.method_name, arg1, arg2)
+   ```
+
+2. **NEVER use `time.sleep()` in async code** - Use `asyncio.sleep()`:
+   ```python
+   # ❌ WRONG: await asyncio.sleep(1) if you used time.sleep
+   # ✅ CORRECT:
+   await asyncio.sleep(1)  # Non-blocking
+   ```
+
+3. **ALWAYS call `page.update()` or `control.update()`** after state changes
+
+4. **NEVER call `asyncio.run()` inside Flet** - event loop is already running
+
+5. **Use diagnostic logging** to find freeze points:
+   ```python
+   async def debug_function():
+       print("🔴 [DEBUG] Starting")
+       await operation()
+       print("🔴 [DEBUG] Completed")  # If this doesn't print, freeze is in operation()
+   ```
+
+**Quick Fix**: Search for `await bridge.` and wrap all calls with `run_in_executor` (see FLET_QUICK_FIX_GUIDE.md for step-by-step instructions).
+
 ### 🚨 CRITICAL: Server Integration Architecture (October 1, 2025)
 
 **The BackupServer does NOT have an API.** All communication is via **direct Python method calls**:
@@ -87,6 +135,7 @@ This is a comprehensive encrypted file backup system that implements a robust cl
    - Data format conversion (BackupServer ↔ FletV2 formats)
    - Structured error handling with `{'success': bool, 'data': Any, 'error': str}`
    - **NO HTTP, NO REST, NO API CALLS** - pure Python method delegation
+   - **⚠️ CRITICAL**: All bridge methods are SYNCHRONOUS - wrap with `run_in_executor` when calling from async code
 
 ### ServerBridge Integration
 The ServerBridge acts as the primary interface between the GUI and the backend server. Key components include:
@@ -282,6 +331,148 @@ app = FletV2App(page, real_server=None)
 - Implement proper error handling for server method calls (not network operations)
 - Ensure thread safety when calling server methods from GUI thread
 - Data format conversion handled by ServerBridge (BLOB UUIDs ↔ strings)
+
+### 🚨 CRITICAL: Flet Async/Sync Integration Pattern (January 2025)
+
+**Root Cause of UI Freezes**: Calling `await` on non-existent async methods or non-coroutine objects causes Python's event loop to block **forever**, freezing the entire Flet GUI with no error messages.
+
+#### ❌ WRONG Pattern - Causes Permanent Freeze
+
+```python
+# WRONG - These methods don't exist or aren't async!
+async def load_data():
+    result = await bridge.get_database_info_async()  # ❌ Method doesn't exist
+    result = await bridge.get_table_data_async(table)  # ❌ Returns None, not coroutine
+    # Event loop blocks here forever waiting for coroutine
+```
+
+**What Happens**:
+1. Python tries to `await` a non-coroutine object or non-existent method
+2. Event loop blocks indefinitely waiting for a coroutine that never arrives
+3. GUI freezes completely - no error messages, no logs, no recovery
+4. Application becomes unresponsive and must be force-killed
+5. Terminal logs stop abruptly at the freeze point
+
+**Symptoms**:
+- View loads successfully (setup function starts)
+- Terminal shows "Setting up [view] (async)"
+- Logs stop completely after "All update functions completed"
+- Browser shows gray screen or empty view
+- GUI navigation becomes unresponsive
+- No Python exceptions raised
+- No error messages in terminal
+
+#### ✅ CORRECT Pattern - Non-Blocking Async
+
+```python
+# CORRECT - Wrap sync methods with run_in_executor
+async def load_data():
+    loop = asyncio.get_running_loop()
+
+    # Run synchronous server bridge methods in thread pool
+    result = await loop.run_in_executor(None, bridge.get_database_info)
+    result = await loop.run_in_executor(None, bridge.get_table_data, table_name)
+
+    # ✅ Event loop stays responsive while waiting for thread pool
+```
+
+**Why This Works**:
+1. `loop.run_in_executor(None, func, *args)` runs synchronous `func` in default thread pool executor
+2. Returns an awaitable `Future` that the event loop can monitor
+3. Event loop remains responsive while thread pool executes sync code
+4. No blocking - GUI stays interactive during data loading
+5. Proper async integration between Flet (async) and ServerBridge (sync)
+
+**When to Use**:
+- **ALWAYS** when calling ServerBridge methods from async Flet view functions
+- **ALWAYS** when mixing synchronous backend code with async GUI code
+- **ALWAYS** in view setup functions that load data from server
+- **ALWAYS** in event handlers that need server data
+
+#### Reference Implementation
+
+**Fixed Example** (database_simple.py:672-678):
+```python
+async def load_database_info_async() -> None:
+    """Load database connection info from server."""
+    try:
+        # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, bridge.get_database_info)
+
+        if result and result.get('success'):
+            # Process result...
+```
+
+**Fixed Example** (database_simple.py:738-744):
+```python
+async def load_table_data_async() -> None:
+    """Load data for currently selected table."""
+    try:
+        # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
+
+        if result and result.get('success'):
+            # Process result...
+```
+
+#### Diagnostic Pattern for Async Freezes
+
+**Add Strategic Logging** to identify freeze points:
+```python
+async def setup() -> None:
+    print("🔴 [SETUP] Starting async setup")
+
+    print("🔴 [SETUP] About to sleep")
+    await asyncio.sleep(0.5)
+    print("🔴 [SETUP] Sleep completed")
+
+    print("🔴 [SETUP] Loading data 1")
+    await load_data_1()
+    print("🔴 [SETUP] Data 1 loaded")
+
+    print("🔴 [SETUP] Loading data 2")
+    await load_data_2()  # If freeze happens, this line won't print
+    print("🔴 [SETUP] Data 2 loaded")
+```
+
+**Investigation Steps**:
+1. Check terminal logs for last printed message before freeze
+2. Identify the `await` statement that never completes
+3. Verify the awaited function returns a coroutine (use `inspect.iscoroutine()`)
+4. If awaiting ServerBridge method, wrap with `run_in_executor`
+5. Test fix and verify all setup logs complete
+
+#### Universal Checklist for Flet Views
+
+**Before Creating Any Async View Function**:
+- [ ] ALL ServerBridge calls wrapped with `loop.run_in_executor(None, bridge.method, *args)`
+- [ ] NO direct `await bridge.method()` calls (bridge methods are SYNC, not ASYNC)
+- [ ] Diagnostic logging added to track async flow (print statements at each step)
+- [ ] Test in browser DevTools with Network tab open (check for freeze/hang)
+- [ ] Verify terminal shows ALL setup completion logs
+
+**Validation Test**:
+```python
+# Quick test - add this to any async function
+import inspect
+
+async def my_async_function():
+    result = some_bridge_call()
+
+    # Validate it's actually a coroutine before awaiting
+    if inspect.iscoroutine(result):
+        data = await result
+    else:
+        # ❌ NOT a coroutine - will cause freeze if you await it!
+        print(f"ERROR: {result} is not a coroutine, use run_in_executor!")
+```
+
+#### Related Documentation
+- Flet Async Patterns: https://flet.dev/docs/guides/python/async-apps
+- Python asyncio: https://docs.python.org/3/library/asyncio-task.html
+- ThreadPoolExecutor: https://docs.python.org/3/library/concurrent.futures.html
 
 ### Database Operations
 

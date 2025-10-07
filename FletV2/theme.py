@@ -667,7 +667,8 @@ def create_skeleton_loader(height: int = 20, width: int | None = None, radius: i
         height=height,
         width=width,
         border_radius=radius,
-        bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.SURFACE_VARIANT),
+    # SURFACE_VARIANT not available; approximate with SURFACE tint
+    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.SURFACE),
         animate=ft.Animation(1000, ft.AnimationCurve.EASE_IN_OUT)
     )
 

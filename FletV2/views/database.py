@@ -8,6 +8,7 @@ Let Flet handle CRUD operations with simple, clean patterns.
 """
 
 # Standard library imports
+import asyncio
 import json
 import os
 import sys
@@ -83,8 +84,9 @@ def create_database_view(
 
         try:
             logger.info(f"🔵 [DATABASE] Fetching data for table: {selected_table}")
-            # Use NEW async method to prevent blocking the UI thread
-            result = await server_bridge.get_table_data_async(selected_table)
+            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, server_bridge.get_table_data, selected_table)
             logger.info(f"🔵 [DATABASE] get_table_data_async returned: success={result.get('success')}")
             if not result.get('success'):
                 logger.error(f"Failed to fetch data for {selected_table}: {result.get('error', 'Unknown error')}")
@@ -144,7 +146,7 @@ def create_database_view(
             )
         ],
         spacing=10,
-        scroll=ft.ScrollMode.AUTO,
+        scroll="auto",
         expand=True,
     )
 
@@ -180,7 +182,8 @@ def create_database_view(
                     ft.Container(
                         content=ft.Text(record_text, size=12, selectable=True),
                         padding=8,
-                        bgcolor=ft.Colors.SURFACE_VARIANT if i % 2 == 0 else None,
+                        # SURFACE_VARIANT not available; use SURFACE for alternating row background
+                        bgcolor=ft.Colors.SURFACE if i % 2 == 0 else None,
                         border_radius=4,
                     )
                 )
@@ -226,10 +229,12 @@ def create_database_view(
 
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'update_table_record_async'):
+                if bridge is None or not hasattr(bridge, 'update_table_record'):
                     show_error_message(page, "Server bridge not ready (update unavailable)")
                     return
-                result = await bridge.update_table_record_async(selected_table, updated_record)
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.update_table_record, selected_table, updated_record)
                 if result.get('success'):
                     # Update local data with server-confirmed record
                     updated_record = result.get('data', updated_record)
@@ -248,7 +253,7 @@ def create_database_view(
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text("Edit Record"),
-            content=ft.Column(field_controls, height=300, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(field_controls, height=300, scroll="auto"),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(edit_dialog)),
                 ft.FilledButton("Save", on_click=save_changes),
@@ -266,10 +271,12 @@ def create_database_view(
         async def confirm_delete(_e: ft.ControlEvent) -> None:
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'delete_table_record_async'):
+                if bridge is None or not hasattr(bridge, 'delete_table_record'):
                     show_error_message(page, "Server bridge not ready (delete unavailable)")
                     return
-                result = await bridge.delete_table_record_async(selected_table, record.get('id'))
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.delete_table_record, selected_table, record.get('id'))
                 if result.get('success'):
                     # Remove from local data after server confirms deletion
                     table_data[:] = [row for row in table_data if row.get('id') != record.get('id')]
@@ -322,10 +329,12 @@ def create_database_view(
 
             try:
                 bridge = server_bridge
-                if bridge is None or not hasattr(bridge, 'add_table_record_async'):
+                if bridge is None or not hasattr(bridge, 'add_table_record'):
                     show_error_message(page, "Server bridge not ready (add unavailable)")
                     return
-                result = await bridge.add_table_record_async(selected_table, new_record_data)
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.add_table_record, selected_table, new_record_data)
                 if result.get('success'):
                     # Use server-returned record to ensure consistency
                     new_record = result.get('data', new_record_data)
@@ -340,7 +349,7 @@ def create_database_view(
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Record"),
-            content=ft.Column(field_controls, height=300, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(field_controls, height=300, scroll="auto"),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(add_dialog)),
                 ft.FilledButton("Add", on_click=save_new_record),
@@ -446,7 +455,7 @@ def create_database_view(
         ]),
         actions_row,
         table_card
-    ], expand=True, spacing=20, scroll=ft.ScrollMode.AUTO)
+    ], expand=True, spacing=20, scroll="auto")
 
     # Create the main container with theme support
     database_container = themed_card(main_content, None, page)  # No title since we have one in content
@@ -460,8 +469,9 @@ def create_database_view(
             return
 
         try:
-            # Use NEW async method to prevent blocking the UI thread
-            info_res = await server_bridge.get_database_info_async()
+            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+            loop = asyncio.get_running_loop()
+            info_res = await loop.run_in_executor(None, server_bridge.get_database_info)
             if not info_res.get('success'):
                 logger.error(f"Failed to fetch database info: {info_res.get('error', 'Unknown error')}")
                 db_status["status"] = "Database info unavailable"

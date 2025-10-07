@@ -391,6 +391,7 @@ class FletV2App(ft.Row):
         # Comment 12: Track current view dispose function for proper StateManager cleanup
         self._current_view_dispose: Callable[[], None] | None = None
         self._current_view_name: str | None = None
+        self._current_setup_task: asyncio.Task | None = None  # Track setup task for cancellation
 
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self.content_area = ft.Container(
@@ -562,7 +563,7 @@ class FletV2App(ft.Row):
             "dashboard": ("views.dashboard", "create_dashboard_view", "dashboard"),
             "clients": ("views.clients", "create_clients_view", "clients"),
             "files": ("views.files", "create_files_view", "files"),
-            "database": ("views.database_simple", "create_database_view", "database"),  # Simple view to avoid browser crashes
+            "database": ("views.database_pro", "create_database_view", "database"),  # Professional view with full CRUD operations
             "analytics": ("views.analytics", "create_analytics_view", "analytics"),
             "logs": ("views.logs", "create_logs_view", "logs"),
             "settings": ("views.settings", "create_settings_view", "settings"),
@@ -583,6 +584,13 @@ class FletV2App(ft.Row):
     def navigate_to(self, view_name: str) -> None:
         """Navigate to a specific view and sync navigation rail."""
         print(f"🟡 [NAVIGATE_TO] FUNCTION CALLED WITH view_name='{view_name}'")
+
+        # CRITICAL FIX: Prevent navigating to the same view twice (causes setup cancellation)
+        if view_name == self._current_view_name:
+            print(f"🟡 [NAVIGATE_TO] Already on '{view_name}', skipping navigation")
+            logger.debug(f"Already on '{view_name}', skipping navigation")
+            return
+
         print(f"🟡 [NAVIGATE_TO] About to call logger.info")
         logger.info(f"🟡 [NAVIGATE_TO] FUNCTION ENTERED with view_name='{view_name}'")
         print(f"🟡 [NAVIGATE_TO] logger.info completed successfully")
@@ -890,19 +898,28 @@ class FletV2App(ft.Row):
 
     def _dispose_current_view(self, new_view_name: str) -> None:
         """Dispose of the current view before loading a new one."""
-        if self._current_view_dispose and new_view_name != self._current_view_name:
-            try:
-                self._current_view_dispose()
-                logger.debug(f"Disposed of previous view: {self._current_view_name}")
-            except Exception as e:
-                logger.warning(f"Failed to dispose previous view {self._current_view_name}: {e}")
-            self._current_view_dispose = None
-            self._current_view_name = None
+        if new_view_name != self._current_view_name:
+            # Cancel any running setup task first
+            if self._current_setup_task and not self._current_setup_task.done():
+                print(f"🟥 [DISPOSE] Cancelling setup task for '{self._current_view_name}'")
+                logger.info(f"Cancelling setup task for view: {self._current_view_name}")
+                self._current_setup_task.cancel()
+                self._current_setup_task = None
+
+            # Then call view's dispose function
+            if self._current_view_dispose:
+                try:
+                    self._current_view_dispose()
+                    logger.debug(f"Disposed of previous view: {self._current_view_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to dispose previous view {self._current_view_name}: {e}")
+                self._current_view_dispose = None
+                self._current_view_name = None
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
         print(f"🚨🚨🚨 _perform_view_loading ENTERED for '{view_name}' 🚨🚨🚨")
-        logger.info(f"🔄 Loading view: {view_name}")
+        logger.info(f"🔄 Loading view: {view_name} (previous: {self._current_view_name})")
 
         # Comment 12: Dispose of current view before loading new one
         self._dispose_current_view(view_name)
@@ -982,7 +999,7 @@ class FletV2App(ft.Row):
                             "This is a diagnostics panel. Navigate to another view to continue.",
                             size=12, color=ft.Colors.ON_SURFACE_VARIANT
                         )
-                    ], spacing=8, scroll=ft.ScrollMode.ALWAYS),
+                    ], spacing=8, scroll="always"),
                     padding=20,
                     bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
                     border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),
@@ -1083,16 +1100,29 @@ class FletV2App(ft.Row):
                                 await setup_func()
                             else:
                                 setup_func()
+                        except asyncio.CancelledError:
+                            print(f"🟦 [SETUP_TASK] Setup cancelled for '{view_name}'")
+                            logger.info(f"Setup cancelled for {view_name}")
+                            raise  # Re-raise to properly cancel the task
                         except Exception as setup_err:
                             logger.warning(f"Setup function execution failed: {setup_err}")
                     else:
                         logger.debug("No setup_func to execute (None or not callable); skipping")
+                except asyncio.CancelledError:
+                    print(f"🟦 [SETUP_TASK] Delayed setup cancelled during sleep for '{view_name}'")
+                    raise  # Re-raise to properly cancel the task
                 except Exception as setup_err:
                     logger.warning(f"Setup function failed for {view_name}: {setup_err}")
+                finally:
+                    # Clear task reference when done (successfully or cancelled)
+                    if self._current_setup_task:
+                        print(f"🟦 [SETUP_TASK] Clearing setup task reference for '{view_name}'")
+                        self._current_setup_task = None
 
-            # Run setup asynchronously using page.run_task()
+            # Run setup asynchronously using page.run_task() and track for cancellation
             try:
-                self.page.run_task(delayed_setup)
+                self._current_setup_task = self.page.run_task(delayed_setup)
+                print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {self._current_setup_task}")
             except Exception as e:
                 logger.warning(f"Failed to schedule setup task for {view_name}: {e}")
 

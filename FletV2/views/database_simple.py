@@ -239,8 +239,12 @@ def create_database_view(
         print("🔵 [UPDATE_DROPDOWN] Dropdown attached, proceeding with update")
 
         options = available_tables or list(DEFAULT_TABLE_OPTIONS)
+        # Use explicit text/key to avoid value mismatches across Flet versions
         table_dropdown.options = [
-            ft.dropdown.Option(table, table.replace("_", " ").title())
+            ft.dropdown.Option(
+                text=table.replace("_", " ").title(),
+                key=table,
+            )
             for table in options
         ]
         if current_table not in options:
@@ -323,7 +327,8 @@ def create_database_view(
             content=ft.Column(tile_children, spacing=10, tight=True),
             padding=ft.Padding(16, 12, 16, 12),
             border_radius=14,
-            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.SURFACE_VARIANT),
+            # SURFACE_VARIANT not available in current Flet; approximate with SURFACE tint
+            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.SURFACE),
         )
 
     def refresh_records_list() -> None:
@@ -428,7 +433,8 @@ def create_database_view(
             search_field.update()
 
         if hasattr(page, "run_task"):
-            page.run_task(load_table_data_async())
+            # Pass function reference, not coroutine object
+            page.run_task(load_table_data_async)
 
     def on_search_change(event: ft.ControlEvent) -> None:
         nonlocal search_query
@@ -437,9 +443,10 @@ def create_database_view(
 
     def on_refresh(_event: ft.ControlEvent) -> None:
         if hasattr(page, "run_task"):
-            page.run_task(load_database_info_async())
-            page.run_task(load_table_names_async())
-            page.run_task(load_table_data_async())
+            # FIXED: Pass function, not coroutine object
+            page.run_task(load_database_info_async)
+            page.run_task(load_table_names_async)
+            page.run_task(load_table_data_async)
 
     # ------------------------------------------------------------------
     # CRUD OPERATIONS
@@ -462,14 +469,16 @@ def create_database_view(
 
         add_dialog = ft.AlertDialog(
             title=ft.Text(f"Add record to {current_table.title()}"),
-            content=ft.Column(list(input_fields.values()), height=360, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(list(input_fields.values()), height=360, scroll="auto"),
         )
 
         async def save_async() -> None:
             try:
                 set_status("Saving record…", ft.Colors.BLUE, True)
                 payload = {column: field.value or None for column, field in input_fields.items()}
-                result = await bridge.add_table_record_async(current_table, payload)  # type: ignore[arg-type]
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.add_table_record, current_table, payload)
                 if result.get("success"):
                     show_success_message(page, "Record added successfully")
                     await load_table_data_async()
@@ -487,7 +496,8 @@ def create_database_view(
 
         add_dialog.actions = [
             ft.TextButton("Cancel", on_click=lambda _: page.close(add_dialog)),
-            ft.FilledButton("Add", on_click=lambda _: page.run_task(save_async())),
+            # Pass function reference to run_task
+            ft.FilledButton("Add", on_click=lambda _: page.run_task(save_async)),
         ]
 
         page.open(add_dialog)
@@ -512,7 +522,7 @@ def create_database_view(
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit record #{record.get('id', 'unknown')}"),
-            content=ft.Column(list(input_fields.values()), height=360, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(list(input_fields.values()), height=360, scroll="auto"),
         )
 
         async def save_changes() -> None:
@@ -522,7 +532,9 @@ def create_database_view(
                     payload[column] = field.value or None
 
                 set_status("Updating record…", ft.Colors.BLUE, True)
-                result = await bridge.update_table_record_async(current_table, payload)  # type: ignore[arg-type]
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.update_table_record, current_table, payload)
                 if result.get("success"):
                     show_success_message(page, "Record updated successfully")
                     await load_table_data_async()
@@ -540,7 +552,8 @@ def create_database_view(
 
         edit_dialog.actions = [
             ft.TextButton("Cancel", on_click=lambda _: page.close(edit_dialog)),
-            ft.FilledButton("Save", on_click=lambda _: page.run_task(save_changes())),
+            # Pass function reference to run_task
+            ft.FilledButton("Save", on_click=lambda _: page.run_task(save_changes)),
         ]
 
         page.open(edit_dialog)
@@ -567,7 +580,9 @@ def create_database_view(
         async def confirm_async() -> None:
             try:
                 set_status("Deleting record…", ft.Colors.BLUE, True)
-                result = await bridge.delete_table_record_async(current_table, record_id)  # type: ignore[arg-type]
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, bridge.delete_table_record, current_table, record_id)
                 if result.get("success"):
                     show_success_message(page, "Record deleted successfully")
                     await load_table_data_async()
@@ -587,7 +602,8 @@ def create_database_view(
             ft.TextButton("Cancel", on_click=lambda _: page.close(confirm_dialog)),
             ft.FilledButton(
                 "Delete",
-                on_click=lambda _: page.run_task(confirm_async()),
+                # Pass function reference to run_task
+                on_click=lambda _: page.run_task(confirm_async),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
             ),
         ]
@@ -634,15 +650,18 @@ def create_database_view(
                 show_error_message(page, f"Export failed: {exc}")
 
         if hasattr(page, "run_task"):
-            page.run_task(export_async())
+            # Pass function reference, not coroutine object
+            page.run_task(export_async)
 
     # ------------------------------------------------------------------
     # DATA LOADING HELPERS
     # ------------------------------------------------------------------
     async def load_database_info_async() -> None:
         nonlocal db_info
+        print("🟠 [LOAD_DB_INFO] Function ENTERED")
 
         if not server_available():
+            print("🟠 [LOAD_DB_INFO] Server not available")
             db_info = {
                 "status": "Disconnected",
                 "tables": 0,
@@ -655,9 +674,12 @@ def create_database_view(
             return
 
         try:
+            print("🟠 [LOAD_DB_INFO] Setting status to 'Loading database info…'")
             set_status("Loading database info…", ft.Colors.BLUE, True)
+            print("🟠 [LOAD_DB_INFO] Getting active bridge")
             bridge = get_active_bridge()
             if bridge is None:
+                print("🟠 [LOAD_DB_INFO] Bridge is None")
                 db_info = {
                     "status": "Disconnected",
                     "tables": 0,
@@ -669,21 +691,29 @@ def create_database_view(
                 update_database_info_ui()
                 return
 
-            # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+            print("🟠 [LOAD_DB_INFO] About to call bridge.get_database_info() with run_in_executor")
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_database_info)
+            print(f"🟠 [LOAD_DB_INFO] Method returned: success={result.get('success')}, error={result.get('error')}")
+
             if result.get("success") and result.get("data"):
                 db_info = result["data"]
+                print(f"🟠 [LOAD_DB_INFO] SUCCESS - Updated db_info: {db_info}")
             else:
                 error_msg = result.get("error", "Unknown error")
+                print(f"🟠 [LOAD_DB_INFO] FAILED - Error: {error_msg}")
                 logger.warning("Failed to load database info: %s", error_msg)
                 db_info["status"] = f"Error: {error_msg}"
         except Exception as exc:  # pragma: no cover - defensive
+            print(f"🟠 [LOAD_DB_INFO] EXCEPTION: {type(exc).__name__}: {exc}")
             logger.exception("Database info load failed: %s", exc)
             db_info["status"] = f"Error: {exc}"
         finally:
+            print("🟠 [LOAD_DB_INFO] Finally block - setting status to Ready")
             set_status("Ready", ft.Colors.GREY_400, False)
             update_database_info_ui()
+            print("🟠 [LOAD_DB_INFO] Function EXITING")
 
     async def load_table_names_async() -> None:
         nonlocal available_tables
@@ -700,6 +730,7 @@ def create_database_view(
                 available_tables = list(DEFAULT_TABLE_OPTIONS)
                 return
 
+            # CRITICAL FIX: Use run_in_executor for sync method (no async version exists)
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_table_names)
             if result.get("success"):
@@ -735,7 +766,7 @@ def create_database_view(
                 table_columns = []
                 return
 
-            # CRITICAL FIX: Use run_in_executor for sync server bridge methods
+            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
             if result.get("success"):
@@ -877,7 +908,7 @@ def create_database_view(
         ],
         expand=True,
         spacing=24,
-        scroll=ft.ScrollMode.AUTO,
+        scroll="auto",
     )
 
     main_container = ft.Container(content=main_content, expand=True)
@@ -895,25 +926,41 @@ def create_database_view(
     # ------------------------------------------------------------------
     # LIFECYCLE HOOKS
     # ------------------------------------------------------------------
+    # Track background tasks for proper cancellation
+    background_tasks: list[asyncio.Task] = []
+    _setup_cancelled = False
+
     async def setup() -> None:
         """Setup function - load initial data."""
+        nonlocal _setup_cancelled
 
         print("🔴 [DATABASE_SETUP] Setup function CALLED")
         logger.info("🔴 [DATABASE_SETUP] Setting up database view (async)")
         print("🔴 [DATABASE_SETUP] About to call update functions")
         try:
-            # CRITICAL: Initialize UI state AFTER view is attached to page
+            # Check if disposed before proceeding
+            if _setup_cancelled:
+                print("🔴 [DATABASE_SETUP] Setup cancelled - exiting early")
+                return
+
+            # Allow AnimatedSwitcher transition to finish BEFORE any updates to avoid
+            # potential deadlocks/disconnects when controls aren't fully attached yet.
+            print(f"🔴 [DATABASE_SETUP] Waiting {SETUP_DELAY_SECONDS}s for attachment")
+            await asyncio.sleep(SETUP_DELAY_SECONDS)
+
+            if _setup_cancelled:
+                print("🔴 [DATABASE_SETUP] Setup cancelled after sleep - exiting")
+                return
+
+            # CRITICAL: Initialize UI state AFTER guaranteed attachment delay
             print("🔴 [DATABASE_SETUP] Calling update_table_dropdown()")
             update_table_dropdown()
             print("🔴 [DATABASE_SETUP] Calling update_database_info_ui()")
             update_database_info_ui()
             print("🔴 [DATABASE_SETUP] Calling refresh_records_list()")
             refresh_records_list()
-            print("🔴 [DATABASE_SETUP] All update functions completed")
+            print("🔴 [DATABASE_SETUP] Initial UI updates completed, loading data…")
 
-            # Allow AnimatedSwitcher transition to finish before loading data
-            print(f"🔴 [DATABASE_SETUP] About to sleep for {SETUP_DELAY_SECONDS}s")
-            await asyncio.sleep(SETUP_DELAY_SECONDS)
             print("🔴 [DATABASE_SETUP] Sleep completed, loading database info")
             await load_database_info_async()
             print("🔴 [DATABASE_SETUP] Database info loaded, loading table names")
@@ -921,13 +968,32 @@ def create_database_view(
             print("🔴 [DATABASE_SETUP] Table names loaded, loading table data")
             await load_table_data_async()
             print("🔴 [DATABASE_SETUP] All async loading completed successfully!")
+        except asyncio.CancelledError:
+            print("🔴 [DATABASE_SETUP] Setup task was cancelled")
+            logger.info("Database view setup cancelled")
+            raise  # Re-raise to properly cancel the task
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Database view setup failed: %s", exc)
 
     def dispose() -> None:
-        """Dispose hook."""
+        """Dispose hook - cancel background tasks."""
+        nonlocal _setup_cancelled
 
-        logger.debug("Disposing database view")
+        print("🟥 [DATABASE_DISPOSE] Dispose function CALLED")
+        logger.info("🟥 [DATABASE_DISPOSE] Disposing database view - cancelling background tasks")
+
+        # Signal setup to stop if it's running
+        _setup_cancelled = True
+
+        # Cancel all tracked background tasks
+        for task in background_tasks:
+            if not task.done():
+                print(f"🟥 [DATABASE_DISPOSE] Cancelling task: {task}")
+                task.cancel()
+
+        background_tasks.clear()
+        print("🟥 [DATABASE_DISPOSE] All background tasks cancelled")
+        logger.debug("Database view disposed")
 
     print(f"🔴 [DATABASE_VIEW] About to return tuple: (main_container={type(main_container)}, dispose={type(dispose)}, setup={type(setup)})")
     logger.info(f"🔴 [DATABASE_VIEW] Returning view tuple with setup function: {setup}")

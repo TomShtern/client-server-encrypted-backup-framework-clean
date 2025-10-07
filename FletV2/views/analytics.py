@@ -4,6 +4,7 @@ Analytics View - Data Visualization Dashboard
 Shows backup statistics with charts and metrics.
 """
 
+import asyncio
 import os
 import sys
 from collections.abc import Coroutine
@@ -299,7 +300,7 @@ def create_analytics_view(
 
         # Storage
         storage_row,
-    ], spacing=20, expand=True, scroll=ft.ScrollMode.AUTO)
+    ], spacing=20, expand=True, scroll="auto")
 
     main_container = ft.Container(
         content=content,
@@ -316,9 +317,10 @@ def create_analytics_view(
             return
 
         try:
-            # Fetch analytics data from server using BackupServer's async method
-            # This avoids connection pool exhaustion issues
-            server_data = await server_bridge._call_real_server_method_async('get_analytics_data_async')
+            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+            # Fetch analytics data from server - bridge method is SYNC, not async
+            loop = asyncio.get_running_loop()
+            server_data = await loop.run_in_executor(None, server_bridge.get_analytics_data)
             if not isinstance(server_data, dict) or not server_data.get('success'):
                 # Server call failed, keep placeholder data
                 return

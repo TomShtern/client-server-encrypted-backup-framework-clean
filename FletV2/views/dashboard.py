@@ -1390,7 +1390,7 @@ def create_dashboard_view(
             # Activity Section with enhanced styling
             activity_container
 
-        ], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+        ], spacing=0, scroll="auto", expand=True)
 
     dashboard_container = ft.Container(
         content=dashboard_content,

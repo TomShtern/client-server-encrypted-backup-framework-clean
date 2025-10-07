@@ -555,12 +555,88 @@ class ServerBridge:
         return await self._call_real_server_method_async('get_system_status_async')
 
     def get_analytics_data(self):
-        """Get analytics data."""
-        return self._call_real_server_method('get_analytics_data')
+        """Get analytics data.
+
+        Normalize server response to the schema expected by FletV2 analytics view:
+        {
+            'success': bool,
+            'data': {
+                'total_backups': int,
+                'total_storage_gb': float,
+                'success_rate': float,
+                'avg_backup_size_gb': float,
+                'backup_trend': list[int],
+                'client_storage': list[float],
+                'file_type_distribution': list[int]
+            },
+            'error': str | None,
+            'raw': <original server data>
+        }
+        """
+        raw = self._call_real_server_method('get_analytics_data')
+        # If call failed or unexpected, return as-is
+        if not isinstance(raw, dict) or not raw.get('success'):
+            return raw
+
+        src = raw.get('data') or {}
+        # Heuristic normalization from server-side keys to analytics view keys
+        total_backups = src.get('total_backups') or src.get('total_files') or 0
+        # Estimate total storage from database stats when available
+        db_stats = src.get('database_stats') or {}
+        size_bytes = (
+            db_stats.get('database_size_bytes')
+            if isinstance(db_stats, dict) else 0
+        ) or 0
+        total_storage_gb = round(float(size_bytes) / (1024 * 1024 * 1024), 2) if size_bytes else 0.0
+
+        normalized = {
+            'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
+            'total_storage_gb': total_storage_gb,
+            'success_rate': float(src.get('success_rate', 0.0) or 0.0),
+            'avg_backup_size_gb': float(src.get('avg_backup_size_gb', 0.0) or 0.0),
+            'backup_trend': src.get('backup_trend') or [],
+            'client_storage': src.get('client_storage') or [],
+            'file_type_distribution': src.get('file_type_distribution') or [],
+        }
+
+        return {
+            'success': True,
+            'data': normalized,
+            'error': None,
+            'raw': raw.get('data')
+        }
 
     async def get_analytics_data_async(self):
-        """Get analytics data (async)."""
-        return await self._call_real_server_method_async('get_analytics_data_async')
+        """Get analytics data (async) with normalized schema."""
+        raw = await self._call_real_server_method_async('get_analytics_data_async')
+        if not isinstance(raw, dict) or not raw.get('success'):
+            return raw
+
+        src = raw.get('data') or {}
+        db_stats = src.get('database_stats') or {}
+        size_bytes = (
+            db_stats.get('database_size_bytes')
+            if isinstance(db_stats, dict) else 0
+        ) or 0
+        total_storage_gb = round(float(size_bytes) / (1024 * 1024 * 1024), 2) if size_bytes else 0.0
+
+        total_backups = src.get('total_backups') or src.get('total_files') or 0
+        normalized = {
+            'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
+            'total_storage_gb': total_storage_gb,
+            'success_rate': float(src.get('success_rate', 0.0) or 0.0),
+            'avg_backup_size_gb': float(src.get('avg_backup_size_gb', 0.0) or 0.0),
+            'backup_trend': src.get('backup_trend') or [],
+            'client_storage': src.get('client_storage') or [],
+            'file_type_distribution': src.get('file_type_distribution') or [],
+        }
+
+        return {
+            'success': True,
+            'data': normalized,
+            'error': None,
+            'raw': raw.get('data')
+        }
 
     def get_performance_metrics(self):
         """Get performance metrics."""

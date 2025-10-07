@@ -137,7 +137,7 @@ def create_experimental_view(
         # Tools section
         tools_section,
 
-    ], spacing=24, expand=True, scroll=ft.ScrollMode.AUTO)
+    ], spacing=24, expand=True, scroll="auto")
 
     main_container = ft.Container(
         content=content,

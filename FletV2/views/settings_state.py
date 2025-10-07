@@ -139,7 +139,9 @@ class EnhancedSettingsState:
             # Try server bridge first
             if self.server_bridge:
                 try:
-                    result = await self.server_bridge.save_settings_async(self.current_settings)
+                    # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, self.server_bridge.save_settings, self.current_settings)
                     if result.get("success"):
                         self.last_saved = datetime.now()
                         if self.state_manager:
@@ -206,7 +208,9 @@ class EnhancedSettingsState:
             # Try server first
             if self.server_bridge:
                 try:
-                    result = await self.server_bridge.load_settings_async()
+                    # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, self.server_bridge.load_settings)
                     if isinstance(result, dict) and result.get("success"):
                         loaded = result.get("data") or result.get("settings")
                 except Exception as e:
@@ -310,7 +314,11 @@ class EnhancedSettingsState:
     async def validate_settings_async(self, settings_data: dict[str, Any]):
         try:
             if self.server_bridge:
-                return await self.server_bridge.validate_settings_async(settings_data)
+                real_server = getattr(self.server_bridge, 'real_server', None)
+                if real_server and hasattr(real_server, 'validate_settings'):
+                    # Call sync server method with run_in_executor (safer pattern)
+                    loop = asyncio.get_running_loop()
+                    return await loop.run_in_executor(None, real_server.validate_settings, settings_data)
             validation_result = {"valid": True, "errors": [], "warnings": []}
             if "server" in settings_data:
                 self._validate_server_settings(settings_data["server"], validation_result)
@@ -427,9 +435,11 @@ class EnhancedSettingsState:
                 self.state_manager.start_progress("settings_backup", total_steps=2, message="Creating backup")
                 self.state_manager.set_loading("settings_backup", True)
             if self.server_bridge:
-                result = await self.server_bridge.backup_settings_async(
-                    backup_name, self.current_settings
-                )
+                real_server = getattr(self.server_bridge, 'real_server', None)
+                if real_server and hasattr(real_server, 'backup_settings'):
+                    # Call sync server method with run_in_executor (safer pattern)
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, real_server.backup_settings, backup_name, self.current_settings)
                 if result.get("success") and self.state_manager:
                     self.state_manager.update_progress("settings_backup", step=1, message="Saving")
                     self.state_manager.add_notification(f"Backup '{backup_name}' created", "success")
@@ -465,7 +475,11 @@ class EnhancedSettingsState:
             if self.state_manager:
                 self.state_manager.set_loading("settings_restore", True)
             if self.server_bridge:
-                result = await self.server_bridge.restore_settings_async(backup_file)
+                real_server = getattr(self.server_bridge, 'real_server', None)
+                if real_server and hasattr(real_server, 'restore_settings'):
+                    # Call sync server method with run_in_executor (safer pattern)
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, real_server.restore_settings, backup_file)
                 if result.get("success"):
                     restored_settings = result.get("data", {}).get("restored_settings")
                     if restored_settings:

@@ -471,9 +471,11 @@ class StateManager:
             await self.update_async("logs_data", logs_data, source=f"logs_{source}")
 
             # Update logs statistics if server bridge available
-            if self.server_bridge and hasattr(self.server_bridge, 'get_log_statistics_async'):
+            if self.server_bridge and hasattr(self.server_bridge, 'get_log_statistics'):
                 try:
-                    stats = await self.server_bridge.get_log_statistics_async()
+                    # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                    loop = asyncio.get_running_loop()
+                    stats = await loop.run_in_executor(None, self.server_bridge.get_log_statistics)
                     await self.update_async("logs_statistics", stats, source="server_stats")
                 except Exception as e:
                     logger.warning(f"Failed to update logs statistics: {e}")
@@ -491,10 +493,12 @@ class StateManager:
         """Clear logs state and notify subscribers"""
         try:
             # If server_bridge supports clearing logs on server, prefer that
-            if self.server_bridge and hasattr(self.server_bridge, 'clear_logs_async'):
+            if self.server_bridge and hasattr(self.server_bridge, 'clear_logs'):
                 try:
                     self.set_loading("clear_logs", True)
-                    result = await self.server_bridge.clear_logs_async()
+                    # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, self.server_bridge.clear_logs)
                     # If server responded with success and returned data, reflect that
                     if isinstance(result, dict) and result.get('success', True):
                         await self.update_async("logs_data", [], source="server_clear")
@@ -630,7 +634,9 @@ class StateManager:
                 # Validate settings if server bridge available
                 if self.server_bridge and hasattr(self.server_bridge, 'validate_settings_async'):
                     try:
-                        validation_result = await self.server_bridge.validate_settings_async(settings_data)
+                        # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                        loop = asyncio.get_running_loop()
+                        validation_result = await loop.run_in_executor(None, self.server_bridge.validate_settings, settings_data)
                         await self.update_async("settings_validation", validation_result, source="server_validation")
 
                         if not validation_result.get('data', {}).get('valid', True):
@@ -669,7 +675,9 @@ class StateManager:
         """Validate settings and update validation state"""
         try:
             if self.server_bridge and hasattr(self.server_bridge, 'validate_settings_async'):
-                result = await self.server_bridge.validate_settings_async(settings_data)
+                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, self.server_bridge.validate_settings, settings_data)
                 await self.update_async("settings_validation", result, source="validation")
                 return result
             else:

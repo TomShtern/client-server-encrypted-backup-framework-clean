@@ -1,67 +1,380 @@
-# Core Encryption & Security
-pycryptodome>=3.19.1
-psutil>=5.9.0
+# Requirements (package lines are exact; short inline comments next to each line)
+pycryptodome>=3.19.1            # Crypto primitives used for RSA/AES (server & scripts)
+psutil>=5.9.0                   # Process/system monitoring
+Flask>=2.3.2                    # Web framework for API bridge
+flask-cors>=6.0.0               # CORS for Flask API
+flask-socketio>=5.0.0           # SocketIO support for realtime events
+sentry-sdk>=2.8.0               # Optional observability/telemetry
+watchdog>=2.1.0                 # File system event monitoring
+filetype>=1.2.0                 # File type detection by magic bytes
+flet>=0.28.3                    # Primary GUI framework (FletV2)
+plyer>=2.1.0                    # Native device features (optional)
+matplotlib>=3.7.0               # Charts / static plotting
+pydantic>=2.11.7                # Data validation (v2)
+pydantic-core>=2.33.2           # Pydantic runtime core
+httpx>=0.27.2,<0.28             # Async HTTP client (Flet integration)
+aiofiles>=24.1.0                # Async file I/O helpers
+python-dotenv>=1.0.0            # Load .env for local configs
+certifi>=2024.8.30              # TLS CA certs
+charset_normalizer>=3.4.0       # HTTP charset helper
+docutils>=0.22                  # Documentation utilities
+idna>=3.10                      # IDNA for URLs
+pillow>=10.4.0                  # Image processing (PIL)
+pygments>=2.19.0                # Syntax highlighting (docs/tools)
+pypiwin32>=223                  # Win32 compatibility helpers
+pywin32>=311                    # Windows extensions
+requests>=2.32.4                # Synchronous HTTP client
+urllib3>=2.2.5                  # HTTP library used by requests
+loguru>=0.7.0                   # Structured logging (optional)
+pytest>=7.0.0                   # Test framework
+ruff>=0.6.8                     # Lint/formatter (dev)
+cryptography>=42.0.4            # High-level crypto library (optional)
+plotly>=5.15.0                  # Interactive plotting (optional)
+humanize>=4.7.0                 # Human readable formatting
+seaborn>=0.12.0                 # Statistical plotting
+textual>=0.38.0                 # TUI toolkit (dev/ops)
+typer>=0.9.0                    # CLI toolkit
+python-bidi>=0.4.2              # Bi-directional text handling
+wcwidth>=0.2.6                  # Character width calculations
+rich>=13.7.0                    # Rich console output
+click>=8.1.0                    # CLI helpers
+websockets>=11.0                # Websocket library (optional)
+sse-starlette>=1.6.0            # SSE for ASGI (optional)
+python-magic-bin>=0.4.14        # libmagic windows binary (file detection)
+xxhash>=3.3.0                   # Fast hashing (optional)
+schedule>=1.2.0                 # Simple scheduler (optional)
+apscheduler>=3.10.0             # Advanced scheduler (optional)
+numpy>=1.24.0                   # Numerical computing (plots/analytics)
 
-# Flask Web Framework & API
-Flask>=2.3.2
-flask-cors>=6.0.0
-flask-socketio>=5.0.0
-sentry-sdk>=2.8.0
+# Detailed explanations (below each package name is expanded with where/how it's used)
+# pycryptodome (pycryptodome>=3.19.1):
+#   Purpose: Provides Crypto.Cipher, Crypto.PublicKey, Crypto.Random and related
+#   cryptographic primitives.
+#   Where used: server-side file transfer and protocol handling uses AES and RSA
+#   operations (see `python_server/server/*` imports such as `from Crypto.Cipher import AES`)
+#   Notes: This is the project's primary low-level crypto library; many scripts
+#   in `scripts/security/key-generation/` also import Crypto.* modules.
+#
+# psutil (psutil>=5.9.0):
+#   Purpose: System and process utilities to inspect running processes, CPU/memory
+#   Where used: `scripts/one_click_build_and_run.py`, server monitoring, and
+#   some GUI/server helper modules that check for running instances or collect
+#   resource metrics.
+#
+# Flask (Flask>=2.3.2):
+#   Purpose: Lightweight WSGI web framework.
+#   Where used: `api_server/cyberbackup_api_server.py` and health/debug endpoints
+#   across the repo. Imported as `from flask import Flask, request, jsonify`.
+#
+# flask-cors (flask-cors>=6.0.0):
+#   Purpose: Enables Cross-Origin Resource Sharing for Flask apps.
+#   Where used: `api_server/cyberbackup_api_server.py` to allow the GUI (or browser)
+#   to call the API when needed.
+#
+# flask-socketio (flask-socketio>=5.0.0):
+#   Purpose: Adds Socket.IO support to Flask for real-time bidirectional events.
+#   Where used: Optional realtime channels in the API bridge and server GUI.
+#
+# sentry-sdk (sentry-sdk>=2.8.0):
+#   Purpose: Error reporting and telemetry.
+#   Where used: Conditional Sentry initialization lives in `Shared/sentry_config.py`
+#   and server GUI modules to capture exceptions in production.
+#
+# watchdog (watchdog>=2.1.0):
+#   Purpose: File-system event monitoring (watch directories, react to changes).
+#   Where used: Test helpers and optional file-watching utilities referenced in
+#   docs/tests (`watchdog.observers` / `watchdog.events`).
+#
+# filetype (filetype>=1.2.0):
+#   Purpose: Detect file types from magic bytes.
+#   Where used: No direct import hits during scan (may be reserved for upload
+#   content-type detection or legacy utilities). Kept for parity with older
+#   branches where it was used.
+#
+# flet (flet>=0.28.3):
+#   Purpose: Primary GUI framework used by `FletV2/` (views, theme, navigation).
+#   Where used: Many files import `import flet as ft` (see `FletV2/views/*`).
+#
+# plyer (plyer>=2.1.0):
+#   Purpose: Cross-platform native APIs (notifications, battery, vibration).
+#   Where used: Optional; not widely imported in the main FletV2 codebase, but
+#   kept to support platform features in examples and optional integrations.
+#
+# matplotlib (matplotlib>=3.7.0):
+#   Purpose: Static plotting for charts/analytics.
+#   Where used: Server GUI uses matplotlib in `python_server/server_gui/*` and
+#   Flet docs reference Matplotlib integration (`flet.matplotlib_chart`).
+#
+# pydantic (pydantic>=2.11.7) & pydantic-core (pydantic-core>=2.33.2):
+#   Purpose: Data validation and settings models (Pydantic v2).
+#   Where used: Models, config parsing and some API schema handling. Docs and
+#   fix notes reference Pydantic import issues; ensure compatible versions.
+#
+# httpx (httpx>=0.27.2,<0.28):
+#   Purpose: Async HTTP client used by FletV2 for calling the local API without
+#   blocking the UI thread.
+#   Where used: `FletV2/utils/real_server_client.py` and some integration tests.
+#
+# aiofiles (aiofiles>=24.1.0):
+#   Purpose: Async file reading/writing to avoid blocking the UI thread.
+#   Where used: Several Flet views import `aiofiles` for non-blocking I/O.
+#
+# python-dotenv (python-dotenv>=1.0.0):
+#   Purpose: Loads environment variables from .env files during local development.
+#   Where used: Launchers and scripts that read `.env` for local dev flags.
+#
+# certifi / charset_normalizer / idna / urllib3 / requests:
+#   Purpose: Standard HTTP libs and lower-level dependencies used by `requests`.
+#   Where used: `requests` used by many scripts/tests; the others are dependency
+#   and compatibility pins.
+#
+# pillow (pillow>=10.4.0):
+#   Purpose: Image manipulation for server GUI assets and thumbnailing.
+#   Where used: `python_server/server_gui/*` asset handling uses `from PIL import Image`.
+#
+# pygments (pygments>=2.19.0):
+#   Purpose: Syntax highlighting for docs/tools and admin output; optional.
+#
+# pypiwin32 / pywin32:
+#   Purpose: Windows-specific bindings used where Windows-only integrations are
+#   required (services, native hooks).
+#
+# loguru (loguru>=0.7.0):
+#   Purpose: Structured logging library used in scripts or optional debug tools.
+#
+# pytest (pytest>=7.0.0):
+#   Purpose: Test runner used by the repository's `tests/` directory.
+#
+# ruff (ruff>=0.6.8):
+#   Purpose: Linter/formatter for CI/dev workflows.
+#
+# cryptography (cryptography>=42.0.4):
+#   Purpose: High-level cryptographic primitives (Fernet, certificate handling).
+#   Where used: Optional; most runtime crypto uses pycryptodome, but cryptography
+#   is kept for compatibility and examples.
+#
+# plotly / seaborn / numpy:
+#   Purpose: Interactive plotting and statistical visuals (plotly/seaborn) and the
+#   numeric base `numpy`. Primarily used in analytics/reporting and docs/examples.
+#
+# humanize (humanize>=4.7.0):
+#   Purpose: Human-friendly formatting helpers (bytes, dates).
+#
+# textual / typer / click:
+#   Purpose: CLI / TUI building libraries used by dev/admin scripts.
+#
+# python-bidi / wcwidth:
+#   Purpose: Correct handling of BiDi (right-to-left) text and character width
+#   calculations. `Shared/utils/utf8_solution.py` imports `bidi` and `wcwidth` to
+#   initialize console handling correctly on Windows.
+#
+# rich (rich>=13.7.0):
+#   Purpose: Rich console output for pretty tracebacks and developer tooling.
+#
+# websockets / sse-starlette:
+#   Purpose: Optional async realtime libraries for raw websocket or SSE endpoints.
+#   The main realtime path uses Flask-SocketIO, but these remain available for
+#   experiments or ASGI endpoints.
+#
+# python-magic-bin (python-magic-bin>=0.4.14):
+#   Purpose: libmagic binary for Windows; used for reliable file-type detection when
+#   `filetype` or system libmagic is not available.
+#
+# xxhash (xxhash>=3.3.0):
+#   Purpose: Very fast hashing for caching and indexing helpers (optional).
+#
+# schedule / apscheduler:
+#   Purpose: Scheduling utilities for periodic background tasks (simple vs advanced).
+#
+# End of file
 
-# File System & Monitoring
-watchdog>=2.1.0
-filetype>=1.2.0
 
-# GUI Frameworks
-flet>=0.28.3                    # Primary GUI framework (Material Design 3) - Updated to latest
-tkcalendar>=1.6.1               # Legacy TKinter calendar widget
-tksheet>=6.2.15                 # Legacy TKinter sheet widget
-plyer>=2.1.0                    # Cross-platform native features
-matplotlib>=3.7.0               # Charts for GUI analytics
+# Requirements (package lines are exact; short inline comments next to each line)
+pycryptodome>=3.19.1            # Crypto primitives used for RSA/AES (server & scripts)
+psutil>=5.9.0                   # Process/system monitoring
+Flask>=2.3.2                    # Web framework for API bridge
+flask-cors>=6.0.0               # CORS for Flask API
+flask-socketio>=5.0.0           # SocketIO support for realtime events
+sentry-sdk>=2.8.0               # Optional observability/telemetry
+watchdog>=2.1.0                 # File system event monitoring
+filetype>=1.2.0                 # File type detection by magic bytes
+flet>=0.28.3                    # Primary GUI framework (FletV2)
+plyer>=2.1.0                    # Native device features (optional)
+matplotlib>=3.7.0               # Charts / static plotting
+pydantic>=2.11.7                # Data validation (v2)
+pydantic-core>=2.33.2           # Pydantic runtime core
+httpx>=0.27.2,<0.28             # Async HTTP client (Flet integration)
+aiofiles>=24.1.0                # Async file I/O helpers
+python-dotenv>=1.0.0            # Load .env for local configs
+certifi>=2024.8.30              # TLS CA certs
+charset_normalizer>=3.4.0       # HTTP charset helper
+docutils>=0.22                  # Documentation utilities
+idna>=3.10                      # IDNA for URLs
+pillow>=10.4.0                  # Image processing (PIL)
+pygments>=2.19.0                # Syntax highlighting (docs/tools)
+pypiwin32>=223                  # Win32 compatibility helpers
+pywin32>=311                    # Windows extensions
+requests>=2.32.4                # Synchronous HTTP client
+urllib3>=2.2.5                  # HTTP library used by requests
+loguru>=0.7.0                   # Structured logging (optional)
+pytest>=7.0.0                   # Test framework
+ruff>=0.6.8                     # Lint/formatter (dev)
+cryptography>=42.0.4            # High-level crypto library (optional)
+plotly>=5.15.0                  # Interactive plotting (optional)
+humanize>=4.7.0                 # Human readable formatting
+seaborn>=0.12.0                 # Statistical plotting
+textual>=0.38.0                 # TUI toolkit (dev/ops)
+typer>=0.9.0                    # CLI toolkit
+python-bidi>=0.4.2              # Bi-directional text handling
+wcwidth>=0.2.6                  # Character width calculations
+rich>=13.7.0                    # Rich console output
+click>=8.1.0                    # CLI helpers
+websockets>=11.0                # Websocket library (optional)
+sse-starlette>=1.6.0            # SSE for ASGI (optional)
+python-magic-bin>=0.4.14        # libmagic windows binary (file detection)
+xxhash>=3.3.0                   # Fast hashing (optional)
+schedule>=1.2.0                 # Simple scheduler (optional)
+apscheduler>=3.10.0             # Advanced scheduler (optional)
+numpy>=1.24.0                   # Numerical computing (plots/analytics)
 
-# Data Validation & Processing
-pydantic>=2.11.7
-pydantic-core>=2.33.2
-
-# Async & HTTP Operations
-httpx>=0.27.2,<0.28             # Modern async HTTP client for FletV2
-aiofiles>=24.1.0                # Async file operations for better performance
-python-dotenv>=1.0.0            # Environment variable management
-
-# Core Python Dependencies
-certifi>=2024.8.30
-charset_normalizer>=3.4.0
-docutils>=0.22
-idna>=3.10
-pillow>=10.4.0
-pygments>=2.19.0
-pypiwin32>=223
-pywin32>=311
-requests>=2.32.4
-urllib3>=2.2.5
-
-# Development & Testing
-loguru>=0.7.0                   # Structured logging library
-pytest>=7.0.0                   # Testing framework
-ruff>=0.6.8                     # Unified linting & formatting tool
-cryptography>=42.0.4            # Advanced cryptography library
-plotly>=5.15.0                  # Interactive plotting library
-humanize>=4.7.0                 # Human-readable data formatting
-seaborn>=0.12.0                 # Statistical visualization
-textual>=0.38.0                 # TUI framework
-typer>=0.9.0                    # CLI building toolkit
-
-# Unicode & Rich Text Support
-python-bidi>=0.4.2              # Unicode Bidirectional Algorithm
-wcwidth>=0.2.6                  # Unicode character width calculation
-rich>=13.7.0                    # Enhanced console output
-
-# Additional Utilities
-click>=8.1.0                    # Command-line interface framework
-websockets>=11.0                # WebSocket library
-sse-starlette>=1.6.0            # Server-Sent Events
-python-magic-bin>=0.4.14        # File type detection (Windows compatible)
-xxhash>=3.3.0                   # Fast hashing algorithm
-schedule>=1.2.0                 # Job scheduling library
-apscheduler>=3.10.0             # Advanced Python Scheduler
-numpy>=1.24.0                   # Numerical computing library
+# Detailed explanations (below each package name is expanded with where/how it's used)
+# pycryptodome (pycryptodome>=3.19.1):
+#   Purpose: Provides Crypto.Cipher, Crypto.PublicKey, Crypto.Random and related
+#   cryptographic primitives.
+#   Where used: server-side file transfer and protocol handling uses AES and RSA
+#   operations (see `python_server/server/*` imports such as `from Crypto.Cipher import AES`)
+#   Notes: This is the project's primary low-level crypto library; many scripts
+#   in `scripts/security/key-generation/` also import Crypto.* modules.
+#
+# psutil (psutil>=5.9.0):
+#   Purpose: System and process utilities to inspect running processes, CPU/memory
+#   Where used: `scripts/one_click_build_and_run.py`, server monitoring, and
+#   some GUI/server helper modules that check for running instances or collect
+#   resource metrics.
+#
+# Flask (Flask>=2.3.2):
+#   Purpose: Lightweight WSGI web framework.
+#   Where used: `api_server/cyberbackup_api_server.py` and health/debug endpoints
+#   across the repo. Imported as `from flask import Flask, request, jsonify`.
+#
+# flask-cors (flask-cors>=6.0.0):
+#   Purpose: Enables Cross-Origin Resource Sharing for Flask apps.
+#   Where used: `api_server/cyberbackup_api_server.py` to allow the GUI (or browser)
+#   to call the API when needed.
+#
+# flask-socketio (flask-socketio>=5.0.0):
+#   Purpose: Adds Socket.IO support to Flask for real-time bidirectional events.
+#   Where used: Optional realtime channels in the API bridge and server GUI.
+#
+# sentry-sdk (sentry-sdk>=2.8.0):
+#   Purpose: Error reporting and telemetry.
+#   Where used: Conditional Sentry initialization lives in `Shared/sentry_config.py`
+#   and server GUI modules to capture exceptions in production.
+#
+# watchdog (watchdog>=2.1.0):
+#   Purpose: File-system event monitoring (watch directories, react to changes).
+#   Where used: Test helpers and optional file-watching utilities referenced in
+#   docs/tests (`watchdog.observers` / `watchdog.events`).
+#
+# filetype (filetype>=1.2.0):
+#   Purpose: Detect file types from magic bytes.
+#   Where used: No direct import hits during scan (may be reserved for upload
+#   content-type detection or legacy utilities). Kept for parity with older
+#   branches where it was used.
+#
+# flet (flet>=0.28.3):
+#   Purpose: Primary GUI framework used by `FletV2/` (views, theme, navigation).
+#   Where used: Many files import `import flet as ft` (see `FletV2/views/*`).
+#
+# plyer (plyer>=2.1.0):
+#   Purpose: Cross-platform native APIs (notifications, battery, vibration).
+#   Where used: Optional; not widely imported in the main FletV2 codebase, but
+#   kept to support platform features in examples and optional integrations.
+#
+# matplotlib (matplotlib>=3.7.0):
+#   Purpose: Static plotting for charts/analytics.
+#   Where used: Server GUI uses matplotlib in `python_server/server_gui/*` and
+#   Flet docs reference Matplotlib integration (`flet.matplotlib_chart`).
+#
+# pydantic (pydantic>=2.11.7) & pydantic-core (pydantic-core>=2.33.2):
+#   Purpose: Data validation and settings models (Pydantic v2).
+#   Where used: Models, config parsing and some API schema handling. Docs and
+#   fix notes reference Pydantic import issues; ensure compatible versions.
+#
+# httpx (httpx>=0.27.2,<0.28):
+#   Purpose: Async HTTP client used by FletV2 for calling the local API without
+#   blocking the UI thread.
+#   Where used: `FletV2/utils/real_server_client.py` and some integration tests.
+#
+# aiofiles (aiofiles>=24.1.0):
+#   Purpose: Async file reading/writing to avoid blocking the UI thread.
+#   Where used: Several Flet views import `aiofiles` for non-blocking I/O.
+#
+# python-dotenv (python-dotenv>=1.0.0):
+#   Purpose: Loads environment variables from .env files during local development.
+#   Where used: Launchers and scripts that read `.env` for local dev flags.
+#
+# certifi / charset_normalizer / idna / urllib3 / requests:
+#   Purpose: Standard HTTP libs and lower-level dependencies used by `requests`.
+#   Where used: `requests` used by many scripts/tests; the others are dependency
+#   and compatibility pins.
+#
+# pillow (pillow>=10.4.0):
+#   Purpose: Image manipulation for server GUI assets and thumbnailing.
+#   Where used: `python_server/server_gui/*` asset handling uses `from PIL import Image`.
+#
+# pygments (pygments>=2.19.0):
+#   Purpose: Syntax highlighting for docs/tools and admin output; optional.
+#
+# pypiwin32 / pywin32:
+#   Purpose: Windows-specific bindings used where Windows-only integrations are
+#   required (services, native hooks).
+#
+# loguru (loguru>=0.7.0):
+#   Purpose: Structured logging library used in scripts or optional debug tools.
+#
+# pytest (pytest>=7.0.0):
+#   Purpose: Test runner used by the repository's `tests/` directory.
+#
+# ruff (ruff>=0.6.8):
+#   Purpose: Linter/formatter for CI/dev workflows.
+#
+# cryptography (cryptography>=42.0.4):
+#   Purpose: High-level cryptographic primitives (Fernet, certificate handling).
+#   Where used: Optional; most runtime crypto uses pycryptodome, but cryptography
+#   is kept for compatibility and examples.
+#
+# plotly / seaborn / numpy:
+#   Purpose: Interactive plotting and statistical visuals (plotly/seaborn) and the
+#   numeric base `numpy`. Primarily used in analytics/reporting and docs/examples.
+#
+# humanize (humanize>=4.7.0):
+#   Purpose: Human-friendly formatting helpers (bytes, dates).
+#
+# textual / typer / click:
+#   Purpose: CLI / TUI building libraries used by dev/admin scripts.
+#
+# python-bidi / wcwidth:
+#   Purpose: Correct handling of BiDi (right-to-left) text and character width
+#   calculations. `Shared/utils/utf8_solution.py` imports `bidi` and `wcwidth` to
+#   initialize console handling correctly on Windows.
+#
+# rich (rich>=13.7.0):
+#   Purpose: Rich console output for pretty tracebacks and developer tooling.
+#
+# websockets / sse-starlette:
+#   Purpose: Optional async realtime libraries for raw websocket or SSE endpoints.
+#   The main realtime path uses Flask-SocketIO, but these remain available for
+#   experiments or ASGI endpoints.
+#
+# python-magic-bin (python-magic-bin>=0.4.14):
+#   Purpose: libmagic binary for Windows; used for reliable file-type detection when
+#   `filetype` or system libmagic is not available.
+#
+# xxhash (xxhash>=3.3.0):
+#   Purpose: Very fast hashing for caching and indexing helpers (optional).
+#
+# schedule / apscheduler:
+#   Purpose: Scheduling utilities for periodic background tasks (simple vs advanced).
+#
+# End of file

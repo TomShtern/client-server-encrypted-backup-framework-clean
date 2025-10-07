@@ -266,7 +266,7 @@ def main(page: ft.Page):
 
             example_intensity_comparison(),
 
-        ], scroll=ft.ScrollMode.AUTO, spacing=30)
+        ], scroll="auto", spacing=30)
     )
 
 

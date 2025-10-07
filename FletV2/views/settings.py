@@ -502,7 +502,7 @@ def create_settings_view(
                     server_enable_ssl_switch,
                     ft.Row([server_ssl_cert_field], spacing=10),
                     ft.Row([server_ssl_key_field], spacing=10),
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
             ft.Tab(
                 text="Interface",
@@ -513,7 +513,7 @@ def create_settings_view(
                     gui_auto_refresh_switch,
                     gui_refresh_interval_field,
                     gui_auto_resize_switch,
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
             ft.Tab(
                 text="Monitoring",
@@ -523,7 +523,7 @@ def create_settings_view(
                     monitoring_enabled_switch,
                     monitoring_refresh_field,
                     ft.Row([monitoring_cpu_field, monitoring_memory_field, monitoring_disk_field], spacing=10),
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
             ft.Tab(
                 text="Logging",
@@ -533,7 +533,7 @@ def create_settings_view(
                     logging_enabled_switch,
                     ft.Row([logging_level_dropdown, logging_max_size_field, logging_max_files_field], spacing=10),
                     logging_file_field,
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
             ft.Tab(
                 text="Security",
@@ -543,7 +543,7 @@ def create_settings_view(
                     security_require_auth_switch,
                     security_api_key_field,
                     ft.Row([security_max_attempts_field, security_session_timeout_field], spacing=10),
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
             ft.Tab(
                 text="Backup",
@@ -554,7 +554,7 @@ def create_settings_view(
                     backup_path_field,
                     ft.Row([backup_interval_field, backup_retention_field], spacing=10),
                     backup_compress_switch,
-                ], spacing=15, scroll=ft.ScrollMode.AUTO)
+                ], spacing=15, scroll="auto")
             ),
         ]
     )

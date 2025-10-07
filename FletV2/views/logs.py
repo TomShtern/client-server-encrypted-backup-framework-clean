@@ -157,7 +157,7 @@ def create_logs_view(
     system_logs_content = ft.Container(
         content=ft.Column([
             system_logs_table,
-        ], scroll=ft.ScrollMode.AUTO, expand=True),
+        ], scroll="auto", expand=True),
         padding=20,
         border_radius=16,
         bgcolor=ft.Colors.SURFACE,
@@ -176,7 +176,7 @@ def create_logs_view(
     flet_logs_content = ft.Container(
         content=ft.Column([
             flet_logs_table,
-        ], scroll=ft.ScrollMode.AUTO, expand=True),
+        ], scroll="auto", expand=True),
         padding=20,
         border_radius=16,
         bgcolor=ft.Colors.SURFACE,

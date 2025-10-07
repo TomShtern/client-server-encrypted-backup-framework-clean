@@ -84,7 +84,8 @@ def create_glassmorphic_container(content, intensity="medium"):
         content=content,
         padding=20,
         border_radius=16,
-        bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE_VARIANT),
+    # SURFACE_VARIANT not available; use SURFACE tint
+    bgcolor=ft.Colors.with_opacity(config["opacity"], ft.Colors.SURFACE),
         border=ft.border.all(1, ft.Colors.with_opacity(config["border_opacity"], ft.Colors.OUTLINE)),
         blur=ft.Blur(sigma_x=config["blur"], sigma_y=config["blur"], tile_mode=ft.TileMode.MIRROR)
     )
@@ -386,10 +387,11 @@ def main(page: ft.Page):
             metrics_grid,
             gauge_grid,
             create_activity_panel(),
-        ], spacing=24, scroll=ft.ScrollMode.AUTO),
+        ], spacing=24, scroll="auto"),
         padding=28,
         expand=True,
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE_VARIANT)
+    # SURFACE_VARIANT not available; use SURFACE tint
+    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE)
     )
 
     page.add(dashboard_layout)

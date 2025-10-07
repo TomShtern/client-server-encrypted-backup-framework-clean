@@ -104,7 +104,7 @@ def main(page: ft.Page):
             run_button,
             ft.Divider(),
             status_text
-        ], spacing=20, scroll=ft.ScrollMode.AUTO)
+        ], spacing=20, scroll="auto")
     )
 
     # Auto-run on start
