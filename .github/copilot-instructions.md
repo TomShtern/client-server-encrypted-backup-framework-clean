@@ -639,6 +639,10 @@ It's critical that Flet's async architecture requires controls to be in the page
 - **Large Empty Gray Area:** If the `records_section` expands to fill available vertical space, ensure the `ft.Column` inside has `alignment=ft.MainAxisAlignment.START` in addition to `tight=True`. Verify no invisible widgets are present before the `records_listview` within the `ft.Stack`.
 - **Long Text Strings Causing Large Record Cards:** Truncate the display of long string values within the `build_record_card` function, similar to how byte arrays are handled. Limit the length of the displayed string and add an ellipsis if it exceeds a certain character count.
 
+## 📝 Additional Project-Specific Notes
+
+- **Enhance, Don't Replace:** When instructed to update the analytics view, improve the existing one instead of creating a new one. This maintains consistency and avoids unnecessary duplication.
+
 ## 🛠️ Debugging & Tooling
 
 ### Updating Claude Code
@@ -682,17 +686,9 @@ npm install -g @anthropic-ai/claude-code
 
 ### Using `grep` in the Terminal
 
-`grep` is a command-line utility for searching text patterns in files or input streams. It's powerful for finding specific strings
+`grep` is a command-line utility for searching text patterns in files or input streams. It's powerful for finding specific strings.
 
 ## 🛠️ Debugging & Tooling
 ### Updating pip
 
-To update pip, use the following command:
-
-```bash
-pip install --upgrade pip
-```
-
-### Updating pip packages in a virtual environment
-
-Always update packages inside the venv used by the project to avoid global breaks. Here's how to manage pip packages
+To update pip, use the

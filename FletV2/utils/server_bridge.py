@@ -581,19 +581,21 @@ class ServerBridge:
         src = raw.get('data') or {}
         # Heuristic normalization from server-side keys to analytics view keys
         total_backups = src.get('total_backups') or src.get('total_files') or 0
-        # Estimate total storage from database stats when available
-        db_stats = src.get('database_stats') or {}
-        size_bytes = (
-            db_stats.get('database_size_bytes')
-            if isinstance(db_stats, dict) else 0
-        ) or 0
-        total_storage_gb = round(float(size_bytes) / (1024 * 1024 * 1024), 2) if size_bytes else 0.0
+        # Prefer explicit storage/average fields if provided by server; fall back to DB file size as last resort
+        total_bytes = src.get('total_storage_bytes') or 0
+        avg_bytes = src.get('avg_backup_size_bytes') or 0.0
+        if not total_bytes:
+            db_stats = src.get('database_stats') or {}
+            # Note: database_size_bytes is SQLite file size, not total storage of files; keep only as fallback
+            total_bytes = (db_stats.get('database_size_bytes') if isinstance(db_stats, dict) else 0) or 0
+        total_storage_gb = round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0
+        avg_backup_size_gb = round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else float(src.get('avg_backup_size_gb', 0.0) or 0.0)
 
         normalized = {
             'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
             'total_storage_gb': total_storage_gb,
             'success_rate': float(src.get('success_rate', 0.0) or 0.0),
-            'avg_backup_size_gb': float(src.get('avg_backup_size_gb', 0.0) or 0.0),
+            'avg_backup_size_gb': avg_backup_size_gb,
             'backup_trend': src.get('backup_trend') or [],
             'client_storage': src.get('client_storage') or [],
             'file_type_distribution': src.get('file_type_distribution') or [],
@@ -613,19 +615,20 @@ class ServerBridge:
             return raw
 
         src = raw.get('data') or {}
-        db_stats = src.get('database_stats') or {}
-        size_bytes = (
-            db_stats.get('database_size_bytes')
-            if isinstance(db_stats, dict) else 0
-        ) or 0
-        total_storage_gb = round(float(size_bytes) / (1024 * 1024 * 1024), 2) if size_bytes else 0.0
+        total_bytes = src.get('total_storage_bytes') or 0
+        avg_bytes = src.get('avg_backup_size_bytes') or 0.0
+        if not total_bytes:
+            db_stats = src.get('database_stats') or {}
+            total_bytes = (db_stats.get('database_size_bytes') if isinstance(db_stats, dict) else 0) or 0
+        total_storage_gb = round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0
+        avg_backup_size_gb = round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else float(src.get('avg_backup_size_gb', 0.0) or 0.0)
 
         total_backups = src.get('total_backups') or src.get('total_files') or 0
         normalized = {
             'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
             'total_storage_gb': total_storage_gb,
             'success_rate': float(src.get('success_rate', 0.0) or 0.0),
-            'avg_backup_size_gb': float(src.get('avg_backup_size_gb', 0.0) or 0.0),
+            'avg_backup_size_gb': avg_backup_size_gb,
             'backup_trend': src.get('backup_trend') or [],
             'client_storage': src.get('client_storage') or [],
             'file_type_distribution': src.get('file_type_distribution') or [],

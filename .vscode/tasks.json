@@ -58,6 +58,34 @@
 			],
 			"isBackground": true,
 			"group": "build"
+		},
+		{
+			"label": "Lint Python Code",
+			"type": "shell",
+			"command": "c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\flet_venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pylint",
+				"FletV2",
+				"Shared",
+				"python_server",
+				"api_server"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Run FletV2 with Server (PS1)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\FletV2\\start_with_server.ps1"
+			],
+			"isBackground": true,
+			"group": "build"
 		}
 	]
 }

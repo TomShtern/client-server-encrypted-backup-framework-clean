@@ -1539,6 +1539,50 @@ class DatabaseManager:
             logger.error(f"Database error while getting total files count: {e}")
             return 0
 
+    def get_total_storage_bytes(self, verified_only: bool = False) -> int:
+        """Return total storage size (SUM of FileSize) in bytes.
+
+        Args:
+            verified_only: When True, only include files with Verified = 1
+
+        Returns:
+            int: Total number of bytes across matching files.
+        """
+        try:
+            where = "WHERE FileSize IS NOT NULL"
+            if verified_only:
+                where += " AND Verified = 1"
+
+            query = f"SELECT SUM(FileSize) FROM files {where}"
+            if result := self.execute(query, fetchone=True):
+                return int(result[0]) if result[0] is not None else 0
+            return 0
+        except Exception as e:
+            logger.error(f"Database error while getting total storage bytes: {e}")
+            return 0
+
+    def get_average_backup_size_bytes(self, verified_only: bool = False) -> float:
+        """Return average backup (file) size (AVG of FileSize) in bytes.
+
+        Args:
+            verified_only: When True, only include files with Verified = 1
+
+        Returns:
+            float: Average file size in bytes (0.0 if no data)
+        """
+        try:
+            where = "WHERE FileSize IS NOT NULL"
+            if verified_only:
+                where += " AND Verified = 1"
+
+            query = f"SELECT AVG(FileSize) FROM files {where}"
+            if result := self.execute(query, fetchone=True):
+                return float(result[0]) if result[0] is not None else 0.0
+            return 0.0
+        except Exception as e:
+            logger.error(f"Database error while getting average backup size bytes: {e}")
+            return 0.0
+
     def bulk_insert_clients(self, client_list: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Bulk insert multiple clients efficiently using executemany.

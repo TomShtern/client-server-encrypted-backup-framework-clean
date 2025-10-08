@@ -2052,11 +2052,51 @@ class BackupServer:
     def get_analytics_data(self) -> dict[str, Any]:
         """Get analytics information."""
         try:
+            total_files = self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
+            # Prefer verified-only aggregates for real storage and average size
+            total_bytes = self.db_manager.get_total_storage_bytes(True) if hasattr(self.db_manager, 'get_total_storage_bytes') else 0
+            avg_bytes = self.db_manager.get_average_backup_size_bytes(True) if hasattr(self.db_manager, 'get_average_backup_size_bytes') else 0.0
+
+            # Fallbacks: if verified-only produce zero on small datasets, try all files via storage statistics
+            if (not total_bytes) or (not avg_bytes):
+                try:
+                    storage_stats = self.db_manager.get_storage_statistics() if hasattr(self.db_manager, 'get_storage_statistics') else {}
+                    fs = (storage_stats or {}).get('file_stats') or {}
+                    si = (storage_stats or {}).get('storage_info') or {}
+                    if not total_bytes:
+                        # file_stats.total_size_gb → convert back to bytes if present
+                        total_size_gb = fs.get('total_size_gb')
+                        if isinstance(total_size_gb, (int, float)) and total_size_gb > 0:
+                            total_bytes = int(total_size_gb * 1024 * 1024 * 1024)
+                        else:
+                            total_size_mb_val = si.get('total_size_mb')
+                            if isinstance(total_size_mb_val, (int, float)) and total_size_mb_val > 0:
+                                total_bytes = int(float(total_size_mb_val) * 1024 * 1024)
+                    if not avg_bytes:
+                        avg_mb = fs.get('average_file_size_mb')
+                        if isinstance(avg_mb, (int, float)) and avg_mb > 0:
+                            avg_bytes = float(avg_mb) * 1024 * 1024
+                        else:
+                            # Try deriving from filesystem directory size / file count
+                            total_size_mb_val = si.get('total_size_mb')
+                            total_files_fs = si.get('total_files')
+                            if isinstance(total_size_mb_val, (int, float)) and isinstance(total_files_fs, int) and total_files_fs > 0:
+                                avg_bytes = (float(total_size_mb_val) / float(total_files_fs)) * 1024 * 1024
+                except Exception:
+                    # Last resort: leave zeros
+                    pass
+
             analytics_data = {
                 'total_clients': self.db_manager.get_total_clients_count(),
-                'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0,
+                'total_files': total_files,
                 'server_uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
-                'database_stats': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
+                'database_stats': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {},
+                # New canonical analytics fields for UI
+                'total_storage_bytes': total_bytes,
+                'avg_backup_size_bytes': avg_bytes,
+                # Back-compat convenience (GB values)
+                'total_storage_gb': round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0,
+                'avg_backup_size_gb': round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else 0.0,
             }
             return self._format_response(True, analytics_data)
         except Exception as e:
