@@ -364,6 +364,7 @@ def convert_backupserver_client_to_fletv2(client_data: dict) -> dict:
 8. **Flet App Still Stuck Loading:** The port is already in use from the previous session. The app is trying to start but can't bind to the port because the old instance is still running. Ensure the previous instance is fully closed.
 9. **Launching Flet GUI without Server:** The Flet GUI must always be launched with the server.
 10. **GUI Disconnect:** The GUI disconnects if the database view triggers a disconnect, likely due to an update-before-attachment or a blocking call.
+11. **ListView bgcolor:** ListView doesn't support bgcolor in Flet 0.28.3. Use a transparent Container instead.
 
 ## 📁 Key Files Reference
 
@@ -642,6 +643,9 @@ It's critical that Flet's async architecture requires controls to be in the page
 ## 📝 Additional Project-Specific Notes
 
 - **Enhance, Don't Replace:** When instructed to update the analytics view, improve the existing one instead of creating a new one. This maintains consistency and avoids unnecessary duplication.
+- **Logs Page Design:** When improving the logs page design, follow Material Design 3 (MD3) principles. Implement color-coding for logs based on their severity level (success, info, warning, error, etc.), applying the colors subtly. Use ListView instead of DataTable for better performance and scrollability.
+- **The Flet GUI shows an error related to `ft.Colors.SURFACE_CONTAINER_LOW`:** This indicates that the color name is not available in the current Flet version. Please consult the Flet documentation for compatible color names.
+- **ListView `bgcolor` Error:** ListView doesn't support bgcolor in Flet 0.28.3. Use a transparent Container instead.
 
 ## 🛠️ Debugging & Tooling
 
@@ -673,22 +677,3 @@ If you encounter an "Unsupported architecture: ia32" error when using Claude Cod
     \- Visit: [https://nodejs.org/](https://nodejs.org/)
     \- Download the **Windows Installer (.msi)** for **x64** (not x86)
     \- Install the LTS version (currently v22.x is fine)
-3.  **Verify after installation:**
-    \- Open a new terminal or PowerShell window.
-    \- Run: `node -p "process.arch"`
-    \- The output should be `x64`. If it still shows `ia32`, ensure you have completely uninstalled the previous version and installed the 64-bit version correctly.
-4.  **Reinstall Claude Code**:
-
-```powershell
-npm uninstall -g @anthropic-ai/claude-code
-npm install -g @anthropic-ai/claude-code
-```
-
-### Using `grep` in the Terminal
-
-`grep` is a command-line utility for searching text patterns in files or input streams. It's powerful for finding specific strings.
-
-## 🛠️ Debugging & Tooling
-### Updating pip
-
-To update pip, use the
