@@ -82,7 +82,7 @@ RSA_PUBLIC_KEY_SIZE = 160 # Bytes, X.509 format (for 1024-bit RSA - per protocol
 AES_KEY_SIZE_BYTES = 32 # 256-bit AES
 
 # Logging Configuration
-DEFAULT_LOG_LINES_LIMIT = 100  # Default number of log lines to retrieve
+DEFAULT_LOG_LINES_LIMIT = 500  # Default number of log lines to retrieve (increased for GUI)
 DEFAULT_ACTIVITY_LIMIT = 50  # Default number of activity entries to return
 MAX_INLINE_DOWNLOAD_BYTES = 10 * 1024 * 1024  # Limit for embedding file content in responses (10 MB)
 MAX_LOG_EXPORT_SIZE = 100 * 1024 * 1024  # Maximum log file size to export (100 MB) - prevents hang on huge logs
@@ -2417,27 +2417,53 @@ class BackupServer:
             return []
 
     def get_logs(self) -> dict[str, Any]:
-        """Get system logs (basic implementation)."""
+        """Get system logs (enhanced to include multiple log files)."""
         try:
-            # This is a basic implementation - in a production system you'd want proper log aggregation
-            log_data = {
-                'logs': [],
-                'note': 'Log retrieval functionality requires implementation of log storage/retrieval system'
-            }
+            all_logs = []
+            current_log_path = None
 
-            # Try multiple log file locations in priority order
+            # Get primary log file
             log_paths = [
                 getattr(self, 'backup_log_file', None),  # Instance variable
                 backup_log_file,  # Module variable
                 'server.log'  # Fallback
             ]
 
+            # Read from current log file (NO BREAK - removed to allow multi-file aggregation)
             for log_path in log_paths:
-                if log_path:  # Skip None values
-                    logs = self._read_log_file(log_path)
+                if log_path and os.path.exists(log_path):  # Skip None values and check existence
+                    logs = self._read_log_file(log_path, limit=500)  # Increased limit
                     if logs:
-                        log_data['logs'] = logs
-                        break
+                        all_logs.extend(logs)
+                        current_log_path = os.path.abspath(log_path)  # Store absolute path
+                        break  # Only read from ONE current log file
+
+            # Also try to read from rotated log files in logs/ directory
+            import glob
+            logs_dir = os.path.dirname(getattr(self, 'backup_log_file', 'logs'))
+            if not logs_dir or not os.path.exists(logs_dir):
+                logs_dir = 'logs'  # Fallback to default logs directory
+
+            if os.path.exists(logs_dir):
+                # Find all backup-server_*.log files and sort by modification time (newest first)
+                log_files = glob.glob(os.path.join(logs_dir, 'backup-server_*.log'))
+                log_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+
+                # Read from up to 5 most recent log files (excluding current one already read)
+                for log_file in log_files[:5]:
+                    abs_log_file = os.path.abspath(log_file)
+                    # Skip the current log file (already read above)
+                    if current_log_path and abs_log_file == current_log_path:
+                        continue
+                    rotated_logs = self._read_log_file(log_file, limit=100)
+                    if rotated_logs:
+                        all_logs.extend(rotated_logs)
+
+            log_data = {
+                'logs': all_logs,
+                'count': len(all_logs),
+                'note': f'Retrieved {len(all_logs)} log entries from current and {len(log_files[:5]) if "log_files" in locals() else 0} historical log files'
+            }
 
             return self._format_response(True, log_data)
         except Exception as e:

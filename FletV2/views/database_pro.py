@@ -97,6 +97,13 @@ def create_database_view(
     table_columns: list[str] = []
     search_query = ""
 
+    # Table interaction state
+    sort_column_index: int | None = None
+    sort_ascending = True
+    selected_row_ids: set[Any] = set()  # Track selected rows for bulk operations
+    current_page = 0
+    records_per_page = 25  # Pagination size
+
     db_stats = {
         "status": "Disconnected",
         "tables": 0,
@@ -144,6 +151,46 @@ def create_database_view(
 
         return str_value
 
+    def format_table_cell_value(value: Any, col_name: str) -> str:
+        """Smart formatting for table cells with context-aware truncation."""
+        if value is None:
+            return "—"  # Em dash for NULL values
+
+        # Handle binary/hex data (IDs, keys)
+        if isinstance(value, (bytes, bytearray)):
+            hex_str = value.hex()
+            if len(hex_str) > 16:
+                # Show first 8 + ... + last 6 chars for readability
+                return f"{hex_str[:8]}...{hex_str[-6:]}"
+            return hex_str
+
+        # Handle datetime
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d %H:%M")  # Shorter format for table
+
+        # Handle strings
+        str_value = str(value)
+
+        # Context-aware truncation based on column name
+        if any(key in col_name.lower() for key in ['id', 'uuid', 'guid']):
+            # IDs: show start and end
+            if len(str_value) > 20:
+                return f"{str_value[:10]}...{str_value[-8:]}"
+        elif any(key in col_name.lower() for key in ['key', 'hash', 'token']):
+            # Keys/hashes: show first 12 chars
+            if len(str_value) > 16:
+                return f"{str_value[:12]}..."
+        elif any(key in col_name.lower() for key in ['name', 'description']):
+            # Names: standard truncation
+            if len(str_value) > 30:
+                return f"{str_value[:30]}..."
+        else:
+            # Default: moderate truncation
+            if len(str_value) > 40:
+                return f"{str_value[:40]}..."
+
+        return str_value
+
     # ========================================================================
     # UI CONTROLS
     # ========================================================================
@@ -175,7 +222,7 @@ def create_database_view(
     )
 
     # Records display - two view modes: cards (ListView) and table (DataTable)
-    view_mode = "cards"  # "cards" or "table"
+    view_mode = "table"  # "cards" or "table"
 
     # Provide a fallback height to ensure visibility even if parent doesn't expand fully
     # Use a Column instead of ListView to avoid attachment/height quirks
@@ -204,48 +251,133 @@ def create_database_view(
     cards_view_container = ft.Container(
         content=records_listview,
         padding=ft.Padding(8, 8, 8, 24),
-        visible=True,
+        visible=False,
     )
 
-    # DataTable for table view mode
+    # DataTable for table view mode with enhanced styling
     # CRITICAL: DataTable requires at least one column - initialize with placeholder
     data_table = ft.DataTable(
         columns=[
-            ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD, size=13))
+            ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
         ],
         rows=[
-            ft.DataRow(cells=[ft.DataCell(ft.Text("Initializing database view...", color=ft.Colors.GREY_500))])
+            ft.DataRow(cells=[ft.DataCell(ft.Text("Initializing database view...", color=ft.Colors.GREY_500, size=13))])
         ],
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
-        border_radius=8,
-        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.05, ft.Colors.OUTLINE)),
-        heading_row_height=48,
-        data_row_min_height=40,
-        data_row_max_height=60,
-        column_spacing=20,
-        show_checkbox_column=False,
+        # Enhanced border styling
+        border=ft.border.all(2, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
+        border_radius=12,
+        # Better horizontal lines between rows
+        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        # Vertical dividers between columns
+        divider_thickness=1,
+        # Enhanced row sizing
+        heading_row_height=52,
+        data_row_min_height=48,
+        data_row_max_height=72,
+        # Better column spacing
+        column_spacing=24,
+        # Enable checkboxes for row selection
+        show_checkbox_column=True,
+        # Better heading text styling
+        heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
     )
 
-    # Container to hold current view mode
+    # Bulk actions toolbar (shown when rows selected)
+    selected_count_text = ft.Text(
+        "0 rows selected",
+        size=14,
+        color=ft.Colors.ON_PRIMARY,
+        weight=ft.FontWeight.W_500,
+    )
+
+    btn_clear_selection = ft.TextButton(
+        "Clear Selection",
+        icon=ft.Icons.CLEAR,
+        style=ft.ButtonStyle(color=ft.Colors.ON_PRIMARY),
+        on_click=lambda e: None,  # Will be set later
+    )
+
+    btn_bulk_delete = ft.FilledButton(
+        "Delete Selected",
+        icon=ft.Icons.DELETE_SWEEP,
+        style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+        on_click=lambda e: None,  # Will be set later
+    )
+
+    bulk_actions_toolbar = ft.Container(
+        content=ft.Row(
+            [
+                selected_count_text,
+                ft.Container(expand=True),
+                btn_clear_selection,
+                btn_bulk_delete,
+            ],
+            spacing=12,
+        ),
+        bgcolor=ft.Colors.PRIMARY,
+        border_radius=8,
+        padding=12,
+        visible=False,  # Hidden by default
+    )
+
+    # Pagination controls
+    pagination_info = ft.Text(
+        "Page 1 of 1",
+        size=13,
+        color=ft.Colors.ON_SURFACE_VARIANT,
+        weight=ft.FontWeight.W_500,
+    )
+
+    btn_prev_page = ft.IconButton(
+        icon=ft.Icons.CHEVRON_LEFT,
+        tooltip="Previous page",
+        disabled=True,
+        on_click=lambda e: None,  # Will be set later
+    )
+
+    btn_next_page = ft.IconButton(
+        icon=ft.Icons.CHEVRON_RIGHT,
+        tooltip="Next page",
+        disabled=True,
+        on_click=lambda e: None,  # Will be set later
+    )
+
+    pagination_controls = ft.Row(
+        [
+            btn_prev_page,
+            pagination_info,
+            btn_next_page,
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+        spacing=8,
+    )
+
+    # Container to hold current view mode with enhanced styling
     # NO scroll here - parent main_layout handles scrolling to avoid nested scroll conflicts
     table_view_container = ft.Container(
         content=ft.Column(
             [
+                bulk_actions_toolbar,  # Shown when rows selected
                 ft.Container(
                     content=data_table,
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
-                    border_radius=8,
-                    padding=10,
+                    # Enhanced container styling
+                    border=ft.border.all(2, ft.Colors.with_opacity(0.15, ft.Colors.OUTLINE)),
+                    border_radius=12,
+                    padding=16,
+                    # Subtle background to distinguish from page
+                    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
                 ),
+                pagination_controls,
             ],
-            spacing=10,
+            spacing=12,
         ),
-        visible=False,
+        visible=True,
+        padding=ft.Padding(8, 8, 8, 8),
     )
 
     # Single switcher container to avoid Stack overlay quirks
     # NOTE: ft.Container does NOT support min_height in Flet 0.28.3 (only height/width)
-    views_switcher = ft.Container(content=cards_view_container)
+    views_switcher = ft.Container(content=table_view_container)
 
     # Action buttons
     btn_add = themed_button("Add Record", None, "filled", ft.Icons.ADD)
@@ -257,7 +389,7 @@ def create_database_view(
     btn_view_cards = ft.IconButton(
         icon=ft.Icons.VIEW_MODULE,
         tooltip="Card View",
-        selected=True,
+        selected=False,
         style=ft.ButtonStyle(
             color={ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT, ft.ControlState.SELECTED: ft.Colors.PRIMARY}
         ),
@@ -265,7 +397,7 @@ def create_database_view(
     btn_view_table = ft.IconButton(
         icon=ft.Icons.TABLE_CHART,
         tooltip="Table View",
-        selected=False,
+        selected=True,
         style=ft.ButtonStyle(
             color={ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT, ft.ControlState.SELECTED: ft.Colors.PRIMARY}
         ),
@@ -519,8 +651,193 @@ def create_database_view(
         print(f"🟩 [REFRESH_DISPLAY] records_listview.update() COMPLETED")
         _force_records_area_update()
 
+    def update_bulk_actions_toolbar() -> None:
+        """Update bulk actions toolbar based on selection."""
+        count = len(selected_row_ids)
+
+        if count > 0:
+            bulk_actions_toolbar.visible = True
+            selected_count_text.value = f"{count} row{'s' if count != 1 else ''} selected"
+        else:
+            bulk_actions_toolbar.visible = False
+
+        # Update controls if attached
+        if is_control_attached(selected_count_text):
+            selected_count_text.update()
+        if is_control_attached(bulk_actions_toolbar):
+            bulk_actions_toolbar.update()
+
+    def on_row_selection_changed(record_id: Any, selected: bool) -> None:
+        """Handle row selection change."""
+        nonlocal selected_row_ids
+
+        if selected:
+            selected_row_ids.add(record_id)
+        else:
+            selected_row_ids.discard(record_id)
+
+        update_bulk_actions_toolbar()
+
+    def clear_selection(e: ft.ControlEvent) -> None:
+        """Clear all row selections."""
+        nonlocal selected_row_ids
+        selected_row_ids.clear()
+        refresh_data_table()
+
+    def bulk_delete_selected(e: ft.ControlEvent) -> None:
+        """Delete all selected rows."""
+        if not selected_row_ids or not is_server_connected():
+            return
+
+        # Show confirmation dialog
+        count = len(selected_row_ids)
+        dialog = ft.AlertDialog(
+            title=ft.Text("Confirm Bulk Deletion"),
+            content=ft.Text(
+                f"Are you sure you want to delete {count} selected record{'s' if count != 1 else ''}?\n\n"
+                "This action cannot be undone.",
+                selectable=True,
+            ),
+        )
+
+        async def confirm_bulk_delete() -> None:
+            """Perform the bulk deletion."""
+            nonlocal selected_row_ids
+
+            try:
+                update_status(f"Deleting {len(selected_row_ids)} records...", ft.Colors.BLUE, True)
+
+                bridge = get_active_bridge()
+                if bridge is None:
+                    show_error_message(page, "Server disconnected")
+                    return
+
+                # Delete each selected record
+                deleted_count = 0
+                failed_count = 0
+                loop = asyncio.get_running_loop()
+
+                for record_id in list(selected_row_ids):
+                    result = await loop.run_in_executor(
+                        None, bridge.delete_table_record, current_table, record_id
+                    )
+                    if result.get("success"):
+                        deleted_count += 1
+                    else:
+                        failed_count += 1
+
+                # Clear selection
+                selected_row_ids.clear()
+
+                # Show result
+                if failed_count == 0:
+                    show_success_message(page, f"Successfully deleted {deleted_count} record{'s' if deleted_count != 1 else ''}")
+                else:
+                    show_error_message(
+                        page,
+                        f"Deleted {deleted_count} record{'s' if deleted_count != 1 else ''}, "
+                        f"failed to delete {failed_count}"
+                    )
+
+                # Reload data
+                page.close(dialog)
+                await load_table_data()
+
+            except Exception as ex:
+                logger.exception(f"Error during bulk delete: {ex}")
+                show_error_message(page, f"Error: {ex}")
+
+            finally:
+                update_status("Ready", ft.Colors.GREY_400, False)
+
+        dialog.actions = [
+            ft.TextButton("Cancel", on_click=lambda _: page.close(dialog)),
+            ft.FilledButton(
+                "Delete All",
+                on_click=lambda _: page.run_task(confirm_bulk_delete),
+                style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+            ),
+        ]
+
+        page.open(dialog)
+
+    def update_pagination_controls() -> None:
+        """Update pagination controls based on current state."""
+        if not filtered_records:
+            pagination_info.value = "Page 0 of 0"
+            btn_prev_page.disabled = True
+            btn_next_page.disabled = True
+        else:
+            total_records = len(filtered_records)
+            total_pages = max(1, (total_records + records_per_page - 1) // records_per_page)
+
+            # Update pagination info text
+            pagination_info.value = f"Page {current_page + 1} of {total_pages}"
+
+            # Update button states
+            btn_prev_page.disabled = (current_page == 0)
+            btn_next_page.disabled = (current_page >= total_pages - 1)
+
+        # Update controls if attached
+        if is_control_attached(pagination_info):
+            pagination_info.update()
+        if is_control_attached(btn_prev_page):
+            btn_prev_page.update()
+        if is_control_attached(btn_next_page):
+            btn_next_page.update()
+
+    def go_to_prev_page(e: ft.ControlEvent) -> None:
+        """Navigate to previous page."""
+        nonlocal current_page
+        if current_page > 0:
+            current_page -= 1
+            refresh_data_table()
+
+    def go_to_next_page(e: ft.ControlEvent) -> None:
+        """Navigate to next page."""
+        nonlocal current_page
+        total_records = len(filtered_records)
+        total_pages = (total_records + records_per_page - 1) // records_per_page
+        if current_page < total_pages - 1:
+            current_page += 1
+            refresh_data_table()
+
+    def sort_by_column(column_index: int) -> None:
+        """Sort filtered records by specified column."""
+        nonlocal sort_column_index, sort_ascending, filtered_records, current_page
+
+        # Toggle sort direction if clicking same column
+        if sort_column_index == column_index:
+            sort_ascending = not sort_ascending
+        else:
+            sort_column_index = column_index
+            sort_ascending = True
+
+        # Reset to first page when sorting
+        current_page = 0
+
+        # Get display columns list
+        display_columns = [col for col in table_columns if col.lower() not in SENSITIVE_FIELDS][:8]
+
+        if column_index < len(display_columns):
+            col_name = display_columns[column_index]
+
+            # Sort records by the selected column
+            def sort_key(record: dict[str, Any]) -> Any:
+                value = record.get(col_name)
+                # Handle None values
+                if value is None:
+                    return "" if sort_ascending else "zzz"
+                # Convert bytes to hex for comparison
+                if isinstance(value, (bytes, bytearray)):
+                    return value.hex()
+                return value
+
+            filtered_records.sort(key=sort_key, reverse=not sort_ascending)
+            refresh_data_table()
+
     def refresh_data_table() -> None:
-        """Refresh the DataTable display."""
+        """Refresh the DataTable display with enhanced formatting and styling."""
         if not is_control_attached(data_table):
             logger.debug("DataTable not attached, skipping refresh")
             return
@@ -542,53 +859,104 @@ def create_database_view(
             # Build columns (limit to avoid overflow)
             display_columns = [col for col in table_columns if col.lower() not in SENSITIVE_FIELDS][:8]
 
-            for col_name in display_columns:
+            # Create column headers with sorting support
+            for col_idx, col_name in enumerate(display_columns):
+                # Format column name: capitalize, replace underscores
+                formatted_name = col_name.replace("_", " ").title()
+
+                # Add sort indicator if this column is sorted
+                if sort_column_index == col_idx:
+                    sort_icon = "↑" if sort_ascending else "↓"
+                    formatted_name = f"{formatted_name} {sort_icon}"
+
                 data_table.columns.append(
                     ft.DataColumn(
-                        ft.Text(col_name.replace("_", " ").title(), weight=ft.FontWeight.BOLD, size=13)
+                        ft.Text(
+                            formatted_name,
+                            weight=ft.FontWeight.BOLD,
+                            size=14,
+                            color=ft.Colors.PRIMARY,
+                        ),
+                        on_sort=lambda e, idx=col_idx: sort_by_column(idx),
                     )
                 )
 
             # Add action column
             if is_server_connected():
-                data_table.columns.append(ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD, size=13)))
+                data_table.columns.append(
+                    ft.DataColumn(
+                        ft.Text(
+                            "Actions",
+                            weight=ft.FontWeight.BOLD,
+                            size=14,
+                            color=ft.Colors.PRIMARY,
+                        )
+                    )
+                )
 
-            # Build rows (limit to prevent performance issues)
-            for record in filtered_records[:MAX_VISIBLE_RECORDS]:
+            # Calculate pagination
+            total_records = len(filtered_records)
+            total_pages = (total_records + records_per_page - 1) // records_per_page
+            start_idx = current_page * records_per_page
+            end_idx = min(start_idx + records_per_page, total_records)
+            page_records = filtered_records[start_idx:end_idx]
+
+            # Build rows with alternating colors and smart formatting
+            for idx, record in enumerate(page_records):
                 cells = []
 
-                for col_name in display_columns:
-                    value = stringify_value(record.get(col_name))
-                    # Truncate long values
-                    if len(value) > 50:
-                        value = value[:47] + "..."
-                    cells.append(ft.DataCell(ft.Text(value, size=12, selectable=True)))
+                # Get record ID for selection tracking
+                record_id = record.get("id") or record.get("ID") or idx
 
-                # Add action buttons
+                # Create data cells with smart formatting
+                for col_name in display_columns:
+                    value = format_table_cell_value(record.get(col_name), col_name)
+                    cells.append(
+                        ft.DataCell(
+                            ft.Text(
+                                value,
+                                size=13,
+                                selectable=True,
+                                color=ft.Colors.ON_SURFACE,
+                            )
+                        )
+                    )
+
+                # Add action buttons with better styling
                 if is_server_connected():
                     action_cell = ft.DataCell(
                         ft.Row(
                             [
                                 ft.IconButton(
                                     icon=ft.Icons.EDIT_OUTLINED,
-                                    icon_size=16,
-                                    tooltip="Edit",
+                                    icon_size=18,
+                                    tooltip="Edit record",
+                                    icon_color=ft.Colors.BLUE,
                                     on_click=lambda _e, r=record: edit_record_dialog(r),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE_OUTLINE,
-                                    icon_size=16,
+                                    icon_size=18,
+                                    tooltip="Delete record",
                                     icon_color=ft.Colors.ERROR,
-                                    tooltip="Delete",
                                     on_click=lambda _e, r=record: delete_record_dialog(r),
                                 ),
                             ],
-                            spacing=4,
+                            spacing=2,
                         )
                     )
                     cells.append(action_cell)
 
-                data_table.rows.append(ft.DataRow(cells=cells))
+                # Create row with selection support and hover effects
+                is_selected = record_id in selected_row_ids
+                data_row = ft.DataRow(
+                    cells=cells,
+                    selected=is_selected,
+                    on_select_changed=lambda e, rid=record_id: on_row_selection_changed(rid, e.data == "true"),
+                    # MD3 color theming for selected state
+                    color=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY) if is_selected else None,
+                )
+                data_table.rows.append(data_row)
 
         # CRITICAL: Final validation - DataTable MUST have columns and rows (prevents gray screen)
         if not data_table.columns:
@@ -601,6 +969,7 @@ def create_database_view(
             )
 
         data_table.update()
+        update_pagination_controls()
 
     def toggle_view_mode(new_mode: str) -> None:
         """Toggle between cards and table view modes."""
@@ -615,8 +984,12 @@ def create_database_view(
         btn_view_cards.selected = (new_mode == "cards")
         btn_view_table.selected = (new_mode == "table")
 
-        # Swap content in switcher to avoid overlay issues
+        # CRITICAL FIX: Update visibility properties before swapping content
         is_cards = (new_mode == "cards")
+        cards_view_container.visible = is_cards
+        table_view_container.visible = not is_cards
+
+        # Swap content in switcher to avoid overlay issues
         views_switcher.content = cards_view_container if is_cards else table_view_container
         if is_control_attached(views_switcher):
             views_switcher.update()
@@ -641,9 +1014,12 @@ def create_database_view(
 
     def apply_search_filter() -> None:
         """Apply search filter to records."""
-        nonlocal filtered_records
+        nonlocal filtered_records, current_page
 
         print(f"🟨 [SEARCH_FILTER] ENTERED - all_records: {len(all_records)}, search_query: '{search_query}'")
+
+        # Reset to first page when filtering
+        current_page = 0
 
         if not search_query.strip():
             filtered_records = all_records.copy()
@@ -1252,6 +1628,10 @@ def create_database_view(
     btn_export_json.on_click = lambda _: export_data("json")
     btn_view_cards.on_click = lambda _: toggle_view_mode("cards")
     btn_view_table.on_click = lambda _: toggle_view_mode("table")
+    btn_prev_page.on_click = go_to_prev_page
+    btn_next_page.on_click = go_to_next_page
+    btn_clear_selection.on_click = clear_selection
+    btn_bulk_delete.on_click = bulk_delete_selected
 
     # ========================================================================
     # LIFECYCLE FUNCTIONS

@@ -39,6 +39,17 @@ print("=" * 70)
 print(">> Starting Flet GUI with Real BackupServer Integration")
 print("=" * 70)
 
+# Initialize log capture VERY EARLY (before any other imports)
+# This ensures all Flet framework and application logs are captured
+print("\n[0/4] Initializing log capture system...")
+try:
+    from Shared.logging.flet_log_capture import get_flet_log_capture
+    _log_capture = get_flet_log_capture()
+    print(f"[OK] Log capture initialized - ready to capture framework and app logs")
+except Exception as e:
+    print(f"[WARNING] Failed to initialize log capture: {e}")
+    print("Logs view may not display Flet framework logs correctly.")
+
 # Import the real server
 print("\n[1/4] Importing BackupServer...")
 try:

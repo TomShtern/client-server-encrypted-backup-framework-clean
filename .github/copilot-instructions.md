@@ -22,7 +22,7 @@ globs: *
 ## Directory Map
 - `FletV2/`: GUI views, theming, and bridge adapters (`main.py`, `views/`, `utils/server_bridge.py`, `state_manager.py`, `theme.py`).
 - `python_server/`: Core TCP server (`server.py`), protocol definitions, database ops, and worker pool wiring.
-- `Shared/`: Cross-cutting helpers (`utf8_solution`, logging config, retry utilities, metrics collectors).
+- `Shared/`: Cross-cutting helpers (`utf8_solution`, logging config, retry utilities, metrics collectors, `flet_log_capture.py`).
 - `api_server/`: Flask bridge for HTTP fallback and integration with external tooling.
 - `Client/`: Native C++ client implementing the same protocol enums; rebuild after protocol shifts.
 - `scripts/` + PowerShell: Launchers, diagnostics, and combined build workflows.
@@ -95,6 +95,8 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - Use `page.run_task` to offload long operations and update controls via refs to avoid blocking UI thread.
 - Cancel background tasks and unregister event listeners inside `dispose` to prevent leaks.
 - Truncate lengthy values in cards to maintain consistent layout and avoid overflows.
+- When using `page.run_task()`, ensure you are passing the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())`). Passing the result will lead to an `AssertionError`.
+- **Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: async_func())`).**
 
 ## Theme & Styling
 - Reuse `theme.py` constants such as `PRONOUNCED_NEUMORPHIC_SHADOWS`, `GLASS_MODERATE`, and gradient helpers.
@@ -178,6 +180,16 @@ C:\\Backups\\payload.bin
 - **Layout overflow**: truncate strings or move to chips to maintain card sizing.
 - **Build drift**: rerun `scripts/one_click_build_and_run.py` after C++ or protocol modifications.
 - **Expected class but received "(...) -> TextControl"**: Ensure the correct control type is being passed and that the factory is returning the expected type. Review control constructors and return types.
+- **`try/except Exception: pass`**: Replace with `with contextlib.suppress(Exception):` for cleaner error handling.
+- **Bare `except:` clauses**: Replace with `except Exception:` for better error specificity.
+- **`sum(1 for ...)`**: Replace with `len([...])` for counting operations.
+- **`page.run_task()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
+- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with a supported icon from the `ft.icons` module. Verify icon availability in the target Flet version. When this error occurs, replace `ft.Icons.SAVE_AS_OUTLINE` with `ft.Icons.SAVE_OUTLINED`.
+- **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
+- **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
+- When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
+- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
+- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
 
 ## Operational Checklists
 - Pre-commit: lint, tests, C++ build, GUI smoke, documentation sync.
@@ -268,3 +280,25 @@ C:\\Backups\\payload.bin
 
 ## Coding Style
 - Simplify conditional expressions using the `or` operator where appropriate to improve code conciseness and readability (e.g., `expansion_icon or ft.Container(width=0)`). Run linting tools like Ruff to confirm no new issues are introduced after applying such changes.
+- Use `with contextlib.suppress(Exception):` instead of `try/except Exception: pass` for cleaner error handling.
+- Use `except Exception:` instead of bare `except:` clauses for better error specificity.
+- Use `len([...])` instead of `sum(1 for ...)` for counting operations.
+- **`page.run_task()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
+- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with a supported icon from the `ft.icons` module. Verify icon availability in the target Flet version. When this error occurs, replace `ft.Icons.SAVE_AS_OUTLINE` with `ft.Icons.SAVE_OUTLINED`.
+- **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
+- **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
+- When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
+- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
+- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+
+## Active Tasks
+
+- Implement a mechanism to read from all available log files, including rotated logs, to get a comprehensive log history.
+- Fix the "Flet logs" display to connect it to real, live Flet logs.
+- Fix the issues and make the flet logs display as well. change and add+just from where it fetches logs, and connect it to real live logs.
+- Make it so when a specific log is clicked, it opens in a new popup window and can be copied.
+- Display all real logs, and not only some of them.
+- Fix the logs view to properly display all logs, including Flet logs.
+- Remove the page attachment check in `_render_list` in `enhanced_logs.py`.
+- Increase the auto-refresh interval in `enhanced_logs.py` to 5 seconds.
+- Ensure ListView.update() is safe with try/except to prevent crashes during setup.

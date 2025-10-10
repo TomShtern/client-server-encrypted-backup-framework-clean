@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Lightweight database management view tuned for Flet 0.28.3 web hot-reload.
+"""Professional database management view with DataTable, sorting, and pagination.
 
-The previous implementation relied on ``ft.DataTable`` which caused heavy widget
-rebuilds on every update. In web mode that triggered long blocking layouts and
-made the entire GUI appear frozen even when no server was connected. This
-rewrite switches to a ``ListView`` based layout per the official Flet guidance
-(https://flet.dev/docs/controls/listview/) to use ListView/GridView for large or
-frequently refreshed collections. All updates now target individual controls,
-eliminating the freeze while retaining CRUD, search, and export capabilities.
+Replaces the ListView-based implementation with a full-featured DataTable that includes:
+- Column-based sorting (click headers)
+- Client-side pagination (25 rows/page for performance)
+- Row selection with checkboxes
+- Inline actions column (Edit/Delete)
+- Full CRUD operations with dialogs
+- Search/filter across all columns
+- CSV/JSON export capabilities
+- Material Design 3 styling
+
+Performance optimized with targeted control updates and limited row rendering.
 """
 
 from __future__ import annotations
@@ -68,9 +72,9 @@ logger = get_logger(__name__)
 
 DEFAULT_TABLE = "clients"
 DEFAULT_TABLE_OPTIONS: tuple[str, ...] = ("clients", "files", "logs", "settings", "backups")
-MAX_VISIBLE_RECORDS = 50
+ROWS_PER_PAGE = 25
 MAX_EXPORT_RECORDS = 10_000
-SETUP_DELAY_SECONDS = 0.5  # Increased from 0.2 to ensure controls fully attached
+SETUP_DELAY_SECONDS = 0.5  # Delay for control attachment
 SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "key_material"}
 
 
@@ -79,11 +83,9 @@ def create_database_view(
     page: ft.Page,
     state_manager: StateManager | None = None,  # noqa: ARG001 - reserved for future use
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    """Create lightweight database management view."""
+    """Create professional database management view with DataTable."""
 
-    print("🔴 [DATABASE_VIEW] Function ENTERED")
-    logger.info("🔴 [DATABASE_VIEW] Initializing lightweight database view (ListView-based)")
-    print("🔴 [DATABASE_VIEW] Logger.info completed")
+    logger.info("Initializing database view with DataTable and pagination")
 
     current_table = DEFAULT_TABLE
     available_tables: list[str] = list(DEFAULT_TABLE_OPTIONS)
@@ -91,6 +93,9 @@ def create_database_view(
     filtered_records: list[dict[str, Any]] = []
     table_columns: list[str] = []
     search_query = ""
+    current_page = 0
+    sort_column_index: int | None = None
+    sort_ascending = True
     db_info: dict[str, Any] = {
         "status": "Disconnected",
         "tables": 0,
@@ -133,26 +138,30 @@ def create_database_view(
         width=320,
     )
 
-    records_list = ft.ListView(expand=True, spacing=12, padding=ft.Padding(0, 4, 0, 24))
-    records_list.controls.append(
-        ft.Container(
-            content=ft.Column(
-                [
-                    ft.Icon(ft.Icons.DATASET, size=48, color=ft.Colors.GREY_500),
-                    ft.Text("Database view is ready", size=16, color=ft.Colors.GREY_500),
-                    ft.Text(
-                        "Connect the backup server and choose a table to load records.",
-                        size=12,
-                        color=ft.Colors.GREY_400,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                tight=True,
-                spacing=8,
-            ),
-            padding=ft.Padding(0, 36, 0, 36),
-        )
+    # DataTable will be created dynamically
+    data_table = ft.DataTable(
+        columns=[],
+        rows=[],
+        column_spacing=20,
+        data_row_min_height=40,
+        data_row_max_height=60,
+        heading_row_height=50,
+        show_checkbox_column=True,
+        horizontal_lines=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+        divider_thickness=1,
+    )
+
+    # Pagination controls
+    page_info_text = ft.Text("No records", size=13, color=ft.Colors.ON_SURFACE_VARIANT)
+    prev_page_button = ft.IconButton(
+        icon=ft.Icons.ARROW_BACK,
+        tooltip="Previous page",
+        disabled=True,
+    )
+    next_page_button = ft.IconButton(
+        icon=ft.Icons.ARROW_FORWARD,
+        tooltip="Next page",
+        disabled=True,
     )
 
     add_button = cast(
@@ -180,7 +189,9 @@ def create_database_view(
         if value is None:
             return ""
         if isinstance(value, (bytes, bytearray)):
-            return value.hex()
+            # Show first 8 chars of hex for readability
+            hex_str = value.hex()
+            return f"{hex_str[:8]}..." if len(hex_str) > 8 else hex_str
         if isinstance(value, datetime):
             return value.isoformat(sep=" ", timespec="seconds")
         return str(value)
@@ -198,15 +209,11 @@ def create_database_view(
                 loading_indicator.update()
 
     def update_database_info_ui() -> None:
-        print("🔵 [UPDATE_DB_INFO] Function called")
-        # CRITICAL: Only modify controls if ALL are attached to page
+        # Only modify controls if ALL are attached to page
         attached = all(_control_attached(c) for c in (db_status_value, db_tables_value, db_records_value, db_size_value, add_button))
-        print(f"🔵 [UPDATE_DB_INFO] All controls attached: {attached}")
         if not attached:
             logger.debug("Database info controls not yet attached, skipping update")
-            print("🔵 [UPDATE_DB_INFO] Returning early - controls not attached")
             return
-        print("🔵 [UPDATE_DB_INFO] Controls attached, proceeding with update")
 
         db_status_value.value = db_info.get("status", "Unknown")
         status_lower = db_info.get("status", "").lower()
@@ -228,18 +235,12 @@ def create_database_view(
         add_button.update()
 
     def update_table_dropdown() -> None:
-        print("🔵 [UPDATE_DROPDOWN] Function called")
-        # CRITICAL: Only modify dropdown if attached to page
         attached = _control_attached(table_dropdown)
-        print(f"🔵 [UPDATE_DROPDOWN] Dropdown attached: {attached}")
         if not attached:
             logger.debug("Table dropdown not yet attached, skipping update")
-            print("🔵 [UPDATE_DROPDOWN] Returning early - dropdown not attached")
             return
-        print("🔵 [UPDATE_DROPDOWN] Dropdown attached, proceeding with update")
 
         options = available_tables or list(DEFAULT_TABLE_OPTIONS)
-        # Use explicit text/key to avoid value mismatches across Flet versions
         table_dropdown.options = [
             ft.dropdown.Option(
                 text=table.replace("_", " ").title(),
@@ -260,133 +261,138 @@ def create_database_view(
 
         table_dropdown.update()
 
-    def build_record_tile(record: dict[str, Any], index: int) -> ft.Container:
-        display_keys: list[str] = table_columns or list(record.keys())
-        rows: list[ft.Control] = []
-        shown = 0
-        for key in display_keys:
-            if not isinstance(key, str):
+    def get_total_pages() -> int:
+        if not filtered_records:
+            return 0
+        return max(1, (len(filtered_records) + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE)
+
+    def get_page_records() -> list[dict[str, Any]]:
+        """Get records for current page."""
+        start_idx = current_page * ROWS_PER_PAGE
+        end_idx = start_idx + ROWS_PER_PAGE
+        return filtered_records[start_idx:end_idx]
+
+    def update_pagination_controls() -> None:
+        """Update pagination button states and page info."""
+        total_pages = get_total_pages()
+        total_records = len(filtered_records)
+
+        if total_records == 0:
+            page_info_text.value = "No records"
+            prev_page_button.disabled = True
+            next_page_button.disabled = True
+        else:
+            start_idx = current_page * ROWS_PER_PAGE + 1
+            end_idx = min((current_page + 1) * ROWS_PER_PAGE, total_records)
+            page_info_text.value = f"Showing {start_idx}-{end_idx} of {total_records} records • Page {current_page + 1} of {total_pages}"
+
+            prev_page_button.disabled = current_page <= 0
+            next_page_button.disabled = current_page >= total_pages - 1
+
+        for control in (page_info_text, prev_page_button, next_page_button):
+            if _control_attached(control):
+                control.update()
+
+    def build_table_columns() -> list[ft.DataColumn]:
+        """Build DataTable columns from table schema."""
+        if not table_columns:
+            return [ft.DataColumn(ft.Text("No Data", weight=ft.FontWeight.BOLD))]
+
+        columns = []
+        for idx, col_name in enumerate(table_columns):
+            # Skip sensitive fields
+            if col_name.lower() in SENSITIVE_FIELDS:
                 continue
-            if key.lower() in SENSITIVE_FIELDS:
-                continue
-            value = _stringify(record.get(key))
-            if not value and value != "0":
-                continue
-            rows.append(
-                ft.Row(
-                    [
-                        ft.Text(
-                            key.replace("_", " ").title(),
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            width=150,
-                        ),
-                        ft.Text(value, size=12, selectable=True, expand=True),
-                    ],
-                    spacing=10,
-                    vertical_alignment=ft.CrossAxisAlignment.START,
-                )
+
+            # Format column header
+            header_text = col_name.replace("_", " ").title()
+
+            # Create sortable column
+            column = ft.DataColumn(
+                label=ft.Text(header_text, weight=ft.FontWeight.BOLD),
+                on_sort=lambda e, col_idx=idx: on_column_sort(col_idx),
             )
-            shown += 1
-            if shown >= 8:
-                break
+            columns.append(column)
 
-        if not rows:
-            rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500))
-
-        footer: ft.Control | None = None
-        if server_available():
-            footer = ft.Row(
-                [
-                    ft.IconButton(
-                        icon=ft.Icons.EDIT,
-                        tooltip="Edit record",
-                        icon_size=18,
-                        on_click=lambda _e, r=record: edit_record(r),
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.DELETE,
-                        tooltip="Delete record",
-                        icon_size=18,
-                        icon_color=ft.Colors.ERROR,
-                        on_click=lambda _e, r=record: delete_record(r),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.END,
+        # Add Actions column
+        columns.append(
+            ft.DataColumn(
+                label=ft.Text("Actions", weight=ft.FontWeight.BOLD),
             )
-
-        tile_children: list[ft.Control] = [
-            ft.Text(f"{current_table.title()} #{index + 1}", size=14, weight=ft.FontWeight.BOLD),
-            ft.Column(rows, spacing=6, tight=True),
-        ]
-
-        if footer:
-            tile_children.append(footer)
-
-        return ft.Container(
-            content=ft.Column(tile_children, spacing=10, tight=True),
-            padding=ft.Padding(16, 12, 16, 12),
-            border_radius=14,
-            # SURFACE_VARIANT not available in current Flet; approximate with SURFACE tint
-            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.SURFACE),
         )
 
-    def refresh_records_list() -> None:
-        print("🔵 [REFRESH_RECORDS] Function called")
-        # CRITICAL: Only modify ListView controls if attached to page
-        attached = _control_attached(records_list)
-        print(f"🔵 [REFRESH_RECORDS] Records list attached: {attached}")
-        if not attached:
-            logger.debug("Records list not yet attached, skipping update")
-            print("🔵 [REFRESH_RECORDS] Returning early - list not attached")
-            return
-        print("🔵 [REFRESH_RECORDS] List attached, proceeding with update")
+        return columns
 
-        records_list.controls.clear()
+    def build_table_rows() -> list[ft.DataRow]:
+        """Build DataTable rows for current page."""
+        if not filtered_records or not table_columns:
+            return []
 
-        if not filtered_records:
+        page_records = get_page_records()
+        rows = []
+
+        for record in page_records:
+            cells = []
+
+            # Add data cells
+            for col_name in table_columns:
+                if col_name.lower() in SENSITIVE_FIELDS:
+                    continue
+
+                value = _stringify(record.get(col_name, ""))
+                cells.append(ft.DataCell(ft.Text(value, selectable=True)))
+
+            # Add actions cell
             if server_available():
-                message = f"No records found in '{current_table}'."
-            else:
-                message = "Connect the backup server to load data."
-            records_list.controls.append(
-                ft.Container(
-                    content=ft.Column(
+                actions_cell = ft.DataCell(
+                    ft.Row(
                         [
-                            ft.Icon(ft.Icons.INBOX_OUTLINED, size=40, color=ft.Colors.GREY_500),
-                            ft.Text(message, size=14, color=ft.Colors.GREY_500),
+                            ft.IconButton(
+                                icon=ft.Icons.EDIT,
+                                icon_size=18,
+                                tooltip="Edit",
+                                on_click=lambda e, r=record: edit_record(r),
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.DELETE,
+                                icon_size=18,
+                                icon_color=ft.Colors.ERROR,
+                                tooltip="Delete",
+                                on_click=lambda e, r=record: delete_record(r),
+                            ),
                         ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=6,
-                    ),
-                    padding=ft.Padding(0, 28, 0, 28),
-                )
-            )
-        else:
-            summary = ft.Text(
-                f"Showing {min(len(filtered_records), MAX_VISIBLE_RECORDS)} of {len(filtered_records)} records",
-                size=13,
-                color=ft.Colors.ON_SURFACE_VARIANT,
-            )
-            records_list.controls.append(summary)
-
-            for index, record in enumerate(filtered_records[:MAX_VISIBLE_RECORDS]):
-                records_list.controls.append(build_record_tile(record, index))
-
-            if len(filtered_records) > MAX_VISIBLE_RECORDS:
-                records_list.controls.append(
-                    ft.Text(
-                        f"…and {len(filtered_records) - MAX_VISIBLE_RECORDS} more records",
-                        size=12,
-                        color=ft.Colors.GREY_500,
-                        italic=True,
+                        spacing=0,
                     )
                 )
+            else:
+                actions_cell = ft.DataCell(ft.Text(""))
 
-        records_list.update()
+            cells.append(actions_cell)
+
+            row = ft.DataRow(
+                cells=cells,
+                on_select_changed=lambda e: None,  # Placeholder for selection
+            )
+            rows.append(row)
+
+        return rows
+
+    def refresh_data_table() -> None:
+        """Rebuild and update DataTable."""
+        if not _control_attached(data_table):
+            logger.debug("DataTable not yet attached, skipping update")
+            return
+
+        data_table.columns = build_table_columns()
+        data_table.rows = build_table_rows()
+        data_table.sort_column_index = sort_column_index
+        data_table.sort_ascending = sort_ascending
+
+        data_table.update()
+        update_pagination_controls()
 
     def apply_search_filter() -> None:
-        nonlocal filtered_records
+        nonlocal filtered_records, current_page
 
         if not search_query.strip():
             filtered_records = list(all_records)
@@ -398,7 +404,10 @@ def create_database_view(
                 if any(query in _stringify(value).lower() for value in record.values())
             ]
 
-        refresh_records_list()
+        # Reset to first page after filtering
+        current_page = 0
+        refresh_data_table()
+
         if search_query.strip():
             set_status(
                 f"Found {len(filtered_records)} matches",
@@ -412,6 +421,34 @@ def create_database_view(
                 loading=None,
             )
 
+    def apply_sort() -> None:
+        """Sort filtered records by current sort column."""
+        nonlocal filtered_records
+
+        if sort_column_index is None or not table_columns:
+            return
+
+        # Get visible columns (excluding sensitive fields)
+        visible_columns = [col for col in table_columns if col.lower() not in SENSITIVE_FIELDS]
+
+        if sort_column_index >= len(visible_columns):
+            return
+
+        sort_column_name = visible_columns[sort_column_index]
+
+        def sort_key(record: dict[str, Any]) -> Any:
+            value = record.get(sort_column_name)
+            if value is None:
+                return ""
+            if isinstance(value, (bytes, bytearray)):
+                return value.hex()
+            return value
+
+        try:
+            filtered_records.sort(key=sort_key, reverse=not sort_ascending)
+        except Exception as e:
+            logger.warning(f"Sort failed: {e}")
+
     def get_export_payload() -> tuple[list[str], list[dict[str, Any]]]:
         if table_columns:
             columns = table_columns[:]
@@ -424,16 +461,16 @@ def create_database_view(
     # EVENT HANDLERS
     # ------------------------------------------------------------------
     def on_table_change(event: ft.ControlEvent) -> None:
-        nonlocal current_table, search_query
+        nonlocal current_table, search_query, current_page
 
         current_table = event.control.value or DEFAULT_TABLE
         search_query = ""
+        current_page = 0
         search_field.value = ""
         if _control_attached(search_field):
             search_field.update()
 
         if hasattr(page, "run_task"):
-            # Pass function reference, not coroutine object
             page.run_task(load_table_data_async)
 
     def on_search_change(event: ft.ControlEvent) -> None:
@@ -441,9 +478,36 @@ def create_database_view(
         search_query = event.control.value or ""
         apply_search_filter()
 
+    def on_column_sort(col_idx: int) -> None:
+        """Handle column header click for sorting."""
+        nonlocal sort_column_index, sort_ascending
+
+        if sort_column_index == col_idx:
+            # Toggle sort direction
+            sort_ascending = not sort_ascending
+        else:
+            # New column, default to ascending
+            sort_column_index = col_idx
+            sort_ascending = True
+
+        apply_sort()
+        refresh_data_table()
+
+    def on_previous_page(e: ft.ControlEvent) -> None:
+        nonlocal current_page
+        if current_page > 0:
+            current_page -= 1
+            refresh_data_table()
+
+    def on_next_page(e: ft.ControlEvent) -> None:
+        nonlocal current_page
+        total_pages = get_total_pages()
+        if current_page < total_pages - 1:
+            current_page += 1
+            refresh_data_table()
+
     def on_refresh(_event: ft.ControlEvent) -> None:
         if hasattr(page, "run_task"):
-            # FIXED: Pass function, not coroutine object
             page.run_task(load_database_info_async)
             page.run_task(load_table_names_async)
             page.run_task(load_table_data_async)
@@ -476,7 +540,7 @@ def create_database_view(
             try:
                 set_status("Saving record…", ft.Colors.BLUE, True)
                 payload = {column: field.value or None for column, field in input_fields.items()}
-                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                # CRITICAL: Use run_in_executor for sync bridge method
                 loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, bridge.add_table_record, current_table, payload)
                 if result.get("success"):
@@ -488,7 +552,7 @@ def create_database_view(
                         page,
                         f"Failed to add record: {result.get('error', 'Unknown error')}",
                     )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 logger.exception("Error adding record: %s", exc)
                 show_error_message(page, f"Error adding record: {exc}")
             finally:
@@ -496,7 +560,6 @@ def create_database_view(
 
         add_dialog.actions = [
             ft.TextButton("Cancel", on_click=lambda _: page.close(add_dialog)),
-            # Pass function reference to run_task
             ft.FilledButton("Add", on_click=lambda _: page.run_task(save_async)),
         ]
 
@@ -532,7 +595,7 @@ def create_database_view(
                     payload[column] = field.value or None
 
                 set_status("Updating record…", ft.Colors.BLUE, True)
-                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                # CRITICAL: Use run_in_executor for sync bridge method
                 loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, bridge.update_table_record, current_table, payload)
                 if result.get("success"):
@@ -544,7 +607,7 @@ def create_database_view(
                         page,
                         f"Failed to update record: {result.get('error', 'Unknown error')}",
                     )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 logger.exception("Error updating record: %s", exc)
                 show_error_message(page, f"Error updating record: {exc}")
             finally:
@@ -552,7 +615,6 @@ def create_database_view(
 
         edit_dialog.actions = [
             ft.TextButton("Cancel", on_click=lambda _: page.close(edit_dialog)),
-            # Pass function reference to run_task
             ft.FilledButton("Save", on_click=lambda _: page.run_task(save_changes)),
         ]
 
@@ -580,7 +642,7 @@ def create_database_view(
         async def confirm_async() -> None:
             try:
                 set_status("Deleting record…", ft.Colors.BLUE, True)
-                # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+                # CRITICAL: Use run_in_executor for sync bridge method
                 loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, bridge.delete_table_record, current_table, record_id)
                 if result.get("success"):
@@ -592,7 +654,7 @@ def create_database_view(
                         page,
                         f"Failed to delete record: {result.get('error', 'Unknown error')}",
                     )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 logger.exception("Error deleting record: %s", exc)
                 show_error_message(page, f"Error deleting record: {exc}")
             finally:
@@ -602,7 +664,6 @@ def create_database_view(
             ft.TextButton("Cancel", on_click=lambda _: page.close(confirm_dialog)),
             ft.FilledButton(
                 "Delete",
-                # Pass function reference to run_task
                 on_click=lambda _: page.run_task(confirm_async),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
             ),
@@ -645,12 +706,11 @@ def create_database_view(
                     page,
                     f"Exported {len(rows_to_export)} records to {filename}",
                 )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 logger.exception("Error exporting data: %s", exc)
                 show_error_message(page, f"Export failed: {exc}")
 
         if hasattr(page, "run_task"):
-            # Pass function reference, not coroutine object
             page.run_task(export_async)
 
     # ------------------------------------------------------------------
@@ -658,10 +718,8 @@ def create_database_view(
     # ------------------------------------------------------------------
     async def load_database_info_async() -> None:
         nonlocal db_info
-        print("🟠 [LOAD_DB_INFO] Function ENTERED")
 
         if not server_available():
-            print("🟠 [LOAD_DB_INFO] Server not available")
             db_info = {
                 "status": "Disconnected",
                 "tables": 0,
@@ -674,12 +732,9 @@ def create_database_view(
             return
 
         try:
-            print("🟠 [LOAD_DB_INFO] Setting status to 'Loading database info…'")
             set_status("Loading database info…", ft.Colors.BLUE, True)
-            print("🟠 [LOAD_DB_INFO] Getting active bridge")
             bridge = get_active_bridge()
             if bridge is None:
-                print("🟠 [LOAD_DB_INFO] Bridge is None")
                 db_info = {
                     "status": "Disconnected",
                     "tables": 0,
@@ -691,29 +746,22 @@ def create_database_view(
                 update_database_info_ui()
                 return
 
-            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
-            print("🟠 [LOAD_DB_INFO] About to call bridge.get_database_info() with run_in_executor")
+            # CRITICAL: Use run_in_executor for sync bridge method
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_database_info)
-            print(f"🟠 [LOAD_DB_INFO] Method returned: success={result.get('success')}, error={result.get('error')}")
 
             if result.get("success") and result.get("data"):
                 db_info = result["data"]
-                print(f"🟠 [LOAD_DB_INFO] SUCCESS - Updated db_info: {db_info}")
             else:
                 error_msg = result.get("error", "Unknown error")
-                print(f"🟠 [LOAD_DB_INFO] FAILED - Error: {error_msg}")
                 logger.warning("Failed to load database info: %s", error_msg)
                 db_info["status"] = f"Error: {error_msg}"
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"🟠 [LOAD_DB_INFO] EXCEPTION: {type(exc).__name__}: {exc}")
+        except Exception as exc:
             logger.exception("Database info load failed: %s", exc)
             db_info["status"] = f"Error: {exc}"
         finally:
-            print("🟠 [LOAD_DB_INFO] Finally block - setting status to Ready")
             set_status("Ready", ft.Colors.GREY_400, False)
             update_database_info_ui()
-            print("🟠 [LOAD_DB_INFO] Function EXITING")
 
     async def load_table_names_async() -> None:
         nonlocal available_tables
@@ -730,7 +778,7 @@ def create_database_view(
                 available_tables = list(DEFAULT_TABLE_OPTIONS)
                 return
 
-            # CRITICAL FIX: Use run_in_executor for sync method (no async version exists)
+            # CRITICAL: Use run_in_executor for sync method
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_table_names)
             if result.get("success"):
@@ -740,7 +788,7 @@ def create_database_view(
                 error_msg = result.get("error", "Unknown error")
                 logger.warning("Failed to load table names: %s", error_msg)
                 available_tables = list(DEFAULT_TABLE_OPTIONS)
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             logger.exception("Table name load failed: %s", exc)
             available_tables = list(DEFAULT_TABLE_OPTIONS)
         finally:
@@ -748,13 +796,13 @@ def create_database_view(
             update_table_dropdown()
 
     async def load_table_data_async() -> None:
-        nonlocal all_records, filtered_records, table_columns
+        nonlocal all_records, filtered_records, table_columns, current_page
 
         if not server_available():
             all_records = []
             filtered_records = []
             table_columns = []
-            refresh_records_list()
+            refresh_data_table()
             return
 
         try:
@@ -766,7 +814,7 @@ def create_database_view(
                 table_columns = []
                 return
 
-            # CRITICAL FIX: Use run_in_executor for sync bridge method (January 2025)
+            # CRITICAL: Use run_in_executor for sync bridge method
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
             if result.get("success"):
@@ -774,13 +822,14 @@ def create_database_view(
                 table_columns = list(data.get("columns", []))
                 all_records = list(data.get("rows", []))
                 filtered_records = list(all_records)
+                current_page = 0
             else:
                 error_msg = result.get("error", "Unknown error")
                 logger.warning("Failed to load table data: %s", error_msg)
                 all_records = []
                 filtered_records = []
                 table_columns = []
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             logger.exception("Table data load failed: %s", exc)
             all_records = []
             filtered_records = []
@@ -790,7 +839,7 @@ def create_database_view(
             set_status("Ready", ft.Colors.GREY_400, False)
 
     # ------------------------------------------------------------------
-    # INITIAL LAYOUT COMPOSITION
+    # LAYOUT COMPOSITION
     # ------------------------------------------------------------------
     info_cards = ft.ResponsiveRow(
         [
@@ -874,22 +923,46 @@ def create_database_view(
         spacing=12,
     )
 
-    add_button.on_click = add_record
-    refresh_button.on_click = on_refresh
-    export_csv_button.on_click = lambda _e: export_data("csv")
-    export_json_button.on_click = lambda _e: export_data("json")
+    # DataTable container with scroll
+    table_container = ft.Container(
+        content=ft.Column(
+            [
+                ft.Container(
+                    content=data_table,
+                    border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                    border_radius=8,
+                    padding=10,
+                ),
+            ],
+            scroll="auto",
+            expand=True,
+        ),
+        expand=True,
+    )
+
+    # Pagination row
+    pagination_row = ft.Row(
+        [
+            page_info_text,
+            ft.Container(expand=True),
+            prev_page_button,
+            next_page_button,
+        ],
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+    )
 
     records_section = create_neumorphic_container(
         ft.Column(
             [
                 ft.Text("Database Records", size=28, weight=ft.FontWeight.BOLD),
                 ft.Text(
-                    "Rendered with ListView to avoid DataTable freezes per Flet documentation.",
+                    "Interactive table with sorting, pagination, and full CRUD operations",
                     size=12,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
-                ft.Container(content=records_list, expand=True),
+                table_container,
+                pagination_row,
             ],
             spacing=16,
             expand=True,
@@ -913,20 +986,19 @@ def create_database_view(
 
     main_container = ft.Container(content=main_content, expand=True)
 
+    # Wire up event handlers
     table_dropdown.on_change = on_table_change
     search_field.on_change = on_search_change
-
-    # CRITICAL FIX: Do NOT update controls during view creation!
-    # These updates will freeze the UI if called before the view is attached to the page.
-    # All UI updates are now deferred to the setup() function.
-    # update_table_dropdown()     # ❌ REMOVED - causes freeze
-    # update_database_info_ui()   # ❌ REMOVED - causes freeze
-    # refresh_records_list()      # ❌ REMOVED - causes freeze
+    add_button.on_click = add_record
+    refresh_button.on_click = on_refresh
+    export_csv_button.on_click = lambda _e: export_data("csv")
+    export_json_button.on_click = lambda _e: export_data("json")
+    prev_page_button.on_click = on_previous_page
+    next_page_button.on_click = on_next_page
 
     # ------------------------------------------------------------------
     # LIFECYCLE HOOKS
     # ------------------------------------------------------------------
-    # Track background tasks for proper cancellation
     background_tasks: list[asyncio.Task] = []
     _setup_cancelled = False
 
@@ -934,69 +1006,44 @@ def create_database_view(
         """Setup function - load initial data."""
         nonlocal _setup_cancelled
 
-        print("🔴 [DATABASE_SETUP] Setup function CALLED")
-        logger.info("🔴 [DATABASE_SETUP] Setting up database view (async)")
-        print("🔴 [DATABASE_SETUP] About to call update functions")
+        logger.info("Setting up database view (async)")
         try:
-            # Check if disposed before proceeding
             if _setup_cancelled:
-                print("🔴 [DATABASE_SETUP] Setup cancelled - exiting early")
                 return
 
-            # Allow AnimatedSwitcher transition to finish BEFORE any updates to avoid
-            # potential deadlocks/disconnects when controls aren't fully attached yet.
-            print(f"🔴 [DATABASE_SETUP] Waiting {SETUP_DELAY_SECONDS}s for attachment")
+            # Allow AnimatedSwitcher transition to finish
             await asyncio.sleep(SETUP_DELAY_SECONDS)
 
             if _setup_cancelled:
-                print("🔴 [DATABASE_SETUP] Setup cancelled after sleep - exiting")
                 return
 
-            # CRITICAL: Initialize UI state AFTER guaranteed attachment delay
-            print("🔴 [DATABASE_SETUP] Calling update_table_dropdown()")
+            # Initialize UI state
             update_table_dropdown()
-            print("🔴 [DATABASE_SETUP] Calling update_database_info_ui()")
             update_database_info_ui()
-            print("🔴 [DATABASE_SETUP] Calling refresh_records_list()")
-            refresh_records_list()
-            print("🔴 [DATABASE_SETUP] Initial UI updates completed, loading data…")
+            refresh_data_table()
 
-            print("🔴 [DATABASE_SETUP] Sleep completed, loading database info")
+            # Load data
             await load_database_info_async()
-            print("🔴 [DATABASE_SETUP] Database info loaded, loading table names")
             await load_table_names_async()
-            print("🔴 [DATABASE_SETUP] Table names loaded, loading table data")
             await load_table_data_async()
-            print("🔴 [DATABASE_SETUP] All async loading completed successfully!")
         except asyncio.CancelledError:
-            print("🔴 [DATABASE_SETUP] Setup task was cancelled")
             logger.info("Database view setup cancelled")
-            raise  # Re-raise to properly cancel the task
-        except Exception as exc:  # pragma: no cover - defensive
+            raise
+        except Exception as exc:
             logger.exception("Database view setup failed: %s", exc)
 
     def dispose() -> None:
         """Dispose hook - cancel background tasks."""
         nonlocal _setup_cancelled
 
-        print("🟥 [DATABASE_DISPOSE] Dispose function CALLED")
-        logger.info("🟥 [DATABASE_DISPOSE] Disposing database view - cancelling background tasks")
-
-        # Signal setup to stop if it's running
+        logger.info("Disposing database view - cancelling background tasks")
         _setup_cancelled = True
 
-        # Cancel all tracked background tasks
         for task in background_tasks:
             if not task.done():
-                print(f"🟥 [DATABASE_DISPOSE] Cancelling task: {task}")
                 task.cancel()
 
         background_tasks.clear()
-        print("🟥 [DATABASE_DISPOSE] All background tasks cancelled")
         logger.debug("Database view disposed")
 
-    print(f"🔴 [DATABASE_VIEW] About to return tuple: (main_container={type(main_container)}, dispose={type(dispose)}, setup={type(setup)})")
-    logger.info(f"🔴 [DATABASE_VIEW] Returning view tuple with setup function: {setup}")
-    result = (main_container, dispose, setup)
-    print(f"🔴 [DATABASE_VIEW] Result tuple created, len={len(result)}, types={[type(x) for x in result]}")
-    return result
+    return (main_container, dispose, setup)

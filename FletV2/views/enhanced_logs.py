@@ -19,7 +19,13 @@ import contextlib
 from datetime import datetime
 import asyncio
 import json
+import re
+import csv
 from typing import Any, Callable, Optional
+try:
+    import websockets
+except ImportError:
+    websockets = None
 
 import flet as ft
 
@@ -33,116 +39,13 @@ for _path in (_flet_v2_root, _repo_root):
 
 import Shared.utils.utf8_solution as _  # noqa: F401
 
-# --------------------------------------------------------------------------------------
-# NEOMORPHIC SHADOW SYSTEM
-# True neomorphism requires dual shadows: one light (top-left) and one dark (bottom-right)
-# This creates the "soft UI" effect where elements appear to extrude from or press into the surface
-# --------------------------------------------------------------------------------------
+# Import modularized components
+from FletV2.utils.ui.neomorphism import NeomorphicShadows
+from FletV2.utils.logging.color_system import LogColorSystem
+from FletV2.components.log_card import LogCard  # Moved from inside function
 
-class NeomorphicShadows:
-    """Professional neomorphic shadow system with elevation levels"""
-
-    @staticmethod
-    def get_card_shadows(elevation: str = "medium") -> list[ft.BoxShadow]:
-        """
-        Get neomorphic shadows for cards based on elevation level.
-        Neomorphism uses dual shadows to create depth perception.
-        """
-        if elevation == "low":
-            return [
-                # Light shadow (top-left) - simulates light source
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=10,
-                    color=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
-                    offset=ft.Offset(-2, -2),
-                ),
-                # Dark shadow (bottom-right) - creates depth
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=10,
-                    color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-                    offset=ft.Offset(2, 2),
-                ),
-            ]
-        elif elevation == "medium":
-            return [
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=15,
-                    color=ft.Colors.with_opacity(0.10, ft.Colors.WHITE),
-                    offset=ft.Offset(-3, -3),
-                ),
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=15,
-                    color=ft.Colors.with_opacity(0.20, ft.Colors.BLACK),
-                    offset=ft.Offset(3, 3),
-                ),
-            ]
-        else:  # high
-            return [
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=20,
-                    color=ft.Colors.with_opacity(0.12, ft.Colors.WHITE),
-                    offset=ft.Offset(-4, -4),
-                ),
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=20,
-                    color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
-                    offset=ft.Offset(4, 4),
-                ),
-            ]
-
-    @staticmethod
-    def get_hover_shadows() -> list[ft.BoxShadow]:
-        """Enhanced shadows for hover state - more pronounced elevation"""
-        return [
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=18,
-                color=ft.Colors.with_opacity(0.12, ft.Colors.WHITE),
-                offset=ft.Offset(-4, -4),
-            ),
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=18,
-                color=ft.Colors.with_opacity(0.22, ft.Colors.BLACK),
-                offset=ft.Offset(4, 4),
-            ),
-        ]
-
-    @staticmethod
-    def get_pressed_shadows() -> list[ft.BoxShadow]:
-        """Inset shadows for pressed state - appears pressed into surface"""
-        return [
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-                offset=ft.Offset(2, 2),
-            ),
-        ]
-
-    @staticmethod
-    def get_button_shadows() -> list[ft.BoxShadow]:
-        """Neomorphic button shadows"""
-        return [
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
-                offset=ft.Offset(-2, -2),
-            ),
-            ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.18, ft.Colors.BLACK),
-                offset=ft.Offset(2, 2),
-            ),
-        ]
+# Define batch size for pagination
+BATCH_SIZE = 50  # Process logs in batches of 50
 
 # --------------------------------------------------------------------------------------
 # MD3 COLOR POLYFILLS
@@ -189,152 +92,18 @@ _ensure_color_attr(
 )
 
 # --------------------------------------------------------------------------------------
-# PROFESSIONAL COLOR SYSTEM
-# Distinct, vibrant colors for each log level with excellent contrast
-# --------------------------------------------------------------------------------------
-
-class LogColorSystem:
-    """
-    Professional color system with distinct, recognizable colors.
-    Each level has a primary color, background tint, and semantic meaning.
-    """
-
-    # Color definitions optimized for both dark and light themes
-    COLORS = {
-        "DEBUG": {
-            "primary": "#94A3B8",      # Slate gray - neutral, technical
-            "secondary": "#CBD5E1",
-            "bg_light": "#F8FAFC",
-            "bg_dark": "#1E293B",
-            "icon": ft.Icons.BUG_REPORT_ROUNDED,
-            "label": "DEBUG",
-            "description": "Debug information",
-        },
-        "INFO": {
-            "primary": "#3B82F6",      # Bright blue - informational, clear
-            "secondary": "#60A5FA",
-            "bg_light": "#EFF6FF",
-            "bg_dark": "#1E3A8A",
-            "icon": ft.Icons.INFO_ROUNDED,
-            "label": "INFO",
-            "description": "General information",
-        },
-        "SUCCESS": {
-            "primary": "#10B981",      # Emerald green - positive, successful
-            "secondary": "#34D399",
-            "bg_light": "#ECFDF5",
-            "bg_dark": "#064E3B",
-            "icon": ft.Icons.CHECK_CIRCLE_ROUNDED,
-            "label": "SUCCESS",
-            "description": "Successful operation",
-        },
-        "WARNING": {
-            "primary": "#EAB308",      # Yellow - caution, attention needed
-            "secondary": "#FDE047",
-            "bg_light": "#FEFCE8",
-            "bg_dark": "#713F12",
-            "icon": ft.Icons.WARNING_ROUNDED,
-            "label": "WARNING",
-            "description": "Warning - review needed",
-        },
-        "IMPORTANT": {
-            "primary": "#F97316",      # Orange - important warning, urgent
-            "secondary": "#FB923C",
-            "bg_light": "#FFF7ED",
-            "bg_dark": "#7C2D12",
-            "icon": ft.Icons.PRIORITY_HIGH_ROUNDED,
-            "label": "IMPORTANT",
-            "description": "Important warning",
-        },
-        "ERROR": {
-            "primary": "#EF4444",      # Red - error, failure
-            "secondary": "#F87171",
-            "bg_light": "#FEF2F2",
-            "bg_dark": "#7F1D1D",
-            "icon": ft.Icons.ERROR_ROUNDED,
-            "label": "ERROR",
-            "description": "Error occurred",
-        },
-        "CRITICAL": {
-            "primary": "#DC2626",      # Deep red - critical, severe
-            "secondary": "#EF4444",
-            "bg_light": "#FEE2E2",
-            "bg_dark": "#991B1B",
-            "icon": ft.Icons.DANGEROUS_ROUNDED,
-            "label": "CRITICAL",
-            "description": "Critical failure",
-        },
-        "SPECIAL": {
-            "primary": "#A855F7",      # Purple - special events, unique
-            "secondary": "#C084FC",
-            "bg_light": "#FAF5FF",
-            "bg_dark": "#581C87",
-            "icon": ft.Icons.STARS_ROUNDED,
-            "label": "SPECIAL",
-            "description": "Special event",
-        },
-    }
-
-    @staticmethod
-    def get_level_config(level: str) -> dict:
-        """Get complete color configuration for a log level"""
-        return LogColorSystem.COLORS.get(level, LogColorSystem.COLORS["INFO"])
-
-    @staticmethod
-    def get_surface_tint(color: str, opacity: float = 0.05) -> str:
-        """Create subtle surface tint for neomorphic backgrounds"""
-        return ft.Colors.with_opacity(opacity, color)
-
-    @staticmethod
-    def get_border_color(color: str, opacity: float = 0.15) -> str:
-        """Create border color with appropriate opacity"""
-        return ft.Colors.with_opacity(opacity, color)
-
-# --------------------------------------------------------------------------------------
 # FLET LOG CAPTURE SYSTEM
-# Enhanced logging handler with precise timestamp formatting
+# Uses singleton from Shared module - initialized early in application lifecycle
 # --------------------------------------------------------------------------------------
 
-class FletLogCapture(logging.Handler):
-    """
-    Enhanced logging handler that captures Flet framework logs.
-    Maintains a rolling buffer with timestamps and metadata.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.logs = []
-        self.max_logs = 250  # Generous buffer for debugging
-
-    def emit(self, record):
-        """Capture log record with enhanced formatting"""
-        with contextlib.suppress(Exception):
-            # Format timestamp with milliseconds for precise timing
-            timestamp = datetime.fromtimestamp(record.created)
-            time_str = timestamp.strftime("%H:%M:%S.%f")[:-3]  # Include milliseconds
-
-            self.logs.insert(0, {
-                "time": time_str,
-                "level": record.levelname,
-                "component": record.name,
-                "message": self.format(record),
-                "timestamp": record.created,
-                "full_datetime": timestamp.isoformat(),
-            })
-
-            # Maintain buffer size
-            if len(self.logs) > self.max_logs:
-                self.logs = self.logs[:self.max_logs]
-
-
-# Initialize global log capture
-_flet_log_capture = FletLogCapture()
-_flet_log_capture.setFormatter(logging.Formatter('%(message)s'))
-
-# Attach to root logger (check to avoid duplicates on hot reload)
-_root_logger = logging.getLogger()
-if not any(isinstance(h, FletLogCapture) for h in _root_logger.handlers):
-    _root_logger.addHandler(_flet_log_capture)
+# Import singleton log capture (initialized in start_with_server.py)
+try:
+    from Shared.logging.flet_log_capture import get_flet_log_capture
+    _flet_log_capture = get_flet_log_capture()
+except ImportError:
+    # Fallback if Shared module not available (shouldn't happen in production)
+    print("[WARNING] Could not import FletLogCapture singleton - Flet logs may not display")
+    _flet_log_capture = None
 
 # --------------------------------------------------------------------------------------
 # DATA FETCHING
@@ -347,10 +116,92 @@ def get_system_logs(server_bridge: Any | None) -> list[dict]:
     try:
         result = server_bridge.get_logs()
         if isinstance(result, dict) and result.get('success'):
-            return result.get('data', [])
+            data = result.get('data', {})
+            # Server returns {'logs': [...], 'note': '...'}, extract the logs list
+            if isinstance(data, dict):
+                raw_logs = data.get('logs', [])
+                # Convert raw log strings to dict format
+                parsed_logs = []
+                for line in raw_logs:
+                    if isinstance(line, str):
+                        # Parse log line format: "TIMESTAMP - LEVEL - MESSAGE"
+                        # Example: "2025-10-10 20:18:34,099 - INFO - Server started"
+                        parts = line.split(' - ', 2)
+                        if len(parts) >= 3:
+                            parsed_logs.append({
+                                'time': parts[0].strip(),
+                                'level': parts[1].strip(),
+                                'message': parts[2].strip(),
+                                'component': 'Server',
+                            })
+                        else:
+                            # Fallback for unparseable lines
+                            parsed_logs.append({
+                                'time': '',
+                                'level': 'INFO',
+                                'message': line,
+                                'component': 'Server',
+                            })
+                    elif isinstance(line, dict):
+                        # Already in dict format
+                        parsed_logs.append(line)
+                return parsed_logs
+            return []
         return []
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] get_system_logs failed: {e}")
+        import traceback
+        traceback.print_exc()
         return []
+
+# Define the highlight_text function for search text highlighting
+def highlight_text(text: str, search_query: str) -> ft.Control:
+    """
+    Creates a text control with highlighted search terms.
+    If search_query is provided, matches are highlighted with a background color.
+    """
+    if not search_query:
+        return ft.Text(text, selectable=True)
+
+    # Case insensitive search
+    search_lower = search_query.lower()
+    text_lower = text.lower()
+
+    # Find all occurrences of the search query
+    parts = []
+    start = 0
+    pos = text_lower.find(search_lower)
+
+    while pos != -1:
+        # Add text before match
+        if pos > start:
+            parts.append(ft.TextSpan(text[start:pos]))
+
+        # Add highlighted match
+        parts.append(ft.TextSpan(
+            text=text[pos:pos+len(search_query)],
+            style=ft.TextStyle(
+                bgcolor=ft.Colors.YELLOW_300,
+                color=ft.Colors.BLACK
+            )
+        ))
+
+        start = pos + len(search_query)
+        pos = text_lower.find(search_lower, start)
+
+    # Add remaining text
+    if start < len(text):
+        parts.append(ft.TextSpan(text[start:]))
+
+    # If no matches found, return regular text
+    if not parts:
+        return ft.Text(text, selectable=True, size=12)
+
+    return ft.Text(
+        spans=parts,
+        selectable=True,
+        size=12,
+    )
 
 # --------------------------------------------------------------------------------------
 # MAIN VIEW CREATION
@@ -406,6 +257,65 @@ def create_logs_view(
         return level_map.get(r, "INFO" if r not in LogColorSystem.COLORS else r)
 
     # ---------------------------------------------
+    # STRUCTURED STATE MANAGEMENT
+    # ---------------------------------------------
+    from dataclasses import dataclass, field
+
+    @dataclass
+    class LogsViewState:
+        selected_levels: set[str] = field(default_factory=set)
+        search_query: str = ""
+        is_compact_mode: bool = False
+        is_auto_scroll_locked: bool = True
+        system_logs_data: list[dict] = field(default_factory=list)
+        flet_logs_data: list[dict] = field(default_factory=list)
+        current_system_batch: int = 0
+        current_flet_batch: int = 0
+        system_log_controls: list[ft.Control] = field(default_factory=list)
+        flet_log_controls: list[ft.Control] = field(default_factory=list)
+
+    # Initialize state
+    view_state = LogsViewState()
+
+    # WebSocket connection for live logs
+    websocket_connection = None
+    is_live_mode = False
+
+    # ---------------------------------------------
+    # Toast Notifications
+    # ---------------------------------------------
+
+    def _show_toast(pg: ft.Page, message: str, toast_type: str = "info"):
+        """Show toast notification with appropriate styling"""
+        with contextlib.suppress(Exception):
+            # Color based on type
+            if toast_type == "error":
+                bg_color = ft.Colors.ERROR_CONTAINER
+                text_color = ft.Colors.ON_ERROR_CONTAINER
+                icon = ft.Icons.ERROR_OUTLINE_ROUNDED
+            elif toast_type == "success":
+                bg_color = LogColorSystem.get_surface_tint("#10B981", 0.9)
+                text_color = ft.Colors.ON_PRIMARY_CONTAINER
+                icon = ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED
+            else:
+                bg_color = ft.Colors.SURFACE_CONTAINER_HIGHEST
+                text_color = ft.Colors.ON_SURFACE
+                icon = ft.Icons.INFO_OUTLINE_ROUNDED
+
+            pg.snack_bar = ft.SnackBar(
+                content=ft.Row([
+                    ft.Icon(icon, color=text_color, size=20),
+                    ft.Text(message, color=text_color, size=14),
+                ], spacing=12),
+                bgcolor=bg_color,
+                show_close_icon=True,
+                close_icon_color=text_color,
+                duration=3000,
+            )
+            pg.snack_bar.open = True
+            pg.update()
+
+    # ---------------------------------------------
     # Neomorphic Card Builder
     # This is the heart of the visual design - creates beautiful, elevated log cards
     # ---------------------------------------------
@@ -423,182 +333,19 @@ def create_logs_view(
         - Subtle color tinting based on log level
         """
 
-        # Extract log data safely
-        time_s = str(log.get("time", ""))
-        level = map_level(log.get("level"))
-        comp = str(log.get("component", ""))
-        msg = str(log.get("message", ""))
+        # Determine if compact mode is active
+        is_compact = compact_mode_switch.value
+        # Update state
+        view_state.is_compact_mode = is_compact
 
-        # Get color configuration for this level
-        color_config = LogColorSystem.get_level_config(level)
-        primary_color = color_config["primary"]
-
-        # ===== LEFT ACCENT STRIP =====
-        # Colored vertical strip that provides immediate visual identification
-        accent_strip = ft.Container(
-            width=5,
-            height=None,  # Full height of card
-            bgcolor=primary_color,
-            border_radius=ft.border_radius.only(top_left=10, bottom_left=10),
+        return LogCard(
+            log=log,
+            index=index,
+            is_compact=is_compact,
+            search_query=view_state.search_query,
+            on_click=lambda _: show_log_details(log),
+            page=page,  # Pass page reference for theme-aware shadows
         )
-
-        # ===== ICON CONTAINER =====
-        # Circular icon with subtle background matching the log level
-        icon_circle = ft.Container(
-            content=ft.Icon(
-                color_config["icon"],
-                size=20,
-                color=primary_color,
-            ),
-            width=40,
-            height=40,
-            bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.12),
-            border_radius=20,
-            alignment=ft.alignment.center,
-            # Subtle neomorphic shadow on icon container
-            shadow=[
-                ft.BoxShadow(
-                    spread_radius=0,
-                    blur_radius=6,
-                    color=ft.Colors.with_opacity(0.05, ft.Colors.BLACK),
-                    offset=ft.Offset(1, 1),
-                ),
-            ],
-        )
-
-        # ===== LEVEL BADGE =====
-        # Small pill showing the log level
-        level_badge = ft.Container(
-            content=ft.Text(
-                color_config["label"],
-                size=10,
-                weight=ft.FontWeight.W_700,
-                color=primary_color,
-            ),
-            bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.15),
-            padding=ft.padding.symmetric(horizontal=10, vertical=4),
-            border_radius=12,
-            border=ft.border.all(
-                1,
-                LogColorSystem.get_border_color(primary_color, 0.2)
-            ),
-        )
-
-        # ===== MESSAGE TEXT =====
-        # Main log message with selectable text
-        message_text = ft.Text(
-            msg or "(empty message)",
-            size=13,
-            weight=ft.FontWeight.W_500,
-            color=ft.Colors.ON_SURFACE,
-            max_lines=3,
-            overflow=ft.TextOverflow.ELLIPSIS,
-            selectable=True,
-        )
-
-        # ===== METADATA ROW =====
-        # Component and timestamp information
-        metadata_items = []
-
-        if comp:
-            # Component pill with subtle background
-            metadata_items.append(
-                ft.Container(
-                    content=ft.Row([
-                        ft.Icon(
-                            ft.Icons.WIDGETS_ROUNDED,
-                            size=11,
-                            color=ft.Colors.ON_SURFACE_VARIANT
-                        ),
-                        ft.Text(
-                            comp,
-                            size=11,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            weight=ft.FontWeight.W_500,
-                        ),
-                    ], spacing=4, tight=True),
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE_VARIANT),
-                    padding=ft.padding.symmetric(horizontal=8, vertical=3),
-                    border_radius=6,
-                )
-            )
-
-        if time_s:
-            # Timestamp with clock icon
-            metadata_items.append(
-                ft.Row([
-                    ft.Icon(
-                        ft.Icons.ACCESS_TIME_ROUNDED,
-                        size=11,
-                        color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
-                    ft.Text(
-                        time_s,
-                        size=11,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        weight=ft.FontWeight.W_400,
-                    ),
-                ], spacing=4, tight=True)
-            )
-
-        # ===== CARD CONTENT LAYOUT =====
-        card_content = ft.Row([
-            accent_strip,
-            ft.Container(width=16),  # Spacing
-            icon_circle,
-            ft.Container(width=14),  # Spacing
-            # Main content column
-            ft.Column([
-                message_text,
-                ft.Container(height=8),  # Vertical spacing
-                ft.Row([
-                    *metadata_items,
-                    ft.Container(expand=True),  # Push badge to right
-                    level_badge,
-                ], spacing=8),
-            ], spacing=0, expand=True),
-            ft.Container(width=16),  # Right padding
-        ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-
-        # ===== MAIN CARD CONTAINER =====
-        # Neomorphic container with dual shadows and subtle background tint
-        card_container = ft.Container(
-            content=card_content,
-            padding=ft.padding.only(top=14, bottom=14, right=0, left=0),
-            border_radius=12,
-            # Subtle background tint based on log level
-            bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.02),
-            # Soft border for definition
-            border=ft.border.all(
-                1,
-                LogColorSystem.get_border_color(primary_color, 0.08)
-            ),
-            # Neomorphic shadows - the key to the soft UI effect
-            shadow=NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low"),
-            # Smooth animations for interactions
-            animate=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
-            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-        )
-
-        # Hover interaction handler
-        def on_card_hover(e: ft.ControlEvent):
-            """Enhanced hover effect with scale and shadow changes"""
-            is_hovering = e.data == "true"
-
-            if is_hovering:
-                card_container.shadow = NeomorphicShadows.get_hover_shadows()
-                card_container.scale = 1.015
-                card_container.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.04)
-            else:
-                card_container.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low")
-                card_container.scale = 1.0
-                card_container.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
-
-            card_container.update()
-
-        card_container.on_hover = on_card_hover
-
-        return card_container
 
     # ---------------------------------------------
     # Empty State Component
@@ -612,7 +359,8 @@ def create_logs_view(
 
         icon_map = {
             "System Logs": ft.Icons.DESKTOP_WINDOWS_ROUNDED,
-            "Flet Logs": ft.Icons.CODE_ROUNDED,
+            "App Logs": ft.Icons.APPS_ROUNDED,  # Changed from "Flet Logs"
+            "Application Logs": ft.Icons.APPS_ROUNDED,  # Also support full name
         }
 
         # Neomorphic icon container
@@ -717,9 +465,6 @@ def create_logs_view(
     system_loading_ref: ft.Ref[ft.Container] = ft.Ref()
     flet_loading_ref: ft.Ref[ft.Container] = ft.Ref()
 
-    system_logs_data: list[dict] = []
-    flet_logs_data: list[dict] = []
-
     # Create list views
     def make_listview(ref: ft.Ref[ft.ListView]) -> ft.ListView:
         return ft.ListView(
@@ -729,6 +474,7 @@ def create_logs_view(
             auto_scroll=False,
             controls=[],
             expand=True,
+            on_scroll=lambda e: on_list_scroll(e),
         )
 
     # Create loading overlays
@@ -754,7 +500,6 @@ def create_logs_view(
     # Neomorphic filter chips for log level selection
     # ---------------------------------------------
 
-    selected_levels: set[str] = set()  # Empty means show all
     _chip_refs: dict[str, ft.Chip] = {}
 
     def _build_filter_chip(level_name: str) -> ft.Chip:
@@ -767,7 +512,7 @@ def create_logs_view(
                 size=11,
                 weight=ft.FontWeight.W_700,
             ),
-            selected=(level_name in selected_levels),
+            selected=(level_name in view_state.selected_levels),  # Use view state instead of undefined variable
             on_select=lambda e, n=level_name: _on_toggle_level(n, e.control.selected),
             leading=ft.Icon(config["icon"], size=15),
             bgcolor=LogColorSystem.get_surface_tint(config["primary"], 0.08),
@@ -781,12 +526,10 @@ def create_logs_view(
 
     def _on_toggle_level(level_name: str, is_selected: bool):
         """Handle filter chip toggle"""
-        nonlocal selected_levels
-
         if is_selected:
-            selected_levels.add(level_name)
+            view_state.selected_levels.add(level_name)
         else:
-            selected_levels.discard(level_name)
+            view_state.selected_levels.discard(level_name)
 
         # Update chip appearance
         chip = _chip_refs.get(level_name)
@@ -805,24 +548,223 @@ def create_logs_view(
         # Refresh lists with new filter
         _refresh_lists_by_filter()
 
+    # Debounce timer for search
+    search_debounce_timer = None
+
+    def on_search_change(e: ft.ControlEvent):
+        """Handle search query changes with debounce"""
+        nonlocal search_debounce_timer
+
+        # Cancel previous timer
+        if search_debounce_timer and not search_debounce_timer.done():
+            search_debounce_timer.cancel()
+
+        # Update search query
+        view_state.search_query = e.data or ""
+
+        # Set new timer - use page.run_task instead of asyncio.create_task
+        async def delayed_refresh():
+            await asyncio.sleep(0.3)  # 300ms delay
+            _refresh_lists_by_filter()
+
+        search_debounce_timer = page.run_task(delayed_refresh)
+
+    # ---------------------------------------------
+    # LOG DETAILS DIALOG
+    # ---------------------------------------------
+
+    def show_log_details(log_data: dict):
+        """Show detailed log information in a modal dialog"""
+        # Create the content for the dialog
+        full_message = log_data.get("message", "") or "(empty message)"
+
+        # Format the raw log data as JSON
+        try:
+            formatted_json = json.dumps(log_data, indent=2, ensure_ascii=False)
+        except Exception:
+            formatted_json = str(log_data)
+
+        # Create message container with full text
+        message_container = ft.Container(
+            content=ft.Column([
+                ft.Text("Full Log Message", weight=ft.FontWeight.BOLD, size=16),
+                ft.Divider(),
+                ft.Text(
+                    full_message,
+                    selectable=True,
+                    size=14,
+                    expand=True,
+                ),
+            ], scroll=ft.ScrollMode.AUTO),
+            padding=10,
+            height=150,
+        )
+
+        # Create JSON container with raw data
+        json_container = ft.Container(
+            content=ft.Column([
+                ft.Text("Raw Log Data (JSON)", weight=ft.FontWeight.BOLD, size=16),
+                ft.Divider(),
+                ft.Text(
+                    formatted_json,
+                    selectable=True,
+                    size=12,
+                    expand=True,
+                ),
+            ], scroll=ft.ScrollMode.AUTO),
+            padding=10,
+            height=200,
+        )
+
+        # Create copy button
+        def copy_message_to_clipboard(e):
+            page.set_clipboard(full_message)
+            _show_toast(page, "Log message copied to clipboard", "success")
+
+        copy_button = ft.TextButton(
+            "Copy Full Message",
+            icon=ft.Icons.COPY_ROUNDED,
+            on_click=copy_message_to_clipboard
+        )
+
+        # Create the dialog
+        dialog = ft.AlertDialog(
+            title=ft.Text("Log Entry Details"),
+            content=ft.Column([
+                message_container,
+                json_container,
+                copy_button
+            ], spacing=10, height=450, scroll=ft.ScrollMode.AUTO),
+            actions=[
+                ft.TextButton("Close", on_click=lambda _: close_dialog(dialog))
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            modal=True,
+        )
+
+        # Function to close the dialog
+        def close_dialog(dlg):
+            try:
+                dlg.open = False
+                page.update()
+                page.dialog = None
+            except Exception as e:
+                print(f"[ERROR] Failed to close dialog: {e}")
+
+        # Open the dialog
+        try:
+            page.dialog = dialog
+            dialog.open = True  # CRITICAL: Must set open=True to display dialog!
+            page.update()
+        except Exception as e:
+            print(f"[ERROR] Failed to open dialog: {e}")
+            _show_toast(page, f"Error opening dialog: {e}", "error")
+
+    def on_list_scroll(e: ft.ScrollEvent):
+        """Handle scroll events to disable auto-scroll when user scrolls up"""
+        # Disable auto-scroll when user scrolls manually
+        if auto_scroll_switch.value:
+            auto_scroll_switch.value = False
+            # Update the switch visual state
+            with contextlib.suppress(Exception):
+                auto_scroll_switch.update()
+
+    # Time range for filtering (if needed)
+    start_time_filter = None  # Would come from UI controls
+    end_time_filter = None    # Would come from UI controls
+    selected_component_filter = "All"  # Component filter
+
     def _passes_filter(log: dict) -> bool:
         """Check if log passes current filter"""
-        if not selected_levels:
-            return True
-        return map_level(log.get("level")) in selected_levels
+        # Check level filter
+        if view_state.selected_levels and map_level(log.get("level")) not in view_state.selected_levels:
+            return False
 
-    def _render_list(lst_ref: ft.Ref[ft.ListView], data: list[dict], tab_name: str):
-        """Render log list with filtering"""
+        # Check component filter
+        if selected_component_filter != "All":
+            log_component = log.get("component", "").lower()
+            if log_component and selected_component_filter.lower() not in log_component:
+                return False
+
+        # Check search query (with optional regex support)
+        if view_state.search_query:
+            is_regex_search = view_state.search_query.startswith('/') and view_state.search_query.endswith('/')
+            search_text = view_state.search_query[1:-1] if is_regex_search else view_state.search_query
+            message = log.get("message", "")
+            component = log.get("component", "")
+            time_str = log.get("time", "")
+
+            found_match = False
+
+            if is_regex_search:
+                # Try to use regex to match
+                try:
+                    import re
+                    pattern = re.compile(search_text, re.IGNORECASE)
+                    if (pattern.search(message) or
+                        pattern.search(component) or
+                        pattern.search(time_str)):
+                        found_match = True
+                except re.error:
+                    # If regex is invalid, fall back to simple text matching
+                    search_lower = search_text.lower()
+                    message_lower = message.lower()
+                    component_lower = component.lower()
+                    time_lower = time_str.lower()
+                    if (search_lower in message_lower or
+                        search_lower in component_lower or
+                        search_lower in time_lower):
+                        found_match = True
+            else:
+                # Simple text search
+                search_lower = search_text.lower()
+                message_lower = message.lower()
+                component_lower = component.lower()
+                time_lower = time_str.lower()
+                if (search_lower in message_lower or
+                    search_lower in component_lower or
+                    search_lower in time_lower):
+                    found_match = True
+
+            if not found_match:
+                return False
+
+        # Check time range filter (simplified implementation)
+        if start_time_filter or end_time_filter:
+            log_time_str = log.get("time", "")
+            if log_time_str:
+                # Parse time string - expecting format like "HH:MM:SS.mmm"
+                with contextlib.suppress(Exception):
+                    # For now, just check if the time is within our range
+                    # This is a simplified check - a full implementation would parse time properly
+                    if start_time_filter and log_time_str < start_time_filter:
+                        return False
+                    if end_time_filter and log_time_str > end_time_filter:
+                        return False
+
+        return True
+
+    def _render_list(lst_ref: ft.Ref[ft.ListView], data: list[dict], tab_name: str, is_system: bool = True):
+        """Render log list with filtering and pagination"""
+        # Reduced debug output - only log when ref is None
         if not lst_ref.current:
+            print(f"[DEBUG] _render_list: lst_ref.current is None for {tab_name}")
             return
 
-        # CRITICAL: Check if control is attached to page before updating
-        # The ref might be populated before the control is in the page tree
-        if not hasattr(lst_ref.current, 'page') or lst_ref.current.page is None:
-            return
+        # Note: Removed page attachment check - Flet handles this automatically
+        # The control might temporarily not have .page during transitions but updates still work
+
+        # Check current scroll offset to determine if user has scrolled up
+        try:
+            # We need to check if the list view has scrolled up
+            # Note: This might be different depending on Flet's implementation
+            # We'll determine scroll state based on user preference and auto-scroll setting
+            should_scroll_to_bottom = auto_scroll_switch.value
+        except Exception:
+            should_scroll_to_bottom = True
 
         if not data:
-            # Show empty state
+            # Show empty state (debug removed - normal behavior)
             lst_ref.current.controls = [create_empty_state(tab_name)]
         else:
             # Filter data
@@ -858,23 +800,79 @@ def create_logs_view(
                                 size=13,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                        ], horizontal_alignment=ft.alignment.center, spacing=0),
                         padding=60,
                         alignment=ft.alignment.center,
                     )
                 ]
             else:
-                # Render log cards
-                lst_ref.current.controls = [
-                    build_log_card(row, idx) for idx, row in enumerate(filtered_data)
-                ]
+                # Determine which batch to show based on the tab
+                current_batch = view_state.current_system_batch if is_system else view_state.current_flet_batch
+                start_idx = current_batch * BATCH_SIZE
+                end_idx = start_idx + BATCH_SIZE
 
-        lst_ref.current.update()
+                # Get the batch of logs to render
+                batch_data = filtered_data[start_idx:end_idx]
+
+                # Create log cards for the current batch
+                log_cards = [build_log_card(row, idx) for idx, row in enumerate(batch_data)]
+
+                # Add "Load More" button if there are more logs
+                if end_idx < len(filtered_data):
+                    load_more_button = ft.Container(
+                        content=ft.ElevatedButton(
+                            "Load More",
+                            icon=ft.Icons.ADD_ROUNDED,
+                            on_click=lambda _: load_more_logs(is_system_tab=is_system),
+                            style=ft.ButtonStyle(
+                                padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                                shape=ft.RoundedRectangleBorder(radius=24),
+                            )
+                        ),
+                        padding=ft.padding.symmetric(vertical=10),
+                        alignment=ft.alignment.center,
+                    )
+
+                    lst_ref.current.controls = log_cards + [load_more_button]
+                else:
+                    lst_ref.current.controls = log_cards
+
+        # Safe update - control might not be attached to page during setup
+        try:
+            lst_ref.current.update()
+        except AssertionError as e:
+            if "must be added to the page first" not in str(e):
+                raise
+
+        # Auto-scroll to bottom if enabled
+        if should_scroll_to_bottom:
+            with contextlib.suppress(Exception):
+                lst_ref.current.scroll_to(offset=-1, duration=300)
+
+        # Update statistics panel
+        update_statistics()
+
+        # Check for critical logs and show alerts if needed
+        check_for_critical_logs(data)
+
+    def load_more_logs(is_system_tab: bool):
+        """Load the next batch of logs"""
+        if is_system_tab:
+            view_state.current_system_batch += 1
+            # Re-render with the new batch
+            _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
+        else:
+            view_state.current_flet_batch += 1
+            # Re-render with the new batch
+            _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
 
     def _refresh_lists_by_filter():
         """Refresh both lists with current filter settings"""
-        _render_list(system_list_ref, system_logs_data, "System Logs")
-        _render_list(flet_list_ref, flet_logs_data, "Flet Logs")
+        # Reset batch counters when refreshing
+        view_state.current_system_batch = 0
+        view_state.current_flet_batch = 0
+        _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
+        _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
 
     # ---------------------------------------------
     # Tab System
@@ -935,7 +933,7 @@ def create_logs_view(
 
         tabbar_row_ref.current.controls = [
             _create_tab_button("System Logs", ft.Icons.ARTICLE_ROUNDED, 0, active_tab_index == 0),
-            _create_tab_button("Flet Logs", ft.Icons.CODE_ROUNDED, 1, active_tab_index == 1),
+            _create_tab_button("App Logs", ft.Icons.APPS_ROUNDED, 1, active_tab_index == 1),  # Changed from "Flet Logs"
         ]
         tabbar_row_ref.current.update()
 
@@ -959,6 +957,12 @@ def create_logs_view(
         if idx == active_tab_index:
             return
 
+        # Reset batch counter for the previous tab
+        if active_tab_index == 0:  # Was on System logs tab
+            view_state.current_system_batch = 0
+        else:  # Was on Flet logs tab
+            view_state.current_flet_batch = 0
+
         active_tab_index = idx
         _render_tabbar()
         _render_active_content()
@@ -974,14 +978,16 @@ def create_logs_view(
         """Refresh system logs from server"""
         nonlocal _system_first_load
 
-        if system_loading_ref.current and (show_spinner or _system_first_load):
-            # CRITICAL: Only update if attached to page
-            if hasattr(system_loading_ref.current, 'page') and system_loading_ref.current.page:
-                system_loading_ref.current.visible = True
-                system_loading_ref.current.update()
+        if (system_loading_ref.current and (show_spinner or _system_first_load) and
+            hasattr(system_loading_ref.current, 'page') and system_loading_ref.current.page):
+            system_loading_ref.current.visible = True
+            system_loading_ref.current.update()
 
         # Fetch logs
         logs = get_system_logs(server_bridge)
+        # Reduced spam: Only log on first load
+        if _system_first_load:
+            print(f"[DEBUG] refresh_system_logs: Fetched {len(logs)} logs from server")
 
         # Normalize log format
         safe_logs: list[dict] = []
@@ -1001,15 +1007,19 @@ def create_logs_view(
                     "message": str(item)
                 })
 
-        nonlocal system_logs_data
-        system_logs_data = safe_logs
-        _render_list(system_list_ref, system_logs_data, "System Logs")
+        # Reduced spam: Only log normalization count on first load
+        if _system_first_load:
+            print(f"[DEBUG] refresh_system_logs: Normalized to {len(safe_logs)} safe logs")
+        view_state.system_logs_data = safe_logs
+        _render_list(system_list_ref, view_state.system_logs_data, "System Logs")
 
-        if system_loading_ref.current and (show_spinner or _system_first_load):
-            # CRITICAL: Only update if attached to page
-            if hasattr(system_loading_ref.current, 'page') and system_loading_ref.current.page:
-                system_loading_ref.current.visible = False
-                system_loading_ref.current.update()
+        # Update statistics panel
+        update_statistics()
+
+        if (system_loading_ref.current and (show_spinner or _system_first_load) and
+            hasattr(system_loading_ref.current, 'page') and system_loading_ref.current.page):
+            system_loading_ref.current.visible = False
+            system_loading_ref.current.update()
 
         _system_first_load = False
 
@@ -1017,105 +1027,207 @@ def create_logs_view(
             _show_toast(page, "System logs refreshed", "success")
 
     async def refresh_flet_logs(show_toast: bool = False, show_spinner: bool = False):
-        """Refresh Flet logs from capture handler"""
+        """Refresh Flet logs from singleton capture handler - shows APPLICATION logs"""
         nonlocal _flet_first_load
 
-        if flet_loading_ref.current and (show_spinner or _flet_first_load):
-            # CRITICAL: Only update if attached to page
-            if hasattr(flet_loading_ref.current, 'page') and flet_loading_ref.current.page:
-                flet_loading_ref.current.visible = True
-                flet_loading_ref.current.update()
+        if (flet_loading_ref.current and (show_spinner or _flet_first_load) and
+            hasattr(flet_loading_ref.current, 'page') and flet_loading_ref.current.page):
+            flet_loading_ref.current.visible = True
+            flet_loading_ref.current.update()
 
-        nonlocal flet_logs_data
-        flet_logs_data = _flet_log_capture.logs.copy() if _flet_log_capture.logs else []
-        _render_list(flet_list_ref, flet_logs_data, "Flet Logs")
+        # Get APPLICATION logs from singleton capture (changed from get_flet_logs to get_app_logs)
+        if _flet_log_capture:
+            view_state.flet_logs_data = _flet_log_capture.get_app_logs()  # CHANGED: Show app logs instead
+        else:
+            view_state.flet_logs_data = []
 
-        if flet_loading_ref.current and (show_spinner or _flet_first_load):
-            # CRITICAL: Only update if attached to page
-            if hasattr(flet_loading_ref.current, 'page') and flet_loading_ref.current.page:
-                flet_loading_ref.current.visible = False
-                flet_loading_ref.current.update()
+        # Reduced spam: Only log on first load
+        if _flet_first_load:
+            if _flet_log_capture:
+                stats = _flet_log_capture.get_stats()
+                print(f"[DEBUG] refresh_flet_logs: Fetched {len(view_state.flet_logs_data)} Application logs (GUI)")
+                print(f"[DEBUG] Capture stats: {stats}")
+            else:
+                print("[DEBUG] refresh_flet_logs: FletLogCapture singleton not available")
+
+        _render_list(flet_list_ref, view_state.flet_logs_data, "Application Logs")  # CHANGED: Updated tab name
+
+        # Update statistics panel
+        update_statistics()
+
+        if (flet_loading_ref.current and (show_spinner or _flet_first_load) and
+            hasattr(flet_loading_ref.current, 'page') and flet_loading_ref.current.page):
+            flet_loading_ref.current.visible = False
+            flet_loading_ref.current.update()
 
         _flet_first_load = False
 
         if show_toast:
-            _show_toast(page, "Flet logs refreshed", "success")
+            _show_toast(page, "Application logs refreshed", "success")
 
     def on_refresh_click(_: ft.ControlEvent):
         """Handle refresh button click"""
+        # Create async wrapper functions for page.run_task
+        async def refresh_system_task():
+            await refresh_system_logs(show_toast=True, show_spinner=True)
+
+        async def refresh_flet_task():
+            await refresh_flet_logs(show_toast=True, show_spinner=True)
+
         if active_tab_index == 0:
-            page.run_task(refresh_system_logs(show_toast=True, show_spinner=True))
+            page.run_task(refresh_system_task)
         else:
-            page.run_task(refresh_flet_logs(show_toast=True, show_spinner=True))
+            page.run_task(refresh_flet_task)
 
     def on_export_click(_: ft.ControlEvent):
-        """Export logs to JSON file"""
-        try:
-            export_dir = os.path.join(_repo_root, "logs_exports")
-            os.makedirs(export_dir, exist_ok=True)
+        """Show export options dialog"""
+        # Create dropdown for export format
+        format_dropdown = ft.Dropdown(
+            label="Export Format",
+            width=200,
+            options=[
+                ft.dropdown.Option("json", "JSON"),
+                ft.dropdown.Option("csv", "CSV"),
+                ft.dropdown.Option("txt", "Plain Text"),
+            ],
+            value="json"  # Default to JSON
+        )
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create checkbox for filtered vs all logs
+        filtered_only_checkbox = ft.Checkbox(label="Export only currently filtered logs", value=True)
 
-            payload = {
-                "exported_at": timestamp,
-                "export_datetime": datetime.now().isoformat(),
-                "system_logs": system_logs_data,
-                "flet_logs": flet_logs_data or _flet_log_capture.logs.copy(),
-            }
+        def perform_export(e):
+            """Perform the actual export based on selected options"""
+            try:
+                export_dir = os.path.join(_repo_root, "logs_exports")
+                os.makedirs(export_dir, exist_ok=True)
 
-            filepath = os.path.join(export_dir, f"logs_{timestamp}.json")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                export_format = format_dropdown.value
+                filtered_only = filtered_only_checkbox.value
 
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
+                # Determine which logs to export
+                if active_tab_index == 0:  # System logs
+                    export_logs = [log for log in view_state.system_logs_data if _passes_filter(log)] if filtered_only else view_state.system_logs_data
+                else:  # Flet logs
+                    export_logs = [log for log in view_state.flet_logs_data if _passes_filter(log)] if filtered_only else view_state.flet_logs_data
 
-            _show_toast(page, f"Exported to {filepath}", "success")
-        except Exception as e:
-            _show_toast(page, f"Export failed: {str(e)}", "error")
+                if export_format == "json":
+                    # Export as JSON
+                    payload = {
+                        "exported_at": timestamp,
+                        "export_datetime": datetime.now().isoformat(),
+                        "filtered_only": filtered_only,
+                        "active_tab": "System Logs" if active_tab_index == 0 else "Flet Logs",
+                        "logs": export_logs,
+                    }
+
+                    filepath = os.path.join(export_dir, f"logs_{timestamp}.json")
+
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+                elif export_format == "csv":
+                    # Export as CSV
+                    import csv
+                    filepath = os.path.join(export_dir, f"logs_{timestamp}.csv")
+
+                    with open(filepath, "w", newline='', encoding="utf-8") as csvfile:
+                        fieldnames = ["time", "level", "component", "message"]
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                        writer.writeheader()
+                        for log in export_logs:
+                            writer.writerow({
+                                "time": log.get("time", ""),
+                                "level": log.get("level", ""),
+                                "component": log.get("component", ""),
+                                "message": log.get("message", ""),
+                            })
+
+                elif export_format == "txt":
+                    # Export as plain text
+                    filepath = os.path.join(export_dir, f"logs_{timestamp}.txt")
+
+                    with open(filepath, "w", encoding="utf-8") as txtfile:
+                        txtfile.write(f"Log Export - {datetime.now().isoformat()}\n")
+                        txtfile.write(f"Filtered Only: {filtered_only}\n")
+                        txtfile.write(f"Active Tab: {'System Logs' if active_tab_index == 0 else 'Flet Logs'}\n")
+                        txtfile.write("="*50 + "\n\n")
+
+                        for log in export_logs:
+                            txtfile.write(f"[{log.get('time', '')}] [{log.get('level', '')}] ")
+                            txtfile.write(f"[{log.get('component', '')}] {log.get('message', '')}\n")
+
+                _show_toast(page, f"Exported to {filepath}", "success")
+                # Close dialog
+                with contextlib.suppress(Exception):
+                    page.dialog = None
+                    page.update()
+            except Exception as e:
+                _show_toast(page, f"Export failed: {str(e)}", "error")
+
+        # Create export button
+        export_button = ft.ElevatedButton("Export", on_click=perform_export)
+
+        # Create dialog
+        export_dialog = ft.AlertDialog(
+            title=ft.Text("Export Logs"),
+            content=ft.Column([
+                format_dropdown,
+                filtered_only_checkbox,
+            ], spacing=10, height=150),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda _: close_export_dialog()),
+                export_button,
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        def close_export_dialog():
+            with contextlib.suppress(Exception):
+                page.dialog = None
+                page.update()
+
+        # Show dialog
+        with contextlib.suppress(Exception):
+            page.dialog = export_dialog
+            page.update()
 
     async def on_clear_flet_click(_: ft.ControlEvent):
-        """Clear Flet logs"""
+        """Clear Flet logs from singleton capture"""
         try:
-            _flet_log_capture.logs.clear()
-            await refresh_flet_logs(show_toast=False)
-            _show_toast(page, "Cleared Flet logs", "success")
+            if _flet_log_capture:
+                _flet_log_capture.clear_flet_logs()
+                await refresh_flet_logs(show_toast=False)
+                _show_toast(page, "Cleared Flet logs", "success")
+            else:
+                _show_toast(page, "Log capture not available", "error")
         except Exception as e:
             _show_toast(page, f"Clear failed: {str(e)}", "error")
 
-    # ---------------------------------------------
-    # Toast Notifications
-    # ---------------------------------------------
+    def check_for_critical_logs(logs):
+        """Check logs for ERROR and CRITICAL messages and show alerts"""
+        # Look for ERROR and CRITICAL logs
+        critical_logs = []
+        for log in logs:
+            level = map_level(log.get("level", ""))
+            if level in ["ERROR", "CRITICAL"]:
+                critical_logs.append(log)
 
-    def _show_toast(pg: ft.Page, message: str, toast_type: str = "info"):
-        """Show toast notification with appropriate styling"""
-        try:
-            # Color based on type
-            if toast_type == "error":
-                bg_color = ft.Colors.ERROR_CONTAINER
-                text_color = ft.Colors.ON_ERROR_CONTAINER
-                icon = ft.Icons.ERROR_OUTLINE_ROUNDED
-            elif toast_type == "success":
-                bg_color = LogColorSystem.get_surface_tint("#10B981", 0.9)
-                text_color = ft.Colors.ON_PRIMARY_CONTAINER
-                icon = ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED
-            else:
-                bg_color = ft.Colors.SURFACE_CONTAINER_HIGHEST
-                text_color = ft.Colors.ON_SURFACE
-                icon = ft.Icons.INFO_OUTLINE_ROUNDED
+        # If we found critical logs, show an alert
+        if critical_logs:
+            # Count the number of critical logs
+            error_count = len([log for log in critical_logs if map_level(log.get("level", "")) == "ERROR"])
+            critical_count = len([log for log in critical_logs if map_level(log.get("level", "")) == "CRITICAL"])
 
-            pg.snack_bar = ft.SnackBar(
-                content=ft.Row([
-                    ft.Icon(icon, color=text_color, size=20),
-                    ft.Text(message, color=text_color, size=14),
-                ], spacing=12),
-                bgcolor=bg_color,
-                show_close_icon=True,
-                close_icon_color=text_color,
-                duration=3000,
-            )
-            pg.snack_bar.open = True
-            pg.update()
-        except Exception:
-            pass
+            # Show an appropriate alert
+            if critical_count > 0:
+                alert_message = f"{critical_count} CRITICAL and {error_count} ERROR logs detected!"
+                _show_toast(page, alert_message, "error")
+            elif error_count > 0:
+                alert_message = f"{error_count} ERROR logs detected!"
+                _show_toast(page, alert_message, "error")
 
     # ---------------------------------------------
     # Action Buttons
@@ -1157,12 +1269,104 @@ def create_logs_view(
             ink=True,
         )
 
-    # Auto-refresh switch
+    # Auto-refresh switch (compact)
     auto_refresh_switch = ft.Switch(
         label="Auto-refresh",
         value=True,
-        label_style=ft.TextStyle(size=14, weight=ft.FontWeight.W_500),
+        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
     )
+
+    # Auto-scroll to bottom switch (compact)
+    auto_scroll_switch = ft.Switch(
+        label="Lock to Bottom",
+        value=True,
+        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
+    )
+
+    # Compact mode switch
+    compact_mode_switch = ft.Switch(
+        label="Compact Mode",
+        value=False,
+        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
+    )
+
+    # Load saved settings
+    def load_saved_settings():
+        """Load user preferences from client storage"""
+        # Wrap in try/except to handle timeout errors gracefully
+        with contextlib.suppress(Exception):
+            # Load filters
+            saved_filters = page.client_storage.get("logs.filters")
+            if saved_filters and isinstance(saved_filters, list):
+                view_state.selected_levels = set(saved_filters)
+                # Update UI to reflect saved filters
+                for level_name, chip in _chip_refs.items():
+                    chip.selected = level_name in view_state.selected_levels
+                    config = LogColorSystem.get_level_config(level_name)
+                    chip.bgcolor = LogColorSystem.get_surface_tint(
+                        config["primary"],
+                        0.20 if level_name in view_state.selected_levels else 0.08
+                    )
+                    if chip.leading:
+                        chip.leading.color = config["primary"]
+
+            # Load compact mode setting
+            saved_compact_mode = page.client_storage.get("logs.compact_mode")
+            if saved_compact_mode is not None:
+                compact_mode_switch.value = saved_compact_mode
+
+            # Load auto-scroll setting
+            saved_auto_scroll = page.client_storage.get("logs.auto_scroll")
+            if saved_auto_scroll is not None:
+                auto_scroll_switch.value = saved_auto_scroll
+
+    # Function to save settings
+    def save_current_settings():
+        """Save user preferences to client storage"""
+        with contextlib.suppress(Exception):
+            # Save filters
+            page.client_storage.set("logs.filters", list(view_state.selected_levels))
+            # Save compact mode
+            page.client_storage.set("logs.compact_mode", compact_mode_switch.value)
+            # Save auto-scroll
+            page.client_storage.set("logs.auto_scroll", auto_scroll_switch.value)
+
+    # Update settings when they change
+    def update_settings(e):
+        save_current_settings()
+
+    # Set up change event handlers
+    compact_mode_switch.on_change = update_settings
+    auto_scroll_switch.on_change = update_settings
+
+    # Create save filter button
+    save_filter_button = ft.IconButton(
+        icon=ft.Icons.SAVE_OUTLINED,
+        tooltip="Save current filters",
+        on_click=lambda e: save_current_filter()
+    )
+
+    # Live mode toggle switch (compact)
+    live_mode_switch = ft.Switch(
+        label="Live Mode",
+        value=False,
+        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
+    )
+
+    # Component filter dropdown (compact)
+    component_options = ft.Dropdown(
+        label="Component",
+        width=150,
+        options=[ft.dropdown.Option("All"), ft.dropdown.Option("Server"), ft.dropdown.Option("Client")],  # Placeholder options
+        on_change=lambda e: update_component_filter(e),
+    )
+
+    def update_component_filter(e):
+        """Update the component filter from UI control"""
+        nonlocal selected_component_filter
+        selected_component_filter = e.control.value
+        # Refresh the logs to apply the new filter
+        _refresh_lists_by_filter()
 
     # Action buttons row
     action_buttons = ft.Row([
@@ -1187,41 +1391,289 @@ def create_logs_view(
     ], spacing=12, wrap=True)
 
     # ---------------------------------------------
-    # Header Section
+    # Header Section - Ultra Compact Single Row
     # ---------------------------------------------
 
-    # Neomorphic header icon
-    header_icon = ft.Container(
-        content=ft.Icon(
-            ft.Icons.ARTICLE_ROUNDED,
-            size=32,
-            color=ft.Colors.PRIMARY,
-        ),
-        width=56,
-        height=56,
-        bgcolor=ft.Colors.SURFACE,
-        border_radius=16,
-        alignment=ft.alignment.center,
-        shadow=NeomorphicShadows.get_card_shadows("medium"),
+    # Compact search field
+    search_field = ft.TextField(
+        hint_text="Search...",
+        icon=ft.Icons.SEARCH_ROUNDED,
+        width=200,
+        dense=True,
+        on_change=lambda e: on_search_change(e),
     )
 
+    # Ultra-compact switches (icon-only or very small labels)
+    auto_refresh_switch = ft.Switch(
+        label="Auto",
+        value=True,
+        label_style=ft.TextStyle(size=10),
+    )
+
+    auto_scroll_switch = ft.Switch(
+        label="Lock",
+        value=True,
+        label_style=ft.TextStyle(size=10),
+    )
+
+    compact_mode_switch = ft.Switch(
+        label="Compact",
+        value=False,
+        label_style=ft.TextStyle(size=10),
+    )
+
+    live_mode_switch = ft.Switch(
+        label="Live",
+        value=False,
+        label_style=ft.TextStyle(size=10),
+    )
+
+    # Compact component dropdown
+    component_options = ft.Dropdown(
+        label="Component",
+        width=120,
+        dense=True,
+        options=[ft.dropdown.Option("All"), ft.dropdown.Option("Server"), ft.dropdown.Option("Client")],
+        on_change=lambda e: update_component_filter(e),
+    )
+
+    # Icon-only action buttons for maximum compactness
+    refresh_btn = ft.IconButton(
+        icon=ft.Icons.REFRESH_ROUNDED,
+        tooltip="Refresh logs",
+        on_click=on_refresh_click,
+    )
+
+    export_btn = ft.IconButton(
+        icon=ft.Icons.DOWNLOAD_ROUNDED,
+        tooltip="Export logs",
+        on_click=on_export_click,
+    )
+
+    clear_btn = ft.IconButton(
+        icon=ft.Icons.DELETE_SWEEP_ROUNDED,
+        tooltip="Clear Flet logs",
+        on_click=on_clear_flet_click,
+    )
+
+    save_filter_button = ft.IconButton(
+        icon=ft.Icons.SAVE_OUTLINED,
+        tooltip="Save current filters",
+        on_click=lambda e: save_current_filter()
+    )
+
+    # Single row header - everything in one line
     header_row = ft.Row([
-        ft.Row([
-            header_icon,
-            ft.Container(width=16),
-            ft.Text(
-                "Logs",
-                size=32,
-                weight=ft.FontWeight.BOLD,
-                color=ft.Colors.ON_SURFACE,
-            ),
-        ], spacing=0),
-        ft.Row([
-            auto_refresh_switch,
-            ft.Container(width=16),
-            action_buttons,
-        ], spacing=0, wrap=True),
-    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, wrap=True)
+        ft.Text("Logs", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+        ft.VerticalDivider(width=1),
+        search_field,
+        ft.VerticalDivider(width=1),
+        auto_refresh_switch,
+        auto_scroll_switch,
+        compact_mode_switch,
+        live_mode_switch,
+        ft.VerticalDivider(width=1),
+        component_options,
+        ft.VerticalDivider(width=1),
+        refresh_btn,
+        export_btn,
+        clear_btn,
+        save_filter_button,
+    ], spacing=6, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+    # Simplified statistics - just a placeholder since update_statistics was removed
+    def update_statistics():
+        """Placeholder for statistics update - simplified version"""
+        pass
+
+    def update_time_filter():
+        """Placeholder for time filter update"""
+        # Time filters removed for compactness
+        _refresh_lists_by_filter()
+
+    # Saved filters functionality
+    def save_current_filter():
+        """Save the current filter configuration as a preset"""
+        # Get current filter values
+        current_filters = {
+            'selected_levels': list(view_state.selected_levels),
+            'search_query': view_state.search_query,
+            'start_time': start_time_filter,
+            'end_time': end_time_filter,
+            'component_filter': selected_component_filter,
+        }
+
+        # Create a name for the filter preset (could also prompt user for name)
+        import time
+        filter_name = f"Filter_{int(time.time())}"
+
+        # Save to client storage
+        with contextlib.suppress(Exception):
+            saved_filters = page.client_storage.get("logs.saved_filters") or {}
+            saved_filters[filter_name] = current_filters
+            page.client_storage.set("logs.saved_filters", saved_filters)
+
+            # Update the saved filters dropdown
+            update_saved_filters_dropdown()
+        _show_toast(page, f"Filter saved as {filter_name}", "success")
+
+    def load_filter_preset(filter_name):
+        """Load a saved filter preset"""
+        saved_filters = page.client_storage.get("logs.saved_filters") or {}
+        filter_data = saved_filters.get(filter_name, {})
+
+        if filter_data:
+            # Apply the saved filter settings
+            view_state.selected_levels = set(filter_data.get('selected_levels', []))
+
+            # Update the search field
+            search_field.value = filter_data.get('search_query', '')
+            view_state.search_query = filter_data.get('search_query', '')
+
+            # Update time filters
+            nonlocal start_time_filter, end_time_filter, selected_component_filter
+            start_time_filter = filter_data.get('start_time', None)
+            end_time_filter = filter_data.get('end_time', None)
+
+            selected_component_filter = filter_data.get('component_filter', 'All')
+
+            # Update UI elements to reflect saved values
+            # Time filter fields removed for compactness
+            if component_options:
+                component_options.value = selected_component_filter
+
+            # Update chip selections
+            for level_name, chip in _chip_refs.items():
+                chip.selected = level_name in view_state.selected_levels
+                config = LogColorSystem.get_level_config(level_name)
+                chip.bgcolor = LogColorSystem.get_surface_tint(
+                    config["primary"],
+                    0.20 if level_name in view_state.selected_levels else 0.08
+                )
+                if chip.leading:
+                    chip.leading.color = config["primary"]
+                with contextlib.suppress(Exception):
+                    chip.update()
+
+            # Refresh the logs to apply the new filters
+            _refresh_lists_by_filter()
+            _show_toast(page, f"Loaded filter: {filter_name}", "success")
+
+    def update_saved_filters_dropdown():
+        """Update the saved filters dropdown with available presets"""
+        saved_filters = page.client_storage.get("logs.saved_filters") or {}
+        filter_names = list(saved_filters.keys())
+
+        # Clear existing options and add new ones
+        # Note: We can't update dropdown options dynamically in Flet,
+        # so this would require recreating the control or using a different approach
+        pass
+
+    def toggle_live_mode(e):
+        """Toggle live mode on/off"""
+        nonlocal is_live_mode, websocket_connection
+        is_live_mode = live_mode_switch.value
+
+        if is_live_mode and websockets:
+            # Start WebSocket connection for live logs
+            page.run_task(start_websocket_connection)
+            # Store the task reference if needed for cancellation
+            # task reference is stored in _live_task in the setup_subscriptions function
+        elif not is_live_mode and websocket_connection:
+            # Close WebSocket connection
+            async def close_websocket():
+                nonlocal websocket_connection
+                with contextlib.suppress(Exception):
+                    if websocket_connection:
+                        await websocket_connection.close()
+                # Update the connection variable after closing
+                websocket_connection = None
+
+            page.run_task(close_websocket)
+
+    # Set up change event for live mode switch
+    live_mode_switch.on_change = toggle_live_mode
+
+    async def start_websocket_connection():
+        """Start WebSocket connection to receive live logs"""
+        nonlocal websocket_connection
+        try:
+            # Check if websockets module is available
+            if not websockets:
+                _show_toast(page, "WebSockets not available", "error")
+                live_mode_switch.value = False
+                with contextlib.suppress(Exception):
+                    live_mode_switch.update()
+                return
+
+            # This would connect to your server's WebSocket endpoint
+            # Replace with actual WebSocket endpoint
+            ws_url = "ws://localhost:8080/logs"  # Placeholder - replace with actual endpoint
+            websocket_connection = await websockets.connect(ws_url)
+
+            # Start listening for messages
+            await listen_for_logs(websocket_connection)
+        except Exception as ex:
+            # Handle connection errors
+            _show_toast(page, f"WebSocket connection failed: {str(ex)}", "error")
+            is_live_mode = False
+            live_mode_switch.value = False
+            with contextlib.suppress(Exception):
+                live_mode_switch.update()
+
+    async def listen_for_logs(ws_connection):
+        """Listen for incoming log messages from WebSocket"""
+        try:
+            async for message in ws_connection:
+                try:
+                    # Parse the incoming log message
+                    log_data = json.loads(message)
+
+                    # Add to the appropriate log list based on the source
+                    if active_tab_index == 0:  # System logs tab
+                        # Prepend new log to the existing list
+                        view_state.system_logs_data.insert(0, log_data)
+                    else:  # Flet logs tab
+                        view_state.flet_logs_data.insert(0, log_data)
+
+                    # Update statistics
+                    update_statistics()
+
+                    # If auto-scroll is enabled, scroll to the new log
+                    if auto_scroll_switch.value:
+                        # Refresh the view to show the new log
+                        if active_tab_index == 0:
+                            _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
+                        else:
+                            _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
+
+                        # Scroll to the top item to see the latest log
+                        list_ref = system_list_ref if active_tab_index == 0 else flet_list_ref
+                        if list_ref.current:
+                            with contextlib.suppress(Exception):
+                                list_ref.current.scroll_to(offset=0, duration=300)
+                except json.JSONDecodeError:
+                    # Skip invalid JSON messages
+                    continue
+                except Exception:
+                    # Handle other parsing errors
+                    continue
+        except Exception as ws_ex:
+            # Check if it's a websocket connection closed error
+            if websockets and 'ConnectionClosed' in str(type(ws_ex)):
+                # Connection was closed, stop live mode
+                is_live_mode = False
+                live_mode_switch.value = False
+                with contextlib.suppress(Exception):
+                    live_mode_switch.update()
+                _show_toast(page, "WebSocket connection closed", "info")
+            else:
+                # Handle other connection errors
+                is_live_mode = False
+                live_mode_switch.value = False
+                with contextlib.suppress(Exception):
+                    live_mode_switch.update()
+                _show_toast(page, "Live log connection error", "error")
 
     # ---------------------------------------------
     # Filter Row
@@ -1259,16 +1711,17 @@ def create_logs_view(
     # ---------------------------------------------
 
     main_content = ft.Column([
-        ft.Container(content=header_row, padding=ft.padding.only(bottom=20)),
+        ft.Container(content=header_row, padding=ft.padding.only(bottom=8)),
         filter_container,
-        ft.Container(content=tabbar, padding=ft.padding.symmetric(vertical=12)),
+        # Stats row removed for compactness
+        ft.Container(content=tabbar, padding=ft.padding.symmetric(vertical=8)),
         content_host,
     ], spacing=0, expand=True)
 
-    # Main container with padding
+    # Main container with reduced padding
     main_container = ft.Container(
         content=main_content,
-        padding=28,
+        padding=16,
         expand=True,
         bgcolor=ft.Colors.SURFACE,
     )
@@ -1297,7 +1750,7 @@ def create_logs_view(
                     else:
                         await refresh_flet_logs(show_toast=False, show_spinner=False)
 
-                await asyncio.sleep(2.0)  # Refresh every 2 seconds
+                await asyncio.sleep(5.0)  # Refresh every 5 seconds (reduced spam)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -1305,8 +1758,11 @@ def create_logs_view(
             return
 
     async def setup_subscriptions():
-        """Initialize view"""
+        """Initialize view with fast initial load"""
         nonlocal _live_task
+
+        # Load saved settings
+        load_saved_settings()
 
         # CRITICAL FIX: Wait for refs to be fully initialized
         # Flet needs time to attach controls to page tree and populate refs
@@ -1316,10 +1772,9 @@ def create_logs_view(
         # Additional safety: Wait for refs to be populated
         max_wait = 20  # 2 seconds max wait
         wait_count = 0
-        while wait_count < max_wait:
-            if (tabbar_row_ref.current and content_host_ref.current and
-                system_list_ref.current and flet_list_ref.current):
-                break
+        while (wait_count < max_wait and
+               not all([tabbar_row_ref.current, content_host_ref.current,
+                       system_list_ref.current, flet_list_ref.current])):
             await asyncio.sleep(0.1)
             wait_count += 1
 
@@ -1327,9 +1782,15 @@ def create_logs_view(
         _render_tabbar()
         _render_active_content()
 
-        # Load initial data
-        await refresh_system_logs(show_toast=False, show_spinner=True)
-        await refresh_flet_logs(show_toast=False, show_spinner=True)
+        # Load initial data - must wait for completion to ensure UI updates
+        try:
+            await refresh_system_logs(show_toast=False, show_spinner=True)
+            await refresh_flet_logs(show_toast=False, show_spinner=True)
+        except Exception as e:
+            # Log any errors during initial load
+            print(f"Error loading initial logs: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Start auto-refresh loop
         try:

@@ -1,0 +1,13 @@
+
+ ▐▛███▜▌   Claude Code v2.0.13
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Serve…
+════════════ Conversation compacted · ctrl+o for history ═══════════
+  ⎿  Referenced file FletV2\views\enhanced_logs.py
+  ⎿  Referenced file FletV2\CLAUDE.md
+  ⎿  Todo list read (7 items)
+  ⎿  Session limit reached ∙ resets 7pm
+     /upgrade to increase your usage limit.
+
+
+
