@@ -565,7 +565,7 @@ class FletV2App(ft.Row):
             "files": ("views.files", "create_files_view", "files"),
             "database": ("views.database_pro", "create_database_view", "database"),  # Professional view with full CRUD operations
             "analytics": ("views.analytics", "create_analytics_view", "analytics"),
-            "logs": ("views.logs", "create_logs_view", "logs"),
+            "logs": ("views.enhanced_logs", "create_logs_view", "logs"),  # TEMPORARY: Testing enhanced logs view
             "settings": ("views.settings", "create_settings_view", "settings"),
             "experimental": ("views.experimental", "create_experimental_view", "experimental"),
         }
