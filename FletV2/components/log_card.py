@@ -56,7 +56,7 @@ class LogCard(ft.Container):
             width=5,
             height=None,  # Full height of card
             bgcolor=primary_color,
-            border_radius=ft.border_radius.only(top_left=10 if not is_compact else 8, bottom_left=10 if not is_compact else 8),
+            border_radius=ft.border_radius.only(top_left=8 if is_compact else 10, bottom_left=8 if is_compact else 10),
         )
 
         # ===== ICON CONTAINER =====
@@ -179,7 +179,7 @@ class LogCard(ft.Container):
                     *metadata_items,
                     ft.Container(expand=True),  # Push badge to right
                     level_badge,
-                ], spacing=8 if not is_compact else 4),
+                ], spacing=4 if is_compact else 8),
             ], spacing=0, expand=True),
             ft.Container(width=horizontal_spacing),  # Right padding
         ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
@@ -244,7 +244,9 @@ class LogCard(ft.Container):
                 self.scale = 1.0
                 self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
 
-            self.update()
+            # Only update if control is attached to page
+            if self.page:
+                self.update()
 
         self.on_hover = on_card_hover
 

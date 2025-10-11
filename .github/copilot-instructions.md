@@ -34,6 +34,7 @@ globs: *
 - **Retry Decorator**: Wraps unstable I/O, logging attempts with context for postmortems.
 - **Theme Toolkit**: Supplies neumorphic/glass presets; avoid ad-hoc styling.
 - **DB Manager**: Manages pooled SQLite connections; request via `db_manager.get_connection()` only.
+- **Log Viewer (`enhanced_logs.py`):** Implements a sophisticated log viewer with neomorphic Material 3 design, featuring advanced search, filtering, pagination. Key components include `LogCard`, `NeomorphicShadows`, and a dataclass-based `LogsViewState`.
 
 ## Launch Playbook
 - Execute `FletV2/start_with_server.ps1` to configure env vars and start TCP server + GUI in order.
@@ -190,6 +191,11 @@ C:\\Backups\\payload.bin
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
 - **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+- **`enhanced_logs.py` Issues**:
+    - **Performance**: Filtering rebuilds all log cards instead of using visibility toggles; inefficient text highlighting. Implement visibility-based filtering and optimize text highlighting.
+    - **Features**: Incomplete WebSocket implementation (placeholder URLs), missing time range pickers and statistics dashboard. Complete WebSocket streaming and add time range pickers and statistics dashboard.
+    - **Code**: Duplicate variable definitions and inconsistent naming ("Flet Logs" vs "App Logs"). Remove duplicates and add input validation, and improve error messages.
+    - **Security**: No sanitization of log content (XSS risk), potential information disclosure. Sanitize log content and add access controls.
 
 ## Operational Checklists
 - Pre-commit: lint, tests, C++ build, GUI smoke, documentation sync.
@@ -241,7 +247,7 @@ C:\\Backups\\payload.bin
 - Prefer PowerShell launchers for Windows hygiene; Linux/macOS require analogous shell scripts.
 - Maintain task definitions (`.vscode/tasks.json`) so teammates can start stack uniformly.
 - Pin Python dependencies via `requirements.txt`; regenerate hashes when libraries update.
-- Keep CMake presets aligned with vcpkg manifests to prevent drift in C++ builds.
+- Keep CMake presets aligned with vcpkg manifests aligned with vcpkg manifests to prevent drift in C++ builds.
 - Schedule routine cleanup of `python_server/server/received_files/` in staging environments.
 - Monitor port usage (`netstat -ano`) before launches to avoid conflicts.
 
@@ -302,3 +308,52 @@ C:\\Backups\\payload.bin
 - Remove the page attachment check in `_render_list` in `enhanced_logs.py`.
 - Increase the auto-refresh interval in `enhanced_logs.py` to 5 seconds.
 - Ensure ListView.update() is safe with try/except to prevent crashes during setup.
+- **Enhanced Logs View (`enhanced_logs.py`):**
+    - Implement visibility-based filtering instead of rebuilding all log cards.
+    - Optimize text highlighting for better performance.
+    - Complete WebSocket streaming with correct URLs.
+    - Add time range pickers and a statistics dashboard.
+    - Remove duplicate variable definitions and ensure consistent naming (e.g., "Flet Logs" vs "App Logs").
+    - Add input validation and improve error messages.
+    - Sanitize log content to prevent XSS risks and information disclosure.
+    - Add access controls to the log viewer.
+    - Consider adding keyboard shortcuts for improved UX.
+    - Improve mobile responsiveness.
+
+    - **Time Range Picker Controls**
+        - Add two `TextField` controls in the header for start and end date filtering.
+        - Format: `YYYY-MM-DD` with helpful hints.
+        - Integrate into the existing header row with proper spacing.
+        - Event handlers automatically refresh logs when dates change.
+
+    - **Enhanced Time Filtering Logic**
+        - Improve `_passes_filter()` function with proper date parsing.
+        - Handle various timestamp formats from logs.
+        - Implement robust error handling for invalid date formats.
+        - Filter logs by date range comparison.
+
+    - **Statistics Dashboard**
+        - Add a compact statistics panel showing:
+            - Total log count
+            - Log counts by level (ERROR, WARNING, INFO, DEBUG, CRITICAL)
+            - Color-coded badges for each level
+        - Position between header and tabs for optimal visibility.
+        - Update automatically when logs are refreshed.
+
+    - **Statistics Calculation**
+        - `calculate_statistics()` function counts logs by level and component.
+        - `create_statistics_dashboard()` generates the visual display.
+        - Integrate with both system and application log tabs.
+        - Update in real-time as logs change.
+
+    - **Filter Persistence**
+        - Time range filters should be saved/loaded with filter presets.
+        - UI fields should be properly restored when loading saved filters.
+        - Maintain consistency with existing filter system.
+- **Fixes**:
+    - Fixed function redeclaration error in `enhanced_logs.py`.
+    - Corrected method call in `update_statistics()` to `_flet_log_capture.get_app_logs()`.
+- **Refactoring**:
+    - Extracted regex compilation logic into a separate `_compile_search_regex()` function.
+    - Added guard clause in `_compile_search_regex` to handle plain text search first.
+    - Extracted fallback logic in `highlight_text` into a dedicated `_highlight_text_fallback()` function.

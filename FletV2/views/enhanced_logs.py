@@ -102,7 +102,7 @@ try:
     _flet_log_capture = get_flet_log_capture()
 except ImportError:
     # Fallback if Shared module not available (shouldn't happen in production)
-    print("[WARNING] Could not import FletLogCapture singleton - Flet logs may not display")
+    print("[WARNING] Could not import FletLogCapture singleton - App logs may not display")
     _flet_log_capture = None
 
 # --------------------------------------------------------------------------------------
@@ -155,55 +155,134 @@ def get_system_logs(server_bridge: Any | None) -> list[dict]:
         return []
 
 # Define the highlight_text function for search text highlighting
+def _compile_search_regex(search_query: str) -> re.Pattern:
+    """
+    Compile a regex pattern from search query.
+    Supports both plain text and regex patterns (enclosed in /pattern/ or /pattern/flags).
+    """
+    # Guard clause: handle plain text search first
+    if not (search_query.startswith('/') and search_query.count('/') >= 2):
+        return re.compile(re.escape(search_query), re.IGNORECASE)
+
+    # Extract pattern and flags for regex patterns
+    parts = search_query.split('/')
+    if len(parts) >= 3:
+        pattern = parts[1]
+        flags_str = parts[2] if len(parts) > 2 else ''
+        # Parse flags
+        flags = 0
+        if 'i' in flags_str:
+            flags |= re.IGNORECASE
+        if 'm' in flags_str:
+            flags |= re.MULTILINE
+        if 's' in flags_str:
+            flags |= re.DOTALL
+
+        try:
+            return re.compile(pattern, flags)
+        except re.error:
+            # Invalid regex, fall back to literal search
+            return re.compile(re.escape(search_query), re.IGNORECASE)
+    else:
+        # Malformed regex, treat as literal
+        return re.compile(re.escape(search_query), re.IGNORECASE)
+
 def highlight_text(text: str, search_query: str) -> ft.Control:
     """
     Creates a text control with highlighted search terms.
-    If search_query is provided, matches are highlighted with a background color.
+    Supports both plain text and regex patterns (enclosed in /pattern/ or /pattern/flags).
+    Uses optimized regex matching for better performance.
     """
-    if not search_query:
-        return ft.Text(text, selectable=True)
+    if not search_query or not text:
+        return ft.Text(text, selectable=True, size=12)
 
-    # Case insensitive search
+    try:
+        regex = _compile_search_regex(search_query)
+
+        # Find all matches efficiently using regex
+        matches = list(regex.finditer(text))
+        if not matches:
+            return ft.Text(text, selectable=True, size=12)
+
+        # Build text spans efficiently
+        parts = []
+        last_end = 0
+
+        for match in matches:
+            # Add text before match
+            if match.start() > last_end:
+                parts.append(ft.TextSpan(text[last_end:match.start()]))
+
+            # Add highlighted match
+            parts.append(ft.TextSpan(
+                text=text[match.start():match.end()],
+                style=ft.TextStyle(
+                    bgcolor=ft.Colors.YELLOW_300,
+                    color=ft.Colors.BLACK
+                )
+            ))
+
+            last_end = match.end()
+
+        # Add remaining text
+        if last_end < len(text):
+            parts.append(ft.TextSpan(text[last_end:]))
+
+        return ft.Text(
+            spans=parts,
+            selectable=True,
+            size=12,
+        )
+
+    except Exception:
+        # Fallback to simple text search if regex fails
+        return _highlight_text_fallback(text, search_query)
+
+def _highlight_text_fallback(text: str, search_query: str) -> ft.Control:
+    """
+    Fallback text highlighting using simple string search when regex fails.
+    """
     search_lower = search_query.lower()
     text_lower = text.lower()
 
-    # Find all occurrences of the search query
+    # Use more efficient string methods
+    if search_lower not in text_lower:
+        return ft.Text(text, selectable=True, size=12)
+
+    # Find all occurrences efficiently
     parts = []
     start = 0
-    pos = text_lower.find(search_lower)
+    search_len = len(search_query)
 
-    while pos != -1:
+    while True:
+        pos = text_lower.find(search_lower, start)
+        if pos == -1:
+            break
+
         # Add text before match
         if pos > start:
             parts.append(ft.TextSpan(text[start:pos]))
 
         # Add highlighted match
         parts.append(ft.TextSpan(
-            text=text[pos:pos+len(search_query)],
+            text=text[pos:pos + search_len],
             style=ft.TextStyle(
                 bgcolor=ft.Colors.YELLOW_300,
                 color=ft.Colors.BLACK
             )
         ))
 
-        start = pos + len(search_query)
-        pos = text_lower.find(search_lower, start)
+        start = pos + search_len
 
     # Add remaining text
     if start < len(text):
         parts.append(ft.TextSpan(text[start:]))
-
-    # If no matches found, return regular text
-    if not parts:
-        return ft.Text(text, selectable=True, size=12)
 
     return ft.Text(
         spans=parts,
         selectable=True,
         size=12,
     )
-
-# --------------------------------------------------------------------------------------
 # MAIN VIEW CREATION
 # --------------------------------------------------------------------------------------
 
@@ -669,10 +748,32 @@ def create_logs_view(
             with contextlib.suppress(Exception):
                 auto_scroll_switch.update()
 
-    # Time range for filtering (if needed)
-    start_time_filter = None  # Would come from UI controls
-    end_time_filter = None    # Would come from UI controls
+    # Time range for filtering
+    start_time_filter = None
+    end_time_filter = None
     selected_component_filter = "All"  # Component filter
+
+    # Time range picker controls
+    start_date_field = ft.TextField(
+        hint_text="Start Date (YYYY-MM-DD)",
+        width=140,
+        dense=True,
+        on_change=lambda e: on_time_filter_change(),
+    )
+
+    end_date_field = ft.TextField(
+        hint_text="End Date (YYYY-MM-DD)",
+        width=140,
+        dense=True,
+        on_change=lambda e: on_time_filter_change(),
+    )
+
+    def on_time_filter_change():
+        """Handle time filter changes"""
+        nonlocal start_time_filter, end_time_filter
+        start_time_filter = start_date_field.value.strip() if start_date_field.value else None
+        end_time_filter = end_date_field.value.strip() if end_date_field.value else None
+        _refresh_lists_by_filter()
 
     def _passes_filter(log: dict) -> bool:
         """Check if log passes current filter"""
@@ -729,18 +830,47 @@ def create_logs_view(
             if not found_match:
                 return False
 
-        # Check time range filter (simplified implementation)
+        # Check time range filter (improved implementation)
         if start_time_filter or end_time_filter:
             log_time_str = log.get("time", "")
             if log_time_str:
-                # Parse time string - expecting format like "HH:MM:SS.mmm"
-                with contextlib.suppress(Exception):
-                    # For now, just check if the time is within our range
-                    # This is a simplified check - a full implementation would parse time properly
-                    if start_time_filter and log_time_str < start_time_filter:
+                try:
+                    # Parse log timestamp - handle various formats
+                    # Expected formats: "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD HH:MM:SS,mmm"
+                    if " " in log_time_str:
+                        date_part = log_time_str.split(" ")[0]  # Get YYYY-MM-DD part
+                    else:
+                        date_part = log_time_str.split("T")[0] if "T" in log_time_str else log_time_str
+
+                    # Parse the date for comparison
+                    from datetime import datetime
+                    log_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+
+                    # Parse filter dates if provided
+                    start_date = None
+                    end_date = None
+
+                    if start_time_filter:
+                        try:
+                            start_date = datetime.strptime(start_time_filter, "%Y-%m-%d").date()
+                        except ValueError:
+                            pass  # Invalid date format, ignore
+
+                    if end_time_filter:
+                        try:
+                            end_date = datetime.strptime(end_time_filter, "%Y-%m-%d").date()
+                        except ValueError:
+                            pass  # Invalid date format, ignore
+
+                    # Apply date filtering
+                    if start_date and log_date < start_date:
                         return False
-                    if end_time_filter and log_time_str > end_time_filter:
+                    if end_date and log_date > end_date:
                         return False
+
+                except (ValueError, IndexError):
+                    # If we can't parse the date, skip filtering for this log
+                    pass
 
         return True
 
@@ -806,19 +936,34 @@ def create_logs_view(
                     )
                 ]
             else:
-                # Determine which batch to show based on the tab
+                # Create or update controls for all filtered data
+                if is_system:
+                    # Create controls for all system logs if not already created or if data changed
+                    if len(view_state.system_log_controls) != len(data):
+                        view_state.system_log_controls = [build_log_card(row, idx) for idx, row in enumerate(data)]
+                    # Update visibility based on current filter
+                    for control, log_data in zip(view_state.system_log_controls, data):
+                        control.visible = _passes_filter(log_data)
+                    # Get visible controls
+                    visible_controls = [c for c in view_state.system_log_controls if c.visible]
+                else:
+                    # Create controls for all app logs if not already created or if data changed
+                    if len(view_state.flet_log_controls) != len(data):
+                        view_state.flet_log_controls = [build_log_card(row, idx) for idx, row in enumerate(data)]
+                    # Update visibility based on current filter
+                    for control, log_data in zip(view_state.flet_log_controls, data):
+                        control.visible = _passes_filter(log_data)
+                    # Get visible controls
+                    visible_controls = [c for c in view_state.flet_log_controls if c.visible]
+
+                # Apply batching to visible controls
                 current_batch = view_state.current_system_batch if is_system else view_state.current_flet_batch
                 start_idx = current_batch * BATCH_SIZE
                 end_idx = start_idx + BATCH_SIZE
+                batch_controls = visible_controls[start_idx:end_idx]
 
-                # Get the batch of logs to render
-                batch_data = filtered_data[start_idx:end_idx]
-
-                # Create log cards for the current batch
-                log_cards = [build_log_card(row, idx) for idx, row in enumerate(batch_data)]
-
-                # Add "Load More" button if there are more logs
-                if end_idx < len(filtered_data):
+                # Add "Load More" button if there are more visible logs
+                if end_idx < len(visible_controls):
                     load_more_button = ft.Container(
                         content=ft.ElevatedButton(
                             "Load More",
@@ -832,10 +977,9 @@ def create_logs_view(
                         padding=ft.padding.symmetric(vertical=10),
                         alignment=ft.alignment.center,
                     )
-
-                    lst_ref.current.controls = log_cards + [load_more_button]
+                    lst_ref.current.controls = batch_controls + [load_more_button]
                 else:
-                    lst_ref.current.controls = log_cards
+                    lst_ref.current.controls = batch_controls
 
         # Safe update - control might not be attached to page during setup
         try:
@@ -864,15 +1008,78 @@ def create_logs_view(
         else:
             view_state.current_flet_batch += 1
             # Re-render with the new batch
-            _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
+            _render_list(flet_list_ref, view_state.flet_logs_data, "App Logs", is_system=False)
 
     def _refresh_lists_by_filter():
-        """Refresh both lists with current filter settings"""
-        # Reset batch counters when refreshing
+        """Refresh both lists with current filter settings using visibility-based filtering"""
+        # Reset batch counters when filtering changes
         view_state.current_system_batch = 0
         view_state.current_flet_batch = 0
-        _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
-        _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
+
+        # For visibility-based filtering, we need to update the visibility of existing controls
+        # instead of rebuilding them. This is much more efficient.
+
+        # Update system logs visibility
+        if view_state.system_log_controls and len(view_state.system_log_controls) == len(view_state.system_logs_data):
+            for control, log_data in zip(view_state.system_log_controls, view_state.system_logs_data):
+                control.visible = _passes_filter(log_data)
+            # Update the list view with first batch of visible controls
+            visible_system_controls = [c for c in view_state.system_log_controls if c.visible]
+            system_list_ref.current.controls = visible_system_controls[:BATCH_SIZE]
+            if len(visible_system_controls) > BATCH_SIZE:
+                load_more_btn = ft.Container(
+                    content=ft.ElevatedButton(
+                        "Load More",
+                        icon=ft.Icons.ADD_ROUNDED,
+                        on_click=lambda _: load_more_logs(is_system_tab=True),
+                        style=ft.ButtonStyle(
+                            padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                            shape=ft.RoundedRectangleBorder(radius=24),
+                        )
+                    ),
+                    padding=ft.padding.symmetric(vertical=10),
+                    alignment=ft.alignment.center,
+                )
+                system_list_ref.current.controls.append(load_more_btn)
+        else:
+            # Fallback to old method if no controls stored or data size mismatch
+            _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
+
+        # Update app logs visibility
+        if view_state.flet_log_controls and len(view_state.flet_log_controls) == len(view_state.flet_logs_data):
+            for control, log_data in zip(view_state.flet_log_controls, view_state.flet_logs_data):
+                control.visible = _passes_filter(log_data)
+            # Update the list view with first batch of visible controls
+            visible_flet_controls = [c for c in view_state.flet_log_controls if c.visible]
+            flet_list_ref.current.controls = visible_flet_controls[:BATCH_SIZE]
+            if len(visible_flet_controls) > BATCH_SIZE:
+                load_more_btn = ft.Container(
+                    content=ft.ElevatedButton(
+                        "Load More",
+                        icon=ft.Icons.ADD_ROUNDED,
+                        on_click=lambda _: load_more_logs(is_system_tab=False),
+                        style=ft.ButtonStyle(
+                            padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                            shape=ft.RoundedRectangleBorder(radius=24),
+                        )
+                    ),
+                    padding=ft.padding.symmetric(vertical=10),
+                    alignment=ft.alignment.center,
+                )
+                flet_list_ref.current.controls.append(load_more_btn)
+        else:
+            # Fallback to old method if no controls stored or data size mismatch
+            _render_list(flet_list_ref, view_state.flet_logs_data, "App Logs", is_system=False)
+
+        # Safe updates
+        try:
+            system_list_ref.current.update()
+        except:
+            pass
+        try:
+            flet_list_ref.current.update()
+        except:
+            pass
 
     # ---------------------------------------------
     # Tab System
@@ -960,7 +1167,7 @@ def create_logs_view(
         # Reset batch counter for the previous tab
         if active_tab_index == 0:  # Was on System logs tab
             view_state.current_system_batch = 0
-        else:  # Was on Flet logs tab
+        else:  # Was on App logs tab
             view_state.current_flet_batch = 0
 
         active_tab_index = idx
@@ -1027,7 +1234,7 @@ def create_logs_view(
             _show_toast(page, "System logs refreshed", "success")
 
     async def refresh_flet_logs(show_toast: bool = False, show_spinner: bool = False):
-        """Refresh Flet logs from singleton capture handler - shows APPLICATION logs"""
+        """Refresh App logs from singleton capture handler - shows APPLICATION logs"""
         nonlocal _flet_first_load
 
         if (flet_loading_ref.current and (show_spinner or _flet_first_load) and
@@ -1109,7 +1316,7 @@ def create_logs_view(
                 # Determine which logs to export
                 if active_tab_index == 0:  # System logs
                     export_logs = [log for log in view_state.system_logs_data if _passes_filter(log)] if filtered_only else view_state.system_logs_data
-                else:  # Flet logs
+                else:  # App logs
                     export_logs = [log for log in view_state.flet_logs_data if _passes_filter(log)] if filtered_only else view_state.flet_logs_data
 
                 if export_format == "json":
@@ -1118,7 +1325,7 @@ def create_logs_view(
                         "exported_at": timestamp,
                         "export_datetime": datetime.now().isoformat(),
                         "filtered_only": filtered_only,
-                        "active_tab": "System Logs" if active_tab_index == 0 else "Flet Logs",
+                        "active_tab": "System Logs" if active_tab_index == 0 else "App Logs",
                         "logs": export_logs,
                     }
 
@@ -1152,7 +1359,7 @@ def create_logs_view(
                     with open(filepath, "w", encoding="utf-8") as txtfile:
                         txtfile.write(f"Log Export - {datetime.now().isoformat()}\n")
                         txtfile.write(f"Filtered Only: {filtered_only}\n")
-                        txtfile.write(f"Active Tab: {'System Logs' if active_tab_index == 0 else 'Flet Logs'}\n")
+                        txtfile.write(f"Active Tab: {'System Logs' if active_tab_index == 0 else 'App Logs'}\n")
                         txtfile.write("="*50 + "\n\n")
 
                         for log in export_logs:
@@ -1195,12 +1402,12 @@ def create_logs_view(
             page.update()
 
     async def on_clear_flet_click(_: ft.ControlEvent):
-        """Clear Flet logs from singleton capture"""
+        """Clear App logs from singleton capture"""
         try:
             if _flet_log_capture:
                 _flet_log_capture.clear_flet_logs()
                 await refresh_flet_logs(show_toast=False)
-                _show_toast(page, "Cleared Flet logs", "success")
+                _show_toast(page, "Cleared App logs", "success")
             else:
                 _show_toast(page, "Log capture not available", "error")
         except Exception as e:
@@ -1269,27 +1476,6 @@ def create_logs_view(
             ink=True,
         )
 
-    # Auto-refresh switch (compact)
-    auto_refresh_switch = ft.Switch(
-        label="Auto-refresh",
-        value=True,
-        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
-    )
-
-    # Auto-scroll to bottom switch (compact)
-    auto_scroll_switch = ft.Switch(
-        label="Lock to Bottom",
-        value=True,
-        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
-    )
-
-    # Compact mode switch
-    compact_mode_switch = ft.Switch(
-        label="Compact Mode",
-        value=False,
-        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
-    )
-
     # Load saved settings
     def load_saved_settings():
         """Load user preferences from client storage"""
@@ -1319,89 +1505,6 @@ def create_logs_view(
             saved_auto_scroll = page.client_storage.get("logs.auto_scroll")
             if saved_auto_scroll is not None:
                 auto_scroll_switch.value = saved_auto_scroll
-
-    # Function to save settings
-    def save_current_settings():
-        """Save user preferences to client storage"""
-        with contextlib.suppress(Exception):
-            # Save filters
-            page.client_storage.set("logs.filters", list(view_state.selected_levels))
-            # Save compact mode
-            page.client_storage.set("logs.compact_mode", compact_mode_switch.value)
-            # Save auto-scroll
-            page.client_storage.set("logs.auto_scroll", auto_scroll_switch.value)
-
-    # Update settings when they change
-    def update_settings(e):
-        save_current_settings()
-
-    # Set up change event handlers
-    compact_mode_switch.on_change = update_settings
-    auto_scroll_switch.on_change = update_settings
-
-    # Create save filter button
-    save_filter_button = ft.IconButton(
-        icon=ft.Icons.SAVE_OUTLINED,
-        tooltip="Save current filters",
-        on_click=lambda e: save_current_filter()
-    )
-
-    # Live mode toggle switch (compact)
-    live_mode_switch = ft.Switch(
-        label="Live Mode",
-        value=False,
-        label_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_400),
-    )
-
-    # Component filter dropdown (compact)
-    component_options = ft.Dropdown(
-        label="Component",
-        width=150,
-        options=[ft.dropdown.Option("All"), ft.dropdown.Option("Server"), ft.dropdown.Option("Client")],  # Placeholder options
-        on_change=lambda e: update_component_filter(e),
-    )
-
-    def update_component_filter(e):
-        """Update the component filter from UI control"""
-        nonlocal selected_component_filter
-        selected_component_filter = e.control.value
-        # Refresh the logs to apply the new filter
-        _refresh_lists_by_filter()
-
-    # Action buttons row
-    action_buttons = ft.Row([
-        _create_neomorphic_button(
-            "Refresh",
-            ft.Icons.REFRESH_ROUNDED,
-            on_refresh_click,
-            "tonal"
-        ),
-        _create_neomorphic_button(
-            "Export",
-            ft.Icons.DOWNLOAD_ROUNDED,
-            on_export_click,
-            "outlined"
-        ),
-        _create_neomorphic_button(
-            "Clear Flet Logs",
-            ft.Icons.DELETE_SWEEP_ROUNDED,
-            on_clear_flet_click,
-            "outlined"
-        ),
-    ], spacing=12, wrap=True)
-
-    # ---------------------------------------------
-    # Header Section - Ultra Compact Single Row
-    # ---------------------------------------------
-
-    # Compact search field
-    search_field = ft.TextField(
-        hint_text="Search...",
-        icon=ft.Icons.SEARCH_ROUNDED,
-        width=200,
-        dense=True,
-        on_change=lambda e: on_search_change(e),
-    )
 
     # Ultra-compact switches (icon-only or very small labels)
     auto_refresh_switch = ft.Switch(
@@ -1437,6 +1540,74 @@ def create_logs_view(
         on_change=lambda e: update_component_filter(e),
     )
 
+    # Function to save settings
+    def save_current_settings():
+        """Save user preferences to client storage"""
+        with contextlib.suppress(Exception):
+            # Save filters
+            page.client_storage.set("logs.filters", list(view_state.selected_levels))
+            # Save compact mode
+            page.client_storage.set("logs.compact_mode", compact_mode_switch.value)
+            # Save auto-scroll
+            page.client_storage.set("logs.auto_scroll", auto_scroll_switch.value)
+
+    # Update settings when they change
+    def update_settings(e):
+        save_current_settings()
+
+    # Set up change event handlers
+    compact_mode_switch.on_change = update_settings
+    auto_scroll_switch.on_change = update_settings
+
+    # Create save filter button
+    save_filter_button = ft.IconButton(
+        icon=ft.Icons.SAVE_OUTLINED,
+        tooltip="Save current filters",
+        on_click=lambda e: save_current_filter()
+    )
+
+    def update_component_filter(e):
+        """Update the component filter from UI control"""
+        nonlocal selected_component_filter
+        selected_component_filter = e.control.value
+        # Refresh the logs to apply the new filter
+        _refresh_lists_by_filter()
+
+    # Action buttons row
+    action_buttons = ft.Row([
+        _create_neomorphic_button(
+            "Refresh",
+            ft.Icons.REFRESH_ROUNDED,
+            on_refresh_click,
+            "tonal"
+        ),
+        _create_neomorphic_button(
+            "Export",
+            ft.Icons.DOWNLOAD_ROUNDED,
+            on_export_click,
+            "outlined"
+        ),
+        _create_neomorphic_button(
+            "Clear App Logs",
+            ft.Icons.DELETE_SWEEP_ROUNDED,
+            on_clear_flet_click,
+            "outlined"
+        ),
+    ], spacing=12, wrap=True)
+
+    # ---------------------------------------------
+    # Header Section - Ultra Compact Single Row
+    # ---------------------------------------------
+
+    # Compact search field
+    search_field = ft.TextField(
+        hint_text="Search...",
+        icon=ft.Icons.SEARCH_ROUNDED,
+        width=200,
+        dense=True,
+        on_change=lambda e: on_search_change(e),
+    )
+
     # Icon-only action buttons for maximum compactness
     refresh_btn = ft.IconButton(
         icon=ft.Icons.REFRESH_ROUNDED,
@@ -1452,7 +1623,7 @@ def create_logs_view(
 
     clear_btn = ft.IconButton(
         icon=ft.Icons.DELETE_SWEEP_ROUNDED,
-        tooltip="Clear Flet logs",
+        tooltip="Clear App logs",
         on_click=on_clear_flet_click,
     )
 
@@ -1468,6 +1639,9 @@ def create_logs_view(
         ft.VerticalDivider(width=1),
         search_field,
         ft.VerticalDivider(width=1),
+        start_date_field,
+        end_date_field,
+        ft.VerticalDivider(width=1),
         auto_refresh_switch,
         auto_scroll_switch,
         compact_mode_switch,
@@ -1482,9 +1656,91 @@ def create_logs_view(
     ], spacing=6, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
     # Simplified statistics - just a placeholder since update_statistics was removed
+    def calculate_statistics(logs_data: list[dict]) -> dict:
+        """Calculate statistics from logs data"""
+        stats = {
+            'total': len(logs_data),
+            'by_level': {},
+            'by_component': {},
+            'recent_trend': 0,  # Placeholder for trend calculation
+        }
+
+        # Count by level
+        for log in logs_data:
+            level = map_level(log.get("level", "INFO"))
+            stats['by_level'][level] = stats['by_level'].get(level, 0) + 1
+
+            component = log.get("component", "Unknown")
+            stats['by_component'][component] = stats['by_component'].get(component, 0) + 1
+
+        return stats
+
+    def create_statistics_dashboard(stats: dict) -> ft.Control:
+        """Create a compact statistics dashboard"""
+        if not stats or stats['total'] == 0:
+            return ft.Container()  # Empty container if no data
+
+        # Create level badges
+        level_badges = []
+        level_colors = {
+            'ERROR': ft.Colors.RED_400,
+            'WARNING': ft.Colors.ORANGE_400,
+            'INFO': ft.Colors.BLUE_400,
+            'DEBUG': ft.Colors.GREY_400,
+            'CRITICAL': ft.Colors.PURPLE_400,
+        }
+
+        for level, count in stats['by_level'].items():
+            color = level_colors.get(level.upper(), ft.Colors.GREY_400)
+            level_badges.append(
+                ft.Container(
+                    content=ft.Text(f"{level}: {count}", size=11, color=ft.Colors.WHITE),
+                    bgcolor=color,
+                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                    border_radius=8,
+                )
+            )
+
+        # Main stats row
+        stats_row = ft.Row([
+            ft.Text(f"Total: {stats['total']}", size=12, weight=ft.FontWeight.BOLD),
+            ft.VerticalDivider(width=1),
+            *level_badges,
+        ], spacing=8, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+        # Wrap in a styled container
+        return ft.Container(
+            content=stats_row,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
+            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+            border_radius=8,
+            margin=ft.margin.only(bottom=8),
+        )
+
     def update_statistics():
-        """Placeholder for statistics update - simplified version"""
-        pass
+        """Update and display statistics for current logs"""
+        try:
+            # Get current logs data
+            system_logs = get_system_logs(server_bridge)
+            flet_logs = []
+            if _flet_log_capture:
+                flet_logs = _flet_log_capture.get_app_logs()  # Fixed: use get_app_logs() instead of get_logs()
+
+            # Calculate stats for active tab
+            if active_tab_index == 0:  # System logs
+                stats = calculate_statistics(system_logs)
+            else:  # App logs
+                stats = calculate_statistics(flet_logs)
+
+            # Update the statistics display
+            stats_container.content = create_statistics_dashboard(stats)
+            stats_container.update()
+
+        except Exception as e:
+            print(f"[ERROR] Failed to update statistics: {e}")
+            # Clear stats on error
+            stats_container.content = ft.Container()
+            stats_container.update()
 
     def update_time_filter():
         """Placeholder for time filter update"""
@@ -1538,7 +1794,8 @@ def create_logs_view(
             selected_component_filter = filter_data.get('component_filter', 'All')
 
             # Update UI elements to reflect saved values
-            # Time filter fields removed for compactness
+            start_date_field.value = start_time_filter or ""
+            end_date_field.value = end_time_filter or ""
             if component_options:
                 component_options.value = selected_component_filter
 
@@ -1580,12 +1837,12 @@ def create_logs_view(
             # Store the task reference if needed for cancellation
             # task reference is stored in _live_task in the setup_subscriptions function
         elif not is_live_mode and websocket_connection:
-            # Close WebSocket connection
+            # Close WebSocket connection (though it's disabled, keep for future implementation)
             async def close_websocket():
                 nonlocal websocket_connection
                 with contextlib.suppress(Exception):
-                    if websocket_connection:
-                        await websocket_connection.close()
+                    if websocket_connection and websockets:
+                        websocket_connection.close()
                 # Update the connection variable after closing
                 websocket_connection = None
 
@@ -1596,6 +1853,16 @@ def create_logs_view(
 
     async def start_websocket_connection():
         """Start WebSocket connection to receive live logs"""
+        # WebSocket live logging is not currently implemented
+        # This feature requires a WebSocket server endpoint on the backend
+        _show_toast(page, "Live log streaming is not available - use refresh to update logs", "info")
+        live_mode_switch.value = False
+        with contextlib.suppress(Exception):
+            live_mode_switch.update()
+        return
+
+        # Original WebSocket implementation (disabled)
+        """
         nonlocal websocket_connection
         try:
             # Check if websockets module is available
@@ -1620,6 +1887,7 @@ def create_logs_view(
             live_mode_switch.value = False
             with contextlib.suppress(Exception):
                 live_mode_switch.update()
+        """
 
     async def listen_for_logs(ws_connection):
         """Listen for incoming log messages from WebSocket"""
@@ -1633,7 +1901,7 @@ def create_logs_view(
                     if active_tab_index == 0:  # System logs tab
                         # Prepend new log to the existing list
                         view_state.system_logs_data.insert(0, log_data)
-                    else:  # Flet logs tab
+                    else:  # App logs tab
                         view_state.flet_logs_data.insert(0, log_data)
 
                     # Update statistics
@@ -1645,7 +1913,7 @@ def create_logs_view(
                         if active_tab_index == 0:
                             _render_list(system_list_ref, view_state.system_logs_data, "System Logs", is_system=True)
                         else:
-                            _render_list(flet_list_ref, view_state.flet_logs_data, "Flet Logs", is_system=False)
+                            _render_list(flet_list_ref, view_state.flet_logs_data, "App Logs", is_system=False)
 
                         # Scroll to the top item to see the latest log
                         list_ref = system_list_ref if active_tab_index == 0 else flet_list_ref
@@ -1706,6 +1974,9 @@ def create_logs_view(
         bgcolor=ft.Colors.TRANSPARENT,
     )
 
+    # Statistics container
+    stats_container = ft.Container()
+
     # ---------------------------------------------
     # Main Layout
     # ---------------------------------------------
@@ -1713,7 +1984,7 @@ def create_logs_view(
     main_content = ft.Column([
         ft.Container(content=header_row, padding=ft.padding.only(bottom=8)),
         filter_container,
-        # Stats row removed for compactness
+        stats_container,  # Statistics dashboard
         ft.Container(content=tabbar, padding=ft.padding.symmetric(vertical=8)),
         content_host,
     ], spacing=0, expand=True)
