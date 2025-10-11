@@ -14,8 +14,6 @@ filetype>=1.2.0
 
 # GUI Frameworks
 flet>=0.28.3                    # Primary GUI framework (Material Design 3) - Updated to latest
-tkcalendar>=1.6.1               # Legacy TKinter calendar widget
-tksheet>=6.2.15                 # Legacy TKinter sheet widget
 plyer>=2.1.0                    # Cross-platform native features
 matplotlib>=3.7.0               # Charts for GUI analytics
 
