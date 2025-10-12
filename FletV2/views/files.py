@@ -8,6 +8,8 @@ Clean file management with server integration and graceful fallbacks.
 """
 
 # Standard library imports
+import asyncio
+import contextlib
 import hashlib
 import os
 import sys
@@ -45,12 +47,34 @@ except ImportError:  # pragma: no cover - fallback logging
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
 
+from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
-from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card, themed_metric_card
+from FletV2.utils.ui_components import AppCard, create_status_pill
 from FletV2.utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.ui_builders import (
+    create_action_button,
+    create_filter_dropdown,
+    create_search_bar,
+    create_view_header,
+)
 
 logger = get_logger(__name__)
+
+
+def _build_metric_card(title: str, value_control: ft.Text, icon: str) -> ft.Card:
+    """Create a reusable metric card for the files overview."""
+
+    return ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                ft.Row([ft.Icon(icon, size=24), ft.Text(title, size=14)]),
+                value_control,
+            ], spacing=8),
+            padding=20,
+        ),
+        elevation=2,
+    )
 
 
 def create_files_view(
@@ -68,22 +92,19 @@ def create_files_view(
     files_data = []
 
     # Load file data from server - ASYNC VERSION to prevent UI blocking
-    async def _fetch_files_async():
+    async def _fetch_files_async() -> list[dict[str, Any]]:
         """Fetch files from server asynchronously."""
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _fetch_files_sync)
-
-    def _fetch_files_sync():
-        """Synchronous files fetch (called in executor)."""
         if not server_bridge:
             return []
-        try:
-            result = server_bridge.get_files()
-            return result if isinstance(result, list) else []
-        except Exception as ex:
-            logger.error(f"Failed to fetch files from server: {ex}")
-            return []
+
+        result = await run_sync_in_executor(safe_server_call, server_bridge, 'get_files')
+        if result.get('success'):
+            data = result.get('data', [])
+            if isinstance(data, list):
+                return data
+
+        logger.error(f"Failed to fetch files from server: {result.get('error', 'Unknown error')}")
+        return []
 
     def load_files_data() -> None:
         """Load file data using async pattern to avoid blocking UI."""
@@ -98,9 +119,7 @@ def create_files_view(
         if hasattr(page, "run_task"):
             page.run_task(_load_and_apply)
         else:
-            # Fallback for environments without run_task
-            files_data = _fetch_files_sync()
-            update_table()
+            asyncio.get_event_loop().create_task(_load_and_apply())
 
     def format_file_size(size_bytes: int) -> str:
         """Format file size in human readable format."""
@@ -150,6 +169,11 @@ def create_files_view(
         border_radius=12,
         expand=True
     )
+
+    total_files_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
+    complete_files_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
+    total_size_value = ft.Text("0 B", size=24, weight=ft.FontWeight.BOLD)
+    failed_files_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
 
     def filter_files() -> list[dict[str, Any]]:
         """Filter files based on search and filters."""
@@ -228,25 +252,19 @@ def create_files_view(
         total_size = sum(f.get('size', 0) for f in files_data)
         failed_files = len([f for f in files_data if f.get('status') == 'failed'])
 
-        # Update the stat card values
-        if stats_row.controls and len(stats_row.controls) >= 4:
-            # Update Total Files
-            if stats_row.controls[0].controls[0].content:
-                stats_row.controls[0].controls[0].content.content.controls[1].value = str(total_files)
+        total_files_value.value = str(total_files)
+        complete_files_value.value = str(complete_files)
+        total_size_value.value = format_file_size(total_size)
+        failed_files_value.value = str(failed_files)
 
-            # Update Complete Files
-            if stats_row.controls[1].controls[0].content:
-                stats_row.controls[1].controls[0].content.content.controls[1].value = str(complete_files)
-
-            # Update Total Size
-            if stats_row.controls[2].controls[0].content:
-                stats_row.controls[2].controls[0].content.content.controls[1].value = format_file_size(total_size)
-
-            # Update Failed Files
-            if stats_row.controls[3].controls[0].content:
-                stats_row.controls[3].controls[0].content.content.controls[1].value = str(failed_files)
-
-            stats_row.update()
+        for control in (
+            total_files_value,
+            complete_files_value,
+            total_size_value,
+            failed_files_value,
+        ):
+            with contextlib.suppress(Exception):
+                control.update()
 
     # File action handlers
     def download_file(file: dict[str, Any]) -> None:
@@ -260,7 +278,7 @@ def create_files_view(
                     if not file_id or not isinstance(file_id, str):
                         show_error_message(page, "Invalid file ID")
                         return
-                    result = server_bridge.download_file(file_id, e.path)
+                    result = await run_sync_in_executor(safe_server_call, server_bridge, 'download_file', file_id, e.path)
                     if result.get('success'):
                         show_success_message(page, f"Downloaded {file.get('name')} to {e.path}")
                     else:
@@ -271,7 +289,13 @@ def create_files_view(
             except Exception as ex:
                 show_error_message(page, f"Download error: {ex}")
 
-        file_picker = ft.FilePicker(on_result=save_file)
+        def handle_picker_result(event: ft.FilePickerResultEvent) -> None:
+            if hasattr(page, "run_task"):
+                page.run_task(save_file(event))
+            else:
+                asyncio.get_event_loop().create_task(save_file(event))
+
+        file_picker = ft.FilePicker(on_result=handle_picker_result)
         page.overlay.append(file_picker)
         file_picker.update()  # Ensure FilePicker is properly attached before use
         file_picker.save_file(
@@ -279,46 +303,53 @@ def create_files_view(
             file_name=file.get('name', 'file.txt')
         )
 
+    async def _verify_file_async(file_data: dict[str, Any]) -> None:
+        file_name = file_data.get('name', 'Unknown')
+        file_id = file_data.get('id')
+
+        if not file_id or not isinstance(file_id, str):
+            show_error_message(page, "Invalid file ID")
+            return
+
+        try:
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'verify_file', file_id)
+        except Exception as exc:  # pragma: no cover - UI feedback path
+            show_error_message(page, f"Verification error: {exc}")
+            return
+
+        if isinstance(result, dict):
+            if result.get('success'):
+                verification_data = result.get('data', {})
+                show_verification_dialog(file_name, verification_data, "Server")
+                return
+
+            show_error_message(page, f"Verification failed: {result.get('error', 'Unknown error')}")
+            return
+
+        if isinstance(result, bool):
+            if result:
+                verification_data = {
+                    'size': file_data.get('size', 0),
+                    'modified': file_data.get('modified', 'Unknown'),
+                    'status': 'verified'
+                }
+                show_verification_dialog(file_name, verification_data, "Server")
+            else:
+                show_error_message(page, "File verification failed")
+            return
+
+        show_error_message(page, f"Unexpected verification result type: {type(result)}")
+
     def verify_file(file: dict[str, Any]) -> None:
-        """Verify file integrity."""
-        file_name = file.get('name', 'Unknown')
-        file_path = file.get('path', '')
+        """Verify file integrity without blocking the UI."""
+        if not server_bridge:
+            show_error_message(page, "Server not connected. Please start the backup server.")
+            return
 
-        if server_bridge:
-            file_id = file.get('id')
-            if not file_id or not isinstance(file_id, str):
-                show_error_message(page, "Invalid file ID")
-                return
-            try:
-                result = server_bridge.verify_file(file_id)
-
-                # Handle both normalized dict format and raw boolean return
-                if isinstance(result, bool):
-                    # Direct boolean return from mock
-                    if result:
-                        verification_data = {
-                            'size': file.get('size', 0),
-                            'modified': file.get('modified', 'Unknown'),
-                            'status': 'verified'
-                        }
-                        show_verification_dialog(file_name, verification_data, "Server")
-                    else:
-                        show_error_message(page, "File verification failed")
-                elif isinstance(result, dict):
-                    # Normalized return format
-                    if result.get('success'):
-                        verification_data = result.get('data', {})
-                        show_verification_dialog(file_name, verification_data, "Server")
-                    else:
-                        show_error_message(page, f"Verification failed: {result.get('error', 'Unknown error')}")
-                else:
-                    show_error_message(page, f"Unexpected verification result type: {type(result)}")
-            except Exception as ex:
-                show_error_message(page, f"Verification error: {ex}")
+        if hasattr(page, "run_task"):
+            page.run_task(lambda: _verify_file_async(file))
         else:
-            if not server_bridge:
-                show_error_message(page, "Server not connected. Please start the backup server.")
-                return
+            asyncio.get_event_loop().create_task(_verify_file_async(file))
 
     def show_verification_dialog(file_name: str, data: dict[str, Any], mode: str) -> None:
         """Show verification results dialog."""
@@ -348,24 +379,25 @@ def create_files_view(
 
     def delete_file(file: dict[str, Any]) -> None:
         """Delete file with confirmation."""
-        def confirm_delete(_e: ft.ControlEvent) -> None:
-            if server_bridge:
-                file_id = file.get('id')
-                if not file_id or not isinstance(file_id, str):
-                    show_error_message(page, "Invalid file ID")
-                    return
-                try:
-                    result = server_bridge.delete_file(file_id)
-                    if result.get('success'):
-                        show_success_message(page, f"File {file.get('name')} deleted")
-                        load_files_data()
-                    else:
-                        show_error_message(page, f"Delete failed: {result.get('error', 'Unknown error')}")
-                except Exception as ex:
-                    show_error_message(page, f"Error: {ex}")
-            else:
+        async def confirm_delete(_e: ft.ControlEvent) -> None:
+            if not server_bridge:
                 show_error_message(page, "Server not connected. Please start the backup server.")
+                page.close(delete_dialog)
                 return
+
+            file_id = file.get('id')
+            if not file_id or not isinstance(file_id, str):
+                show_error_message(page, "Invalid file ID")
+                page.close(delete_dialog)
+                return
+
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'delete_file', file_id)
+
+            if result.get('success'):
+                show_success_message(page, f"File {file.get('name')} deleted")
+                load_files_data()
+            else:
+                show_error_message(page, f"Delete failed: {result.get('error', 'Unknown error')}")
 
             page.close(delete_dialog)
 
@@ -404,79 +436,104 @@ def create_files_view(
         show_success_message(page, "Files refreshed")
 
     # Create UI components
-    search_field = ft.TextField(
-        label="Search files",
-        prefix_icon=ft.Icons.SEARCH,
-        on_change=on_search_change,
-        width=300
+    search_field = create_search_bar(
+        on_search_change,
+        placeholder="Search files…",
     )
 
-    status_filter_dropdown = ft.Dropdown(
-        label="Status",
-        value="all",
-        options=[
-            ft.dropdown.Option("all", "All"),
-            ft.dropdown.Option("complete", "Complete"),
-            ft.dropdown.Option("verified", "Verified"),
-            ft.dropdown.Option("uploading", "Uploading"),
-            ft.dropdown.Option("queued", "Queued"),
-            ft.dropdown.Option("failed", "Failed"),
+    status_filter_dropdown = create_filter_dropdown(
+        "Status",
+        [
+            ("all", "All"),
+            ("complete", "Complete"),
+            ("verified", "Verified"),
+            ("uploading", "Uploading"),
+            ("queued", "Queued"),
+            ("failed", "Failed"),
         ],
-        on_change=on_status_filter_change,
-        width=120
+        on_status_filter_change,
+        value=status_filter,
+        width=200,
     )
 
-    type_filter_dropdown = ft.Dropdown(
-        label="Type",
-        value="all",
-        options=[
-            ft.dropdown.Option("all", "All"),
-            ft.dropdown.Option("document", "Documents"),
-            ft.dropdown.Option("image", "Images"),
-            ft.dropdown.Option("video", "Videos"),
-            ft.dropdown.Option("code", "Code"),
-            ft.dropdown.Option("archive", "Archives"),
+    type_filter_dropdown = create_filter_dropdown(
+        "Type",
+        [
+            ("all", "All"),
+            ("document", "Documents"),
+            ("image", "Images"),
+            ("video", "Videos"),
+            ("code", "Code"),
+            ("archive", "Archives"),
         ],
-        on_change=on_type_filter_change,
-        width=120
+        on_type_filter_change,
+        value=type_filter,
+        width=200,
     )
 
-    # Actions row
-    actions_row = ft.Row([
-        search_field,
-        status_filter_dropdown,
-        type_filter_dropdown,
-        ft.Container(expand=True),  # Spacer
-        themed_button("Refresh", refresh_files, "outlined", ft.Icons.REFRESH),
-    ], spacing=10)
+    filters_row = ft.ResponsiveRow(
+        controls=[
+            ft.Container(content=search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
+            ft.Container(content=status_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+            ft.Container(content=type_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+            ft.Container(
+                content=create_action_button("Refresh", refresh_files, icon=ft.Icons.REFRESH, primary=False),
+                col={"xs": 12, "sm": 12, "md": 3, "lg": 2},
+                alignment=ft.alignment.center_left,
+            ),
+        ],
+        spacing=12,
+        run_spacing=12,
+        alignment=ft.MainAxisAlignment.START,
+    )
 
-    # File stats are now handled by update_stats_display() function
-
-    # Enhanced table with layered card design
-    table_card = themed_card(files_table, "Files", page)
-
-    # Initialize stats container for updates
     stats_row = ft.ResponsiveRow([
-        ft.Column([themed_metric_card("Total Files", "0", ft.Icons.FOLDER)],
-                 col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([themed_metric_card("Complete", "0", ft.Icons.CHECK_CIRCLE)],
-                 col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([themed_metric_card("Total Size", "0 B", ft.Icons.STORAGE)],
-                 col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([themed_metric_card("Failed", "0", ft.Icons.ERROR)],
-                 col={"sm": 12, "md": 6, "lg": 3}),
-    ])
+        ft.Container(
+            content=_build_metric_card("Total files", total_files_value, ft.Icons.FOLDER),
+            col={"sm": 12, "md": 6, "lg": 3},
+        ),
+        ft.Container(
+            content=_build_metric_card("Complete", complete_files_value, ft.Icons.CHECK_CIRCLE),
+            col={"sm": 12, "md": 6, "lg": 3},
+        ),
+        ft.Container(
+            content=_build_metric_card("Total size", total_size_value, ft.Icons.STORAGE),
+            col={"sm": 12, "md": 6, "lg": 3},
+        ),
+        ft.Container(
+            content=_build_metric_card("Failed", failed_files_value, ft.Icons.ERROR),
+            col={"sm": 12, "md": 6, "lg": 3},
+        ),
+    ], spacing=16, run_spacing=16)
 
-    # Main layout with responsive design and scrollbar
-    main_content = ft.Column([
-        ft.Text("Files Management", size=28, weight=ft.FontWeight.BOLD),
-        stats_row,
-        actions_row,
-        table_card
-    ], expand=True, spacing=20, scroll="auto")
+    stats_section = AppCard(stats_row, title="At a glance")
+    filters_section = AppCard(filters_row, title="Filters")
+    table_section = AppCard(files_table, title="Files")
+    table_section.expand = True
 
-    # Create the main container with theme support
-    files_container = themed_card(main_content, None, page)  # No title since we have one in content
+    header = create_view_header(
+        "Files management",
+        icon=ft.Icons.FOLDER,
+        description="Review backed up files and manage integrity checks.",
+    )
+
+    main_content = ft.Column(
+        [
+            header,
+            stats_section,
+            filters_section,
+            table_section,
+        ],
+        spacing=16,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+    files_container = ft.Container(
+        content=main_content,
+        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        expand=True,
+    )
 
     def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""

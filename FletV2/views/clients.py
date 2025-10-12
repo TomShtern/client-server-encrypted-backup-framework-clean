@@ -45,10 +45,17 @@ except ImportError:  # pragma: no cover - fallback logging
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
 
+from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
-from FletV2.utils.ui_components import create_status_pill, themed_button, themed_card
+from FletV2.utils.ui_components import AppCard, create_status_pill
 from FletV2.utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.ui_builders import (
+    create_action_button,
+    create_filter_dropdown,
+    create_search_bar,
+    create_view_header,
+)
 
 logger = get_logger(__name__)
 
@@ -90,29 +97,20 @@ def create_clients_view(
     status_filter = "all"
     clients_data = []
 
-    def _fetch_clients_sync() -> list[dict[str, Any]]:
-        """Retrieve clients synchronously from real server only."""
+    async def _fetch_clients_async() -> list[dict[str, Any]]:
         if not server_bridge:
             logger.debug("Server bridge not available (GUI-only mode)")
             return []
 
-        try:
-            result = server_bridge.get_clients()
-            if isinstance(result, list):
-                return result
-            if isinstance(result, dict) and result.get("success"):
-                data = result.get("data", [])
-                return data if isinstance(data, list) else []
-        except Exception as ex:
-            logger.error(f"Failed to fetch clients from server: {ex}")
-            return []
+        result = await run_sync_in_executor(safe_server_call, server_bridge, 'get_clients')
+        if result.get('success'):
+            data = result.get('data', [])
+            if isinstance(data, list):
+                return data
 
-        logger.warning("Server returned unexpected response format")
+        error = result.get('error', 'Unknown error')
+        logger.error(f"Failed to fetch clients from server: {error}")
         return []
-
-    async def _fetch_clients_async() -> list[dict[str, Any]]:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _fetch_clients_sync)
 
     # Load client data from server or use mock
     def load_clients_data(*, broadcast: bool | None = None) -> None:
@@ -126,7 +124,7 @@ def create_clients_view(
         if hasattr(page, "run_task"):
             page.run_task(_load_and_apply)
         else:
-            apply_clients_data(_fetch_clients_sync(), broadcast=should_broadcast)
+            asyncio.get_event_loop().create_task(_load_and_apply())
 
     # Create DataTable using Flet's built-in functionality with enhanced header
     clients_table = ft.DataTable(
@@ -303,27 +301,34 @@ def create_clients_view(
 
     def disconnect_client(client: dict[str, Any]) -> None:
         """Disconnect client with confirmation."""
-        def confirm_disconnect(_e: ft.ControlEvent) -> None:
-            if server_bridge:
-                client_id = client.get('id')
-                if not client_id or not isinstance(client_id, str):
-                    show_error_message(page, "Invalid client ID")
-                    return
-                try:
-                    result = server_bridge.disconnect_client(client_id)
-                    if result.get('success'):
-                        show_success_message(page, f"Client {client.get('name')} disconnected")
-                        load_clients_data()
-                    else:
-                        show_error_message(page, f"Failed to disconnect: {result.get('error', 'Unknown error')}")
-                except Exception as ex:
-                    show_error_message(page, f"Error: {ex}")
-            else:
-                # No server connection
+
+        async def confirm_disconnect_async(_e: ft.ControlEvent) -> None:
+            if not server_bridge:
                 show_error_message(page, "Server not connected. Please start the backup server.")
+                page.close(confirm_dialog)
                 return
 
+            client_id = client.get('id')
+            if not client_id or not isinstance(client_id, str):
+                show_error_message(page, "Invalid client ID")
+                page.close(confirm_dialog)
+                return
+
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'disconnect_client', client_id)
+
+            if result.get('success'):
+                show_success_message(page, f"Client {client.get('name')} disconnected")
+                load_clients_data()
+            else:
+                show_error_message(page, f"Failed to disconnect: {result.get('error', 'Unknown error')}")
+
             page.close(confirm_dialog)
+
+        def confirm_disconnect(event: ft.ControlEvent) -> None:
+            if hasattr(page, "run_task"):
+                page.run_task(confirm_disconnect_async(event))
+            else:
+                asyncio.get_event_loop().create_task(confirm_disconnect_async(event))
 
         confirm_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Disconnect"),
@@ -337,28 +342,34 @@ def create_clients_view(
 
     def delete_client(client: dict[str, Any]) -> None:
         """Delete client with confirmation."""
-        def confirm_delete(_e: ft.ControlEvent) -> None:
-            nonlocal clients_data
-            if server_bridge:
-                client_id = client.get('id')
-                if not client_id or not isinstance(client_id, str):
-                    show_error_message(page, "Invalid client ID")
-                    return
-                try:
-                    result = server_bridge.delete_client(client_id)
-                    if result.get('success'):
-                        show_success_message(page, f"Client {client.get('name')} deleted")
-                        load_clients_data()
-                    else:
-                        show_error_message(page, f"Failed to delete: {result.get('error', 'Unknown error')}")
-                except Exception as ex:
-                    show_error_message(page, f"Error: {ex}")
-            else:
-                # No server connection
+
+        async def confirm_delete_async(_e: ft.ControlEvent) -> None:
+            if not server_bridge:
                 show_error_message(page, "Server not connected. Please start the backup server.")
+                page.close(delete_dialog)
                 return
 
+            client_id = client.get('id')
+            if not client_id or not isinstance(client_id, str):
+                show_error_message(page, "Invalid client ID")
+                page.close(delete_dialog)
+                return
+
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'delete_client', client_id)
+
+            if result.get('success'):
+                show_success_message(page, f"Client {client.get('name')} deleted")
+                load_clients_data()
+            else:
+                show_error_message(page, f"Failed to delete: {result.get('error', 'Unknown error')}")
+
             page.close(delete_dialog)
+
+        def confirm_delete(event: ft.ControlEvent) -> None:
+            if hasattr(page, "run_task"):
+                page.run_task(confirm_delete_async(event))
+            else:
+                asyncio.get_event_loop().create_task(confirm_delete_async(event))
 
         delete_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Delete"),
@@ -372,7 +383,6 @@ def create_clients_view(
 
     def add_client() -> None:
         """Add new client dialog."""
-        nonlocal clients_data
         name_field = ft.TextField(label="Client Name", hint_text="Enter client name")
         ip_field = ft.TextField(label="IP Address", hint_text="Enter IP address")
         status_dropdown = ft.Dropdown(
@@ -385,7 +395,7 @@ def create_clients_view(
             ]
         )
 
-        def save_client(_e: ft.ControlEvent) -> None:
+        async def save_client_async(_e: ft.ControlEvent) -> None:
             if not name_field.value or not name_field.value.strip():
                 show_error_message(page, "Client name is required")
                 return
@@ -399,22 +409,24 @@ def create_clients_view(
                 "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
 
-            if server_bridge:
-                try:
-                    result = server_bridge.add_client(new_client)
-                    if result.get('success'):
-                        show_success_message(page, f"Client {new_client['name']} added")
-                        load_clients_data()
-                    else:
-                        show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
-                except Exception as ex:
-                    show_error_message(page, f"Error: {ex}")
-            else:
-                # No server connection
+            if not server_bridge:
                 show_error_message(page, "Server not connected. Please start the backup server.")
                 return
 
-            page.close(add_dialog)
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'add_client', new_client)
+
+            if result.get('success'):
+                show_success_message(page, f"Client {new_client['name']} added")
+                load_clients_data()
+                page.close(add_dialog)
+            else:
+                show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
+
+        def save_client(event: ft.ControlEvent) -> None:
+            if hasattr(page, "run_task"):
+                page.run_task(save_client_async(event))
+            else:
+                asyncio.get_event_loop().create_task(save_client_async(event))
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Client"),
@@ -428,7 +440,6 @@ def create_clients_view(
 
     def edit_client(client: dict[str, Any]) -> None:
         """Edit existing client dialog."""
-        nonlocal clients_data
         name_field = ft.TextField(label="Client Name", value=client.get('name', ''), hint_text="Enter client name")
         ip_field = ft.TextField(label="IP Address", value=client.get('ip_address', ''), hint_text="Enter IP address")
         status_dropdown = ft.Dropdown(
@@ -441,7 +452,7 @@ def create_clients_view(
             ]
         )
 
-        def save_changes(_e: ft.ControlEvent) -> None:
+        async def save_changes_async(_e: ft.ControlEvent) -> None:
             if not name_field.value or not name_field.value.strip():
                 show_error_message(page, "Client name is required")
                 return
@@ -463,17 +474,20 @@ def create_clients_view(
                 show_error_message(page, "Selected client has no ID; cannot update.")
                 return
 
-            try:
-                result = server_bridge.update_client(str(client_id), {"name": updated_client["name"]})
-                if result.get('success'):
-                    show_success_message(page, f"Client {updated_client['name']} updated")
-                    load_clients_data()
-                else:
-                    show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
-            except Exception as ex:
-                show_error_message(page, f"Error: {ex}")
+            result = await run_sync_in_executor(safe_server_call, server_bridge, 'update_client', str(client_id), {"name": updated_client["name"]})
 
-            page.close(edit_dialog)
+            if result.get('success'):
+                show_success_message(page, f"Client {updated_client['name']} updated")
+                load_clients_data()
+                page.close(edit_dialog)
+            else:
+                show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
+
+        def save_changes(event: ft.ControlEvent) -> None:
+            if hasattr(page, "run_task"):
+                page.run_task(save_changes_async(event))
+            else:
+                asyncio.get_event_loop().create_task(save_changes_async(event))
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
@@ -504,34 +518,38 @@ def create_clients_view(
         show_success_message(page, "Clients refreshed")
 
     # Create UI components
-    search_field = ft.TextField(
-        label="Search clients",
-        prefix_icon=ft.Icons.SEARCH,
-        on_change=on_search_change,
-        width=300
+    search_field = create_search_bar(
+        on_search_change,
+        placeholder="Search clients…",
     )
 
-    status_filter_dropdown = ft.Dropdown(
-        label="Filter by Status",
-        value="all",
-        options=[
-            ft.dropdown.Option("all", "All"),
-            ft.dropdown.Option("connected", "Connected"),
-            ft.dropdown.Option("disconnected", "Disconnected"),
-            ft.dropdown.Option("connecting", "Connecting"),
+    status_filter_dropdown = create_filter_dropdown(
+        "Status",
+        [
+            ("all", "All"),
+            ("connected", "Connected"),
+            ("disconnected", "Disconnected"),
+            ("connecting", "Connecting"),
         ],
-        on_change=on_status_filter_change,
-        width=150
+        on_status_filter_change,
+        value=status_filter,
+        width=200,
     )
 
-    # Actions row
-    actions_row = ft.Row([
-        search_field,
-        status_filter_dropdown,
-        ft.Container(expand=True),  # Spacer
-        themed_button("Add Client", lambda _e: add_client(), "filled", ft.Icons.ADD),
-        themed_button("Refresh", refresh_clients, "outlined", ft.Icons.REFRESH),
-    ], spacing=10)
+    filters_row = ft.ResponsiveRow(
+        controls=[
+            ft.Container(content=search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
+            ft.Container(content=status_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+            ft.Container(
+                content=create_action_button("Refresh", refresh_clients, icon=ft.Icons.REFRESH, primary=False),
+                col={"xs": 12, "sm": 12, "md": 3, "lg": 2},
+                alignment=ft.alignment.center_left,
+            ),
+        ],
+        spacing=12,
+        run_spacing=12,
+        alignment=ft.MainAxisAlignment.START,
+    )
 
     # Client stats using simple metric cards
     # Responsive stats row for all screen sizes
@@ -546,19 +564,40 @@ def create_clients_view(
                  col={"sm": 12, "md": 6, "lg": 3}),
     ])
 
-    # Enhanced table with layered card design
-    table_card = themed_card(clients_table, "Clients", page)
+    stats_section = AppCard(stats_row, title="At a glance")
+    filters_section = AppCard(filters_row, title="Filters")
+    table_section = AppCard(clients_table, title="Clients")
+    table_section.expand = True
 
-    # Main layout with scrollbar for long client lists
-    main_content = ft.Column([
-        ft.Text("Client Management", size=28, weight=ft.FontWeight.BOLD),
-        stats_row,
-        actions_row,
-        table_card
-    ], expand=True, spacing=20, scroll="auto")
+    header_actions = [
+        create_action_button("Add client", lambda _: add_client(), icon=ft.Icons.PERSON_ADD),
+        create_action_button("Refresh", refresh_clients, icon=ft.Icons.REFRESH, primary=False),
+    ]
 
-    # Create the main container with theme support
-    clients_container = themed_card(main_content, None, page)  # No title since we have one in content
+    header = create_view_header(
+        "Client management",
+        icon=ft.Icons.PEOPLE_ALT_OUTLINED,
+        description="Manage registered backup clients and their connection status.",
+        actions=header_actions,
+    )
+
+    main_column = ft.Column(
+        [
+            header,
+            stats_section,
+            filters_section,
+            table_section,
+        ],
+        spacing=16,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+    main_layout = ft.Container(
+        content=main_column,
+        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        expand=True,
+    )
 
     def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
@@ -583,4 +622,4 @@ def create_clients_view(
                 state_manager.unsubscribe("clients", state_subscription_callback)
             state_subscription_callback = None
 
-    return clients_container, dispose, setup_subscriptions
+    return main_layout, dispose, setup_subscriptions

@@ -1,597 +1,882 @@
 #!/usr/bin/env python3
-"""
-Simplified Settings View - The Flet Way
-~400 lines instead of 968+ lines of framework fighting!
+"""Live settings view with Material Design 3 styling and immediate feedback."""
 
-Core Principle: Use Flet's built-in Tabs, TextField, Switch, and Dropdown.
-Clean settings management with server integration and simple validation.
-"""
+from __future__ import annotations
 
-# Explicit imports instead of star import for better static analysis
+import asyncio
+import copy
 import json
+from collections.abc import Callable
 from typing import Any
 
 import aiofiles
 import flet as ft
 
-# Use absolute imports to avoid path resolution issues
 try:
-    from FletV2.utils.debug_setup import get_logger
-except ImportError:
-    from utils.debug_setup import get_logger
+    from ..config import SETTINGS_FILE
+    from ..utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
+    from ..utils.debug_setup import get_logger
+    from ..utils.server_bridge import ServerBridge
+    from ..utils.state_manager import StateManager
+    from ..utils.ui_builders import create_action_button, create_view_header
+    from ..utils.ui_components import AppCard
+    from ..utils.user_feedback import show_error_message, show_success_message
+except Exception:  # pragma: no cover - fallback for loose execution contexts
+    from FletV2.config import SETTINGS_FILE  # type: ignore
+    from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call  # type: ignore
+    from FletV2.utils.debug_setup import get_logger  # type: ignore
+    from FletV2.utils.server_bridge import ServerBridge  # type: ignore
+    from FletV2.utils.state_manager import StateManager  # type: ignore
+    from FletV2.utils.ui_builders import create_action_button, create_view_header  # type: ignore
+    from FletV2.utils.ui_components import AppCard  # type: ignore
+    from FletV2.utils.user_feedback import show_error_message, show_success_message  # type: ignore
 
-try:
-    from FletV2.utils.server_bridge import ServerBridge
-except ImportError:
-    from utils.server_bridge import ServerBridge
-
-try:
-    from FletV2.utils.state_manager import StateManager
-except ImportError:
-    from utils.state_manager import StateManager
-
-try:
-    from FletV2.utils.ui_components import themed_button
-except ImportError:
-    from utils.ui_components import themed_button
-
-try:
-    from FletV2.utils.user_feedback import show_error_message, show_success_message
-except ImportError:
-    from utils.user_feedback import show_error_message, show_success_message
-
-try:
-    from FletV2.config import SETTINGS_FILE
-except ImportError:
-    from config import SETTINGS_FILE
 
 logger = get_logger(__name__)
+
+
+ColorSeed = dict[str, str]
+
+COLOR_SEEDS: ColorSeed = {
+    "blue": "#3B82F6",
+    "indigo": "#6366F1",
+    "purple": "#8B5CF6",
+    "pink": "#EC4899",
+    "green": "#10B981",
+    "orange": "#F59E0B",
+    "red": "#EF4444",
+}
+
+
+def _default_settings() -> dict[str, Any]:
+    return {
+        "server": {
+            "port": 1256,
+            "host": "127.0.0.1",
+            "max_clients": 50,
+            "timeout": 30,
+            "enable_ssl": False,
+            "ssl_cert_path": "",
+            "ssl_key_path": "",
+        },
+        "gui": {
+            "theme_mode": "system",
+            "color_scheme": "blue",
+            "auto_refresh": True,
+            "refresh_interval": 5,
+            "auto_resize": True,
+        },
+        "monitoring": {
+            "enabled": True,
+            "refresh_interval": 5,
+            "cpu_threshold": 80,
+            "memory_threshold": 85,
+            "disk_threshold": 90,
+        },
+        "logging": {
+            "enabled": True,
+            "level": "INFO",
+            "file_path": "logs/server.log",
+            "max_size_mb": 100,
+            "max_files": 5,
+        },
+        "security": {
+            "require_auth": False,
+            "api_key": "",
+            "max_login_attempts": 3,
+            "session_timeout": 3600,
+        },
+        "backup": {
+            "auto_backup": True,
+            "backup_path": "backups/",
+            "backup_interval_hours": 24,
+            "retention_days": 30,
+            "compress_backups": True,
+        },
+    }
+
+
+Validator = Callable[[Any], tuple[bool, str | None]]
+Parser = Callable[[Any], Any]
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _validate_range(min_value: float, max_value: float, label: str) -> Validator:
+    def _validator(value: Any) -> tuple[bool, str | None]:
+        if value is None:
+            return False, f"{label} is required"
+        if isinstance(value, str) and not value.strip():
+            return False, f"{label} is required"
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return False, f"{label} must be a number"
+        if numeric < min_value or numeric > max_value:
+            return False, f"{label} must be between {min_value:g}-{max_value:g}"
+        return True, None
+
+    return _validator
+
+
+def _validate_required(label: str) -> Validator:
+    def _validator(value: Any) -> tuple[bool, str | None]:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return False, f"{label} is required"
+        return True, None
+
+    return _validator
+
+
+def create_setting_row(label: str, control: ft.Control, description: str | None = None) -> ft.Container:
+    caption = ft.Text(description, size=12, color=ft.Colors.ON_SURFACE_VARIANT) if description else None
+    column = ft.Column([
+        ft.Row([
+            ft.Text(label, size=14, weight=ft.FontWeight.W_500),
+            ft.Container(expand=True),
+            control,
+        ], spacing=12, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        *( [caption] if caption else [] ),
+    ], spacing=4)
+    return ft.Container(content=column, padding=ft.padding.symmetric(vertical=6))
+
+
+def create_settings_section(title: str, controls: list[ft.Control]) -> ft.Container:
+    return ft.Container(
+        content=ft.Column([
+            ft.Text(title, size=18, weight=ft.FontWeight.W_600),
+            ft.Column(controls, spacing=4),
+        ], spacing=12),
+        padding=ft.padding.all(16),
+        border_radius=12,
+        bgcolor=ft.Colors.SURFACE,
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=18,
+            offset=ft.Offset(0, 6),
+            color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK),
+        ),
+    )
+
+
+def _schedule(page: ft.Page, coro: Callable[[], Any] | asyncio.Future[Any]) -> None:
+    async def _runner() -> None:
+        result = coro() if callable(coro) else coro
+        if asyncio.iscoroutine(result):
+            await result
+
+    if hasattr(page, "run_task"):
+        page.run_task(_runner)
+    else:
+        asyncio.create_task(_runner())
 
 
 def create_settings_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: StateManager | None = None
-) -> Any:
-    """Simple settings view using Flet's built-in components."""
-    logger.info("Creating simplified settings view")
+    state_manager: StateManager | None = None,
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Any]]:
+    current_settings: dict[str, Any] = _default_settings()
+    dirty_tracker: dict[str, set[str]] = {section: set() for section in current_settings}
 
-    # Simple state management
-    current_settings = {}
+    controls: dict[tuple[str, str], ft.Control] = {}
+    validation_rules: dict[tuple[str, str], Validator] = {}
+    parsers: dict[tuple[str, str], Parser] = {}
 
-    # Default settings structure
-    def get_default_settings() -> dict[str, Any]:
-        """Get default settings structure."""
-        return {
-            "server": {
-                "port": 1256,
-                "host": "127.0.0.1",
-                "max_clients": 50,
-                "timeout": 30,
-                "enable_ssl": False,
-                "ssl_cert_path": "",
-                "ssl_key_path": ""
-            },
-            "gui": {
-                "theme_mode": "system",
-                "color_scheme": "blue",
-                "auto_refresh": True,
-                "refresh_interval": 5,
-                "auto_resize": True
-            },
-            "monitoring": {
-                "enabled": True,
-                "refresh_interval": 5.0,
-                "cpu_threshold": 80.0,
-                "memory_threshold": 85.0,
-                "disk_threshold": 90.0
-            },
-            "logging": {
-                "enabled": True,
-                "level": "INFO",
-                "file_path": "logs/server.log",
-                "max_size_mb": 100,
-                "max_files": 5
-            },
-            "security": {
-                "require_auth": False,
-                "api_key": "",
-                "max_login_attempts": 3,
-                "session_timeout": 3600
-            },
-            "backup": {
-                "auto_backup": True,
-                "backup_path": "backups/",
-                "backup_interval_hours": 24,
-                "retention_days": 30,
-                "compress_backups": True
-            }
-        }
+    autosave_enabled = True
+    status_text = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
-    # Load settings from server or file
-    async def load_settings() -> None:
-        """Load settings using server bridge or local file."""
+    async def load_settings(show_feedback: bool = False) -> None:
         nonlocal current_settings
 
+        logger.info("Loading settings (with server bridge: %s)", bool(server_bridge))
+        data: dict[str, Any] | None = None
+
         if server_bridge:
-            try:
-                result = server_bridge.load_settings()
-                if result.get('success'):
-                    current_settings = result.get('data', get_default_settings())
-                else:
-                    current_settings = get_default_settings()
-            except Exception:
-                current_settings = get_default_settings()
-        else:
-            # Load from local file
-            try:
-                if SETTINGS_FILE.exists():
-                    async with aiofiles.open(SETTINGS_FILE) as f:
-                        content = await f.read()
-                        loaded = json.loads(content)
-                        current_settings = {**get_default_settings(), **loaded}
-                else:
-                    current_settings = get_default_settings()
-            except Exception:
-                current_settings = get_default_settings()
+            result = await run_sync_in_executor(safe_server_call, server_bridge, "load_settings")
+            if result.get("success"):
+                data = result.get("data")
+            else:
+                logger.warning("Server settings load failed: %s", result.get("error"))
+        elif SETTINGS_FILE.exists():
+            async with aiofiles.open(SETTINGS_FILE) as fp:
+                try:
+                    data = json.loads(await fp.read())
+                except json.JSONDecodeError as err:
+                    logger.error("Failed parsing settings file: %s", err)
 
-        update_ui_from_settings()
+        merged = _default_settings()
+        if isinstance(data, dict):
+            for category, values in data.items():
+                if category in merged and isinstance(values, dict):
+                    merged[category].update(values)
+        current_settings = merged
+        for section in dirty_tracker:
+            dirty_tracker[section].clear()
 
-    # Save settings to server or file
-    async def save_settings() -> None:
-        """Save settings using server bridge or local file."""
-        # Validate first
-        validation_errors = validate_settings()
-        if validation_errors:
-            show_error_message(page, f"Validation failed: {'; '.join(validation_errors)}")
+        _refresh_controls()
+        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
+        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
+        if state_manager:
+            state_manager.update(
+                "settings_data",
+                copy.deepcopy(current_settings),
+                source="settings_view_load",
+            )
+        if show_feedback:
+            show_success_message(page, "Settings loaded")
+
+    async def persist_settings(auto: bool = False) -> None:
+        errors = _validate_all()
+        if errors:
+            show_error_message(page, "; ".join(errors))
             return
 
+        payload = copy.deepcopy(current_settings)
+
         if server_bridge:
-            try:
-                result = server_bridge.save_settings(current_settings)
-                if result.get('success'):
-                    show_success_message(page, "Settings saved to server successfully")
-                else:
-                    show_error_message(page, f"Server save failed: {result.get('error', 'Unknown error')}")
-            except Exception as ex:
-                show_error_message(page, f"Error saving to server: {ex}")
+            result = await run_sync_in_executor(safe_server_call, server_bridge, "save_settings", payload)
+            if not result.get("success"):
+                show_error_message(page, f"Save failed: {result.get('error', 'Unknown error')}")
+                return
         else:
-            # Save to local file
-            try:
-                SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-                async with aiofiles.open(SETTINGS_FILE, 'w') as f:
-                    content = json.dumps(current_settings, indent=2)
-                    await f.write(content)
-                show_success_message(page, "Settings saved locally")
-            except Exception as ex:
-                show_error_message(page, f"Error saving settings: {ex}")
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(SETTINGS_FILE, "w") as fp:
+                await fp.write(json.dumps(payload, indent=2))
 
-    # Simple validation
-    def validate_settings() -> list:
-        """Validate current settings and return list of errors."""
-        errors = []
+        if state_manager:
+            state_manager.update("settings_data", copy.deepcopy(payload), source="settings_view_save")
+            state_manager.broadcast_settings_event("settings_saved", {"auto": auto})
 
-        # Server validation
-        server = current_settings.get("server", {})
-        port = server.get("port", 0)
-        if not isinstance(port, int) or port < 1024 or port > 65535:
-            errors.append("Port must be between 1024-65535")
+        for section in dirty_tracker:
+            dirty_tracker[section].clear()
+        _update_status()
 
-        max_clients = server.get("max_clients", 0)
-        if not isinstance(max_clients, int) or max_clients < 1 or max_clients > 1000:
-            errors.append("Max clients must be between 1-1000")
+        if status_text:
+            status_text.value = "Settings synchronized" if auto else "Settings saved"
+            if status_text.page:
+                status_text.update()
 
-        # SSL validation
-        if server.get("enable_ssl", False):
-            if not server.get("ssl_cert_path", "").strip():
-                errors.append("SSL certificate path required when SSL enabled")
-            if not server.get("ssl_key_path", "").strip():
-                errors.append("SSL key path required when SSL enabled")
+        if not auto:
+            show_success_message(page, "Settings saved")
 
-        # Monitoring validation
-        monitoring = current_settings.get("monitoring", {})
-        if monitoring.get("enabled", False):
-            cpu_threshold = monitoring.get("cpu_threshold", 0)
-            if not isinstance(cpu_threshold, (int, float)) or cpu_threshold <= 0 or cpu_threshold > 100:
-                errors.append("CPU threshold must be between 1-100")
+    @debounce(2.0)
+    async def autosave_worker() -> None:
+        await persist_settings(auto=True)
 
-            memory_threshold = monitoring.get("memory_threshold", 0)
-            if not isinstance(memory_threshold, (int, float)) or memory_threshold <= 0 or memory_threshold > 100:
-                errors.append("Memory threshold must be between 1-100")
+    def _schedule_autosave() -> None:
+        if autosave_enabled:
+            _schedule(page, autosave_worker)
 
-        # Backup validation
-        backup = current_settings.get("backup", {})
-        if backup.get("auto_backup", False):
-            interval = backup.get("backup_interval_hours", 0)
-            if not isinstance(interval, (int, float)) or interval <= 0:
-                errors.append("Backup interval must be greater than 0")
+    def _refresh_controls() -> None:
+        for (category, key), control in controls.items():
+            value = current_settings.get(category, {}).get(key)
+            if isinstance(control, ft.TextField):
+                control.value = str(value) if value is not None else ""
+            elif isinstance(control, (ft.Switch, ft.Checkbox)):
+                control.value = bool(value)
+            elif isinstance(control, ft.Dropdown):
+                control.value = value
+            elif isinstance(control, ft.Slider):
+                control.value = float(value or 0)
+            if hasattr(control, "error_text"):
+                control.error_text = None
+            if hasattr(control, "update") and control.page:
+                control.update()
+        _apply_dependent_states()
+        _update_status()
 
-            if not backup.get("backup_path", "").strip():
-                errors.append("Backup path required when auto-backup enabled")
-
+    def _validate_all() -> list[str]:
+        errors: list[str] = []
+        for identifier, validator in validation_rules.items():
+            value = current_settings.get(identifier[0], {}).get(identifier[1])
+            control = controls.get(identifier)
+            if (identifier in {("server", "ssl_cert_path"), ("server", "ssl_key_path")} and
+                not current_settings.get("server", {}).get("enable_ssl", False)):
+                if control and hasattr(control, "error_text"):
+                    control.error_text = None
+                    if control.page:
+                        control.update()
+                continue
+            if (identifier == ("security", "api_key") and
+                not current_settings.get("security", {}).get("require_auth", False)):
+                if control and hasattr(control, "error_text"):
+                    control.error_text = None
+                    if control.page:
+                        control.update()
+                continue
+            ok, message = validator(value)
+            if not ok and message:
+                errors.append(message)
+                if control and hasattr(control, "error_text"):
+                    control.error_text = message
+                    if control.page:
+                        control.update()
+            else:
+                if control and hasattr(control, "error_text"):
+                    control.error_text = None
+                    if control.page:
+                        control.update()
         return errors
 
-    # UI Controls - Server Tab
-    server_port_field = ft.TextField(label="Port", value="1256", width=100)
-    server_host_field = ft.TextField(label="Host", value="127.0.0.1", width=200)
-    server_max_clients_field = ft.TextField(label="Max Clients", value="50", width=100)
-    server_timeout_field = ft.TextField(label="Timeout (seconds)", value="30", width=100)
-    server_enable_ssl_switch = ft.Switch(label="Enable SSL", value=False)
-    server_ssl_cert_field = ft.TextField(label="SSL Certificate Path", value="", width=300)
-    server_ssl_key_field = ft.TextField(label="SSL Key Path", value="", width=300)
+    def _apply_theme(mode: str) -> None:
+        if not page:
+            return
+        theme_mode = mode.lower()
+        if theme_mode == "light":
+            page.theme_mode = ft.ThemeMode.LIGHT
+        elif theme_mode == "dark":
+            page.theme_mode = ft.ThemeMode.DARK
+        else:
+            page.theme_mode = ft.ThemeMode.SYSTEM
+        page.update()
+        if state_manager:
+            state_manager.broadcast_settings_event("theme_change", {"theme_mode": theme_mode})
 
-    # UI Controls - GUI Tab
-    gui_theme_dropdown = ft.Dropdown(
-        label="Theme Mode",
-        value="system",
-        options=[
-            ft.dropdown.Option("light", "Light"),
-            ft.dropdown.Option("dark", "Dark"),
-            ft.dropdown.Option("system", "System"),
-        ],
-        width=150
-    )
-    gui_color_dropdown = ft.Dropdown(
-        label="Color Scheme",
-        value="blue",
-        options=[
-            ft.dropdown.Option("blue", "Blue"),
-            ft.dropdown.Option("green", "Green"),
-            ft.dropdown.Option("purple", "Purple"),
-            ft.dropdown.Option("orange", "Orange"),
-        ],
-        width=150
-    )
-    gui_auto_refresh_switch = ft.Switch(label="Auto Refresh", value=True)
-    gui_refresh_interval_field = ft.TextField(label="Refresh Interval (seconds)", value="5", width=100)
-    gui_auto_resize_switch = ft.Switch(label="Auto Resize", value=True)
+    def _apply_color_seed(seed_key: str) -> None:
+        seed = COLOR_SEEDS.get(seed_key, COLOR_SEEDS["blue"])
+        theme = page.theme or ft.Theme()
+        theme.color_scheme_seed = seed
+        theme.use_material3 = True
+        page.theme = theme
+        page.update()
+        if state_manager:
+            state_manager.broadcast_settings_event("color_seed_change", {"color": seed_key})
 
-    # UI Controls - Monitoring Tab
-    monitoring_enabled_switch = ft.Switch(label="Enable Monitoring", value=True)
-    monitoring_refresh_field = ft.TextField(label="Refresh Interval (seconds)", value="5.0", width=100)
-    monitoring_cpu_field = ft.TextField(label="CPU Threshold (%)", value="80", width=100)
-    monitoring_memory_field = ft.TextField(label="Memory Threshold (%)", value="85", width=100)
-    monitoring_disk_field = ft.TextField(label="Disk Threshold (%)", value="90", width=100)
-
-    # UI Controls - Logging Tab
-    logging_enabled_switch = ft.Switch(label="Enable Logging", value=True)
-    logging_level_dropdown = ft.Dropdown(
-        label="Log Level",
-        value="INFO",
-        options=[
-            ft.dropdown.Option("DEBUG", "Debug"),
-            ft.dropdown.Option("INFO", "Info"),
-            ft.dropdown.Option("WARNING", "Warning"),
-            ft.dropdown.Option("ERROR", "Error"),
-        ],
-        width=120
-    )
-    logging_file_field = ft.TextField(label="Log File Path", value="logs/server.log", width=300)
-    logging_max_size_field = ft.TextField(label="Max Size (MB)", value="100", width=100)
-    logging_max_files_field = ft.TextField(label="Max Files", value="5", width=100)
-
-    # UI Controls - Security Tab
-    security_require_auth_switch = ft.Switch(label="Require Authentication", value=False)
-    security_api_key_field = ft.TextField(label="API Key", value="", password=True, width=300)
-    security_max_attempts_field = ft.TextField(label="Max Login Attempts", value="3", width=100)
-    security_session_timeout_field = ft.TextField(label="Session Timeout (seconds)", value="3600", width=150)
-
-    # UI Controls - Backup Tab
-    backup_auto_switch = ft.Switch(label="Auto Backup", value=True)
-    backup_path_field = ft.TextField(label="Backup Path", value="backups/", width=300)
-    backup_interval_field = ft.TextField(label="Backup Interval (hours)", value="24", width=100)
-    backup_retention_field = ft.TextField(label="Retention Days", value="30", width=100)
-    backup_compress_switch = ft.Switch(label="Compress Backups", value=True)
-
-    # Update UI from settings
-    def update_ui_from_settings() -> None:
-        """Update UI controls from current settings."""
-        server = current_settings.get("server", {})
-        server_port_field.value = str(server.get("port", 1256))
-        server_host_field.value = server.get("host", "127.0.0.1")
-        server_max_clients_field.value = str(server.get("max_clients", 50))
-        server_timeout_field.value = str(server.get("timeout", 30))
-        server_enable_ssl_switch.value = server.get("enable_ssl", False)
-        server_ssl_cert_field.value = server.get("ssl_cert_path", "")
-        server_ssl_key_field.value = server.get("ssl_key_path", "")
-
-        gui = current_settings.get("gui", {})
-        gui_theme_dropdown.value = gui.get("theme_mode", "system")
-        gui_color_dropdown.value = gui.get("color_scheme", "blue")
-        gui_auto_refresh_switch.value = gui.get("auto_refresh", True)
-        gui_refresh_interval_field.value = str(gui.get("refresh_interval", 5))
-        gui_auto_resize_switch.value = gui.get("auto_resize", True)
-
-        monitoring = current_settings.get("monitoring", {})
-        monitoring_enabled_switch.value = monitoring.get("enabled", True)
-        monitoring_refresh_field.value = str(monitoring.get("refresh_interval", 5.0))
-        monitoring_cpu_field.value = str(monitoring.get("cpu_threshold", 80.0))
-        monitoring_memory_field.value = str(monitoring.get("memory_threshold", 85.0))
-        monitoring_disk_field.value = str(monitoring.get("disk_threshold", 90.0))
-
-        logging = current_settings.get("logging", {})
-        logging_enabled_switch.value = logging.get("enabled", True)
-        logging_level_dropdown.value = logging.get("level", "INFO")
-        logging_file_field.value = logging.get("file_path", "logs/server.log")
-        logging_max_size_field.value = str(logging.get("max_size_mb", 100))
-        logging_max_files_field.value = str(logging.get("max_files", 5))
-
-        security = current_settings.get("security", {})
-        security_require_auth_switch.value = security.get("require_auth", False)
-        security_api_key_field.value = security.get("api_key", "")
-        security_max_attempts_field.value = str(security.get("max_login_attempts", 3))
-        security_session_timeout_field.value = str(security.get("session_timeout", 3600))
-
-        backup = current_settings.get("backup", {})
-        backup_auto_switch.value = backup.get("auto_backup", True)
-        backup_path_field.value = backup.get("backup_path", "backups/")
-        backup_interval_field.value = str(backup.get("backup_interval_hours", 24))
-        backup_retention_field.value = str(backup.get("retention_days", 30))
-        backup_compress_switch.value = backup.get("compress_backups", True)
-
-        # Update all controls - only if they're already attached to page
-        for control in [server_port_field, server_host_field, server_max_clients_field, server_timeout_field,
-                       server_enable_ssl_switch, server_ssl_cert_field, server_ssl_key_field,
-                       gui_theme_dropdown, gui_color_dropdown, gui_auto_refresh_switch, gui_refresh_interval_field, gui_auto_resize_switch,
-                       monitoring_enabled_switch, monitoring_refresh_field, monitoring_cpu_field, monitoring_memory_field, monitoring_disk_field,
-                       logging_enabled_switch, logging_level_dropdown, logging_file_field, logging_max_size_field, logging_max_files_field,
-                       security_require_auth_switch, security_api_key_field, security_max_attempts_field, security_session_timeout_field,
-                       backup_auto_switch, backup_path_field, backup_interval_field, backup_retention_field, backup_compress_switch]:
-            if hasattr(control, 'page') and control.page:
+    def _apply_dependent_states() -> None:
+        enable_ssl = bool(current_settings.get("server", {}).get("enable_ssl"))
+        server_cert.disabled = not enable_ssl
+        server_key.disabled = not enable_ssl
+        require_auth = bool(current_settings.get("security", {}).get("require_auth"))
+        security_api_key.disabled = not require_auth
+        for control in (server_cert, server_key, security_api_key):
+            if hasattr(control, "update") and control.page:
                 control.update()
 
-    # Safe type conversion helpers
-    def safe_int(value: str | None, default: int = 0) -> int:
-        """Safely convert string to int with fallback."""
-        if value is None or value == "":
-            return default
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
+    def _update_status() -> None:
+        if not status_text:
+            return
+        dirty_count = sum(len(items) for items in dirty_tracker.values())
+        if dirty_count:
+            status_text.value = f"{dirty_count} pending change(s); auto-save in 2s"
+        else:
+            status_text.value = ""
+        if status_text.page:
+            status_text.update()
 
-    def safe_float(value: str | None, default: float = 0.0) -> float:
-        """Safely convert string to float with fallback."""
-        if value is None or value == "":
-            return default
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return default
+    def _record_dirty(category: str, key: str) -> None:
+        dirty_tracker.setdefault(category, set()).add(key)
+        _update_status()
 
-    # Update settings from UI
-    def update_settings_from_ui() -> bool:
-        """Update current settings from UI controls. Returns True if successful."""
-        try:
-            current_settings["server"] = {
-                "port": safe_int(server_port_field.value, 8080),
-                "host": server_host_field.value or "localhost",
-                "max_clients": safe_int(server_max_clients_field.value, 10),
-                "timeout": safe_int(server_timeout_field.value, 30),
-                "enable_ssl": server_enable_ssl_switch.value,
-                "ssl_cert_path": server_ssl_cert_field.value,
-                "ssl_key_path": server_ssl_key_field.value
-            }
+    def _update_state(category: str, key: str, value: Any) -> None:
+        current_settings.setdefault(category, {})[key] = value
+        _record_dirty(category, key)
+        if state_manager:
+            state_manager.update(
+                f"settings.{category}.{key}",
+                value,
+                source="settings_view_change",
+            )
 
-            current_settings["gui"] = {
-                "theme_mode": gui_theme_dropdown.value or "system",
-                "color_scheme": gui_color_dropdown.value or "blue",
-                "auto_refresh": gui_auto_refresh_switch.value,
-                "refresh_interval": safe_int(gui_refresh_interval_field.value, 5),
-                "auto_resize": gui_auto_resize_switch.value
-            }
+    def _handle_validation(category: str, key: str, value: Any, control: ft.Control) -> bool:
+        validator = validation_rules.get((category, key))
+        if (category, key) in {
+            ("server", "ssl_cert_path"),
+            ("server", "ssl_key_path"),
+        }:
+            # Conditional requirement based on SSL state
+            if not current_settings.get("server", {}).get("enable_ssl", False):
+                if hasattr(control, "error_text"):
+                    control.error_text = None
+                if isinstance(control, ft.TextField):
+                    control.disabled = True
+                    if control.page:
+                        control.update()
+                return True
+            if isinstance(control, ft.TextField):
+                control.disabled = False
+                if control.page:
+                    control.update()
+        if (category, key) == ("security", "api_key"):
+            if not current_settings.get("security", {}).get("require_auth", False):
+                if hasattr(control, "error_text"):
+                    control.error_text = None
+                if isinstance(control, ft.TextField):
+                    control.disabled = True
+                    if control.page:
+                        control.update()
+                return True
+            if isinstance(control, ft.TextField):
+                control.disabled = False
+                if control.page:
+                    control.update()
+        if not validator:
+            if hasattr(control, "error_text"):
+                control.error_text = None
+            return True
+        ok, message = validator(value)
+        if hasattr(control, "error_text"):
+            control.error_text = message
+        if hasattr(control, "update") and control.page:
+            control.update()
+        return ok
 
-            current_settings["monitoring"] = {
-                "enabled": monitoring_enabled_switch.value,
-                "refresh_interval": safe_float(monitoring_refresh_field.value, 1.0),
-                "cpu_threshold": safe_float(monitoring_cpu_field.value, 80.0),
-                "memory_threshold": safe_float(monitoring_memory_field.value, 85.0),
-                "disk_threshold": safe_float(monitoring_disk_field.value, 90.0)
-            }
+    def _apply_and_schedule(category: str, key: str, value: Any, control: ft.Control) -> None:
+        if not _handle_validation(category, key, value, control):
+            return
+        _update_state(category, key, value)
 
-            current_settings["logging"] = {
-                "enabled": logging_enabled_switch.value,
-                "level": logging_level_dropdown.value or "INFO",
-                "file_path": logging_file_field.value or "app.log",
-                "max_size_mb": safe_int(logging_max_size_field.value, 10),
-                "max_files": safe_int(logging_max_files_field.value, 5)
-            }
+        if category == "gui" and key == "theme_mode":
+            _apply_theme(str(value))
+        if category == "gui" and key == "color_scheme":
+            _apply_color_seed(str(value))
+        if category == "gui" and key == "refresh_interval" and state_manager:
+            state_manager.broadcast_settings_event("refresh_interval_change", {"interval": value})
+        if category == "logging" and key == "level" and state_manager:
+            state_manager.broadcast_settings_event("logging_level_change", {"level": value})
+        if category == "server" and key == "enable_ssl":
+            server_cert.disabled = not bool(value)
+            server_key.disabled = not bool(value)
+            if server_cert.page:
+                server_cert.update()
+            if server_key.page:
+                server_key.update()
+        if category == "security" and key == "require_auth":
+            security_api_key.disabled = not bool(value)
+            if security_api_key.page:
+                security_api_key.update()
+        _update_status()
 
-            current_settings["security"] = {
-                "require_auth": security_require_auth_switch.value,
-                "api_key": security_api_key_field.value or "",
-                "max_login_attempts": safe_int(security_max_attempts_field.value, 3),
-                "session_timeout": safe_int(security_session_timeout_field.value, 30)
-            }
+        _schedule_autosave()
 
-            current_settings["backup"] = {
-                "auto_backup": backup_auto_switch.value,
-                "backup_path": backup_path_field.value or "./backups",
-                "backup_interval_hours": safe_int(backup_interval_field.value, 24),
-                "retention_days": safe_int(backup_retention_field.value, 30),
-                "compress_backups": backup_compress_switch.value
-            }
-        except ValueError as e:
-            show_error_message(page, f"Invalid input: {e}")
-            return False
-        return True
+    def _bind_control(
+        category: str,
+        key: str,
+        control: ft.Control,
+        *,
+        parser: Parser | None = None,
+        validator: Validator | None = None,
+    ) -> ft.Control:
+        controls[(category, key)] = control
+        if validator:
+            validation_rules[(category, key)] = validator
+        if parser:
+            parsers[(category, key)] = parser
 
-    # Action handlers
-    async def on_save_click(_e: ft.ControlEvent) -> None:
-        """Handle save button click."""
-        if update_settings_from_ui():
-            await save_settings()
+        def _on_change(event: ft.ControlEvent) -> None:
+            raw_value = getattr(event.control, "value", None)
+            parse = parsers.get((category, key))
+            value = parse(raw_value) if parse else raw_value
+            _apply_and_schedule(category, key, value, event.control)
 
-    async def on_load_click(_e: ft.ControlEvent) -> None:
-        """Handle load button click."""
-        await load_settings()
-        show_success_message(page, "Settings loaded")
+        if isinstance(control, ft.TextField):
+            control.on_change = _on_change
+        elif isinstance(control, (ft.Switch, ft.Checkbox, ft.Dropdown, ft.Slider)):
+            control.on_change = _on_change
 
-    def on_reset_click(_e: ft.ControlEvent) -> None:
-        """Handle reset button click."""
+        return control
+
+    # Server tab controls
+    server_port = _bind_control(
+        "server",
+        "port",
+        ft.TextField(width=140, label="Port", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1024, 65535, "Port"),
+    )
+    server_host = _bind_control(
+        "server",
+        "host",
+        ft.TextField(width=220, label="Host"),
+        validator=_validate_required("Host"),
+    )
+    server_max_clients = _bind_control(
+        "server",
+        "max_clients",
+        ft.TextField(width=160, label="Max clients", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 1000, "Max clients"),
+    )
+    server_timeout = _bind_control(
+        "server",
+        "timeout",
+        ft.TextField(width=160, label="Timeout (s)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(5, 600, "Timeout"),
+    )
+    server_ssl = _bind_control("server", "enable_ssl", ft.Switch(label="Enable SSL"))
+    server_cert = _bind_control(
+        "server",
+        "ssl_cert_path",
+        ft.TextField(label="SSL certificate path", expand=True),
+        validator=_validate_required("Certificate path"),
+    )
+    server_key = _bind_control(
+        "server",
+        "ssl_key_path",
+        ft.TextField(label="SSL key path", expand=True),
+        validator=_validate_required("Key path"),
+    )
+
+    # Interface tab
+    theme_dropdown = _bind_control(
+        "gui",
+        "theme_mode",
+        ft.Dropdown(
+            width=180,
+            label="Theme mode",
+            options=[
+                ft.dropdown.Option("light", "Light"),
+                ft.dropdown.Option("dark", "Dark"),
+                ft.dropdown.Option("system", "System"),
+            ],
+        ),
+    )
+    color_dropdown = _bind_control(
+        "gui",
+        "color_scheme",
+        ft.Dropdown(
+            width=200,
+            label="Color seed",
+            options=[ft.dropdown.Option(key, key.title()) for key in COLOR_SEEDS],
+        ),
+    )
+    auto_refresh = _bind_control("gui", "auto_refresh", ft.Switch(label="Auto refresh"))
+    refresh_interval = _bind_control(
+        "gui",
+        "refresh_interval",
+        ft.TextField(width=180, label="Refresh interval (s)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 300, "Refresh interval"),
+    )
+    auto_resize = _bind_control("gui", "auto_resize", ft.Switch(label="Responsive layout"))
+
+    # Monitoring tab
+    monitoring_enabled = _bind_control("monitoring", "enabled", ft.Switch(label="Enable monitoring"))
+    monitoring_refresh = _bind_control(
+        "monitoring",
+        "refresh_interval",
+        ft.TextField(width=200, label="Refresh interval (s)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(5, 600, "Monitoring interval"),
+    )
+    monitoring_cpu = _bind_control(
+        "monitoring",
+        "cpu_threshold",
+        ft.TextField(width=200, label="CPU threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 100, "CPU threshold"),
+    )
+    monitoring_memory = _bind_control(
+        "monitoring",
+        "memory_threshold",
+        ft.TextField(width=200, label="Memory threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 100, "Memory threshold"),
+    )
+    monitoring_disk = _bind_control(
+        "monitoring",
+        "disk_threshold",
+        ft.TextField(width=200, label="Disk threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 100, "Disk threshold"),
+    )
+
+    # Logging tab
+    logging_enabled = _bind_control("logging", "enabled", ft.Switch(label="Enable logging"))
+    logging_level = _bind_control(
+        "logging",
+        "level",
+        ft.Dropdown(
+            width=180,
+            label="Log level",
+            options=[
+                ft.dropdown.Option("DEBUG"),
+                ft.dropdown.Option("INFO"),
+                ft.dropdown.Option("WARNING"),
+                ft.dropdown.Option("ERROR"),
+            ],
+        ),
+    )
+    logging_file = _bind_control(
+        "logging",
+        "file_path",
+        ft.TextField(label="Log file path", expand=True),
+        validator=_validate_required("Log file path"),
+    )
+    logging_max_size = _bind_control(
+        "logging",
+        "max_size_mb",
+        ft.TextField(width=200, label="Max size (MB)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 10240, "Max file size"),
+    )
+    logging_max_files = _bind_control(
+        "logging",
+        "max_files",
+        ft.TextField(width=200, label="Max files", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 50, "Rotation count"),
+    )
+
+    # Security tab
+    security_require_auth = _bind_control(
+        "security",
+        "require_auth",
+        ft.Switch(label="Require authentication"),
+    )
+    security_api_key = _bind_control(
+        "security",
+        "api_key",
+        ft.TextField(label="API key", password=True, can_reveal_password=True, expand=True),
+        validator=_validate_required("API key")
+    )
+    security_max_attempts = _bind_control(
+        "security",
+        "max_login_attempts",
+        ft.TextField(width=220, label="Max login attempts", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 10, "Max login attempts"),
+    )
+    security_session_timeout = _bind_control(
+        "security",
+        "session_timeout",
+        ft.TextField(width=220, label="Session timeout (s)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(60, 86400, "Session timeout"),
+    )
+
+    # Backup tab
+    backup_auto = _bind_control("backup", "auto_backup", ft.Switch(label="Auto backups"))
+    backup_path = _bind_control(
+        "backup",
+        "backup_path",
+        ft.TextField(label="Backup path", expand=True),
+        validator=_validate_required("Backup path"),
+    )
+    backup_interval = _bind_control(
+        "backup",
+        "backup_interval_hours",
+        ft.TextField(width=220, label="Backup interval (hours)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 168, "Backup interval"),
+    )
+    backup_retention = _bind_control(
+        "backup",
+        "retention_days",
+        ft.TextField(width=220, label="Retention (days)", keyboard_type=ft.KeyboardType.NUMBER),
+        parser=_safe_int,
+        validator=_validate_range(1, 365, "Retention"),
+    )
+    backup_compress = _bind_control("backup", "compress_backups", ft.Switch(label="Compress backups"))
+
+    server_section = create_settings_section(
+        "Server",
+        [
+            create_setting_row("Connection", ft.Row([server_host, server_port], spacing=12)),
+            create_setting_row("Capacity", ft.Row([server_max_clients, server_timeout], spacing=12)),
+            create_setting_row("Security", server_ssl, "Enable TLS for client connections"),
+            create_setting_row("Certificate", server_cert),
+            create_setting_row("Key", server_key),
+        ],
+    )
+
+    interface_section = create_settings_section(
+        "Interface",
+        [
+            create_setting_row("Theme", ft.Row([theme_dropdown, color_dropdown], spacing=12)),
+            create_setting_row("Refresh", ft.Row([auto_refresh, refresh_interval], spacing=12)),
+            create_setting_row("Layout", auto_resize, "Automatically adapt layout to window size"),
+        ],
+    )
+
+    monitoring_section = create_settings_section(
+        "Monitoring",
+        [
+            create_setting_row("Status", monitoring_enabled),
+            create_setting_row("Sampling", monitoring_refresh, "Frequency for health polls"),
+            create_setting_row(
+                "Thresholds",
+                ft.Row([monitoring_cpu, monitoring_memory, monitoring_disk], spacing=12),
+            ),
+        ],
+    )
+
+    logging_section = create_settings_section(
+        "Logging",
+        [
+            create_setting_row("Status", logging_enabled),
+            create_setting_row("Level", logging_level),
+            create_setting_row("Storage", logging_file),
+            create_setting_row("Rotation", ft.Row([logging_max_size, logging_max_files], spacing=12)),
+        ],
+    )
+
+    security_section = create_settings_section(
+        "Security",
+        [
+            create_setting_row("Authentication", security_require_auth),
+            create_setting_row("API key", security_api_key),
+            create_setting_row(
+                "Login policy",
+                ft.Row([security_max_attempts, security_session_timeout], spacing=12),
+            ),
+        ],
+    )
+
+    backup_section = create_settings_section(
+        "Backup",
+        [
+            create_setting_row("Automation", backup_auto),
+            create_setting_row("Destination", backup_path),
+            create_setting_row("Cadence", ft.Row([backup_interval, backup_retention], spacing=12)),
+            create_setting_row("Compression", backup_compress),
+        ],
+    )
+
+    tabs = ft.Tabs(
+        expand=True,
+        animation_duration=300,
+        divider_color=ft.Colors.TRANSPARENT,
+        tabs=[
+            ft.Tab(text="Server", icon=ft.Icons.DNS, content=server_section),
+            ft.Tab(text="Interface", icon=ft.Icons.PALETTE, content=interface_section),
+            ft.Tab(text="Monitoring", icon=ft.Icons.MONITOR_HEART, content=monitoring_section),
+            ft.Tab(text="Logging", icon=ft.Icons.ARTICLE, content=logging_section),
+            ft.Tab(text="Security", icon=ft.Icons.SECURITY, content=security_section),
+            ft.Tab(text="Backup", icon=ft.Icons.BACKUP, content=backup_section),
+        ],
+    )
+
+    async def _export_settings(path: str) -> None:
+        payload = copy.deepcopy(current_settings)
+        async with aiofiles.open(path, "w") as fp:
+            await fp.write(json.dumps(payload, indent=2))
+        show_success_message(page, f"Settings exported to {path}")
+
+    async def _import_settings(path: str) -> None:
         nonlocal current_settings
-        current_settings = get_default_settings()
-        update_ui_from_settings()
+        async with aiofiles.open(path) as fp:
+            data = json.loads(await fp.read())
+        if not isinstance(data, dict):
+            raise ValueError("Invalid settings file")
+        merged = _default_settings()
+        for category, values in data.items():
+            if category in merged and isinstance(values, dict):
+                merged[category].update(values)
+        current_settings = merged
+        _refresh_controls()
+        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
+        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
+        if state_manager:
+            state_manager.update(
+                "settings_data",
+                copy.deepcopy(current_settings),
+                source="settings_view_import",
+            )
+        show_success_message(page, "Settings imported")
+
+    def _handle_export(_: ft.ControlEvent) -> None:
+        picker = ft.FilePicker(
+            on_result=lambda e: _schedule(page, lambda: _export_settings(e.path)) if e.path else None
+        )
+        page.overlay.append(picker)
+        picker.save_file(
+            dialog_title="Export settings",
+            file_name="settings.json",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
+
+    def _handle_import(_: ft.ControlEvent) -> None:
+        picker = ft.FilePicker(
+            on_result=lambda e: _schedule(
+                page, lambda: _import_settings(e.files[0].path)
+            ) if e.files else None
+        )
+        page.overlay.append(picker)
+        picker.pick_files(
+            dialog_title="Import settings",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
+
+    def _handle_reset(_: ft.ControlEvent) -> None:
+        nonlocal current_settings
+        current_settings = _default_settings()
+        _refresh_controls()
+        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
+        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
+        if state_manager:
+            state_manager.update(
+                "settings_data",
+                copy.deepcopy(current_settings),
+                source="settings_view_reset",
+            )
         show_success_message(page, "Settings reset to defaults")
 
-    def on_export_click(_e: ft.ControlEvent) -> None:
-        """Handle export button click."""
-        async def save_export(e: ft.FilePickerResultEvent) -> None:
-            if e.path:
-                try:
-                    update_settings_from_ui()
-                    async with aiofiles.open(e.path, 'w') as f:
-                        content = json.dumps(current_settings, indent=2)
-                        await f.write(content)
-                    show_success_message(page, f"Settings exported to {e.path}")
-                except Exception as ex:
-                    show_error_message(page, f"Export failed: {ex}")
+    def _handle_save(_: ft.ControlEvent) -> None:
+        _schedule(page, lambda: persist_settings(auto=False))
 
-        file_picker = ft.FilePicker(on_result=save_export)
-        page.overlay.append(file_picker)
-        file_picker.save_file(
-            dialog_title="Export Settings",
-            file_name="settings_export.json",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["json"]
-        )
-
-    def on_import_click(_e: ft.ControlEvent) -> None:
-        """Handle import button click."""
-        async def load_import(e: ft.FilePickerResultEvent) -> None:
-            if e.files:
-                try:
-                    async with aiofiles.open(e.files[0].path) as f:
-                        content = await f.read()
-                        imported = json.loads(content)
-
-                    # Merge with defaults
-                    current_settings.update(imported)
-                    update_ui_from_settings()
-                    show_success_message(page, "Settings imported successfully")
-                except Exception as ex:
-                    show_error_message(page, f"Import failed: {ex}")
-
-        file_picker = ft.FilePicker(on_result=load_import)
-        page.overlay.append(file_picker)
-        file_picker.pick_files(
-            dialog_title="Import Settings",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["json"]
-        )
-
-    # Action buttons
-    actions_row = ft.Row([
-        themed_button("Save", on_save_click, "filled", ft.Icons.SAVE),
-        themed_button("Load", on_load_click, "outlined", ft.Icons.REFRESH),
-        themed_button("Reset", on_reset_click, "outlined", ft.Icons.RESTORE),
-        themed_button("Export", on_export_click, "outlined", ft.Icons.UPLOAD),
-        themed_button("Import", on_import_click, "outlined", ft.Icons.DOWNLOAD),
-    ], spacing=10)
-
-    # Create tabs with settings sections
-    settings_tabs = ft.Tabs(
-        tabs=[
-            ft.Tab(
-                text="Server",
-                icon=ft.Icons.DNS,
-                content=ft.Column([
-                    ft.Text("Server Configuration", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Row([server_port_field, server_host_field], spacing=10),
-                    ft.Row([server_max_clients_field, server_timeout_field], spacing=10),
-                    server_enable_ssl_switch,
-                    ft.Row([server_ssl_cert_field], spacing=10),
-                    ft.Row([server_ssl_key_field], spacing=10),
-                ], spacing=15, scroll="auto")
-            ),
-            ft.Tab(
-                text="Interface",
-                icon=ft.Icons.PALETTE,
-                content=ft.Column([
-                    ft.Text("User Interface Settings", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Row([gui_theme_dropdown, gui_color_dropdown], spacing=10),
-                    gui_auto_refresh_switch,
-                    gui_refresh_interval_field,
-                    gui_auto_resize_switch,
-                ], spacing=15, scroll="auto")
-            ),
-            ft.Tab(
-                text="Monitoring",
-                icon=ft.Icons.MONITOR_HEART,
-                content=ft.Column([
-                    ft.Text("System Monitoring", size=20, weight=ft.FontWeight.BOLD),
-                    monitoring_enabled_switch,
-                    monitoring_refresh_field,
-                    ft.Row([monitoring_cpu_field, monitoring_memory_field, monitoring_disk_field], spacing=10),
-                ], spacing=15, scroll="auto")
-            ),
-            ft.Tab(
-                text="Logging",
-                icon=ft.Icons.ARTICLE,
-                content=ft.Column([
-                    ft.Text("Logging Configuration", size=20, weight=ft.FontWeight.BOLD),
-                    logging_enabled_switch,
-                    ft.Row([logging_level_dropdown, logging_max_size_field, logging_max_files_field], spacing=10),
-                    logging_file_field,
-                ], spacing=15, scroll="auto")
-            ),
-            ft.Tab(
-                text="Security",
-                icon=ft.Icons.SECURITY,
-                content=ft.Column([
-                    ft.Text("Security Settings", size=20, weight=ft.FontWeight.BOLD),
-                    security_require_auth_switch,
-                    security_api_key_field,
-                    ft.Row([security_max_attempts_field, security_session_timeout_field], spacing=10),
-                ], spacing=15, scroll="auto")
-            ),
-            ft.Tab(
-                text="Backup",
-                icon=ft.Icons.BACKUP,
-                content=ft.Column([
-                    ft.Text("Backup Configuration", size=20, weight=ft.FontWeight.BOLD),
-                    backup_auto_switch,
-                    backup_path_field,
-                    ft.Row([backup_interval_field, backup_retention_field], spacing=10),
-                    backup_compress_switch,
-                ], spacing=15, scroll="auto")
-            ),
-        ]
+    utilities = ft.Row(
+        [
+            create_action_button("Export", _handle_export, icon=ft.Icons.UPLOAD, primary=False),
+            create_action_button("Import", _handle_import, icon=ft.Icons.DOWNLOAD, primary=False),
+            create_action_button("Reset", _handle_reset, icon=ft.Icons.RESTORE, primary=False),
+        ],
+        spacing=12,
+        wrap=True,
     )
 
-    # Main layout with responsive design and scrollbar
-    main_content = ft.Column([
-        # Responsive header
-        ft.ResponsiveRow([
-            ft.Column([
-                ft.Row([
-                    ft.Icon(ft.Icons.SETTINGS, size=28, color=ft.Colors.PRIMARY),
-                    ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
-                ], spacing=10)
-            ], col={"sm": 12, "md": 12, "lg": 12})
-        ]),
-        actions_row,
-        ft.Container(
-            content=settings_tabs,
-            expand=True,
-            padding=10,
-            border_radius=12
-        )
-    ], expand=True, spacing=20)
-
-    # Create the main container - simplified structure
-    settings_container = ft.Container(
-        content=main_content,
-        expand=True
+    header = create_view_header(
+        "Settings",
+        icon=ft.Icons.SETTINGS,
+        description="Configure server connectivity, interface preferences, monitoring, and automation.",
+        actions=[create_action_button("Save", _handle_save, icon=ft.Icons.SAVE)],
     )
 
-    async def setup_subscriptions() -> None:
-        """Setup subscriptions and initial data loading after view is added to page."""
+    utility_card = AppCard(utilities, title="Utilities", expand_content=False)
+    tabs_card = AppCard(tabs, title="Configuration")
+    message_bar = ft.Container(content=status_text, padding=ft.padding.symmetric(vertical=4))
+
+    content = ft.Column(
+        [
+            header,
+            message_bar,
+            utility_card,
+            tabs_card,
+        ],
+        spacing=16,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+    layout = ft.Container(
+        content=content,
+        expand=True,
+        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+    )
+
+    async def setup() -> None:
+        status_text.value = "Loading settings…"
+        status_text.update()
         await load_settings()
+        status_text.value = ""
+        status_text.update()
 
     def dispose() -> None:
-        """Clean up subscriptions and resources."""
         logger.debug("Disposing settings view")
-        # No subscriptions to clean up currently
 
-    return settings_container, dispose, setup_subscriptions
+    return layout, dispose, setup

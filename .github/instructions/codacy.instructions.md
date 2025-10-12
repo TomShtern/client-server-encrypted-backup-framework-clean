@@ -1,6 +1,6 @@
 ---
-    description: Configuration for AI behavior when interacting with Codacy's MCP Server
-    applyTo: '**'
+description: Configuration for AI behavior when interacting with Codacy's MCP Server
+applyTo: '**'
 ---
 IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
 # Codacy Rules

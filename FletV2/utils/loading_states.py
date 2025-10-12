@@ -24,7 +24,7 @@ def create_loading_indicator(message="Loading..."):
     return ft.Container(
         content=ft.Column([
             ft.ProgressRing(),
-            ft.Text(message, size=14, color=ft.colors.ON_SURFACE_VARIANT)
+            ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT)
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         alignment=ft.alignment.center,
         padding=20
@@ -43,16 +43,16 @@ def create_error_display(error_message):
     """
     return ft.Container(
         content=ft.Column([
-            ft.Icon(ft.icons.ERROR_OUTLINE, color=ft.colors.ERROR, size=48),
-            ft.Text("Error", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.ERROR),
-            ft.Text(error_message, size=14, color=ft.colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
+            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.ERROR, size=48),
+            ft.Text("Error", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
+            ft.Text(error_message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
         alignment=ft.alignment.center,
         padding=20
     )
 
 
-def create_empty_state(title, message, icon=ft.icons.INBOX_OUTLINED):
+def create_empty_state(title, message, icon=None):
     """
     Create standardized empty state display.
     
@@ -64,11 +64,13 @@ def create_empty_state(title, message, icon=ft.icons.INBOX_OUTLINED):
     Returns:
         Container with icon, title, and message for empty state
     """
+    resolved_icon = icon or ft.Icons.INBOX_OUTLINED
+
     return ft.Container(
         content=ft.Column([
-            ft.Icon(icon, color=ft.colors.ON_SURFACE_VARIANT, size=64),
+            ft.Icon(resolved_icon, color=ft.Colors.ON_SURFACE_VARIANT, size=64),
             ft.Text(title, size=20, weight=ft.FontWeight.BOLD),
-            ft.Text(message, size=14, color=ft.colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
+            ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
         alignment=ft.alignment.center,
         padding=40
@@ -86,7 +88,7 @@ def show_snackbar(page, message, bgcolor=None):
     """
     page.snack_bar = ft.SnackBar(
         content=ft.Text(message),
-        bgcolor=bgcolor or ft.colors.SURFACE_VARIANT
+        bgcolor=bgcolor or ft.Colors.SURFACE
     )
     page.snack_bar.open = True
     page.update()
@@ -100,7 +102,7 @@ def show_error_snackbar(page, error_message):
         page: Flet page to show the snackbar on
         error_message: Error message to display
     """
-    show_snackbar(page, error_message, bgcolor=ft.colors.ERROR_CONTAINER)
+    show_snackbar(page, error_message, bgcolor=ft.Colors.ERROR_CONTAINER)
 
 
 def show_success_snackbar(page, message):
@@ -111,4 +113,4 @@ def show_success_snackbar(page, message):
         page: Flet page to show the snackbar on
         message: Success message to display
     """
-    show_snackbar(page, message, bgcolor=ft.colors.PRIMARY_CONTAINER)
+    show_snackbar(page, message, bgcolor=ft.Colors.PRIMARY_CONTAINER)

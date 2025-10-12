@@ -3,6 +3,10 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 globs: *
 ---
 
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+---
+
 # Client-Server Encrypted Backup Framework – AI Field Guide
 ## Snapshot
 - Production-grade encrypted backup stack combining Flet 0.28.3 GUI, Flask bridge, native C++ client, Python TCP server, and SQLite telemetry.
@@ -78,6 +82,7 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 }
 ```
 **After registering or configuring an MCP server, VS Code must be restarted for the changes to take effect.**
+- Factory CLI: To install Factory CLI on Windows, use the following command in PowerShell: `irm https://app.factory.ai/cli/windows | iex`. Ensure that `C:\Users\<your_user>\bin` is added to your PATH environment variable so the `droid` command is available in new shells. **After installation, ensure that `C:\Users\<your_user>\bin` is added to your PATH environment variable. The environment path may need to be set every time a new shell is opened.**
 
 ## Environment Matrix
 - `PYTHONNOUSERSITE=1`: strips user site-packages, preventing `pydantic_core` conflicts.
@@ -102,6 +107,8 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - **Avoid awaiting synchronous ServerBridge methods in asynchronous contexts to prevent GUI freezes.**
 - **Never use `time.sleep()` in async contexts to prevent UI freezes.**
 - **Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations. This prevents `ListView Control must be added to the page first` errors.**
+- **When using `create_logs_view` in `enhanced_logs.py`, ensure the correct return type annotation is used: `tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]`. This requires importing `Coroutine` from the `typing` module.**
+- **When using `page.run_task` in `settings.py`'s `_schedule` function, ensure the function adheres to its `-> None` return type by not returning anything in either branch. The coroutine should still be scheduled correctly.**
 
 ## Theme & Styling
 - Reuse `theme.py` constants such as `PRONOUNCED_NEUMORPHIC_SHADOWS`, `GLASS_MODERATE`, and gradient helpers.
@@ -189,12 +196,15 @@ C:\\Backups\\payload.bin
 - **Bare `except:` clauses**: Replace with `except Exception:` for better error specificity.
 - **`sum(1 for ...)`**: Replace with `len([...])` for counting operations.
 - **`page.update()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
-- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with a supported icon from the `ft.icons` module. Verify icon availability in the target Flet version. When this error occurs, replace `ft.Icons.SAVE_AS_OUTLINE` with `ft.Icons.SAVE_OUTLINED`.
+- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with `ft.Icons.SAVE_OUTLINED`. Verify icon availability in the target Flet version.
 - **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
 - **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+- **When encountering `Type "Task[None]" is not assignable to return type "None"` in `settings.py`, ensure the `_schedule` function adheres to its `-> None` return type by not returning anything in either branch. The coroutine should still be scheduled correctly.**
+- **Optional member access errors**: Add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.
+- **Uninitialized `status_text`**: Properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.
 
 ## Operational Checklists
 - Pre-commit: lint, tests, C++ build, GUI smoke, documentation sync.
@@ -206,6 +216,7 @@ C:\\Backups\\payload.bin
 - Archive logs between runs to segment investigations cleanly.
 - Communicate progress via repo issues and project status channels.
 - **Prioritize fixes for async safety, memory leaks, security vulnerabilities, and performance bottlenecks.**
+- **Ensure no changes are made that could break the system or the code.**
 
 ## Command Reference
 - Launch stack: `cd FletV2 && .\start_with_server.ps1`.
@@ -219,6 +230,7 @@ C:\\Backups\\payload.bin
 - Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/code-review.md)" && curl -o ~/.claude/commands/code-review.md https://claudecodecommands.directory/api/download/code-review`.
 - Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/update-claudemd.md)" && curl -o ~/.claude/commands/update-claudemd.md https://claudecodecommands.directory/api/download/update-claudemd`.
 - The `update-claudemd.md` file is a Claude Code command that automatically updates `CLAUDE.md` documentation files based on recent git changes. It analyzes Git status, code changes, configuration updates, and API changes to generate an updated `CLAUDE.md` file.
+- Install Factory CLI (Windows): `irm https://app.factory.ai/cli/windows | iex`.
 
 ## Communication & Hygiene
 - Issues should cite component, command invoked, commit hash, environment flags, and log excerpts.
@@ -304,12 +316,20 @@ C:\\Backups\\payload.bin
 - Use `except Exception:` instead of bare `except:` clauses for better error specificity.
 - Use `len([...])` instead of `sum(1 for ...)` for counting operations.
 - **`page.run_task()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
-- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with a supported icon from the `ft.icons` module. Verify icon availability in the target Flet version. When this error occurs, replace `ft.Icons.SAVE_AS_OUTLINE` with `ft.Icons.SAVE_OUTLINED`.
+- **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with `ft.Icons.SAVE_OUTLINED`. Verify icon availability in the target Flet version.
 - **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
 - **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+- **Use proper relative imports instead of absolute imports within try/except blocks.** Example: `from ..utils.debug_setup import get_logger` instead of absolute imports that may fail.
+- **When using `ft.ScrollMode`, use the proper enum values (e.g., `ft.ScrollMode.AUTO`) instead of string literals (e.g., `"auto"`).**
+- **When using `page.run_task()` with a function that requires arguments, wrap the function call in a lambda expression to ensure the function reference is passed correctly.** Example: `page.run_task(lambda: on_save_click(event))`
+- **YAML front matter must not have leading indentation; it must be flush left after the opening `---`.**
+- **When using conditional expressions, avoid negations for better readability. For example, use `"Settings synchronized" if auto else "Settings saved"` instead of `"Settings saved" if not auto else "Settings synchronized"`.**
+- **Combine nested if conditions into single compound conditions where appropriate to improve code clarity.**
+- **When addressing optional member access errors, add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.**
+- **When encountering uninitialized `status_text`, properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.**
 
 ## Active Tasks
 
@@ -381,35 +401,4 @@ C:\\Backups\\payload.bin
 - **Reduce the number of `print()` statements and replace them with proper logging.**
 - **Minimize the use of `page.update()` for full-page redraws; update individual controls instead.**
 - **Decompose files exceeding 1000 lines of code. The files exceeding this limit are `views/enhanced_logs.py` (1,793 LOC), `views/database_pro.py` (1,475 LOC), `views/dashboard.py` (1,311 LOC), and `main.py` (1,114 LOC).**
-- **Eliminate code duplication in CRUD dialogs, formatters, and validation.**
-- **Address technical debt by resolving TODO/FIXME comments. A recent analysis found only a small number of actual TODO comments within the FletV2 project itself, so verify the scope of analysis.**
-- **Simplify the over-engineered theme system and view loading patterns.**
-- **Avoid wildcard imports to prevent namespace pollution.**
-
-## Project Metrics
-- **Project Size**: 90 Python files, 26,100 LOC (outdated). Current: 90 Python files, 22,299 LOC (as of 2025-10-11).
-- **File Size Limit**: Aim for a maximum of 650 LOC per file.
-- **Files Over Limit**: `views/enhanced_logs.py`, `views/database_pro.py`, `views/dashboard.py`, and `main.py` exceed 1000 LOC and require decomposition. Current: `views/enhanced_logs.py` (1,793 LOC), `views/database_pro.py` (1,475 LOC), `views/dashboard.py` (1,311 LOC), and `main.py` (1,114 LOC) (as of 2025-10-11).
-- **TODO/FIXME Count**: There are 572 TODO/FIXME comments across 97 files (outdated). A recent analysis found only a small number of actual TODO comments within the FletV2 project itself, so verify the scope of analysis. Current: ~3 actual TODO comments in the FletV2 project (as of 2025-10-11).
-
-## Remediation Roadmap
-- **Phase 1 (Week 1)**: Fix critical issues (18 hours total).
-- **Phase 2 (Week 2)**: Improve performance and quality (31.5 hours total).
-- **Phase 3 (Week 3+)**: Reduce complexity and debt (25 hours total).
-
-## Success Metrics
-- **Before**: 7.2/10 health, 4 critical issues, 483 prints, 312 page updates, files exceeding 1000 LOC.
-- **After**: 9.0/10 health, 0 critical issues, <50 prints, <100 page updates, all files below 650 LOC.
-
-## Tools & Automation
-- **Async Violation Detector**: Script to find await bridge. patterns.
-- **Print Statement Replacer**: Automated migration to logging.
-- **page.update() Analyzer**: AST-based analysis of update usage.
-- **File size compliance reporter**
-- **TODO/FIXME tracker**
-- **Import complexity analyzer**
-
-## The project has 4 files over 1000 LOC:
-- **views/enhanced_logs.py**: 2,071 LOC (outdated). Current: 1,793 LOC (as of 2025-10-11).
-- **views/database_pro.py**: 1,736 LOC (outdated). Current: 1,475 LOC (as of 2025-10-11).
-- **views/dashboard.py**: 1,483 LOC (outdated). Current: 1,311 LOC (as of 2025-10
+- **Eliminate code duplication

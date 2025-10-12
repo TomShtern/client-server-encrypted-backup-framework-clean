@@ -1,61 +1,97 @@
 #!/usr/bin/env python3
-"""
-Async Error Handling Helpers for FletV2
-Consolidates repeated error handling patterns found across view files.
+"""Utility helpers for async/sync coordination and safe server interactions."""
 
-USAGE EXAMPLES:
+from __future__ import annotations
 
-Before (repeated pattern in views):
-    if server_bridge:
-        try:
-            result = server_bridge.delete_client(client_id)
-            if result.get('success'):
-                show_success_message(page, f"Client {client.get('name')} deleted")
-                load_clients_data()
-            else:
-                show_error_message(page, f"Failed to delete: {result.get('error', 'Unknown error')}")
-        except Exception as ex:
-            show_error_message(page, f"Error: {ex}")
-
-After (using async_helpers):
-    result = safe_server_call(server_bridge, 'delete_client', client_id)
-    if handle_server_result(page, result, f"Client {client.get('name')} deleted", "Delete failed"):
-        load_clients_data()
-
-Or with context manager:
-    with SafeOperation(page, "Delete failed") as op:
-        result = safe_server_call(server_bridge, 'delete_client', client_id)
-        if safe_get(result, 'success'):
-            op.mark_success(f"Client {client.get('name')} deleted")
-            load_clients_data()
-
-Data loading pattern:
-    # Before
-    if server_bridge:
-        try:
-            result = server_bridge.get_clients()
-            if result.get('success'):
-                clients_data = result.get('data', [])
-            else:
-                clients_data = get_mock_clients()
-        except Exception:
-            clients_data = get_mock_clients()
-    else:
-        clients_data = get_mock_clients()
-
-    # After
-    clients_data = safe_load_data(server_bridge, 'get_clients', get_mock_clients())
-"""
-
+import asyncio
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import flet as ft
 from FletV2.utils.debug_setup import get_logger
-from utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
+
+
+T = TypeVar("T")
+
+
+async def run_sync_in_executor(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """Execute a synchronous callable without blocking the Flet event loop."""
+
+    loop = asyncio.get_running_loop()
+
+    if kwargs:
+        def _wrapper() -> T:
+            return func(*args, **kwargs)
+
+        return await loop.run_in_executor(None, _wrapper)
+
+    return await loop.run_in_executor(None, func, *args)
+
+
+async def fetch_with_loading(
+    bridge_method: Callable[..., Any],
+    *args: Any,
+    loading_control: ft.Control | None = None,
+    error_control: ft.Control | None = None,
+    on_success: Callable[[Any], None] | None = None,
+    on_error: Callable[[str], None] | None = None,
+) -> Any | None:
+    """Wrap synchronous bridge calls with loading/error handling conveniences."""
+
+    raw_result: Any | None = None
+
+    if loading_control is not None:
+        loading_control.visible = True
+        if hasattr(loading_control, "update"):
+            loading_control.update()
+
+    try:
+        raw_result = await run_sync_in_executor(bridge_method, *args)
+    except Exception as exc:  # pragma: no cover - UI feedback path
+        error_message = str(exc)
+        _apply_error(error_control, error_message)
+        if on_error:
+            on_error(error_message)
+        return None
+    finally:
+        if loading_control is not None:
+            loading_control.visible = False
+            if hasattr(loading_control, "update"):
+                loading_control.update()
+
+    result_dict: dict[str, Any]
+    if isinstance(raw_result, dict):
+        result_dict = raw_result
+    else:
+        result_dict = {"success": True, "data": raw_result, "error": None}
+
+    if result_dict.get("success"):
+        data = result_dict.get("data")
+        if on_success:
+            on_success(data)
+        return data
+
+    error_message = cast(str, result_dict.get("error", "Unknown error"))
+    _apply_error(error_control, error_message)
+    if on_error:
+        on_error(error_message)
+    return None
+
+
+def _apply_error(control: ft.Control | None, message: str) -> None:
+    if control is None:
+        return
+
+    if hasattr(control, "value"):
+        setattr(control, "value", message)
+    if hasattr(control, "visible"):
+        control.visible = True
+    if hasattr(control, "update"):
+        control.update()
 
 
 def async_event_handler(
@@ -312,3 +348,58 @@ class SafeOperation:
         """Mark operation as successful with message."""
         self.success = True
         show_success_message(self.page, message)
+
+
+def debounce(wait: float):
+    """
+    Debounce decorator for async functions.
+    Delays execution until after 'wait' seconds have elapsed since the last invocation.
+
+    This is useful for expensive operations that shouldn't execute on every keystroke,
+    such as search queries or live filtering.
+
+    Args:
+        wait: Time in seconds to wait before executing (e.g., 0.5 for 500ms)
+
+    Returns:
+        Decorated function that will be debounced
+
+    Example:
+        @debounce(0.5)
+        async def on_search_change(query: str):
+            results = await search_api(query)
+            display_results(results)
+
+        # Function will only execute 500ms after the last call
+        await on_search_change("h")      # Cancelled
+        await on_search_change("he")     # Cancelled
+        await on_search_change("hel")    # Cancelled
+        await on_search_change("hell")   # Cancelled
+        await on_search_change("hello")  # Executes after 500ms
+    """
+    def decorator(func: Callable[..., Awaitable[Any]]):
+        # Store the pending task for cancellation
+        pending_task: asyncio.Task | None = None
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            nonlocal pending_task
+
+            # Cancel any pending execution
+            if pending_task and not pending_task.done():
+                pending_task.cancel()
+                try:
+                    await pending_task
+                except asyncio.CancelledError:
+                    pass  # Expected when we cancel
+
+            # Schedule new execution after delay
+            async def delayed_execution():
+                await asyncio.sleep(wait)
+                return await func(*args, **kwargs)
+
+            pending_task = asyncio.create_task(delayed_execution())
+            return await pending_task
+
+        return wrapper
+    return decorator

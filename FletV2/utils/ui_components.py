@@ -764,6 +764,7 @@ def AppCard(
     actions: list[ft.Control] | None = None,
     padding: int | None = None,
     tooltip: str | None = None,
+    expand_content: bool = True,
 ) -> ft.Container:
     """Unified card: subtle border + elevation, consistent padding & radius."""
     body = content
@@ -787,11 +788,16 @@ def AppCard(
         content=ft.Column([
             *header_controls,
             body
-        ], spacing=_SP["lg"]),
+        ], spacing=_SP["lg"], expand=expand_content, scroll=(ft.ScrollMode.AUTO if expand_content else None)),
         padding=ft.padding.all(padding if padding is not None else _SP["xl"]),
-        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
         border_radius=_RD["lg"],
-        shadow=ft.BoxShadow(spread_radius=0, blur_radius=14, offset=ft.Offset(0, 6), color=ft.Colors.with_opacity(0.12, ft.Colors.BLACK)),
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=14,
+            offset=ft.Offset(0, 6),
+            color=ft.Colors.with_opacity(0.16, ft.Colors.SURFACE_TINT),
+        ),
         bgcolor=ft.Colors.SURFACE,
         # Micro-interactions
         animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),

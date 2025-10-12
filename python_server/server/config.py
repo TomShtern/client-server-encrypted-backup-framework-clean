@@ -47,7 +47,8 @@ AES_KEY_SIZE_BYTES = 32  # 256-bit AES
 # Compatibility with FletV2 GUI (for when python_server config is imported instead of FletV2 config)
 # This ensures that FletV2 GUI can work even when this config module is loaded first
 DEBUG_MODE = True  # Default for server debug mode
-SETTINGS_FILE = Path("config") / "flet_server_gui_settings.json"  # Fallback settings file path
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SETTINGS_FILE = _PROJECT_ROOT / "FletV2" / "data" / "fletv2_settings.json"  # Fallback settings file path aligned with FletV2
 
 # Logging Configuration
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'

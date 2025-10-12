@@ -90,7 +90,7 @@ DATABASE_CLEANUP_INTERVAL = 300.0     # 5 minutes
 # Settings persistence path with proper directory structure
 CONFIG_DIR = PROJECT_ROOT / "data"
 CONFIG_DIR.mkdir(exist_ok=True)
-SETTINGS_FILE = CONFIG_DIR / "flet_server_gui_settings.json"
+SETTINGS_FILE = CONFIG_DIR / "fletv2_settings.json"
 
 # Status colors
 STATUS_COLORS = {

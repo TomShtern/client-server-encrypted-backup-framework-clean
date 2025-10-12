@@ -11,8 +11,8 @@ from datetime import datetime
 from typing import Any
 
 from FletV2.utils.debug_setup import get_logger
-from utils.state_manager import StateManager
-from utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 

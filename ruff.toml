@@ -19,7 +19,6 @@ exclude = [
 	"vcpkg",
 	"python_server",
 	"python_server/server_gui",
-	"python_server/server",
 	"stubs",
 	"temp_core_init.py",
 	"start_servers.py",
