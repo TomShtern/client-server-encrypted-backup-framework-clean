@@ -85,6 +85,7 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - `FLET_DASHBOARD_DEBUG=1`: increases logging for dashboard metrics refresh cycles.
 - `FLET_V2_DEBUG=1`: surfaces theming diagnostics; disable when performing performance measurements.
 - Set variables before launching Python; PowerShell scripts already front-load them.
+- The `claude-code.environmentVariables` setting in VS Code is an array of environment variable strings in the format `"KEY=VALUE"`. These variables are made available to the Claude Code extension during execution. Example: `["PYTHONNOUSERSITE=1", "FLET_NAV_SMOKE=1", "FLET_DASHBOARD_DEBUG=1", "FLET_V2_DEBUG=1", "CYBERBACKUP_DISABLE_INTEGRATED_GUI=1"]`
 
 ## Flet View Lifecycle
 - Factories return `(control, dispose_fn, setup_fn)`; never call `.update()` during construction.
@@ -98,6 +99,9 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - Truncate lengthy values in cards to maintain consistent layout and avoid overflows.
 - When using `page.run_task()`, ensure you are passing the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())`). Passing the result will lead to an `AssertionError`.
 - **Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: async_func())`).**
+- **Avoid awaiting synchronous ServerBridge methods in asynchronous contexts to prevent GUI freezes.**
+- **Never use `time.sleep()` in async contexts to prevent UI freezes.**
+- **Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations. This prevents `ListView Control must be added to the page first` errors.**
 
 ## Theme & Styling
 - Reuse `theme.py` constants such as `PRONOUNCED_NEUMORPHIC_SHADOWS`, `GLASS_MODERATE`, and gradient helpers.
@@ -184,18 +188,13 @@ C:\\Backups\\payload.bin
 - **`try/except Exception: pass`**: Replace with `with contextlib.suppress(Exception):` for cleaner error handling.
 - **Bare `except:` clauses**: Replace with `except Exception:` for better error specificity.
 - **`sum(1 for ...)`**: Replace with `len([...])` for counting operations.
-- **`page.run_task()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
+- **`page.update()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
 - **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with a supported icon from the `ft.icons` module. Verify icon availability in the target Flet version. When this error occurs, replace `ft.Icons.SAVE_AS_OUTLINE` with `ft.Icons.SAVE_OUTLINED`.
 - **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
 - **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
-- **`enhanced_logs.py` Issues**:
-    - **Performance**: Filtering rebuilds all log cards instead of using visibility toggles; inefficient text highlighting. Implement visibility-based filtering and optimize text highlighting.
-    - **Features**: Incomplete WebSocket implementation (placeholder URLs), missing time range pickers and statistics dashboard. Complete WebSocket streaming and add time range pickers and statistics dashboard.
-    - **Code**: Duplicate variable definitions and inconsistent naming ("Flet Logs" vs "App Logs"). Remove duplicates and add input validation, and improve error messages.
-    - **Security**: No sanitization of log content (XSS risk), potential information disclosure. Sanitize log content and add access controls.
 
 ## Operational Checklists
 - Pre-commit: lint, tests, C++ build, GUI smoke, documentation sync.
@@ -206,6 +205,7 @@ C:\\Backups\\payload.bin
 - Launcher tweaks: document modifications in `FletV2_Fix_Verification_Report.md` and commit notes.
 - Archive logs between runs to segment investigations cleanly.
 - Communicate progress via repo issues and project status channels.
+- **Prioritize fixes for async safety, memory leaks, security vulnerabilities, and performance bottlenecks.**
 
 ## Command Reference
 - Launch stack: `cd FletV2 && .\start_with_server.ps1`.
@@ -216,6 +216,9 @@ C:\\Backups\\payload.bin
 - Lint Python modules: `flet_venv\Scripts\python.exe -m pylint FletV2 Shared python_server api_server`.
 - Run tests: `pytest tests/ -vv`.
 - Kill stray Python: `Stop-Process -Name "python" -Force` (PowerShell).
+- Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/code-review.md)" && curl -o ~/.claude/commands/code-review.md https://claudecodecommands.directory/api/download/code-review`.
+- Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/update-claudemd.md)" && curl -o ~/.claude/commands/update-claudemd.md https://claudecodecommands.directory/api/download/update-claudemd`.
+- The `update-claudemd.md` file is a Claude Code command that automatically updates `CLAUDE.md` documentation files based on recent git changes. It analyzes Git status, code changes, configuration updates, and API changes to generate an updated `CLAUDE.md` file.
 
 ## Communication & Hygiene
 - Issues should cite component, command invoked, commit hash, environment flags, and log excerpts.
@@ -226,6 +229,7 @@ C:\\Backups\\payload.bin
 - Record Codacy or security scan results once MCP tooling returns.
 - Track launcher/environment adjustments in commit logs and shared documentation.
 - Provide reproducible scripts for new diagnostics to support teammates.
+- **Prioritize fixes for async safety, memory leaks, security vulnerabilities, and performance bottlenecks.**
 
 ## Metrics & Telemetry
 - Enable structured logging via `Shared.logging_config` to capture `client_id`, opcodes, durations, and CRC outcomes.
@@ -234,6 +238,7 @@ C:\\Backups\\payload.bin
 - Chart refresh cadence controlled by state manager; adjust intervals via `FLET_NAV_SMOKE` toggles.
 - Correlate TCP throughput with database write timings to spot bottlenecks.
 - Archive incident logs alongside SQLite snapshots for forensic parity.
+- **Track the number of `print()` statements and `page.update()` calls; aim to reduce these significantly.**
 
 ## Security Posture
 - Rotate RSA key pairs through documented scripts; never commit private keys.
@@ -242,6 +247,7 @@ C:\\Backups\\payload.bin
 - Isolate secrets in environment variables; sanitize logs to avoid leaking paths or credentials.
 - Run `codacy_cli_analyze` with security plugins once dependencies change.
 - Document threat model assumptions in `security_notes.md`; revisit after protocol updates.
+- **Never store sensitive settings in plaintext. Encrypt credentials and sensitive data.**
 
 ## Deployment & Ops
 - Prefer PowerShell launchers for Windows hygiene; Linux/macOS require analogous shell scripts.
@@ -266,6 +272,11 @@ C:\\Backups\\payload.bin
 - Mock bridge lacks destructive operations; ensure UI guards remain accurate.
 - RSA-1024 may require upgrade roadmap; document migration plan ahead of compliance reviews.
 - Dashboard metrics can lag if state manager subscribers fail to dispose cleanly.
+- **Memory leaks in `enhanced_logs.py` can lead to resource exhaustion. Implement a mechanism to limit log storage.**
+- **Awaiting synchronous `ServerBridge` methods in async contexts will freeze the GUI.**
+- **Using `time.sleep()` in async contexts will freeze the UI.**
+- **Files exceeding 1000 LOC, specifically `views/enhanced_logs.py`, `views/database_pro.py`, and `views/dashboard.py`, and `main.py` require decomposition to improve maintainability.**
+- **The project has 572 TODO/FIXME comments across 97 files, indicating areas needing attention and potential improvements. However, a recent analysis found only a small number of actual TODO comments within the FletV2 project itself. The original analysis may have included comments from build system dependencies.**
 
 ## Quick Diagnostics
 - `python python_server/server/server.py --dry-run` verifies protocol bindings without client traffic.
@@ -283,6 +294,9 @@ C:\\Backups\\payload.bin
 - Validate via lint → build → tests → GUI smoke → transfer before shipping.
 - Update this guide whenever architecture or workflows evolve.
 - Analytics: Confirm charts render after a few navigations
+- **Avoid using `print()` statements for logging; use proper logging mechanisms instead.**
+- **Minimize full-page redraws (`page.update()`) by updating individual controls.**
+- **Decompose files exceeding 1000 lines of code.**
 
 ## Coding Style
 - Simplify conditional expressions using the `or` operator where appropriate to improve code conciseness and readability (e.g., `expansion_icon or ft.Container(width=0)`). Run linting tools like Ruff to confirm no new issues are introduced after applying such changes.
@@ -357,3 +371,45 @@ C:\\Backups\\payload.bin
     - Extracted regex compilation logic into a separate `_compile_search_regex()` function.
     - Added guard clause in `_compile_search_regex` to handle plain text search first.
     - Extracted fallback logic in `highlight_text` into a dedicated `_highlight_text_fallback()` function.
+
+## Quality Assurance
+- **Address the 4 critical issues identified in the comprehensive analysis:**
+    - **Async/Await Violations**: GUI freezing from awaiting synchronous ServerBridge methods.
+    - **Memory Leaks**: Unlimited log storage in enhanced_logs.py causing exhaustion.
+    - **Plaintext Credentials**: Unencrypted sensitive settings in settings files.
+    - **Blocking time.sleep()**: UI freezes from using time.sleep() in async contexts.
+- **Reduce the number of `print()` statements and replace them with proper logging.**
+- **Minimize the use of `page.update()` for full-page redraws; update individual controls instead.**
+- **Decompose files exceeding 1000 lines of code. The files exceeding this limit are `views/enhanced_logs.py` (1,793 LOC), `views/database_pro.py` (1,475 LOC), `views/dashboard.py` (1,311 LOC), and `main.py` (1,114 LOC).**
+- **Eliminate code duplication in CRUD dialogs, formatters, and validation.**
+- **Address technical debt by resolving TODO/FIXME comments. A recent analysis found only a small number of actual TODO comments within the FletV2 project itself, so verify the scope of analysis.**
+- **Simplify the over-engineered theme system and view loading patterns.**
+- **Avoid wildcard imports to prevent namespace pollution.**
+
+## Project Metrics
+- **Project Size**: 90 Python files, 26,100 LOC (outdated). Current: 90 Python files, 22,299 LOC (as of 2025-10-11).
+- **File Size Limit**: Aim for a maximum of 650 LOC per file.
+- **Files Over Limit**: `views/enhanced_logs.py`, `views/database_pro.py`, `views/dashboard.py`, and `main.py` exceed 1000 LOC and require decomposition. Current: `views/enhanced_logs.py` (1,793 LOC), `views/database_pro.py` (1,475 LOC), `views/dashboard.py` (1,311 LOC), and `main.py` (1,114 LOC) (as of 2025-10-11).
+- **TODO/FIXME Count**: There are 572 TODO/FIXME comments across 97 files (outdated). A recent analysis found only a small number of actual TODO comments within the FletV2 project itself, so verify the scope of analysis. Current: ~3 actual TODO comments in the FletV2 project (as of 2025-10-11).
+
+## Remediation Roadmap
+- **Phase 1 (Week 1)**: Fix critical issues (18 hours total).
+- **Phase 2 (Week 2)**: Improve performance and quality (31.5 hours total).
+- **Phase 3 (Week 3+)**: Reduce complexity and debt (25 hours total).
+
+## Success Metrics
+- **Before**: 7.2/10 health, 4 critical issues, 483 prints, 312 page updates, files exceeding 1000 LOC.
+- **After**: 9.0/10 health, 0 critical issues, <50 prints, <100 page updates, all files below 650 LOC.
+
+## Tools & Automation
+- **Async Violation Detector**: Script to find await bridge. patterns.
+- **Print Statement Replacer**: Automated migration to logging.
+- **page.update() Analyzer**: AST-based analysis of update usage.
+- **File size compliance reporter**
+- **TODO/FIXME tracker**
+- **Import complexity analyzer**
+
+## The project has 4 files over 1000 LOC:
+- **views/enhanced_logs.py**: 2,071 LOC (outdated). Current: 1,793 LOC (as of 2025-10-11).
+- **views/database_pro.py**: 1,736 LOC (outdated). Current: 1,475 LOC (as of 2025-10-11).
+- **views/dashboard.py**: 1,483 LOC (outdated). Current: 1,311 LOC (as of 2025-10

@@ -1,0 +1,596 @@
+"""
+Database Pro View - Professional database management interface.
+
+Organization:
+    - Section 1: Data Fetching (async wrappers with run_in_executor)
+    - Section 2: Business Logic (pure functions for database operations)
+    - Section 3: UI Components (Flet control builders)
+    - Section 4: Event Handlers (user interaction handlers)
+    - Section 5: Main View (view composition and setup)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import csv
+import io
+import json
+import os
+import sys
+from datetime import datetime
+from typing import Any, Callable, Coroutine
+import flet as ft
+
+# Ensure proper path setup
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# UTF-8 solution for subprocess/console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+
+# Import new utilities
+from utils.async_helpers_exp import run_sync_in_executor, fetch_with_loading, debounce
+from utils.loading_states import create_loading_indicator, create_error_display, show_success_snackbar, show_error_snackbar
+from utils.data_export import export_to_csv, export_to_json, generate_export_filename
+from utils.ui_builders import create_search_bar, create_filter_dropdown, create_action_button
+from components.data_table import EnhancedDataTable
+from components.filter_controls import FilterControls
+
+# Configuration Constants
+DEFAULT_TABLE = "clients"
+DEFAULT_TABLES = ["clients", "files", "logs", "backups", "settings"]
+MAX_VISIBLE_RECORDS = 100
+MAX_EXPORT_RECORDS = 10000
+MAX_DISPLAY_LENGTH = 100  # Maximum characters to display for string values
+SETUP_DELAY = 0.5  # Seconds to wait for control attachment
+SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "token"}
+
+# ------------------------------------------------------------------------------------
+# SECTION 1: DATA FETCHING (Async wrappers for ServerBridge calls with proper run_in_executor)
+# ------------------------------------------------------------------------------------
+
+async def fetch_database_info_async(bridge):
+    """Fetch database information and statistics."""
+    if not bridge:
+        return {'success': False, 'data': None, 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.get_database_info)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': None, 'error': str(e)}
+
+async def fetch_table_names_async(bridge):
+    """Fetch list of available database table names."""
+    if not bridge:
+        return {'success': False, 'data': [], 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.get_table_names)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': [], 'error': str(e)}
+
+async def fetch_table_data_async(bridge, table_name):
+    """Fetch data from a specific database table."""
+    if not bridge:
+        return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.get_table_data, table_name)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': {'columns': [], 'rows': []}, 'error': str(e)}
+
+async def add_table_record_async(bridge, table_name, record_data):
+    """Add a new record to a table."""
+    if not bridge:
+        return {'success': False, 'data': None, 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.add_table_record, table_name, record_data)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': None, 'error': str(e)}
+
+async def update_table_record_async(bridge, table_name, record_data):
+    """Update an existing record in a table."""
+    if not bridge:
+        return {'success': False, 'data': None, 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.update_table_record, table_name, record_data)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': None, 'error': str(e)}
+
+async def delete_table_record_async(bridge, table_name, record_id):
+    """Delete a record from a table."""
+    if not bridge:
+        return {'success': False, 'data': None, 'error': 'No server bridge available'}
+    
+    try:
+        result = await run_sync_in_executor(bridge.delete_table_record, table_name, record_id)
+        return result
+    except Exception as e:
+        return {'success': False, 'data': None, 'error': str(e)}
+
+# ------------------------------------------------------------------------------------
+# SECTION 2: BUSINESS LOGIC (Pure functions for data operations and transformations)
+# ------------------------------------------------------------------------------------
+
+def filter_records_by_query(records, query):
+    """Filter records based on search query across all fields."""
+    if not query or not records:
+        return records or []
+    
+    query_lower = query.lower()
+    filtered = []
+    
+    for record in records:
+        # Check if query appears in any field of the record
+        for value in record.values():
+            if query_lower in str(value).lower():
+                filtered.append(record)
+                break  # Found match, no need to check other fields
+    
+    return filtered
+
+def sanitize_sensitive_fields(records):
+    """Replace sensitive field values with placeholder text."""
+    sanitized_records = []
+    
+    for record in records:
+        sanitized_record = {}
+        for key, value in record.items():
+            if key.lower() in SENSITIVE_FIELDS:
+                sanitized_record[key] = "REDACTED"
+            else:
+                sanitized_record[key] = value
+        sanitized_records.append(sanitized_record)
+    
+    return sanitized_records
+
+def transform_for_display(records):
+    """Transform records for display by truncating long values."""
+    transformed_records = []
+    
+    for record in records:
+        transformed_record = {}
+        for key, value in record.items():
+            str_value = str(value)
+            if len(str_value) > MAX_DISPLAY_LENGTH:
+                transformed_record[key] = str_value[:MAX_DISPLAY_LENGTH] + "..."
+            else:
+                transformed_record[key] = str_value
+        transformed_records.append(transformed_record)
+    
+    return transformed_records
+
+def prepare_records_for_export(records):
+    """Prepare records for export by sanitizing sensitive data and transforming as needed."""
+    records = sanitize_sensitive_fields(records)
+    records = transform_for_display(records)
+    return records
+
+def get_record_id_field(table_name):
+    """Get the appropriate ID field for different table types."""
+    id_fields = {
+        'clients': 'id',
+        'files': 'id',
+        'logs': 'id',
+        'backups': 'id',
+        'settings': 'id'
+    }
+    return id_fields.get(table_name, 'id')
+
+def validate_record_data(table_name, record_data):
+    """Validate record data based on table type."""
+    if not record_data:
+        return False, "No data provided"
+    
+    # Basic validation - ensure required fields are present
+    required_fields = {
+        'clients': ['id', 'name'],
+        'files': ['id', 'name', 'client_id'],
+        'logs': ['id', 'timestamp', 'level'],
+        'backups': ['id', 'client_id', 'timestamp'],
+        'settings': ['id', 'key']
+    }
+    
+    if table_name in required_fields:
+        required = required_fields[table_name]
+        for field in required:
+            if field not in record_data:
+                return False, f"Missing required field: {field}"
+    
+    return True, "Valid"
+
+def sort_records(records, sort_field, ascending=True):
+    """Sort records by a specified field."""
+    if not records or not sort_field:
+        return records
+    
+    try:
+        return sorted(records, key=lambda x: x.get(sort_field, ''), reverse=not ascending)
+    except Exception:
+        # If sorting fails, return unsorted records
+        return records
+
+# ------------------------------------------------------------------------------------
+# SECTION 3: UI COMPONENTS (Flet control builders - pure UI, no business logic)
+# ------------------------------------------------------------------------------------
+
+def build_database_stats_card(db_info):
+    """Build a card displaying database statistics."""
+    if not db_info or not db_info.get('success'):
+        return ft.Container(
+            content=ft.Text("Database information not available", color=ft.colors.ERROR),
+            padding=20
+        )
+    
+    data = db_info.get('data', {})
+    status = data.get('status', 'Unknown')
+    tables_count = data.get('tables', 0)
+    total_records = data.get('total_records', 0)
+    size = data.get('size', 'Unknown')
+    
+    return ft.Container(
+        content=ft.Column([
+            ft.Text("Database Statistics", size=18, weight=ft.FontWeight.BOLD),
+            ft.Divider(),
+            ft.Row([
+                ft.Column([
+                    ft.Text(f"Status: {status}", size=14),
+                    ft.Text(f"Tables: {tables_count}", size=14),
+                    ft.Text(f"Total Records: {total_records}", size=14),
+                    ft.Text(f"Size: {size}", size=14),
+                ], spacing=5)
+            ])
+        ]),
+        padding=20,
+        border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
+        border_radius=8
+    )
+
+def build_table_selector(tables, on_change_callback, current_table):
+    """Build the table selection dropdown."""
+    options = [ft.dropdown.Option(table) for table in tables]
+    return ft.Dropdown(
+        label="Select Table",
+        options=options,
+        value=current_table,
+        on_change=on_change_callback,
+        width=200
+    )
+
+def build_record_editor(record=None, table_name="clients", mode="edit"):
+    """Build a form for editing/creating records."""
+    # Determine fields based on table type
+    field_controls = []
+    
+    # Common ID field
+    id_value = record.get('id', '') if record else ''
+    field_controls.append(
+        ft.TextField(
+            label="ID",
+            value=id_value,
+            read_only=(mode == "edit"),
+            disabled=(mode == "edit")
+        )
+    )
+    
+    # Table-specific fields
+    if table_name == "clients":
+        name_value = record.get('name', '') if record else ''
+        field_controls.append(ft.TextField(label="Name", value=name_value))
+        last_seen_value = record.get('last_seen', '') if record else ''
+        field_controls.append(ft.TextField(label="Last Seen", value=last_seen_value))
+    elif table_name == "files":
+        name_value = record.get('name', '') if record else ''
+        field_controls.append(ft.TextField(label="Name", value=name_value))
+        client_id_value = record.get('client_id', '') if record else ''
+        field_controls.append(ft.TextField(label="Client ID", value=client_id_value))
+    
+    return ft.Column(field_controls, spacing=10)
+
+def build_data_table_component(columns, rows):
+    """Build an enhanced data table component."""
+    # Create DataColumn from column names
+    data_columns = [ft.DataColumn(ft.Text(col)) for col in columns]
+    
+    # Create DataRow from row data
+    data_rows = []
+    for row in rows:
+        data_cells = [ft.DataCell(ft.Text(str(row.get(col, '')))) for col in columns]
+        data_rows.append(ft.DataRow(cells=data_cells))
+    
+    # Create and return the enhanced data table
+    return EnhancedDataTable(
+        columns=data_columns,
+        rows=data_rows,
+        enable_sorting=True,
+        enable_pagination=True,
+        enable_selection=True,
+        enable_export=True,
+        items_per_page=25
+    )
+
+# ------------------------------------------------------------------------------------
+# SECTION 4: EVENT HANDLERS (User interaction handlers - coordinate between UI and business logic)
+# ------------------------------------------------------------------------------------
+
+async def handle_table_change(e, current_table_state, page, state, load_table_data_callback):
+    """Handle table selection changes."""
+    current_table_state[0] = e.control.value
+    await load_table_data_callback()
+
+async def handle_search_change(query, state, page, rebuild_ui_callback):
+    """Handle search query changes."""
+    state['search_query'] = query
+    
+    # Apply filtering
+    filtered = filter_records_by_query(state['all_records'], query)
+    state['filtered_records'] = filtered
+    
+    # Rebuild UI to show filtered results
+    rebuild_ui_callback()
+
+async def handle_add_record(e, current_table_state, record_form_data, page, state, load_table_data_callback):
+    """Handle adding a new record."""
+    table_name = current_table_state[0]
+    
+    # Validate data
+    is_valid, msg = validate_record_data(table_name, record_form_data)
+    if not is_valid:
+        show_error_snackbar(page, f"Validation error: {msg}")
+        return
+    
+    # Add the record
+    result = await add_table_record_async(state['bridge'], table_name, record_form_data)
+    
+    if result.get('success'):
+        show_success_snackbar(page, "Record added successfully")
+        await load_table_data_callback()  # Refresh the data
+    else:
+        show_error_snackbar(page, f"Failed to add record: {result.get('error', 'Unknown error')}")
+
+async def handle_update_record(e, current_table_state, record_form_data, page, state, load_table_data_callback):
+    """Handle updating an existing record."""
+    table_name = current_table_state[0]
+    
+    # Validate data
+    is_valid, msg = validate_record_data(table_name, record_form_data)
+    if not is_valid:
+        show_error_snackbar(page, f"Validation error: {msg}")
+        return
+    
+    # Update the record
+    result = await update_table_record_async(state['bridge'], table_name, record_form_data)
+    
+    if result.get('success'):
+        show_success_snackbar(page, "Record updated successfully")
+        await load_table_data_callback()  # Refresh the data
+    else:
+        show_error_snackbar(page, f"Failed to update record: {result.get('error', 'Unknown error')}")
+
+async def handle_delete_record(e, current_table_state, record_id, page, state, load_table_data_callback):
+    """Handle deleting a record."""
+    table_name = current_table_state[0]
+    
+    # Ask for confirmation (simplified here)
+    result = await delete_table_record_async(state['bridge'], table_name, record_id)
+    
+    if result.get('success'):
+        show_success_snackbar(page, "Record deleted successfully")
+        await load_table_data_callback()  # Refresh the data
+    else:
+        show_error_snackbar(page, f"Failed to delete record: {result.get('error', 'Unknown error')}")
+
+async def handle_export_data(e, current_table_state, state, page):
+    """Handle data export."""
+    table_name = current_table_state[0]
+    records = state['filtered_records']  # Export only filtered records
+    
+    if not records:
+        show_error_snackbar(page, "No records to export")
+        return
+    
+    # Limit export size
+    records = records[:MAX_EXPORT_RECORDS]
+    
+    # Prepare records for export
+    records = prepare_records_for_export(records)
+    
+    # Generate filename
+    filename = generate_export_filename(f"{table_name}_data", "csv")
+    
+    try:
+        export_to_csv(records, filename)
+        show_success_snackbar(page, f"Exported {len(records)} records to {filename}")
+    except Exception as ex:
+        show_error_snackbar(page, f"Export failed: {str(ex)}")
+
+# ------------------------------------------------------------------------------------
+# SECTION 5: MAIN VIEW (View composition and setup - orchestrates everything)
+# ------------------------------------------------------------------------------------
+
+def create_database_view(page, bridge):
+    """Create the professional database management view."""
+    
+    # State management
+    state = {
+        'bridge': bridge,
+        'all_records': [],
+        'filtered_records': [],
+        'all_columns': [],
+        'search_query': '',
+        'current_table': DEFAULT_TABLE,
+        'available_tables': DEFAULT_TABLES.copy()
+    }
+    
+    # UI containers
+    main_content = ft.Container(expand=True, padding=20)
+    stats_container = ft.Container()
+    table_selector_container = ft.Row()
+    search_container = ft.Row()
+    data_table_container = ft.Container(expand=True)
+    loading_indicator_ui = create_loading_indicator("Loading database information...")
+    error_display_ui = ft.Container(visible=False)
+    
+    # Track current table with a mutable list
+    current_table_state = [DEFAULT_TABLE]
+    
+    # Rebuild UI function
+    def rebuild_ui():
+        """Rebuild the UI with current data."""
+        try:
+            # Create data table with columns and rows
+            if state['all_columns'] and state['filtered_records']:
+                # Create DataTable component
+                columns = [ft.DataColumn(ft.Text(col)) for col in state['all_columns']]
+                rows = []
+                
+                for record in state['filtered_records']:
+                    cells = [ft.DataCell(ft.Text(str(record.get(col, '')))) for col in state['all_columns']]
+                    rows.append(ft.DataRow(cells=cells))
+                
+                data_table = EnhancedDataTable(
+                    columns=columns,
+                    rows=rows,
+                    enable_sorting=True,
+                    enable_pagination=True,
+                    enable_selection=True,
+                    items_per_page=25
+                )
+                
+                data_table_container.content = data_table
+            else:
+                data_table_container.content = ft.Text("No data available")
+            
+            page.update()
+        except Exception as e:
+            print(f"Error rebuilding UI: {e}")
+    
+    # Load table data function
+    async def load_table_data():
+        """Load data for the currently selected table."""
+        try:
+            # Show loading state
+            main_content.content = create_loading_indicator(f"Loading {current_table_state[0]} data...")
+            page.update()
+            
+            # Fetch table data
+            result = await fetch_table_data_async(bridge, current_table_state[0])
+            
+            if result.get('success'):
+                data = result.get('data', {})
+                columns = data.get('columns', [])
+                rows = data.get('rows', [])
+                
+                # Update state
+                state['all_columns'] = columns
+                state['all_records'] = rows
+                state['filtered_records'] = rows  # Initially show all records
+                
+                # Apply search filter if there's a query
+                if state['search_query']:
+                    state['filtered_records'] = filter_records_by_query(rows, state['search_query'])
+                
+                # Rebuild UI
+                rebuild_ui()
+                
+                # Update main content
+                main_content.content = ft.Column([
+                    stats_container,
+                    ft.Divider(),
+                    ft.Row([
+                        build_table_selector(state['available_tables'], 
+                                           lambda e: handle_table_change(e, current_table_state, page, state, load_table_data), 
+                                           current_table_state[0]),
+                        create_search_bar(
+                            on_change=lambda e: handle_search_change(e.control.value, state, page, rebuild_ui)
+                        )
+                    ]),
+                    ft.Divider(),
+                    data_table_container
+                ], expand=True, spacing=20)
+            else:
+                # Show error
+                error_display_ui.content = create_error_display(result.get('error', 'Unknown error'))
+                error_display_ui.visible = True
+                main_content.content = error_display_ui
+            
+            page.update()
+        except Exception as e:
+            error_display_ui.content = create_error_display(f"Error loading table data: {str(e)}")
+            error_display_ui.visible = True
+            main_content.content = error_display_ui
+            page.update()
+    
+    # Load database stats function
+    async def load_database_stats():
+        """Load database statistics."""
+        result = await fetch_database_info_async(bridge)
+        if result.get('success'):
+            stats_container.content = build_database_stats_card(result)
+        else:
+            stats_container.content = ft.Text("Could not load database stats", color=ft.colors.ERROR)
+    
+    # Load table names function
+    async def load_table_names():
+        """Load available table names."""
+        result = await fetch_table_names_async(bridge)
+        if result.get('success'):
+            state['available_tables'] = result.get('data', DEFAULT_TABLES.copy())
+        else:
+            print(f"Failed to load table names: {result.get('error')}")
+    
+    # Setup function
+    async def setup():
+        """Setup the view with initial data."""
+        try:
+            # Show loading state
+            main_content.content = loading_indicator_ui
+            page.update()
+            
+            # Load initial data
+            await load_table_names()
+            await load_database_stats()
+            await load_table_data()
+            
+            # Update main content with complete UI
+            main_content.content = ft.Column([
+                stats_container,
+                ft.Divider(),
+                ft.Row([
+                    build_table_selector(state['available_tables'], 
+                                       lambda e: handle_table_change(e, current_table_state, page, state, load_table_data), 
+                                       current_table_state[0]),
+                    create_search_bar(
+                        on_change=lambda e: handle_search_change(e.control.value, state, page, rebuild_ui)
+                    )
+                ]),
+                ft.Divider(),
+                data_table_container
+            ], expand=True, spacing=20)
+            
+            page.update()
+        except Exception as e:
+            error_display_ui.content = create_error_display(f"Setup failed: {str(e)}")
+            error_display_ui.visible = True
+            main_content.content = error_display_ui
+            page.update()
+    
+    # Dispose function
+    def dispose():
+        """Dispose of resources."""
+        # Currently no resources to dispose
+        pass
+    
+    # Return view components
+    return main_content, dispose, setup
