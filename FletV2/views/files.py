@@ -62,7 +62,7 @@ from FletV2.utils.ui_builders import (
 logger = get_logger(__name__)
 
 
-def _build_metric_card(title: str, value_control: ft.Text, icon: str) -> ft.Card:
+def _build_metric_card(title: str, value_control: ft.Control, icon: str) -> ft.Card:
     """Create a reusable metric card for the files overview."""
 
     return ft.Card(

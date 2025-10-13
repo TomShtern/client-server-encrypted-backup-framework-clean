@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from typing import Any
 
 import aiofiles
@@ -33,6 +33,10 @@ except Exception:  # pragma: no cover - fallback for loose execution contexts
 
 
 logger = get_logger(__name__)
+
+
+# Keep references to background tasks to prevent garbage collection
+_background_tasks: set[asyncio.Task] = set()
 
 
 ColorSeed = dict[str, str]
@@ -180,14 +184,17 @@ def _schedule(page: ft.Page, coro: Callable[[], Any] | asyncio.Future[Any]) -> N
     if hasattr(page, "run_task"):
         page.run_task(_runner)
     else:
-        asyncio.create_task(_runner())
+        task = asyncio.create_task(_runner())
+        # Keep reference to avoid garbage collection
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
 
 def create_settings_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
     state_manager: StateManager | None = None,
-) -> tuple[ft.Control, Callable[[], None], Callable[[], Any]]:
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     current_settings: dict[str, Any] = _default_settings()
     dirty_tracker: dict[str, set[str]] = {section: set() for section in current_settings}
 
@@ -291,9 +298,9 @@ def create_settings_view(
                 control.value = value
             elif isinstance(control, ft.Slider):
                 control.value = float(value or 0)
-            if hasattr(control, "error_text"):
+            if isinstance(control, ft.TextField):
                 control.error_text = None
-            if hasattr(control, "update") and control.page:
+            if control.page:
                 control.update()
         _apply_dependent_states()
         _update_status()
@@ -305,30 +312,30 @@ def create_settings_view(
             control = controls.get(identifier)
             if (identifier in {("server", "ssl_cert_path"), ("server", "ssl_key_path")} and
                 not current_settings.get("server", {}).get("enable_ssl", False)):
-                if control and hasattr(control, "error_text"):
+                if control and isinstance(control, ft.TextField):
                     control.error_text = None
-                    if control.page:
-                        control.update()
+                if control and control.page:
+                    control.update()
                 continue
             if (identifier == ("security", "api_key") and
                 not current_settings.get("security", {}).get("require_auth", False)):
-                if control and hasattr(control, "error_text"):
+                if control and isinstance(control, ft.TextField):
                     control.error_text = None
-                    if control.page:
-                        control.update()
+                if control and control.page:
+                    control.update()
                 continue
             ok, message = validator(value)
             if not ok and message:
                 errors.append(message)
-                if control and hasattr(control, "error_text"):
+                if control and isinstance(control, ft.TextField):
                     control.error_text = message
-                    if control.page:
-                        control.update()
+                if control and control.page:
+                    control.update()
             else:
-                if control and hasattr(control, "error_text"):
+                if control and isinstance(control, ft.TextField):
                     control.error_text = None
-                    if control.page:
-                        control.update()
+                if control and control.page:
+                    control.update()
         return errors
 
     def _apply_theme(mode: str) -> None:
@@ -398,7 +405,7 @@ def create_settings_view(
         }:
             # Conditional requirement based on SSL state
             if not current_settings.get("server", {}).get("enable_ssl", False):
-                if hasattr(control, "error_text"):
+                if isinstance(control, ft.TextField):
                     control.error_text = None
                 if isinstance(control, ft.TextField):
                     control.disabled = True
@@ -411,7 +418,7 @@ def create_settings_view(
                     control.update()
         if (category, key) == ("security", "api_key"):
             if not current_settings.get("security", {}).get("require_auth", False):
-                if hasattr(control, "error_text"):
+                if isinstance(control, ft.TextField):
                     control.error_text = None
                 if isinstance(control, ft.TextField):
                     control.disabled = True
@@ -423,13 +430,13 @@ def create_settings_view(
                 if control.page:
                     control.update()
         if not validator:
-            if hasattr(control, "error_text"):
+            if isinstance(control, ft.TextField):
                 control.error_text = None
             return True
         ok, message = validator(value)
-        if hasattr(control, "error_text"):
+        if isinstance(control, ft.TextField):
             control.error_text = message
-        if hasattr(control, "update") and control.page:
+        if control.page:
             control.update()
         return ok
 
@@ -789,9 +796,11 @@ def create_settings_view(
         show_success_message(page, "Settings imported")
 
     def _handle_export(_: ft.ControlEvent) -> None:
-        picker = ft.FilePicker(
-            on_result=lambda e: _schedule(page, lambda: _export_settings(e.path)) if e.path else None
-        )
+        def _on_export_result(e: ft.FilePickerResultEvent) -> None:
+            if e.path:
+                _schedule(page, lambda: _export_settings(e.path))
+
+        picker = ft.FilePicker(on_result=_on_export_result)
         page.overlay.append(picker)
         picker.save_file(
             dialog_title="Export settings",
@@ -801,11 +810,12 @@ def create_settings_view(
         )
 
     def _handle_import(_: ft.ControlEvent) -> None:
-        picker = ft.FilePicker(
-            on_result=lambda e: _schedule(
-                page, lambda: _import_settings(e.files[0].path)
-            ) if e.files else None
-        )
+        def _on_import_result(e: ft.FilePickerResultEvent) -> None:
+            if e.files and len(e.files) > 0 and e.files[0] and getattr(e.files[0], "path", None):
+                path = e.files[0].path
+                _schedule(page, lambda: _import_settings(path))
+
+        picker = ft.FilePicker(on_result=_on_import_result)
         page.overlay.append(picker)
         picker.pick_files(
             dialog_title="Import settings",

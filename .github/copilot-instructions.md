@@ -39,6 +39,7 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 - **Theme Toolkit**: Supplies neumorphic/glass presets; avoid ad-hoc styling.
 - **DB Manager**: Manages pooled SQLite connections; request via `db_manager.get_connection()` only.
 - **Log Viewer (`enhanced_logs.py`):** Implements a sophisticated log viewer with neomorphic Material 3 design, featuring advanced search, filtering, pagination. Key components include `LogCard`, `NeomorphicShadows`, and a dataclass-based `LogsViewState`.
+- **EnhancedSettingsState (`settings.py`):** The `EnhancedSettingsState` is now embedded within `settings.py`, consolidating settings functionality into a single file. It manages application settings, including loading, saving, exporting, importing, and backing up settings. It supports persistence via `ServerBridge` or local file, JSON/INI export, and validation. Utilities like `action_buttons.py` and `settings_io.py` interact with `EnhancedSettingsState` via structural protocols (duck typing) to avoid tight coupling.
 
 ## Launch Playbook
 - Execute `FletV2/start_with_server.ps1` to configure env vars and start TCP server + GUI in order.
@@ -83,6 +84,7 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 ```
 **After registering or configuring an MCP server, VS Code must be restarted for the changes to take effect.**
 - Factory CLI: To install Factory CLI on Windows, use the following command in PowerShell: `irm https://app.factory.ai/cli/windows | iex`. Ensure that `C:\Users\<your_user>\bin` is added to your PATH environment variable so the `droid` command is available in new shells. **After installation, ensure that `C:\Users\<your_user>\bin` is added to your PATH environment variable. The environment path may need to be set every time a new shell is opened.**
+- For consistent code analysis, configure a `pyrightconfig.json` file with include/extraPaths, exclusions, and basic checking. Clean `settings.json` to only manage interpreter and terminal integration, removing conflicting Pylance analysis settings.
 
 ## Environment Matrix
 - `PYTHONNOUSERSITE=1`: strips user site-packages, preventing `pydantic_core` conflicts.
@@ -205,6 +207,13 @@ C:\\Backups\\payload.bin
 - **When encountering `Type "Task[None]" is not assignable to return type "None"` in `settings.py`, ensure the `_schedule` function adheres to its `-> None` return type by not returning anything in either branch. The coroutine should still be scheduled correctly.**
 - **Optional member access errors**: Add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.
 - **Uninitialized `status_text`**: Properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.
+- **Sudden influx of code analysis errors**: This often indicates a change in IDE settings, linter configurations, or extension updates. Check for stricter type checking or new static analysis tools. Address import resolution issues, attribute access problems, and optional/None safety by adding null checks, fixing imports, and adding type ignores where necessary. **Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.** To address this:
+    - Standardize configuration files (e.g., `*.pylintrc`, `pyproject.toml`, `setup.cfg`, `.flake8`).
+    - Ensure a clear extension setup in VS Code by verifying Python linting and analysis settings. Avoid conflicting settings.
+    - Restart VS Code with a clean environment: close VS Code, delete temporary directories (`.vscode/.ropeproject/`, `.vscode/.pylint.d/`, ``), and restart VS Code with extensions disabled (`code --disable-extensions .`). Re-enable essential extensions one by one.
+    - Create a consistent validation process by adding a command to your project that runs the same validation tools used in VS Code (e.g., `python -m ruff check .`, `python -m pyright`).
+    - Check for memory issues by monitoring the Output panel for memory warnings. Increase memory limits for extensions or run heavier analysis tools on-demand.
+- **Errors from temporary VS Code editing snapshots:** Errors with paths like `chat-editing-snapshot-text-model:/c%3A/...` or `git:/c%3A/...` indicate temporary snapshots or git diff views, not real file errors. Real file errors would show paths like `c:\Users\tom7s\...`. Close the chat editing session, reload VS Code, and run the linter to verify the actual files.
 
 ## Operational Checklists
 - Pre-commit: lint, tests, C++ build, GUI smoke, documentation sync.
@@ -228,7 +237,7 @@ C:\\Backups\\payload.bin
 - Run tests: `pytest tests/ -vv`.
 - Kill stray Python: `Stop-Process -Name "python" -Force` (PowerShell).
 - Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/code-review.md)" && curl -o ~/.claude/commands/code-review.md https://claudecodecommands.directory/api/download/code-review`.
-- Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/update-claudemd.md)" && curl -o ~/.claude/commands/update-claudemd.md https://claudecodecommands.directory/api/download/update-claudemd`.
+- Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/update-claudemd.md)" && curl -o ~/.claude/commands/update-claudemd.md https://claudecodecommands.directory/api/download/update-claudemd.md`.
 - The `update-claudemd.md` file is a Claude Code command that automatically updates `CLAUDE.md` documentation files based on recent git changes. It analyzes Git status, code changes, configuration updates, and API changes to generate an updated `CLAUDE.md` file.
 - Install Factory CLI (Windows): `irm https://app.factory.ai/cli/windows | iex`.
 
@@ -289,6 +298,7 @@ C:\\Backups\\payload.bin
 - **Using `time.sleep()` in async contexts will freeze the UI.**
 - **Files exceeding 1000 LOC, specifically `views/enhanced_logs.py`, `views/database_pro.py`, and `views/dashboard.py`, and `main.py` require decomposition to improve maintainability.**
 - **The project has 572 TODO/FIXME comments across 97 files, indicating areas needing attention and potential improvements. However, a recent analysis found only a small number of actual TODO comments within the FletV2 project itself. The original analysis may have included comments from build system dependencies.**
+- **Inconsistent Code Analysis:** Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.
 
 ## Quick Diagnostics
 - `python python_server/server/server.py --dry-run` verifies protocol bindings without client traffic.
@@ -321,7 +331,7 @@ C:\\Backups\\payload.bin
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
-- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page, especially when using asynchronous operations.
 - **Use proper relative imports instead of absolute imports within try/except blocks.** Example: `from ..utils.debug_setup import get_logger` instead of absolute imports that may fail.
 - **When using `ft.ScrollMode`, use the proper enum values (e.g., `ft.ScrollMode.AUTO`) instead of string literals (e.g., `"auto"`).**
 - **When using `page.run_task()` with a function that requires arguments, wrap the function call in a lambda expression to ensure the function reference is passed correctly.** Example: `page.run_task(lambda: on_save_click(event))`
@@ -330,75 +340,17 @@ C:\\Backups\\payload.bin
 - **Combine nested if conditions into single compound conditions where appropriate to improve code clarity.**
 - **When addressing optional member access errors, add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.**
 - **When encountering uninitialized `status_text`, properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.**
+- **Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.** To address this:
+    - Standardize configuration files (e.g., `*.pylintrc`, `pyproject.toml`, `setup.cfg`, `.flake8`).
+    - Ensure a clear extension setup in VS Code by verifying Python linting and analysis settings. Avoid conflicting settings.
+    - Restart VS Code with a clean environment: close VS Code, delete temporary directories (`.vscode/.ropeproject/`, `.vscode/.pylint.d/`, ``), and restart VS Code with extensions disabled (`code --disable-extensions .`). Re-enable essential extensions one by one.
+    - Create a consistent validation process by adding a command to your project that runs the same validation tools used in VS Code (e.g., `python -m ruff check .`, `python -m pyright`).
+    - Check for memory issues by monitoring the Output panel for memory warnings. Increase memory limits for extensions or run heavier analysis tools on-demand.
+- **Errors from temporary VS Code editing snapshots:** Errors with paths like `chat-editing-snapshot-text-model:/c%3A/...` or `git:/c%3A/...` indicate temporary snapshots or git diff views, not real file errors. Real file errors would show paths like `c:\Users\tom7s\...`. Close the chat editing session, reload VS Code, and run the linter to verify the actual files.
+- **Deprecated imports:** Replace deprecated imports such as `typing.Coroutine` with `collections.abc.Coroutine`.
+- **Import sorting:** Ensure imports are properly sorted to improve code readability and maintainability.
 
 ## Active Tasks
 
 - Implement a mechanism to read from all available log files, including rotated logs, to get a comprehensive log history.
-- Fix the "Flet logs" display to connect it to real, live Flet logs.
-- Fix the issues and make the flet logs display as well. change and add+just from where it fetches logs, and connect it to real live logs.
-- Make it so when a specific log is clicked, it opens in a new popup window and can be copied.
-- Display all real logs, and not only some of them.
-- Fix the logs view to properly display all logs, including Flet logs.
-- Remove the page attachment check in `_render_list` in `enhanced_logs.py`.
-- Increase the auto-refresh interval in `enhanced_logs.py` to 5 seconds.
-- Ensure ListView.update() is safe with try/except to prevent crashes during setup.
-- **Enhanced Logs View (`enhanced_logs.py`):**
-    - Implement visibility-based filtering instead of rebuilding all log cards.
-    - Optimize text highlighting for better performance.
-    - Complete WebSocket streaming with correct URLs.
-    - Add time range pickers and a statistics dashboard.
-    - Remove duplicate variable definitions and ensure consistent naming (e.g., "Flet Logs" vs "App Logs").
-    - Add input validation and improve error messages.
-    - Sanitize log content to prevent XSS risks and information disclosure.
-    - Add access controls to the log viewer.
-    - Consider adding keyboard shortcuts for improved UX.
-    - Improve mobile responsiveness.
-
-    - **Time Range Picker Controls**
-        - Add two `TextField` controls in the header for start and end date filtering.
-        - Format: `YYYY-MM-DD` with helpful hints.
-        - Integrate into the existing header row with proper spacing.
-        - Event handlers automatically refresh logs when dates change.
-
-    - **Enhanced Time Filtering Logic**
-        - Improve `_passes_filter()` function with proper date parsing.
-        - Handle various timestamp formats from logs.
-        - Implement robust error handling for invalid date formats.
-        - Filter logs by date range comparison.
-
-    - **Statistics Dashboard**
-        - Add a compact statistics panel showing:
-            - Total log count
-            - Log counts by level (ERROR, WARNING, INFO, DEBUG, CRITICAL)
-            - Color-coded badges for each level
-        - Position between header and tabs for optimal visibility.
-        - Update automatically when logs are refreshed.
-
-    - **Statistics Calculation**
-        - `calculate_statistics()` function counts logs by level and component.
-        - `create_statistics_dashboard()` generates the visual display.
-        - Integrate with both system and application log tabs.
-        - Update in real-time as logs change.
-
-    - **Filter Persistence**
-        - Time range filters should be saved/loaded with filter presets.
-        - UI fields should be properly restored when loading saved filters.
-        - Maintain consistency with existing filter system.
-- **Fixes**:
-    - Fixed function redeclaration error in `enhanced_logs.py`.
-    - Corrected method call in `update_statistics()` to `_flet_log_capture.get_app_logs()`.
-- **Refactoring**:
-    - Extracted regex compilation logic into a separate `_compile_search_regex()` function.
-    - Added guard clause in `_compile_search_regex` to handle plain text search first.
-    - Extracted fallback logic in `highlight_text` into a dedicated `_highlight_text_fallback()` function.
-
-## Quality Assurance
-- **Address the 4 critical issues identified in the comprehensive analysis:**
-    - **Async/Await Violations**: GUI freezing from awaiting synchronous ServerBridge methods.
-    - **Memory Leaks**: Unlimited log storage in enhanced_logs.py causing exhaustion.
-    - **Plaintext Credentials**: Unencrypted sensitive settings in settings files.
-    - **Blocking time.sleep()**: UI freezes from using time.sleep() in async contexts.
-- **Reduce the number of `print()` statements and replace them with proper logging.**
-- **Minimize the use of `page.update()` for full-page redraws; update individual controls instead.**
-- **Decompose files exceeding 1000 lines of code. The files exceeding this limit are `views/enhanced_logs.py` (1,793 LOC), `views/database_pro.py` (1,475 LOC), `views/dashboard.py` (1,311 LOC), and `main.py` (1,114 LOC).**
-- **Eliminate code duplication
+- Fix the "Flet logs" display to connect it

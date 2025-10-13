@@ -11,7 +11,7 @@ import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Coroutine
 
 import flet as ft
 
@@ -102,7 +102,7 @@ def _safe_percent(value: Any) -> float | None:
         if number < 0:
             return 0.0
         if number > 100:
-            return 100.0
+            number = 100.0
         return number
     return None
 
@@ -163,14 +163,14 @@ def build_metric_rows(data: DashboardData) -> list[dict[str, Any]]:
 def build_activity_rows(activity: list[dict[str, Any]] | None) -> list[list[str]]:
     if not activity:
         return []
-    rows: list[list[str]] = []
-    for item in activity:
-        rows.append([
+    return [
+        [
             str(item.get("timestamp") or item.get("time") or ""),
             str(item.get("client") or item.get("actor") or "System"),
             str(item.get("action") or item.get("event") or ""),
-        ])
-    return rows
+        ]
+        for item in activity
+    ]
 
 
 # ============================================================================
@@ -224,15 +224,14 @@ def _activity_table(rows: list[list[str]]) -> ft.Control:
         ft.Text("Action", weight=ft.FontWeight.BOLD, expand=True),
     ], spacing=12)
 
-    items = [header, ft.Divider(height=1)]
-    for timestamp, actor, action in rows:
-        items.append(
-            ft.Row([
-                ft.Text(timestamp, width=180),
-                ft.Text(actor, width=160),
-                ft.Text(action, expand=True),
-            ], spacing=12)
-        )
+    items = [header, ft.Divider(height=1)] + [
+        ft.Row([
+            ft.Text(timestamp, width=180),
+            ft.Text(actor, width=160),
+            ft.Text(action, expand=True),
+        ], spacing=12)
+        for timestamp, actor, action in rows
+    ]
     return ft.Column(items, spacing=8)
 
 
@@ -245,7 +244,7 @@ def create_dashboard_view(
     page: ft.Page,
     _state_manager: Any | None,
     navigate_callback: Callable[[str], None] | None = None,
-) -> tuple[ft.Control, Callable[[], None], Callable[[], asyncio.Future[Any]]]:
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     state = {
         "data": DashboardData(),
         "loading": False,

@@ -6,16 +6,31 @@ Reusable action buttons block for the Settings view.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Protocol
 
 import flet as ft
-from FletV2.utils.debug_setup import get_logger
 from utils.ui_components import create_modern_progress_indicator
-from views.settings_state import EnhancedSettingsState
+
+from FletV2.utils.debug_setup import get_logger
+
+
+class SettingsStateProto(Protocol):
+    state_manager: Any | None
+    page: Any | None
+    file_picker: Any | None
+    current_settings: dict
+
+    async def save_settings_async(self) -> bool: ...
+    async def export_settings(self, fmt: str) -> dict[str, Any]: ...
+    async def backup_settings_async(self, backup_name: str) -> dict[str, Any]: ...
+    async def import_settings(self, path: str) -> dict[str, Any]: ...
+    def _load_default_settings(self) -> dict: ...
+    def _update_ui_from_settings(self) -> None: ...
 
 logger = get_logger(__name__)
 
 
-def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
+def create_enhanced_action_buttons(state: SettingsStateProto) -> ft.Column:
     """Create enhanced action buttons with responsive layout, modern styling and progress indicators."""
 
     # Progress indicators
@@ -31,14 +46,20 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
     async def export_handler(e: ft.ControlEvent) -> None:
         result = await state.export_settings("json")
         if not result['success'] and state.state_manager:
-            state.state_manager.add_notification(f"Export failed: {result.get('error', 'Unknown error')}", "error")
+            error_msg = result.get('error', 'Unknown error')
+            state.state_manager.add_notification(
+                f"Export failed: {error_msg}", "error"
+            )
 
     async def backup_handler(e: ft.ControlEvent) -> None:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_name = f"settings_backup_{timestamp}"
         result = await state.backup_settings_async(backup_name)
         if not result['success'] and state.state_manager:
-            state.state_manager.add_notification(f"Backup failed: {result.get('error', 'Unknown error')}", "error")
+            error_msg = result.get('error', 'Unknown error')
+            state.state_manager.add_notification(
+                f"Backup failed: {error_msg}", "error"
+            )
 
     def reset_all_settings(e: ft.ControlEvent) -> None:
         def confirm_reset(e: ft.ControlEvent) -> None:
@@ -90,7 +111,7 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
 
     # FilePicker lifecycle management
     def pick_files_result(e: ft.FilePickerResultEvent) -> None:
-        if e.files:
+        if e.files and state.page and hasattr(state.page, "run_task"):
             state.page.run_task(state.import_settings, e.files[0].path)
         else:
             if state.state_manager:
@@ -121,7 +142,11 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
                 ft.FilledButton(
                     "Save Settings",
                     icon=ft.Icons.SAVE,
-                    on_click=lambda e: state.page.run_task(save_settings_handler, e),
+                    on_click=lambda e: (
+                        state.page.run_task(save_settings_handler, e)
+                        if state.page and hasattr(state.page, "run_task")
+                        else None
+                    ),
                     style=ft.ButtonStyle(
                         bgcolor=ft.Colors.PRIMARY,
                         color=ft.Colors.ON_PRIMARY,
@@ -135,7 +160,11 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
                 ft.OutlinedButton(
                     "Export Backup",
                     icon=ft.Icons.DOWNLOAD,
-                    on_click=lambda e: state.page.run_task(export_handler, e),
+                    on_click=lambda e: (
+                        state.page.run_task(export_handler, e)
+                        if state.page and hasattr(state.page, "run_task")
+                        else None
+                    ),
                     style=ft.ButtonStyle(
                         side=ft.BorderSide(2, ft.Colors.PRIMARY),
                         color=ft.Colors.PRIMARY,
@@ -148,7 +177,11 @@ def create_enhanced_action_buttons(state: EnhancedSettingsState) -> ft.Column:
                 ft.OutlinedButton(
                     "Create Backup",
                     icon=ft.Icons.BACKUP,
-                    on_click=lambda e: state.page.run_task(backup_handler, e),
+                    on_click=lambda e: (
+                        state.page.run_task(backup_handler, e)
+                        if state.page and hasattr(state.page, "run_task")
+                        else None
+                    ),
                     style=ft.ButtonStyle(
                         side=ft.BorderSide(2, ft.Colors.SECONDARY),
                         color=ft.Colors.SECONDARY,

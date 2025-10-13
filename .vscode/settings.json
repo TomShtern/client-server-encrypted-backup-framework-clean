@@ -2,6 +2,8 @@
   "python.venvPath": "${workspaceFolder}",
   "python.terminal.activateEnvironment": true,
 
+  "python.defaultInterpreterPath": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+
   "terminal.integrated.defaultProfile.windows": "FletVenv PowerShell",
   "terminal.integrated.profiles.windows": {
     "FletVenv PowerShell": {
@@ -17,9 +19,8 @@
   "python.linting.flake8Enabled": false,
   "python.linting.isortEnabled": false,
   "python.formatting.blackEnabled": false,
-  "python.analysis.autoImportCompletions": true,
+
   "python.terminal.activateEnvInCurrentTerminal": true,
-  "python.defaultInterpreterPath": "${workspaceFolder}/flet_venv/Scripts/python.exe",
   "python.envFile": "${workspaceFolder}/FletV2/.env",
   "[python]": {
     "editor.codeActionsOnSave": {
@@ -61,7 +62,7 @@
     }
   ],
   "editor.experimentalGpuAcceleration": "on",
-  "python.analysis.aiHoverSummaries": true,
+
   "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
   "editor.guides.bracketPairs": "active"
 }

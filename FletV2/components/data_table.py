@@ -18,7 +18,7 @@ from FletV2.utils.ui_builders import create_action_button
 
 class EnhancedDataTable(ft.UserControl):
     """Enhanced DataTable with sorting, pagination, and export functionality."""
-    
+
     def __init__(
         self,
         columns: List[ft.DataColumn],
@@ -33,7 +33,7 @@ class EnhancedDataTable(ft.UserControl):
         export_prefix: str = "data_table_export"
     ):
         super().__init__()
-        
+
         self.columns = columns
         self.all_rows = rows  # Store all rows before pagination
         self.enable_sorting = enable_sorting
@@ -44,18 +44,18 @@ class EnhancedDataTable(ft.UserControl):
         self.on_row_select = on_row_select
         self.on_sort = on_sort
         self.export_prefix = export_prefix
-        
+
         # Pagination state
         self.current_page = 0
         self.filtered_rows = self.all_rows
-        
+
         # Sorting state
         self.sort_column = None
         self.sort_ascending = True
-        
+
         # Selection state
         self.selected_rows = set()
-        
+
         # Build the UI
         self.data_table = ft.DataTable(
             sort_column_index=self.sort_column,
@@ -71,25 +71,25 @@ class EnhancedDataTable(ft.UserControl):
             columns=self.columns,
             rows=self._get_current_page_rows()
         )
-        
+
         self.pagination_controls = self._create_pagination_controls()
         self.export_controls = self._create_export_controls()
-    
+
     def _get_current_page_rows(self) -> List[ft.DataRow]:
         """Get rows for the current page based on pagination settings."""
         if not self.enable_pagination:
             return self.filtered_rows
-        
+
         start_idx = self.current_page * self.items_per_page
         end_idx = start_idx + self.items_per_page
         page_rows = self.filtered_rows[start_idx:end_idx]
-        
+
         # If selection is enabled, add selection handlers
         if self.enable_selection:
             for i, row in enumerate(page_rows):
                 # Store the original on_select if it exists
                 original_on_select = getattr(row, 'on_select', None)
-                
+
                 # Create a new row with the selection handler
                 def make_select_handler(row_idx=start_idx + i):
                     def handle_select(e):
@@ -99,7 +99,7 @@ class EnhancedDataTable(ft.UserControl):
                         if self.on_row_select:
                             self.on_row_select(row_idx, self.filtered_rows[row_idx])
                     return handle_select
-                
+
                 # Since DataRow doesn't support dynamic on_select, we need to recreate
                 # the row with the appropriate selected state
                 page_rows[i] = ft.DataRow(
@@ -107,43 +107,43 @@ class EnhancedDataTable(ft.UserControl):
                     selected=(start_idx + i) in self.selected_rows,
                     on_select=make_select_handler()
                 )
-        
+
         return page_rows
-    
+
     def _create_pagination_controls(self) -> Optional[ft.Row]:
         """Create pagination controls if pagination is enabled."""
         if not self.enable_pagination:
             return None
-        
+
         total_pages = max(1, (len(self.filtered_rows) + self.items_per_page - 1) // self.items_per_page)
-        
+
         prev_button = ft.IconButton(
             icon=ft.Icons.ARROW_BACK,
             on_click=self._prev_page,
             disabled=self.current_page <= 0
         )
-        
+
         next_button = ft.IconButton(
             icon=ft.Icons.ARROW_FORWARD,
             on_click=self._next_page,
             disabled=self.current_page >= total_pages - 1
         )
-        
+
         page_info = ft.Text(
             f"Page {self.current_page + 1} of {total_pages} ({len(self.filtered_rows)} items)"
         )
-        
+
         return ft.Row([
             prev_button,
             page_info,
             next_button
         ], alignment=ft.MainAxisAlignment.CENTER)
-    
+
     def _create_export_controls(self) -> Optional[ft.Row]:
         """Create export controls if export is enabled."""
         if not self.enable_export:
             return None
-        
+
         def export_csv(e):
             if self.filtered_rows:
                 # Convert DataRow objects to dictionaries for export
@@ -155,11 +155,11 @@ class EnhancedDataTable(ft.UserControl):
                             col_name = self.columns[i].label.value if hasattr(self.columns[i].label, 'value') else f"Column_{i}"
                             row_data[col_name] = cell.content.value if hasattr(cell, 'content') and hasattr(cell.content, 'value') else str(cell.content)
                     data_for_export.append(row_data)
-                
+
                 filename = generate_export_filename(self.export_prefix, "csv")
                 export_to_csv(data_for_export, filename)
                 # In a real implementation, you might show a success message to the user
-        
+
         def export_json(e):
             if self.filtered_rows:
                 # Convert DataRow objects to dictionaries for export
@@ -171,73 +171,76 @@ class EnhancedDataTable(ft.UserControl):
                             col_name = self.columns[i].label.value if hasattr(self.columns[i].label, 'value') else f"Column_{i}"
                             row_data[col_name] = cell.content.value if hasattr(cell, 'content') and hasattr(cell.content, 'value') else str(cell.content)
                     data_for_export.append(row_data)
-                
+
                 filename = generate_export_filename(self.export_prefix, "json")
                 export_to_json(data_for_export, filename)
                 # In a real implementation, you might show a success message to the user
-        
+
         return ft.Row([
             create_action_button("Export CSV", export_csv, icon=ft.Icons.DOWNLOAD),
             create_action_button("Export JSON", export_json, icon=ft.Icons.DOWNLOAD, primary=False)
         ])
-    
+
     def _prev_page(self, e):
         """Handle previous page button click."""
         if self.current_page > 0:
             self.current_page -= 1
             self._refresh_table()
-    
+
     def _next_page(self, e):
         """Handle next page button click."""
         total_pages = max(1, (len(self.filtered_rows) + self.items_per_page - 1) // self.items_per_page)
         if self.current_page < total_pages - 1:
             self.current_page += 1
             self._refresh_table()
-    
+
     def _handle_row_selection(self, row_index: int):
         """Handle row selection."""
         if row_index in self.selected_rows:
             self.selected_rows.remove(row_index)
         else:
             self.selected_rows.add(row_index)
-    
+
     def _refresh_table(self):
         """Refresh the table with current data."""
         # Update the data table rows
         self.data_table.rows = self._get_current_page_rows()
-        
+
         # Update pagination controls
         if self.pagination_controls:
             total_pages = max(1, (len(self.filtered_rows) + self.items_per_page - 1) // self.items_per_page)
             page_info = f"Page {self.current_page + 1} of {total_pages} ({len(self.filtered_rows)} items)"
-            
+
             # Update the page info text (need to find it in the controls)
             for control in self.pagination_controls.controls:
-                if isinstance(control, ft.Text):
-                    control.value = page_info
-                    break
-            
+                if hasattr(control, "value") and not hasattr(control, "icon"):
+                    try:
+                        control.value = page_info  # type: ignore[attr-defined]
+                        break
+                    except Exception:
+                        pass
+
             # Update button states
             for i, control in enumerate(self.pagination_controls.controls):
-                if isinstance(control, ft.IconButton):
+                if getattr(control, "icon", None) is not None and getattr(control, "on_click", None) is not None:
                     if i == 0:  # Prev button
                         control.disabled = self.current_page <= 0
                     elif i == 2:  # Next button
                         control.disabled = self.current_page >= total_pages - 1
-        
+
         self.update()
-    
+
     def filter_rows(self, filter_func: Callable[[ft.DataRow], bool]):
         """Filter rows based on a filter function."""
         self.filtered_rows = [row for row in self.all_rows if filter_func(row)]
         self.current_page = 0  # Reset to first page
         self._refresh_table()
-    
+
     def sort_rows(self, column_index: int, ascending: bool = True):
         """Sort rows by a specific column."""
         if not self.enable_sorting:
             return
-        
+
         def extract_sort_value(row: ft.DataRow, col_idx: int):
             """Extract value from the specified column in the row for sorting."""
             if col_idx < len(row.cells):
@@ -252,43 +255,43 @@ class EnhancedDataTable(ft.UserControl):
                     else:
                         return str(content)
             return ""
-        
+
         try:
             self.filtered_rows.sort(
                 key=lambda row: extract_sort_value(row, column_index),
                 reverse=not ascending
             )
-            
+
             # Update sorting state
             self.sort_column = column_index
             self.sort_ascending = ascending
-            
+
             # Update data table sorting info
             self.data_table.sort_column_index = column_index
             self.data_table.sort_ascending = ascending
-            
+
             # Reset to first page
             self.current_page = 0
-            
+
             # Refresh the table
             self._refresh_table()
-            
+
             # Call the sort callback if provided
             if self.on_sort:
                 self.on_sort(column_index, ascending)
-                
+
         except Exception as ex:
             # In a real implementation, you might show an error message
             print(f"Error sorting rows: {ex}")
-    
+
     def build(self):
         """Build the user interface."""
         controls = [self.data_table]
-        
+
         if self.export_controls:
             controls.append(self.export_controls)
-        
+
         if self.pagination_controls:
             controls.append(self.pagination_controls)
-        
+
         return ft.Column(controls, scroll=ft.ScrollMode.AUTO)

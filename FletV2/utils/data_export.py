@@ -16,15 +16,15 @@ from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional
 
 
-def export_to_csv(data: List[Dict[str, Any]], filepath: str, fieldnames: List[str] = None):
+def export_to_csv(data: List[Dict[str, Any]], filepath: str, fieldnames: Optional[List[str]] = None):
     """
     Export data to CSV file.
-    
+
     Args:
         data: List of dictionaries to export
         filepath: Path to the output file
         fieldnames: List of field names to include in the CSV (optional)
-        
+
     Raises:
         ValueError: If no data is provided
         IOError: If there's an issue writing the file
@@ -44,12 +44,12 @@ def export_to_csv(data: List[Dict[str, Any]], filepath: str, fieldnames: List[st
 def export_to_json(data: List[Dict[str, Any]], filepath: str, indent: int = 2):
     """
     Export data to JSON file.
-    
+
     Args:
         data: List of dictionaries to export
         filepath: Path to the output file
         indent: Number of spaces for indentation (default: 2)
-        
+
     Raises:
         IOError: If there's an issue writing the file
     """
@@ -60,12 +60,12 @@ def export_to_json(data: List[Dict[str, Any]], filepath: str, indent: int = 2):
 def export_to_txt(data: List[Dict[str, Any]], filepath: str, format_func: Optional[Callable] = None):
     """
     Export data to TXT file with optional custom formatting.
-    
+
     Args:
         data: List of dictionaries to export
         filepath: Path to the output file
         format_func: Optional function to format each item (default: str)
-        
+
     Raises:
         IOError: If there's an issue writing the file
     """
@@ -81,11 +81,11 @@ def export_to_txt(data: List[Dict[str, Any]], filepath: str, format_func: Option
 def generate_export_filename(prefix: str, extension: str) -> str:
     """
     Generate timestamped export filename.
-    
+
     Args:
         prefix: Prefix for the filename
         extension: File extension without the dot (e.g., "csv", "json")
-        
+
     Returns:
         Generated filename with timestamp
     """
@@ -94,14 +94,14 @@ def generate_export_filename(prefix: str, extension: str) -> str:
 
 
 async def export_with_progress(
-    data: List[Dict[str, Any]], 
-    filepath: str, 
-    export_func: Callable, 
+    data: List[Dict[str, Any]],
+    filepath: str,
+    export_func: Callable,
     progress_callback: Optional[Callable] = None
 ):
     """
     Export data with progress updates.
-    
+
     Args:
         data: List of dictionaries to export
         filepath: Path to the output file

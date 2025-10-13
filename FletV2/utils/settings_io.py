@@ -9,14 +9,25 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
 from FletV2.utils.debug_setup import get_logger
-from views.settings_state import EnhancedSettingsState
 
 logger = get_logger(__name__)
 
 
-async def enhanced_export_settings(state: EnhancedSettingsState, export_format: str = "json"):
+@runtime_checkable
+class SettingsStateProto(Protocol):
+    current_settings: dict
+    state_manager: Any | None
+
+    def _load_default_settings(self) -> dict: ...
+    def _deep_merge_settings(self, base: dict, override: dict) -> dict: ...
+    async def validate_settings_async(self, cand: dict | None = None) -> dict: ...
+    def _update_ui_from_settings(self) -> None: ...
+
+
+async def enhanced_export_settings(state: SettingsStateProto, export_format: str = "json"):
     """Export settings to JSON or INI format, with progress reporting via StateManager."""
     try:
         if state.state_manager:
@@ -106,7 +117,7 @@ def _load_ini_settings(file_path: str) -> dict:
     return imported
 
 
-async def _apply_imported_settings(state: EnhancedSettingsState, imported: dict) -> dict:
+async def _apply_imported_settings(state: SettingsStateProto, imported: dict) -> dict:
     default_settings = state._load_default_settings()
     merged_settings = state._deep_merge_settings(default_settings, imported)
     validation_result = await state.validate_settings_async(merged_settings)
@@ -123,7 +134,7 @@ async def _apply_imported_settings(state: EnhancedSettingsState, imported: dict)
     return {'success': True}
 
 
-async def enhanced_import_settings(state: EnhancedSettingsState, file_path: str):
+async def enhanced_import_settings(state: SettingsStateProto, file_path: str):
     try:
         if state.state_manager:
             state.state_manager.set_loading("settings_import", True)

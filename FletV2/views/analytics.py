@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Coroutine
 
 import flet as ft
 
@@ -175,7 +175,7 @@ def create_analytics_view(
     page: ft.Page,
     _state_manager: Any | None,
     navigate_callback: Callable[[str], None] | None = None,
-) -> tuple[ft.Control, Callable[[], None], Callable[[], asyncio.Future[Any]]]:
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     state = {
         "data": AnalyticsData(),
     }
