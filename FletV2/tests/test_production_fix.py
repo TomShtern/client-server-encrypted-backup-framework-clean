@@ -90,7 +90,7 @@ def main(page: ft.Page):
         ft.Container(
             content=ft.Column([
                 clients_table
-            ], scroll="auto"),
+            ], scroll=ft.ScrollMode.AUTO),
             expand=True,
             border=ft.border.all(1, ft.Colors.OUTLINE),
             border_radius=8,

@@ -1,9 +1,11 @@
-
 # Client-Server Encrypted Backup Framework - Claude Instructions
+
+**Last Updated**: January 13, 2025
+**Project Status**: Active Development - Refactoring Phase
 
 After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
 
-When given a very long task, so it may be beneficial to plan out your work clearly. It's encouraged to spend your entire output context working on the task - just make sure you don't run out of context with significant uncommitted work. Continue working systematically until you have completed this task.
+When given a very long task, it may be beneficial to plan out your work clearly. It's encouraged to spend your entire output context working on the task - just make sure you don't run out of context with significant uncommitted work. Continue working systematically until you have completed this task.
 
 After completing a task that involves tool use, provide a quick summary of the work you've done.
 
@@ -19,6 +21,92 @@ This is a comprehensive encrypted file backup system that implements a robust cl
 - **Protocol**: Custom binary protocol with CRC32 verification for data integrity
 - **Architecture**: Client-server model with cross-platform compatibility
 
+## Recent Updates (Updated: January 13, 2025)
+
+### Major Refactoring Initiative (January 2025)
+
+The project has undergone a comprehensive analysis and is entering a **pragmatic refactoring phase** focused on real improvements rather than arbitrary metrics.
+
+#### Key Changes
+
+1. **Comprehensive Codebase Analysis**
+   - Total LOC: 22,299 lines across 90 Python files
+   - Identified 4 files exceeding best practice guidelines (650 lines):
+     - `views/enhanced_logs.py` - 1,793 lines (logging interface)
+     - `views/database_pro.py` - 1,475 lines (database admin panel)
+     - `views/dashboard.py` - 1,311 lines (metrics dashboard)
+     - `main.py` - 1,114 lines (application entry point)
+
+2. **New Documentation Added**
+   - **[FletV2_COMPREHENSIVE_ANALYSIS_2025.md](FletV2/FletV2_COMPREHENSIVE_ANALYSIS_2025.md)** - Complete architecture analysis
+   - **[FletV2_Modularization_Plan.md](FletV2/FletV2_Modularization_Plan.md)** - Pragmatic refactoring roadmap (64 hours, 5 weeks)
+   - **[architecture_guide.md](FletV2/architecture_guide.md)** - 5-Section Pattern for view organization
+   - **[IMPLEMENTATION_STATUS.md](FletV2/IMPLEMENTATION_STATUS.md)** - Current implementation tracking
+   - **[INTEGRATION_PROGRESS.md](FletV2/INTEGRATION_PROGRESS.md)** - Integration status documentation
+
+3. **Cleanup and Consolidation**
+   - Removed 67 obsolete documentation and test files
+   - Deleted redundant markdown documentation (15+ files)
+   - Consolidated testing approaches
+   - Streamlined project structure
+
+#### Planned Improvements (5-Week Roadmap)
+
+1. **Phase 1: Shared Utilities Foundation** (Week 1 - 16 hours)
+   - `async_helpers.py` - Universal async/sync integration patterns
+   - `loading_states.py` - Consistent loading/error/success displays
+   - `data_export.py` - Reusable CSV/JSON export functionality
+   - `ui_builders.py` - Common UI patterns (search, filters, buttons)
+   - Component extraction for genuinely reused elements
+
+2. **Phase 2: View Refactoring** (Weeks 2-3 - 24 hours)
+   - Apply 5-Section Pattern to all major views
+   - Target 15-20% LOC reduction through deduplication
+   - Systematic `run_in_executor` application
+
+3. **Phase 3: State & Consistency** (Week 4 - 12 hours)
+   - Standardize state management patterns
+   - Unify loading/error handling across views
+   - Code review and consistency verification
+
+4. **Phase 4: Testing & Documentation** (Week 5 - 12 hours)
+   - Unit tests for business logic (70%+ coverage target)
+   - Architecture documentation updates
+   - Pattern reference guides
+
+#### Recent View Enhancements
+
+- **Analytics View** ([views/analytics.py](FletV2/views/analytics.py))
+  - Fixed API integration issues
+  - Added proper ServerBridge method support
+  - Enhanced charts and data visualization
+
+- **Settings View** ([views/settings.py](FletV2/views/settings.py))
+  - Consolidated settings management (removed `settings_state.py`)
+  - Embedded `EnhancedSettingsState` directly in view
+  - Fixed scroll issues for Flet 0.28.3
+  - Improved tab content structure
+  - Better UI update synchronization
+
+- **Database View** ([views/database_pro.py](FletV2/views/database_pro.py))
+  - Enhanced table navigation
+  - Fixed async/sync integration issues
+  - Added proper loading states
+
+- **Logs View** ([views/enhanced_logs.py](FletV2/views/enhanced_logs.py))
+  - Sophisticated neomorphic design
+  - Advanced search and filtering
+  - Multiple export formats (CSV, JSON, TXT)
+  - Real-time log capture integration
+
+### Code Quality Improvements
+
+- **Async/Sync Integration**: Systematic application of `run_in_executor` pattern
+- **Logging Cleanup**: 411 `print()` statements identified for replacement with proper logging
+- **Material Design 3**: Centralized polyfills for MD3 colors
+- **Error Handling**: Consistent structured error responses across all views
+- **Component Reuse**: Creation of shared data table and filter components
+
 ## Project Structure & Components
 
 ### Core Architecture
@@ -29,9 +117,10 @@ This is a comprehensive encrypted file backup system that implements a robust cl
 
 ### FletV2 GUI Architecture
 - **main.py**: Application entry point with sophisticated state management
-- **views/**: Modular view components (dashboard, clients, files, database, analytics, etc.)
+- **views/**: Modular view components (dashboard, clients, files, database, analytics, logs)
 - **theme.py**: Advanced tri-style design system (Material 3, Neumorphism, Glassmorphism)
 - **utils/**: Server bridge, state management, and utility functions
+- **components/**: Reusable UI components (data tables, filter controls, log cards)
 - **config.py**: Configuration and constants for the GUI application
 
 ### Server Architecture
@@ -53,6 +142,7 @@ This is a comprehensive encrypted file backup system that implements a robust cl
 - **Client Management**: View and manage registered backup clients
 - **File Management**: Browse, search, and manage backed up files
 - **Database Management**: Direct database access and record management
+- **Enhanced Logs**: Sophisticated log viewer with search, filtering, and export capabilities
 - **Settings Management**: Comprehensive configuration with server integration
 - **Advanced Styling**: Material Design 3 with neumorphic and glassmorphic effects
 - **Responsive Design**: Adaptive layout for different screen sizes
@@ -93,28 +183,17 @@ async def load_data():
    result = await loop.run_in_executor(None, bridge.method_name, arg1, arg2)
    ```
 
-2. **NEVER use `time.sleep()` in async code** - Use `asyncio.sleep()`:
-   ```python
-   # ❌ WRONG: await asyncio.sleep(1) if you used time.sleep
-   # ✅ CORRECT:
-   await asyncio.sleep(1)  # Non-blocking
-   ```
+2. **NEVER use `time.sleep()` in async code** - Use `asyncio.sleep()`
 
 3. **ALWAYS call `page.update()` or `control.update()`** after state changes
 
 4. **NEVER call `asyncio.run()` inside Flet** - event loop is already running
 
-5. **Use diagnostic logging** to find freeze points:
-   ```python
-   async def debug_function():
-       print("🔴 [DEBUG] Starting")
-       await operation()
-       print("🔴 [DEBUG] Completed")  # If this doesn't print, freeze is in operation()
-   ```
+5. **Use diagnostic logging** to find freeze points
 
 **Quick Fix**: Search for `await bridge.` and wrap all calls with `run_in_executor` (see FLET_QUICK_FIX_GUIDE.md for step-by-step instructions).
 
-### 🚨 CRITICAL: Server Integration Architecture (October 1, 2025)
+### 🚨 CRITICAL: Server Integration Architecture
 
 **The BackupServer does NOT have an API.** All communication is via **direct Python method calls**:
 
@@ -136,6 +215,23 @@ async def load_data():
    - Structured error handling with `{'success': bool, 'data': Any, 'error': str}`
    - **NO HTTP, NO REST, NO API CALLS** - pure Python method delegation
    - **⚠️ CRITICAL**: All bridge methods are SYNCHRONOUS - wrap with `run_in_executor` when calling from async code
+
+### The 5-Section Pattern for Views
+
+**New Standard**: All view files should follow the 5-Section organizational pattern (see [architecture_guide.md](FletV2/architecture_guide.md) for complete details):
+
+1. **Section 1: Data Fetching** - Async wrappers for ServerBridge calls with proper `run_in_executor`
+2. **Section 2: Business Logic** - Pure functions for filtering, calculations, exports (easily testable)
+3. **Section 3: UI Components** - Flet control builders (cards, buttons, containers)
+4. **Section 4: Event Handlers** - User interaction handlers (clicks, changes, form submissions)
+5. **Section 5: Main View** - View composition, lifecycle, and public API
+
+**Benefits**:
+- Clear separation of concerns within a single file
+- Easy to navigate and understand
+- Business logic is testable
+- No artificial layering or unnecessary abstractions
+- Works WITH Flet's functional philosophy
 
 ### ServerBridge Integration
 The ServerBridge acts as the primary interface between the GUI and the backend server. Key components include:
@@ -183,44 +279,6 @@ The advanced theme system implements a tri-style design:
 - **Pre-computed Constants**: Performance-optimized shadow and styling constants
 - **Animation Support**: GPU-accelerated animations for smooth interactions
 
-## Detailed View Components
-
-### Dashboard View
-The main dashboard view features:
-
-- **Metric Cards**: Interactive cards with real-time data and navigation support
-- **Performance Gauges**: Circular progress indicators with status displays
-- **Activity Stream**: Timeline-based activity display with status indicators
-- **Status Monitoring**: Dual status indicators for GUI and server connection
-- **Theme Controls**: Integrated theme switching with multiple options
-
-### Clients View
-The clients management view provides:
-
-- **Data Table**: Display of client information with sorting and filtering
-- **CRUD Operations**: Full Create, Read, Update, Delete functionality
-- **Status Indicators**: Visual status representation for connection states
-- **Search and Filter**: Client filtering by name, ID, and status
-- **Context Menus**: Action menus for each client record
-
-### Database View
-The database management view includes:
-
-- **Table Browser**: Dynamic table browsing with schema detection
-- **Record Management**: Full CRUD operations on database records
-- **Export Functionality**: JSON export of table data
-- **Status Indicators**: Visual representation of database status
-- **Search and Filter**: Record filtering and search capabilities
-
-### Settings View
-The settings management view provides:
-
-- **Tabbed Interface**: Organized settings into logical groups (Server, Interface, Monitoring, Logging, Security, Backup)
-- **Validation**: Client-side validation for settings values
-- **Import/Export**: Settings import/export functionality
-- **Reset Functionality**: Reset to default settings
-- **Server Integration**: Save/load settings from the server
-
 ## Development Conventions
 
 ### Code Style
@@ -230,6 +288,7 @@ The settings management view provides:
 - Implement structured logging with context information
 
 ### Architecture Patterns
+- **5-Section Pattern**: Organize views into Data Fetching, Business Logic, UI Components, Event Handlers, and Main View
 - **ServerBridge Pattern**: Interface between GUI and backend server
 - **State Management**: Reactive UI updates via dedicated state manager
 - **Modular Design**: Separate view components with consistent API patterns
@@ -241,6 +300,12 @@ The settings management view provides:
 - Use structured logging for debugging and monitoring
 - Provide user-friendly error messages in GUI
 - Include automated crash reporting and diagnostics
+
+### Testing Strategy
+- Focus on testing business logic (Section 2 functions)
+- Target 70%+ coverage for pure functions
+- Integration tests for view data flow
+- Manual QA for UI interactions
 
 ## Building and Running
 
@@ -302,6 +367,7 @@ app = FletV2App(page, real_server=None)
 - Unit tests for encryption and protocol implementations
 - GUI component tests for UI interactions
 - End-to-end tests for backup workflow
+- Business logic tests for view Section 2 functions (target: 70%+ coverage)
 
 ### Quality Tools
 - Ruff for linting and formatting
@@ -321,7 +387,7 @@ app = FletV2App(page, real_server=None)
 - Maintain consistency with the tri-style design system (Material 3, Neumorphism, Glassmorphism)
 - Use the provided theme utilities for styling components
 - Implement proper state management for reactive UI updates
-- Follow the established navigation and view switching patterns
+- Follow the established 5-Section Pattern for view organization
 - Prefer Flet's built-in components over complex custom implementations
 
 ### Server Integration
@@ -332,147 +398,22 @@ app = FletV2App(page, real_server=None)
 - Ensure thread safety when calling server methods from GUI thread
 - Data format conversion handled by ServerBridge (BLOB UUIDs ↔ strings)
 
-### 🚨 CRITICAL: Flet Async/Sync Integration Pattern (January 2025)
+### Refactoring Guidelines
 
-**Root Cause of UI Freezes**: Calling `await` on non-existent async methods or non-coroutine objects causes Python's event loop to block **forever**, freezing the entire Flet GUI with no error messages.
+#### Work WITH Flet, Not Against It
 
-#### ❌ WRONG Pattern - Causes Permanent Freeze
+**Core Principles**:
+1. **Simplicity over Sophistication**: Favor straightforward solutions
+2. **Functional Composition**: Use Flet's functional approach
+3. **Extract Only Reused Code**: Don't create unnecessary abstractions
+4. **Quality over Quantity**: Well-organized code beats arbitrary metrics
 
-```python
-# WRONG - These methods don't exist or aren't async!
-async def load_data():
-    result = await bridge.get_database_info_async()  # ❌ Method doesn't exist
-    result = await bridge.get_table_data_async(table)  # ❌ Returns None, not coroutine
-    # Event loop blocks here forever waiting for coroutine
-```
-
-**What Happens**:
-1. Python tries to `await` a non-coroutine object or non-existent method
-2. Event loop blocks indefinitely waiting for a coroutine that never arrives
-3. GUI freezes completely - no error messages, no logs, no recovery
-4. Application becomes unresponsive and must be force-killed
-5. Terminal logs stop abruptly at the freeze point
-
-**Symptoms**:
-- View loads successfully (setup function starts)
-- Terminal shows "Setting up [view] (async)"
-- Logs stop completely after "All update functions completed"
-- Browser shows gray screen or empty view
-- GUI navigation becomes unresponsive
-- No Python exceptions raised
-- No error messages in terminal
-
-#### ✅ CORRECT Pattern - Non-Blocking Async
-
-```python
-# CORRECT - Wrap sync methods with run_in_executor
-async def load_data():
-    loop = asyncio.get_running_loop()
-
-    # Run synchronous server bridge methods in thread pool
-    result = await loop.run_in_executor(None, bridge.get_database_info)
-    result = await loop.run_in_executor(None, bridge.get_table_data, table_name)
-
-    # ✅ Event loop stays responsive while waiting for thread pool
-```
-
-**Why This Works**:
-1. `loop.run_in_executor(None, func, *args)` runs synchronous `func` in default thread pool executor
-2. Returns an awaitable `Future` that the event loop can monitor
-3. Event loop remains responsive while thread pool executes sync code
-4. No blocking - GUI stays interactive during data loading
-5. Proper async integration between Flet (async) and ServerBridge (sync)
-
-**When to Use**:
-- **ALWAYS** when calling ServerBridge methods from async Flet view functions
-- **ALWAYS** when mixing synchronous backend code with async GUI code
-- **ALWAYS** in view setup functions that load data from server
-- **ALWAYS** in event handlers that need server data
-
-#### Reference Implementation
-
-**Fixed Example** (database_simple.py:672-678):
-```python
-async def load_database_info_async() -> None:
-    """Load database connection info from server."""
-    try:
-        # CRITICAL FIX: Use run_in_executor for sync server bridge methods
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, bridge.get_database_info)
-
-        if result and result.get('success'):
-            # Process result...
-```
-
-**Fixed Example** (database_simple.py:738-744):
-```python
-async def load_table_data_async() -> None:
-    """Load data for currently selected table."""
-    try:
-        # CRITICAL FIX: Use run_in_executor for sync server bridge methods
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
-
-        if result and result.get('success'):
-            # Process result...
-```
-
-#### Diagnostic Pattern for Async Freezes
-
-**Add Strategic Logging** to identify freeze points:
-```python
-async def setup() -> None:
-    print("🔴 [SETUP] Starting async setup")
-
-    print("🔴 [SETUP] About to sleep")
-    await asyncio.sleep(0.5)
-    print("🔴 [SETUP] Sleep completed")
-
-    print("🔴 [SETUP] Loading data 1")
-    await load_data_1()
-    print("🔴 [SETUP] Data 1 loaded")
-
-    print("🔴 [SETUP] Loading data 2")
-    await load_data_2()  # If freeze happens, this line won't print
-    print("🔴 [SETUP] Data 2 loaded")
-```
-
-**Investigation Steps**:
-1. Check terminal logs for last printed message before freeze
-2. Identify the `await` statement that never completes
-3. Verify the awaited function returns a coroutine (use `inspect.iscoroutine()`)
-4. If awaiting ServerBridge method, wrap with `run_in_executor`
-5. Test fix and verify all setup logs complete
-
-#### Universal Checklist for Flet Views
-
-**Before Creating Any Async View Function**:
-- [ ] ALL ServerBridge calls wrapped with `loop.run_in_executor(None, bridge.method, *args)`
-- [ ] NO direct `await bridge.method()` calls (bridge methods are SYNC, not ASYNC)
-- [ ] Diagnostic logging added to track async flow (print statements at each step)
-- [ ] Test in browser DevTools with Network tab open (check for freeze/hang)
-- [ ] Verify terminal shows ALL setup completion logs
-
-**Validation Test**:
-```python
-# Quick test - add this to any async function
-import inspect
-
-async def my_async_function():
-    result = some_bridge_call()
-
-    # Validate it's actually a coroutine before awaiting
-    if inspect.iscoroutine(result):
-        data = await result
-    else:
-        # ❌ NOT a coroutine - will cause freeze if you await it!
-        print(f"ERROR: {result} is not a coroutine, use run_in_executor!")
-```
-
-#### Related Documentation
-- Flet Async Patterns: https://flet.dev/docs/guides/python/async-apps
-- Python asyncio: https://docs.python.org/3/library/asyncio-task.html
-- ThreadPoolExecutor: https://docs.python.org/3/library/concurrent.futures.html
+#### What to Extract
+- ✅ **Extract**: Code duplicated 3+ times across views
+- ✅ **Extract**: Genuinely reused components (data tables, filter controls)
+- ✅ **Extract**: Common patterns (async helpers, loading states, export utilities)
+- ❌ **Don't Extract**: View-specific components used in only one place
+- ❌ **Don't Extract**: Simple functions that are clearer when inline
 
 ### Database Operations
 
@@ -482,96 +423,20 @@ async def my_async_function():
 - **Always use finally blocks**: Ensure connections are returned to pool even on exceptions
 - **Track all connections**: Including emergency connections created during pool exhaustion
 - **Use time.monotonic() for durations**: NEVER use time.time() for age/duration calculations
-  - `time.time()` is affected by system clock changes (NTP, DST)
-  - `time.monotonic()` is clock-independent and designed for elapsed time
-  - Example: `age = time.monotonic() - info.created_time`
 - **Prevent double-return**: Use flags to track if connection already handled in error paths
-- **Example pattern**:
-```python
-conn_returned = False
-try:
-    conn = self.connection_pool.get_connection()
-    # ... operations
-    return result
-except Exception:
-    with suppress(Exception):
-        conn.close()
-    conn_returned = True
-    raise
-finally:
-    if conn and not conn_returned:
-        with suppress(Exception):
-            self.connection_pool.return_connection(conn)
-```
 
 #### Transaction Handling
 - **Use transaction() context manager**: For atomic multi-step operations
 - **Check for nested transactions**: Use `conn.in_transaction` before BEGIN
-- **Example**:
-```python
-with self.db_manager.transaction() as conn:
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM clients WHERE ID = ?", (client_id,))
-    cursor.execute("DELETE FROM files WHERE ClientID = ?", (client_id,))
-    # Automatic commit or rollback on exception
-```
 
 #### Thread Safety
 - **Always protect shared state with locks**: Caches, connection tracking, metrics
 - **Use threading.Lock**: For cache read/write operations
-- **Example**:
-```python
-with self._cache_lock:
-    if self._cache['data'] and not_expired:
-        return self._cache['data']
-```
 
 #### Query Correctness
 - **Verify column names in WHERE clauses**: Common bug - using ID instead of ClientID
 - **Always use parameterized queries**: NEVER string interpolation for values
 - **Validate table/column names**: If dynamically constructed, use whitelists
-- **Example bug to avoid**:
-```python
-# WRONG - searches by file ID instead of client ID
-"SELECT * FROM files WHERE ID = ?"
-# CORRECT - searches by client ID
-"SELECT * FROM files WHERE ClientID = ?"
-```
-
-#### Resource Leak Prevention
-- **Track emergency connections**: Store in dict, clean up on shutdown
-- **Validate connections before return**: Test with "SELECT 1", handle errors
-- **Close connections on validation failure**: Don't return bad connections to pool
-- **Clean up partial operations**: Remove incomplete backup files, temp data
-
-#### Error Handling
-- **Catch specific exceptions**: sqlite3.OperationalError, sqlite3.DatabaseError
-- **Use contextlib.suppress()**: For cleanup operations that may fail
-- **Log with appropriate levels**: DEBUG for protocol, INFO for operations, WARNING for recoverable errors
-- **Return structured responses**: `{'success': bool, 'data': Any, 'error': str}`
-
-#### Performance Patterns
-- **Use COUNT(*) for counting**: Not len(get_all_records())
-- **Implement caching with TTL**: 30-second cache for frequently-accessed stats
-- **Create appropriate indexes**: On frequently queried columns
-- **Use executemany()**: For bulk inserts (10-100x faster)
-
-#### Common Pitfalls to Avoid
-1. **❌ Mixed time bases**: Using both time.time() and time.monotonic()
-2. **❌ Untracked resources**: Emergency connections, temporary files
-3. **❌ Race conditions**: Unprotected cache access in multi-threaded code
-4. **❌ Wrong column names**: ID vs ClientID in WHERE clauses
-5. **❌ Nested transaction errors**: Not checking if already in transaction
-6. **❌ Connection leaks**: Not returning connections in all code paths
-7. **❌ Inaccurate metrics**: Reporting attempted operations as successful
-8. **❌ Missing validation**: Assuming WAL mode or other features work
-
-#### Schema Patterns
-- Use the existing DatabaseManager for all database interactions
-- Follow the established schema patterns for client and file records
-- Understand CASCADE behavior: Deleting client deletes all associated files
-- Include appropriate error handling for database operations
-- Foreign key constraints are enforced - maintain referential integrity
 
 ### Performance Considerations
 - Optimize for frequent UI updates with minimal redraw operations
@@ -586,8 +451,8 @@ with self._cache_lock:
 - Follow the existing patterns for logging and diagnostics
 - Ensure all new code is well-documented with docstrings
 
-### Logging Standards (October 2025)
-The codebase follows strict logging level standards documented in [server.py:82-97](python_server/server/server.py#L82):
+### Logging Standards
+The codebase follows strict logging level standards:
 
 **Level Usage**:
 - **DEBUG**: Protocol details, packet parsing, reassembly status, detailed state changes (verbose diagnostics)
@@ -602,7 +467,7 @@ The codebase follows strict logging level standards documented in [server.py:82-
 3. Use WARNING for issues that don't stop operation
 4. Include relevant context (client name, file name, operation type) in all messages
 5. Avoid duplicate logging (don't log same event at multiple levels)
-6. Never use `print()` for diagnostics - always use `logger` methods
+6. **Replace `print()` with proper logging** - 411 instances identified for replacement
 
 ### Input Validation Pattern
 All user-facing methods must validate inputs before database operations:
@@ -619,7 +484,7 @@ if '\x00' in name or '\n' in name:
 ### Constants Management
 - Never duplicate constants - import from config.py
 - Use descriptive constant names: `DEFAULT_LOG_LINES_LIMIT` not magic number `100`
-- Document constant purpose inline: `SETTINGS_FILE = "server_settings.json"  # Settings persistence file`
+- Document constant purpose inline
 - Group related constants together (Logging, Settings, Protocol, etc.)
 
 ### Code Simplicity & Pragmatism (January 2025)
@@ -636,7 +501,6 @@ This project is designed for **50-500 users maximum** at small-to-medium scale. 
    - Current metrics: 60-second samples, 7-day retention = ~10,000 points/metric
    - Database size: ~1.5 MB after 7 days (negligible)
    - **This is appropriate** - SQLite handles this effortlessly
-   - **Don't reduce unless user explicitly requests it**
 
 3. **Avoid unnecessary complexity**
    - If a feature works reliably, leave it alone
@@ -644,20 +508,7 @@ This project is designed for **50-500 users maximum** at small-to-medium scale. 
    - Trust SQLite's capabilities at this scale
 
 4. **When in doubt, ask about scale**
-   - If implementing something that might be "too much", verify with user
    - User prefers simple, working solutions over complex, "enterprise" ones
-   - Example: "Is 10,000 data points too much?" → No, it's tiny for SQLite
-
-5. **Retry patterns**
-   - Retry decorator is available (server.py:131-185) for transient failures
-   - Apply it incrementally to methods that actually encounter errors
-   - Don't preemptively add retries everywhere - add where needed
-
-6. **Performance at this scale**
-   - 500 users × typical usage = trivial load for SQLite
-   - No need for connection pooling beyond basic implementation
-   - No need for caching beyond simple 30-second TTL for stats
-   - No need for sharding, replication, or distributed systems
 
 **Key Takeaway**: Build for the actual use case (50-500 users), not imaginary enterprise scale. Simple, reliable code beats complex, "scalable" code every time at this scale.
 
@@ -668,24 +519,6 @@ This project is designed for **50-500 users maximum** at small-to-medium scale. 
 #### 1. **Centralized Validation Pattern**
 **Rule**: Never duplicate validation logic. Create a single validation method and reuse it.
 
-**Example - Client Name Validation**:
-```python
-def _validate_client_name(self, name: str) -> tuple[bool, str]:
-    """Centralized client name validation."""
-    if not name or not isinstance(name, str):
-        return False, "Client name is required and must be a string"
-    if len(name) > MAX_CLIENT_NAME_LENGTH:
-        return False, f"Client name too long (max {MAX_CLIENT_NAME_LENGTH} chars)"
-    if any(c in name for c in ('\x00', '\n', '\r', '\t')):
-        return False, "Client name contains invalid characters"
-    return True, ""
-
-# Then use it everywhere:
-is_valid, error_msg = self._validate_client_name(name)
-if not is_valid:
-    return self._format_response(False, error=error_msg)
-```
-
 **Location**: server.py:857-877 (reference implementation)
 
 #### 2. **Database-First Deletion Pattern**
@@ -693,33 +526,12 @@ if not is_valid:
 
 **Why**: If database fails, memory is still consistent. Reverse order creates phantom records.
 
-**Pattern**:
-```python
-# CORRECT - Database first
-success = self.db_manager.delete_client(client_id_bytes)
-if not success:
-    return self._format_response(False, error="Database deletion failed")
-
-# THEN remove from memory (only if DB succeeded)
-with self.clients_lock:
-    if client := self.clients.pop(client_id_bytes, None):
-        self.clients_by_name.pop(client.name, None)
-```
-
 **Location**: server.py:1002-1020 (reference implementation)
 
 #### 3. **Universal Retry Decorator Pattern**
 **Rule**: ALL database operations MUST have retry protection for `sqlite3.OperationalError`.
 
 **Why**: Multi-threaded access (GUI + network + maintenance) causes database locks. Retry prevents crashes.
-
-**Pattern**:
-```python
-@retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
-def any_database_method(self, ...):
-    """Method that accesses database."""
-    # Database operation here
-```
 
 **Apply to**: ALL methods that call `self.db_manager.*` or execute SQL queries
 
@@ -730,40 +542,10 @@ def any_database_method(self, ...):
 #### 4. **Comprehensive Health Check Pattern**
 **Rule**: Health checks must VALIDATE critical states, not just READ them.
 
-**Pattern**:
-```python
-# Don't just read metrics - VALIDATE them
-if not pool_status.get('cleanup_thread_alive', False):
-    health_data['errors'].append("Connection pool cleanup thread is dead")
-    health_data['status'] = 'degraded'
-
-# Check for resource leaks
-if hasattr(pool, 'emergency_connections'):
-    leak_count = len(pool.emergency_connections)
-    if leak_count > 0:
-        health_data['errors'].append(f"{leak_count} emergency connections leaked")
-        health_data['status'] = 'degraded'
-```
-
 **Location**: server.py:1920-1932 (reference implementation)
 
 #### 5. **Rate Limiting Pattern**
 **Rule**: Resource-intensive operations (exports, large queries) need per-resource rate limiting.
-
-**Pattern**:
-```python
-# Per-resource rate limiting (not global)
-session_key = f"resource_{identifier}"
-with self._rate_limit_lock:
-    current_time = time.time()
-    last_access = self._last_access_time.get(session_key, 0)
-
-    if current_time - last_access < MIN_INTERVAL:
-        remaining = MIN_INTERVAL - (current_time - last_access)
-        return self._format_response(False, error=f"Rate limit: wait {remaining:.1f}s")
-
-    self._last_access_time[session_key] = current_time
-```
 
 **Locations**:
 - Log export: server.py:2431-2442
@@ -771,41 +553,11 @@ with self._rate_limit_lock:
 
 ### ❌ Anti-Patterns - NEVER Do These
 
-#### 1. **❌ Memory-First Deletion**
-```python
-# WRONG - Creates phantom records on DB failure
-with self.clients_lock:
-    self.clients.pop(client_id_bytes, None)
-success = self.db_manager.delete_client(client_id_bytes)  # May fail!
-```
-
-#### 2. **❌ Duplicate Validation Logic**
-```python
-# WRONG - Validation duplicated in 4 places
-if len(name) > MAX_CLIENT_NAME_LENGTH:
-    return error  # Repeated everywhere!
-```
-
-#### 3. **❌ Unprotected Database Operations**
-```python
-# WRONG - No retry protection
-def get_data(self):
-    return self.db_manager.query()  # Will crash on database lock!
-```
-
-#### 4. **❌ Passive Health Checks**
-```python
-# WRONG - Just reading status without validation
-health_data['cleanup_thread'] = pool_status.get('cleanup_thread_alive')
-# What if it's False? No action taken!
-```
-
-#### 5. **❌ Global Rate Limiting**
-```python
-# WRONG - Single rate limit for all resources
-if current_time - self._last_export < 10:
-    return error  # Blocks unrelated exports!
-```
+1. **❌ Memory-First Deletion** - Always modify database before memory
+2. **❌ Duplicate Validation Logic** - Create centralized validators
+3. **❌ Unprotected Database Operations** - Always use retry decorator
+4. **❌ Passive Health Checks** - Validate states, don't just read them
+5. **❌ Global Rate Limiting** - Use per-resource rate limiting
 
 ### 🔧 Refactoring Checklist
 
@@ -837,27 +589,50 @@ When adding new database operations:
 ## Troubleshooting
 
 ### Common Issues
-- GUI freezing during server communication: Check for blocking operations
+- GUI freezing during server communication: Check for blocking operations and proper `run_in_executor` usage
 - Client connection failures: Verify protocol compatibility and network settings
 - Database lock issues: Ensure proper transaction handling and connection cleanup
 - GUI styling inconsistencies: Follow established theme patterns
+- Views not displaying: Check for scroll conflicts and async/sync integration issues
 
 ### Debugging
 - Enable detailed logging with `--verbose` or environment variables
 - Use the ServerBridge test methods to verify server functionality
 - Check the server.log and enhanced log files for error details
 - Use the built-in diagnostic tools in the GUI for system monitoring
+- Add strategic logging in async functions to identify freeze points
 
 ## Future Development
 
 ### Planned Enhancements
+- Complete Phase 1 utilities (async_helpers, loading_states, data_export, ui_builders)
+- Apply 5-Section Pattern to all major views
 - Enhanced analytics and reporting features
 - Improved backup scheduling and automation
 - Advanced file versioning and recovery options
 - Additional GUI themes and customization options
+- Live log streaming via WebSocket
 
 ### Architecture Considerations
-- Scalability for larger client deployments
-- Additional encryption algorithms support
-- Cloud storage integration options
-- Advanced monitoring and alerting systems
+- Maintain pragmatic scale (50-500 users)
+- Continue working WITH Flet's functional philosophy
+- Focus on maintainability over arbitrary metrics
+- Systematic deduplication of common patterns
+- Consistent async/sync integration across all views
+
+## Documentation References
+
+For more detailed information, see:
+
+- **[FLET_INTEGRATION_GUIDE.md](FLET_INTEGRATION_GUIDE.md)** - Complete async/sync integration patterns
+- **[FLET_QUICK_FIX_GUIDE.md](FLET_QUICK_FIX_GUIDE.md)** - Step-by-step async fix instructions
+- **[FletV2_COMPREHENSIVE_ANALYSIS_2025.md](FletV2/FletV2_COMPREHENSIVE_ANALYSIS_2025.md)** - Complete codebase analysis
+- **[FletV2_Modularization_Plan.md](FletV2/FletV2_Modularization_Plan.md)** - Pragmatic refactoring roadmap (64 hours, 5 weeks)
+- **[architecture_guide.md](FletV2/architecture_guide.md)** - 5-Section Pattern detailed guide
+- **[SETTINGS_VIEW_ANALYSIS.md](SETTINGS_VIEW_ANALYSIS.md)** - Settings view fixes for Flet 0.28.3
+- **[server.py](python_server/server/server.py)** - Reference implementations for patterns
+- **[database.py](python_server/server/database.py)** - Database best practices
+
+---
+
+**This document is a living guide and should be updated as the project evolves. Always verify information against the actual codebase when in doubt.**

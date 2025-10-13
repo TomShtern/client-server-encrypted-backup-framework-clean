@@ -15,11 +15,10 @@ import asyncio
 import logging
 import os
 import signal
+import socket
 import sys
 from pathlib import Path
 from typing import Any
-
-from run_integrated_server import find_available_port
 
 # CRITICAL: Set up Python path IMMEDIATELY for all imports
 current_dir = Path(__file__).parent
@@ -77,46 +76,67 @@ except ImportError as e:
 
 # Import FletV2 components
 try:
-    from main import FletV2App
-    from main import main as flet_main
-except ImportError as e:
-    print(f"Error: Could not import main module: {e}")
-    sys.exit(1)
+    from .main import FletV2App  # type: ignore[import-not-found]
+    from .main import main as flet_main  # type: ignore[import-not-found]
+except ImportError:
+    try:
+        from main import FletV2App
+        from main import main as flet_main
+    except ImportError as e:
+        print(f"Error: Could not import main module: {e}")
+        sys.exit(1)
 
 # Import utils modules with proper error handling
 server_bridge_imported = False
 debug_setup_imported = False
 
 try:
-    from utils.server_bridge import create_server_bridge
+    from .utils.server_bridge import create_server_bridge  # type: ignore[import-not-found]
     server_bridge_imported = True
     print("Successfully imported server_bridge")
-except ImportError as e:
-    print(f"Warning: Could not import server_bridge: {e}")
-    # Silent fallback - path should be configured by now
-    def _create_server_bridge_fallback(real_server=None):
-        class MockBridge:
-            def is_connected(self): return False
-        return MockBridge()
-    create_server_bridge = _create_server_bridge_fallback
+except ImportError:
+    try:
+        from utils.server_bridge import create_server_bridge
+        server_bridge_imported = True
+        print("Successfully imported server_bridge")
+    except ImportError as e:
+        print(f"Warning: Could not import server_bridge: {e}")
+
+        # Silent fallback - path should be configured by now
+        def _create_server_bridge_fallback(real_server=None):
+            class MockBridge:
+                def is_connected(self):
+                    return False
+
+            return MockBridge()
+
+        create_server_bridge = _create_server_bridge_fallback
 
 try:
-    from utils.debug_setup import setup_terminal_debugging
+    from .utils.debug_setup import setup_terminal_debugging  # type: ignore[import-not-found]
     debug_setup_imported = True
     print("Successfully imported debug_setup")
-except ImportError as e:
-    print(f"Warning: Could not import debug_setup: {e}")
-    # Silent fallback - path should be configured by now
-    import logging
-    def _setup_terminal_debugging_fallback(logger_name=None):
-        logger = logging.getLogger(logger_name or __name__)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-    setup_terminal_debugging = _setup_terminal_debugging_fallback
+except ImportError:
+    try:
+        from utils.debug_setup import setup_terminal_debugging
+        debug_setup_imported = True
+        print("Successfully imported debug_setup")
+    except ImportError as e:
+        print(f"Warning: Could not import debug_setup: {e}")
+
+        # Silent fallback - path should be configured by now
+        import logging
+
+        def _setup_terminal_debugging_fallback(logger_name=None):
+            logger = logging.getLogger(logger_name or __name__)
+            if not logger.handlers:
+                handler = logging.StreamHandler()
+                handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+                logger.addHandler(handler)
+                logger.setLevel(logging.INFO)
+            return logger
+
+        setup_terminal_debugging = _setup_terminal_debugging_fallback
 
 # Set up logging
 logger = setup_terminal_debugging(logger_name="IntegratedStartup")
@@ -352,6 +372,29 @@ class IntegratedServerManager:
 
         except Exception as e:
             logger.error(f"❌ Shutdown error: {e}")
+
+def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
+    """
+    Find an available port starting from start_port.
+
+    Args:
+        start_port: The port to start checking from
+        max_attempts: Maximum number of ports to check before giving up
+
+    Returns:
+        An available port number
+
+    Raises:
+        RuntimeError: If no available port is found within max_attempts
+    """
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(('127.0.0.1', port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"No available port found starting from {start_port}")
 
 async def main_integrated(development_mode: bool = False, force_mock: bool = False, port: int = 8000) -> None:
     """

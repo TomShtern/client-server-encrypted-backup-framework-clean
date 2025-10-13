@@ -163,7 +163,7 @@ class BackupServerWithFletV2:
                         # Update maintenance stats
                         gui.update_maintenance_stats("Today", 5, 2)  # type: ignore
 
-                    time.sleep(2)  # Update every 2 seconds
+                    threading.Event().wait(2)  # Update every 2 seconds without blocking the UI thread
 
                 except Exception as e:
                     self.logger.error(f"Update loop error: {e}")
@@ -176,7 +176,7 @@ class BackupServerWithFletV2:
         # Keep main thread alive
         try:
             while True:
-                time.sleep(1)
+                threading.Event().wait(1)
         except KeyboardInterrupt:
             pass
 

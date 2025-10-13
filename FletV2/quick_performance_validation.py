@@ -30,7 +30,9 @@ class MockControl:
 
     def update(self):
         # Simulate control update performance
-        time.sleep(0.001)  # 1ms simulation
+        start = time.perf_counter()
+        while time.perf_counter() - start < 0.001:
+            pass
         return True
 
 class MockPage:
@@ -40,7 +42,9 @@ class MockPage:
 
     def update(self):
         # Simulate page update performance (heavier operation)
-        time.sleep(0.005)  # 5ms simulation
+        start = time.perf_counter()
+        while time.perf_counter() - start < 0.005:
+            pass
         return True
 
 def benchmark_control_updates(iterations: int = 100) -> dict[str, float]:

@@ -291,7 +291,7 @@ def create_files_view(
 
         def handle_picker_result(event: ft.FilePickerResultEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(save_file(event))
+                page.run_task(save_file, event)
             else:
                 asyncio.get_event_loop().create_task(save_file(event))
 
@@ -347,7 +347,7 @@ def create_files_view(
             return
 
         if hasattr(page, "run_task"):
-            page.run_task(lambda: _verify_file_async(file))
+            page.run_task(_verify_file_async, file)
         else:
             asyncio.get_event_loop().create_task(_verify_file_async(file))
 
@@ -370,7 +370,7 @@ def create_files_view(
                     padding=8,
                     border_radius=4
                 ),
-            ], spacing=10, height=250, scroll="auto"),
+            ], spacing=10, height=250, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda _e: page.close(verification_dialog))
             ],

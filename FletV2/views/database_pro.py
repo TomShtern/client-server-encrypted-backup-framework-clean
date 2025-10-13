@@ -1239,7 +1239,7 @@ def create_database_view(
             content=ft.Container(
                 content=ft.Column(
                     list(input_fields.values()),
-                    scroll="auto",
+                    scroll=ft.ScrollMode.AUTO,
                     tight=True,
                 ),
                 width=400,
@@ -1314,7 +1314,7 @@ def create_database_view(
             content=ft.Container(
                 content=ft.Column(
                     list(input_fields.values()),
-                    scroll="auto",
+                    scroll=ft.ScrollMode.AUTO,
                     tight=True,
                 ),
                 width=400,

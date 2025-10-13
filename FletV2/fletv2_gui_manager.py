@@ -286,8 +286,7 @@ class FletV2Manager:
         """Restart the server - called from FletV2 controls."""
         def restart():
             self.stop_server()
-            import time
-            time.sleep(2)
+            threading.Event().wait(2)
             self.start_server()
 
         threading.Thread(target=restart, daemon=True).start()

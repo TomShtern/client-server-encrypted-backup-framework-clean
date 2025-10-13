@@ -292,7 +292,7 @@ def create_clients_view(
                 ft.Text(f"Last Seen: {client.get('last_seen', 'N/A')}"),
                 ft.Text(f"Files: {client.get('files_count', 'N/A')}"),
                 ft.Text(f"IP Address: {client.get('ip_address', 'N/A')}"),
-            ], height=200, scroll="auto"),
+            ], height=200, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Close", on_click=lambda _e: page.close(details_dialog))
             ],
@@ -326,7 +326,7 @@ def create_clients_view(
 
         def confirm_disconnect(event: ft.ControlEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(confirm_disconnect_async(event))
+                page.run_task(confirm_disconnect_async, event)
             else:
                 asyncio.get_event_loop().create_task(confirm_disconnect_async(event))
 
@@ -367,7 +367,7 @@ def create_clients_view(
 
         def confirm_delete(event: ft.ControlEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(confirm_delete_async(event))
+                page.run_task(confirm_delete_async, event)
             else:
                 asyncio.get_event_loop().create_task(confirm_delete_async(event))
 
@@ -424,13 +424,13 @@ def create_clients_view(
 
         def save_client(event: ft.ControlEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(save_client_async(event))
+                page.run_task(save_client_async, event)
             else:
                 asyncio.get_event_loop().create_task(save_client_async(event))
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Client"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll="auto"),
+            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(add_dialog)),
                 ft.FilledButton("Add", on_click=save_client),
@@ -485,13 +485,13 @@ def create_clients_view(
 
         def save_changes(event: ft.ControlEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(save_changes_async(event))
+                page.run_task(save_changes_async, event)
             else:
                 asyncio.get_event_loop().create_task(save_changes_async(event))
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll="auto"),
+            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(edit_dialog)),
                 ft.FilledButton("Save", on_click=save_changes),

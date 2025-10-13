@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Live settings view with Material Design 3 styling and immediate feedback."""
+"""Professional settings view rebuilt for Flet 0.28.3."""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import json
 from collections.abc import Callable, Coroutine
@@ -21,7 +22,7 @@ try:
     from ..utils.ui_builders import create_action_button, create_view_header
     from ..utils.ui_components import AppCard
     from ..utils.user_feedback import show_error_message, show_success_message
-except Exception:  # pragma: no cover - fallback for loose execution contexts
+except Exception:  # pragma: no cover - fallback when running out of package context
     from FletV2.config import SETTINGS_FILE  # type: ignore
     from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call  # type: ignore
     from FletV2.utils.debug_setup import get_logger  # type: ignore
@@ -34,14 +35,10 @@ except Exception:  # pragma: no cover - fallback for loose execution contexts
 
 logger = get_logger(__name__)
 
+Validator = Callable[[Any], tuple[bool, str | None]]
+Parser = Callable[[Any], Any]
 
-# Keep references to background tasks to prevent garbage collection
-_background_tasks: set[asyncio.Task] = set()
-
-
-ColorSeed = dict[str, str]
-
-COLOR_SEEDS: ColorSeed = {
+COLOR_SEEDS: dict[str, str] = {
     "blue": "#3B82F6",
     "indigo": "#6366F1",
     "purple": "#8B5CF6",
@@ -51,91 +48,70 @@ COLOR_SEEDS: ColorSeed = {
     "red": "#EF4444",
 }
 
-
-def _default_settings() -> dict[str, Any]:
-    return {
-        "server": {
-            "port": 1256,
-            "host": "127.0.0.1",
-            "max_clients": 50,
-            "timeout": 30,
-            "enable_ssl": False,
-            "ssl_cert_path": "",
-            "ssl_key_path": "",
-        },
-        "gui": {
-            "theme_mode": "system",
-            "color_scheme": "blue",
-            "auto_refresh": True,
-            "refresh_interval": 5,
-            "auto_resize": True,
-        },
-        "monitoring": {
-            "enabled": True,
-            "refresh_interval": 5,
-            "cpu_threshold": 80,
-            "memory_threshold": 85,
-            "disk_threshold": 90,
-        },
-        "logging": {
-            "enabled": True,
-            "level": "INFO",
-            "file_path": "logs/server.log",
-            "max_size_mb": 100,
-            "max_files": 5,
-        },
-        "security": {
-            "require_auth": False,
-            "api_key": "",
-            "max_login_attempts": 3,
-            "session_timeout": 3600,
-        },
-        "backup": {
-            "auto_backup": True,
-            "backup_path": "backups/",
-            "backup_interval_hours": 24,
-            "retention_days": 30,
-            "compress_backups": True,
-        },
-    }
+DEFAULT_SETTINGS: dict[str, dict[str, Any]] = {
+    "server": {
+        "port": 1256,
+        "host": "127.0.0.1",
+        "max_clients": 50,
+        "timeout": 30,
+        "enable_ssl": False,
+        "ssl_cert_path": "",
+        "ssl_key_path": "",
+    },
+    "gui": {
+        "theme_mode": "system",
+        "color_scheme": "blue",
+        "auto_refresh": True,
+        "refresh_interval": 5,
+        "auto_resize": True,
+    },
+    "monitoring": {
+        "enabled": True,
+        "refresh_interval": 5,
+        "cpu_threshold": 80,
+        "memory_threshold": 85,
+        "disk_threshold": 90,
+    },
+    "logging": {
+        "enabled": True,
+        "level": "INFO",
+        "file_path": "logs/server.log",
+        "max_size_mb": 100,
+        "max_files": 5,
+    },
+    "security": {
+        "require_auth": False,
+        "api_key": "",
+        "max_login_attempts": 3,
+        "session_timeout": 3600,
+    },
+    "backup": {
+        "auto_backup": True,
+        "backup_path": "backups/",
+        "backup_interval_hours": 24,
+        "retention_days": 30,
+        "compress_backups": True,
+    },
+}
 
 
-Validator = Callable[[Any], tuple[bool, str | None]]
-Parser = Callable[[Any], Any]
+def _merge_settings(data: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    merged = copy.deepcopy(DEFAULT_SETTINGS)
+    if isinstance(data, dict):
+        for section, values in data.items():
+            if section in merged and isinstance(values, dict):
+                merged[section].update(values)
+    return merged
 
 
-def _safe_int(value: Any, default: int = 0) -> int:
+def _safe_int(value: Any) -> int:
     try:
         return int(str(value).strip())
     except (TypeError, ValueError):
-        return default
+        return 0
 
 
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(str(value).strip())
-    except (TypeError, ValueError):
-        return default
-
-
-def _validate_range(min_value: float, max_value: float, label: str) -> Validator:
-    def _validator(value: Any) -> tuple[bool, str | None]:
-        if value is None:
-            return False, f"{label} is required"
-        if isinstance(value, str) and not value.strip():
-            return False, f"{label} is required"
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError):
-            return False, f"{label} must be a number"
-        if numeric < min_value or numeric > max_value:
-            return False, f"{label} must be between {min_value:g}-{max_value:g}"
-        return True, None
-
-    return _validator
-
-
-def _validate_required(label: str) -> Validator:
+def _require(label: str) -> Validator:
     def _validator(value: Any) -> tuple[bool, str | None]:
         if value is None or (isinstance(value, str) and not value.strip()):
             return False, f"{label} is required"
@@ -144,25 +120,49 @@ def _validate_required(label: str) -> Validator:
     return _validator
 
 
+def _numeric_range(min_value: float, max_value: float, label: str) -> Validator:
+    def _validator(value: Any) -> tuple[bool, str | None]:
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            return False, f"{label} must be numeric"
+        if numeric_value < min_value or numeric_value > max_value:
+            return False, f"{label} must be between {min_value:g}-{max_value:g}"
+        return True, None
+
+    return _validator
+
+
 def create_setting_row(label: str, control: ft.Control, description: str | None = None) -> ft.Container:
     caption = ft.Text(description, size=12, color=ft.Colors.ON_SURFACE_VARIANT) if description else None
-    column = ft.Column([
-        ft.Row([
-            ft.Text(label, size=14, weight=ft.FontWeight.W_500),
-            ft.Container(expand=True),
-            control,
-        ], spacing=12, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        *( [caption] if caption else [] ),
-    ], spacing=4)
-    return ft.Container(content=column, padding=ft.padding.symmetric(vertical=6))
+    items: list[ft.Control] = [
+        ft.Row(
+            [
+                ft.Text(label, size=14, weight=ft.FontWeight.W_500),
+                ft.Container(expand=True),
+                control,
+            ],
+            spacing=12,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+    ]
+    if caption:
+        items.append(caption)
+    return ft.Container(
+        content=ft.Column(items, spacing=4),
+        padding=ft.padding.symmetric(vertical=6),
+    )
 
 
 def create_settings_section(title: str, controls: list[ft.Control]) -> ft.Container:
     return ft.Container(
-        content=ft.Column([
-            ft.Text(title, size=18, weight=ft.FontWeight.W_600),
-            ft.Column(controls, spacing=4),
-        ], spacing=12),
+        content=ft.Column(
+            [
+                ft.Text(title, size=18, weight=ft.FontWeight.W_600),
+                ft.Column(controls, spacing=4),
+            ],
+            spacing=12,
+        ),
         padding=ft.padding.all(16),
         border_radius=12,
         bgcolor=ft.Colors.SURFACE,
@@ -175,19 +175,713 @@ def create_settings_section(title: str, controls: list[ft.Control]) -> ft.Contai
     )
 
 
-def _schedule(page: ft.Page, coro: Callable[[], Any] | asyncio.Future[Any]) -> None:
-    async def _runner() -> None:
-        result = coro() if callable(coro) else coro
-        if asyncio.iscoroutine(result):
-            await result
+class _SettingsView:
+    def __init__(
+        self,
+        page: ft.Page,
+        server_bridge: ServerBridge | None,
+        state_manager: StateManager | None,
+    ) -> None:
+        self.page = page
+        self.server_bridge = server_bridge
+        self.state_manager = state_manager
+        self.data = copy.deepcopy(DEFAULT_SETTINGS)
+        self.controls: dict[tuple[str, str], ft.Control] = {}
+        self.validators: dict[tuple[str, str], Validator] = {}
+        self.parsers: dict[tuple[str, str], Parser] = {}
+        self.dirty: dict[str, set[str]] = {section: set() for section in self.data}
+        self.status_text = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.autosave_enabled = True
+        self._is_disposed = False
 
-    if hasattr(page, "run_task"):
-        page.run_task(_runner)
-    else:
-        task = asyncio.create_task(_runner())
-        # Keep reference to avoid garbage collection
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
+        self._export_picker = ft.FilePicker(on_result=self._handle_export_result)
+        self._import_picker = ft.FilePicker(on_result=self._handle_import_result)
+
+        @debounce(2.0)
+        async def _auto_save() -> None:
+            await self.persist(auto=True)
+
+        self._autosave = _auto_save
+
+    # ------------------------------------------------------------------
+    # Public lifecycle hooks
+    # ------------------------------------------------------------------
+    def build(self) -> ft.Control:
+        self._ensure_overlay(self._export_picker)
+        self._ensure_overlay(self._import_picker)
+
+        header = create_view_header(
+            "Settings",
+            icon=ft.Icons.SETTINGS,
+            description="Configure networking, interface, monitoring, logging, security, and backup policies.",
+            actions=[create_action_button("Save", self._on_save_clicked, icon=ft.Icons.SAVE)],
+        )
+
+        layout = ft.Container(
+            content=ft.Column(
+                [
+                    header,
+                    ft.Container(content=self.status_text, padding=ft.padding.symmetric(vertical=4)),
+                    self._build_utilities_card(),
+                    self._build_tabs_card(),
+                ],
+                spacing=16,
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+            expand=True,
+            padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        )
+        return layout
+
+    async def setup(self) -> None:
+        self._update_status_text("Loading settings…")
+        await self.load_settings()
+        self._update_status_text("")
+
+    def dispose(self) -> None:
+        self._is_disposed = True
+        for picker in (self._export_picker, self._import_picker):
+            with contextlib.suppress(ValueError):
+                if picker in self.page.overlay:
+                    self.page.overlay.remove(picker)
+
+    # ------------------------------------------------------------------
+    # UI builders
+    # ------------------------------------------------------------------
+    def _build_utilities_card(self) -> ft.Control:
+        utilities = ft.Row(
+            [
+                create_action_button("Export", self._on_export_clicked, icon=ft.Icons.UPLOAD, primary=False),
+                create_action_button("Import", self._on_import_clicked, icon=ft.Icons.DOWNLOAD, primary=False),
+                create_action_button("Reset", self._on_reset_clicked, icon=ft.Icons.RESTORE, primary=False),
+            ],
+            spacing=12,
+            wrap=True,
+        )
+        return AppCard(utilities, title="Utilities", expand_content=False)
+
+    def _build_tabs_card(self) -> ft.Control:
+        tabs = ft.Tabs(
+            expand=True,
+            animation_duration=250,
+            divider_color=ft.Colors.TRANSPARENT,
+            tabs=[
+                ft.Tab(text="Server", icon=ft.Icons.DNS, content=self._build_server_section()),
+                ft.Tab(text="Interface", icon=ft.Icons.PALETTE, content=self._build_interface_section()),
+                ft.Tab(text="Monitoring", icon=ft.Icons.MONITOR_HEART, content=self._build_monitoring_section()),
+                ft.Tab(text="Logging", icon=ft.Icons.ARTICLE, content=self._build_logging_section()),
+                ft.Tab(text="Security", icon=ft.Icons.SECURITY, content=self._build_security_section()),
+                ft.Tab(text="Backup", icon=ft.Icons.BACKUP, content=self._build_backup_section()),
+            ],
+        )
+        first_tab = tabs.tabs[0]
+        tab_summary = {
+            "tab_count": len(tabs.tabs),
+            "first_tab_type": type(first_tab.content).__name__ if first_tab.content else None,
+            "first_tab_children": (
+                len(getattr(getattr(first_tab.content, "content", None), "controls", []))
+                if first_tab.content else 0
+            ),
+        }
+        logger.warning("[settings] Tabs built: %s", [tab.text for tab in tabs.tabs])
+        logger.warning("[settings] First tab summary: %s", tab_summary)
+        return AppCard(tabs, title="Configuration", expand_content=False)
+
+    def _build_server_section(self) -> ft.Control:
+        host = self._text_field("server", "host", "Host", width=220, validator=_require("Host"))
+        port = self._text_field(
+            "server",
+            "port",
+            "Port",
+            width=140,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1024, 65535, "Port"),
+        )
+        max_clients = self._text_field(
+            "server",
+            "max_clients",
+            "Max clients",
+            width=160,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 1000, "Max clients"),
+        )
+        timeout = self._text_field(
+            "server",
+            "timeout",
+            "Timeout (s)",
+            width=160,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(5, 600, "Timeout"),
+        )
+        enable_ssl = self._switch("server", "enable_ssl", "Enable TLS")
+        cert_path = self._text_field(
+            "server",
+            "ssl_cert_path",
+            "Certificate path",
+            expand=True,
+            validator=_require("Certificate path"),
+        )
+        key_path = self._text_field(
+            "server",
+            "ssl_key_path",
+            "Key path",
+            expand=True,
+            validator=_require("Key path"),
+        )
+        return create_settings_section(
+            "Server",
+            [
+                create_setting_row("Connection", ft.Row([host, port], spacing=12)),
+                create_setting_row("Capacity", ft.Row([max_clients, timeout], spacing=12)),
+                create_setting_row("Security", enable_ssl, "Enable TLS for client connections"),
+                create_setting_row("Certificate", cert_path),
+                create_setting_row("Key", key_path),
+            ],
+        )
+
+    def _build_interface_section(self) -> ft.Control:
+        theme = self._dropdown(
+            "gui",
+            "theme_mode",
+            "Theme mode",
+            options=[("light", "Light"), ("dark", "Dark"), ("system", "System")],
+            width=200,
+        )
+        color = self._dropdown(
+            "gui",
+            "color_scheme",
+            "Color seed",
+            options=[(key, key.title()) for key in COLOR_SEEDS],
+            width=220,
+        )
+        auto_refresh = self._switch("gui", "auto_refresh", "Auto refresh")
+        refresh_interval = self._text_field(
+            "gui",
+            "refresh_interval",
+            "Refresh interval (s)",
+            width=180,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 300, "Refresh interval"),
+        )
+        auto_resize = self._switch("gui", "auto_resize", "Responsive layout")
+        return create_settings_section(
+            "Interface",
+            [
+                create_setting_row("Theme", ft.Row([theme, color], spacing=12)),
+                create_setting_row("Refresh", ft.Row([auto_refresh, refresh_interval], spacing=12)),
+                create_setting_row("Layout", auto_resize, "Automatically adapt UI elements to window size"),
+            ],
+        )
+
+    def _build_monitoring_section(self) -> ft.Control:
+        monitoring_enabled = self._switch("monitoring", "enabled", "Enable monitoring")
+        refresh = self._text_field(
+            "monitoring",
+            "refresh_interval",
+            "Refresh interval (s)",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(5, 600, "Monitoring interval"),
+        )
+        cpu = self._text_field(
+            "monitoring",
+            "cpu_threshold",
+            "CPU threshold (%)",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "CPU threshold"),
+        )
+        memory = self._text_field(
+            "monitoring",
+            "memory_threshold",
+            "Memory threshold (%)",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "Memory threshold"),
+        )
+        disk = self._text_field(
+            "monitoring",
+            "disk_threshold",
+            "Disk threshold (%)",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "Disk threshold"),
+        )
+        return create_settings_section(
+            "Monitoring",
+            [
+                create_setting_row("Status", monitoring_enabled),
+                create_setting_row("Sampling", refresh, "Frequency for health polling"),
+                create_setting_row("Thresholds", ft.Row([cpu, memory, disk], spacing=12)),
+            ],
+        )
+
+    def _build_logging_section(self) -> ft.Control:
+        logging_enabled = self._switch("logging", "enabled", "Enable logging")
+        level = self._dropdown(
+            "logging",
+            "level",
+            "Log level",
+            options=["DEBUG", "INFO", "WARNING", "ERROR"],
+            width=200,
+        )
+        file_path = self._text_field(
+            "logging",
+            "file_path",
+            "Log file path",
+            expand=True,
+            validator=_require("Log file path"),
+        )
+        max_size = self._text_field(
+            "logging",
+            "max_size_mb",
+            "Max size (MB)",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 10240, "Max file size"),
+        )
+        max_files = self._text_field(
+            "logging",
+            "max_files",
+            "Max files",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 50, "Rotation count"),
+        )
+        return create_settings_section(
+            "Logging",
+            [
+                create_setting_row("Status", logging_enabled),
+                create_setting_row("Level", level),
+                create_setting_row("Storage", file_path),
+                create_setting_row("Rotation", ft.Row([max_size, max_files], spacing=12)),
+            ],
+        )
+
+    def _build_security_section(self) -> ft.Control:
+        require_auth = self._switch("security", "require_auth", "Require authentication")
+        api_key = self._text_field(
+            "security",
+            "api_key",
+            "API key",
+            expand=True,
+            validator=_require("API key"),
+            password=True,
+        )
+        max_attempts = self._text_field(
+            "security",
+            "max_login_attempts",
+            "Max login attempts",
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 10, "Max login attempts"),
+        )
+        session_timeout = self._text_field(
+            "security",
+            "session_timeout",
+            "Session timeout (s)",
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(60, 86400, "Session timeout"),
+        )
+        return create_settings_section(
+            "Security",
+            [
+                create_setting_row("Authentication", require_auth),
+                create_setting_row("API key", api_key),
+                create_setting_row("Login policy", ft.Row([max_attempts, session_timeout], spacing=12)),
+            ],
+        )
+
+    def _build_backup_section(self) -> ft.Control:
+        auto_backup = self._switch("backup", "auto_backup", "Auto backups")
+        backup_path = self._text_field(
+            "backup",
+            "backup_path",
+            "Backup path",
+            expand=True,
+            validator=_require("Backup path"),
+        )
+        interval = self._text_field(
+            "backup",
+            "backup_interval_hours",
+            "Backup interval (hours)",
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 168, "Backup interval"),
+        )
+        retention = self._text_field(
+            "backup",
+            "retention_days",
+            "Retention (days)",
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 365, "Retention"),
+        )
+        compress = self._switch("backup", "compress_backups", "Compress backups")
+        return create_settings_section(
+            "Backup",
+            [
+                create_setting_row("Automation", auto_backup),
+                create_setting_row("Destination", backup_path),
+                create_setting_row("Cadence", ft.Row([interval, retention], spacing=12)),
+                create_setting_row("Compression", compress),
+            ],
+        )
+
+    # ------------------------------------------------------------------
+    # Control factories
+    # ------------------------------------------------------------------
+    def _text_field(
+        self,
+        section: str,
+        key: str,
+        label: str,
+        *,
+        width: int | None = None,
+        expand: bool = False,
+        keyboard: ft.KeyboardType | None = None,
+        parser: Parser | None = None,
+        validator: Validator | None = None,
+        password: bool = False,
+    ) -> ft.TextField:
+        field = ft.TextField(
+            label=label,
+            width=width,
+            expand=expand,
+            keyboard_type=keyboard,
+            password=password,
+            can_reveal_password=password,
+        )
+        return self._bind_control(section, key, field, parser=parser, validator=validator)
+
+    def _switch(self, section: str, key: str, label: str) -> ft.Switch:
+        control = ft.Switch(label=label)
+        return self._bind_control(section, key, control)
+
+    def _dropdown(
+        self,
+        section: str,
+        key: str,
+        label: str,
+        *,
+        options: list[str] | list[tuple[str, str]],
+        width: int | None = None,
+        validator: Validator | None = None,
+    ) -> ft.Dropdown:
+        dropdown_options: list[ft.dropdown.Option] = []
+        for option in options:
+            if isinstance(option, tuple):
+                dropdown_options.append(ft.dropdown.Option(option[0], option[1]))
+            else:
+                dropdown_options.append(ft.dropdown.Option(option))
+        control = ft.Dropdown(label=label, options=dropdown_options, width=width)
+        return self._bind_control(section, key, control, validator=validator)
+
+    def _bind_control(
+        self,
+        section: str,
+        key: str,
+        control: ft.Control,
+        *,
+        parser: Parser | None = None,
+        validator: Validator | None = None,
+    ) -> ft.Control:
+        identifier = (section, key)
+        self.controls[identifier] = control
+        if parser:
+            self.parsers[identifier] = parser
+        if validator:
+            self.validators[identifier] = validator
+
+        def _on_change(event: ft.ControlEvent) -> None:
+            raw_value = getattr(event.control, "value", None)
+            parsed_value = self.parsers.get(identifier, lambda value: value)(raw_value)
+            self._on_value_changed(section, key, parsed_value)
+
+        control.on_change = _on_change
+        return control
+
+    # ------------------------------------------------------------------
+    # State handling
+    # ------------------------------------------------------------------
+    def _on_value_changed(self, section: str, key: str, value: Any) -> None:
+        if self._is_disposed:
+            return
+        self.data.setdefault(section, {})[key] = value
+        self._mark_dirty(section, key)
+        self._apply_dependencies()
+        self._apply_side_effects(section, key, value)
+        self._schedule_autosave()
+        self._push_state_update(section, key, value)
+
+    def _mark_dirty(self, section: str, key: str) -> None:
+        self.dirty.setdefault(section, set()).add(key)
+        self._update_status_text()
+
+    def _schedule_autosave(self) -> None:
+        if not self.autosave_enabled:
+            return
+        if hasattr(self.page, "run_task"):
+            self.page.run_task(self._autosave)
+        else:
+            asyncio.create_task(self._autosave())
+
+    def _apply_dependencies(self) -> None:
+        ssl_enabled = bool(self.data.get("server", {}).get("enable_ssl"))
+        for ssl_field in ("ssl_cert_path", "ssl_key_path"):
+            control = self.controls.get(("server", ssl_field))
+            if control and isinstance(control, ft.TextField):
+                control.disabled = not ssl_enabled
+                if control.page:
+                    control.update()
+        auth_required = bool(self.data.get("security", {}).get("require_auth"))
+        api_control = self.controls.get(("security", "api_key"))
+        if api_control and isinstance(api_control, ft.TextField):
+            api_control.disabled = not auth_required
+            if api_control.page:
+                api_control.update()
+
+    def _apply_side_effects(self, section: str, key: str, value: Any) -> None:
+        if section == "gui" and key == "theme_mode":
+            self._apply_theme(str(value))
+        elif section == "gui" and key == "color_scheme":
+            self._apply_color_seed(str(value))
+        elif section == "gui" and key == "refresh_interval":
+            self._broadcast("refresh_interval_change", {"interval": value})
+        elif section == "logging" and key == "level":
+            self._broadcast("logging_level_change", {"level": value})
+
+    def _push_state_update(self, section: str, key: str, value: Any) -> None:
+        if self.state_manager:
+            self.state_manager.update(
+                f"settings.{section}.{key}",
+                value,
+                source="settings_view_change",
+            )
+
+    def _broadcast(self, event_name: str, payload: dict[str, Any]) -> None:
+        if self.state_manager:
+            self.state_manager.broadcast_settings_event(event_name, payload)
+
+    def _update_status_text(self, message: str | None = None) -> None:
+        if message is not None:
+            self.status_text.value = message
+        else:
+            pending = sum(len(items) for items in self.dirty.values())
+            self.status_text.value = (
+                f"{pending} pending change(s); auto-save in progress" if pending else ""
+            )
+        if self.status_text.page:
+            self.status_text.update()
+
+    # ------------------------------------------------------------------
+    # Data IO
+    # ------------------------------------------------------------------
+    async def load_settings(self, show_feedback: bool = False) -> None:
+        logger.info("Loading settings (bridge: %s)", bool(self.server_bridge))
+        data: dict[str, Any] | None = None
+
+        if self.server_bridge:
+            result = await run_sync_in_executor(safe_server_call, self.server_bridge, "load_settings")
+            if result.get("success"):
+                data = result.get("data")
+            else:
+                logger.warning("Server settings load failed: %s", result.get("error"))
+        elif SETTINGS_FILE.exists():
+            async with aiofiles.open(SETTINGS_FILE) as handle:
+                try:
+                    data = json.loads(await handle.read())
+                except json.JSONDecodeError as err:
+                    logger.error("Failed to parse local settings file: %s", err)
+
+        self.data = _merge_settings(data)
+        self.dirty = {section: set() for section in self.data}
+        self._refresh_controls()
+        self._apply_theme(str(self.data["gui"].get("theme_mode", "system")))
+        self._apply_color_seed(str(self.data["gui"].get("color_scheme", "blue")))
+        self._push_full_state("settings_view_load")
+        if show_feedback:
+            show_success_message(self.page, "Settings loaded")
+
+    async def persist(self, auto: bool = False) -> None:
+        errors = self._validate_all()
+        if errors:
+            show_error_message(self.page, "; ".join(errors))
+            return
+
+        payload = copy.deepcopy(self.data)
+        if self.server_bridge:
+            result = await run_sync_in_executor(
+                safe_server_call,
+                self.server_bridge,
+                "save_settings",
+                payload,
+            )
+            if not result.get("success"):
+                show_error_message(
+                    self.page,
+                    f"Save failed: {result.get('error', 'Unknown error')}",
+                )
+                return
+        else:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(SETTINGS_FILE, "w") as handle:
+                await handle.write(json.dumps(payload, indent=2))
+
+        self.dirty = {section: set() for section in self.data}
+        self._push_full_state("settings_view_autosave" if auto else "settings_view_save")
+        self._update_status_text("Settings synchronized" if auto else "Settings saved")
+        if not auto:
+            show_success_message(self.page, "Settings saved")
+        self._broadcast("settings_saved", {"auto": auto})
+
+    async def _export_to_path(self, path: str) -> None:
+        payload = copy.deepcopy(self.data)
+        async with aiofiles.open(path, "w") as handle:
+            await handle.write(json.dumps(payload, indent=2))
+        show_success_message(self.page, f"Settings exported to {path}")
+
+    async def _import_from_path(self, path: str) -> None:
+        async with aiofiles.open(path) as handle:
+            imported = json.loads(await handle.read())
+        self.data = _merge_settings(imported)
+        self.dirty = {section: set(values.keys()) for section, values in self.data.items()}
+        self._refresh_controls()
+        self._apply_theme(str(self.data["gui"].get("theme_mode", "system")))
+        self._apply_color_seed(str(self.data["gui"].get("color_scheme", "blue")))
+        self._push_full_state("settings_view_import")
+        self._update_status_text("Imported settings; remember to save")
+        show_success_message(self.page, "Settings imported")
+
+    def _refresh_controls(self) -> None:
+        for (section, key), control in self.controls.items():
+            value = self.data.get(section, {}).get(key)
+            if isinstance(control, ft.TextField):
+                control.value = "" if value is None else str(value)
+                control.error_text = None
+            elif isinstance(control, ft.Switch):
+                control.value = bool(value)
+            elif isinstance(control, ft.Dropdown):
+                control.value = value
+            if control.page:
+                control.update()
+        self._apply_dependencies()
+        self._update_status_text()
+
+    def _validate_all(self) -> list[str]:
+        errors: list[str] = []
+        for identifier, validator in self.validators.items():
+            section, key = identifier
+            if section == "server" and key in {"ssl_cert_path", "ssl_key_path"} and not self.data["server"]["enable_ssl"]:
+                continue
+            if section == "security" and key == "api_key" and not self.data["security"]["require_auth"]:
+                continue
+            value = self.data.get(section, {}).get(key)
+            ok, message = validator(value)
+            control = self.controls.get(identifier)
+            if ok:
+                if isinstance(control, ft.TextField):
+                    control.error_text = None
+                    if control.page:
+                        control.update()
+                continue
+            if message:
+                errors.append(message)
+            if isinstance(control, ft.TextField):
+                control.error_text = message
+                if control.page:
+                    control.update()
+        return errors
+
+    def _apply_theme(self, mode: str) -> None:
+        theme_mode = (mode or "system").lower()
+        if theme_mode == "light":
+            self.page.theme_mode = ft.ThemeMode.LIGHT
+        elif theme_mode == "dark":
+            self.page.theme_mode = ft.ThemeMode.DARK
+        else:
+            self.page.theme_mode = ft.ThemeMode.SYSTEM
+        self.page.update()
+        self._broadcast("theme_change", {"theme_mode": theme_mode})
+
+    def _apply_color_seed(self, seed_key: str) -> None:
+        seed = COLOR_SEEDS.get(seed_key, COLOR_SEEDS["blue"])
+        theme = self.page.theme or ft.Theme()
+        theme.color_scheme_seed = seed
+        theme.use_material3 = True
+        self.page.theme = theme
+        self.page.update()
+        self._broadcast("color_seed_change", {"color": seed_key})
+
+    def _push_full_state(self, source: str) -> None:
+        if self.state_manager:
+            self.state_manager.update(
+                "settings_data",
+                copy.deepcopy(self.data),
+                source=source,
+            )
+
+    # ------------------------------------------------------------------
+    # Event handlers
+    # ------------------------------------------------------------------
+    def _on_export_clicked(self, _: ft.ControlEvent) -> None:
+        self._export_picker.save_file(
+            dialog_title="Export settings",
+            file_name="settings.json",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
+
+    def _handle_export_result(self, event: ft.FilePickerResultEvent) -> None:
+        if event.path:
+            self.page.run_task(self._export_to_path, event.path)
+
+    def _on_import_clicked(self, _: ft.ControlEvent) -> None:
+        self._import_picker.pick_files(
+            dialog_title="Import settings",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
+
+    def _handle_import_result(self, event: ft.FilePickerResultEvent) -> None:
+        if event.files and event.files[0] and getattr(event.files[0], "path", None):
+            self.page.run_task(self._import_from_path, event.files[0].path)
+
+    def _on_reset_clicked(self, _: ft.ControlEvent) -> None:
+        self.data = copy.deepcopy(DEFAULT_SETTINGS)
+        self.dirty = {section: set(values.keys()) for section, values in self.data.items()}
+        self._refresh_controls()
+        self._apply_theme(str(self.data["gui"].get("theme_mode", "system")))
+        self._apply_color_seed(str(self.data["gui"].get("color_scheme", "blue")))
+        self._push_full_state("settings_view_reset")
+        self._update_status_text("Defaults loaded; save to persist")
+        show_success_message(self.page, "Settings reset to defaults")
+
+    def _on_save_clicked(self, _: ft.ControlEvent) -> None:
+        self.page.run_task(self.persist)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _ensure_overlay(self, picker: ft.FilePicker) -> None:
+        if picker not in self.page.overlay:
+            self.page.overlay.append(picker)
 
 
 def create_settings_view(
@@ -195,698 +889,6 @@ def create_settings_view(
     page: ft.Page,
     state_manager: StateManager | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    current_settings: dict[str, Any] = _default_settings()
-    dirty_tracker: dict[str, set[str]] = {section: set() for section in current_settings}
-
-    controls: dict[tuple[str, str], ft.Control] = {}
-    validation_rules: dict[tuple[str, str], Validator] = {}
-    parsers: dict[tuple[str, str], Parser] = {}
-
-    autosave_enabled = True
-    status_text = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-
-    async def load_settings(show_feedback: bool = False) -> None:
-        nonlocal current_settings
-
-        logger.info("Loading settings (with server bridge: %s)", bool(server_bridge))
-        data: dict[str, Any] | None = None
-
-        if server_bridge:
-            result = await run_sync_in_executor(safe_server_call, server_bridge, "load_settings")
-            if result.get("success"):
-                data = result.get("data")
-            else:
-                logger.warning("Server settings load failed: %s", result.get("error"))
-        elif SETTINGS_FILE.exists():
-            async with aiofiles.open(SETTINGS_FILE) as fp:
-                try:
-                    data = json.loads(await fp.read())
-                except json.JSONDecodeError as err:
-                    logger.error("Failed parsing settings file: %s", err)
-
-        merged = _default_settings()
-        if isinstance(data, dict):
-            for category, values in data.items():
-                if category in merged and isinstance(values, dict):
-                    merged[category].update(values)
-        current_settings = merged
-        for section in dirty_tracker:
-            dirty_tracker[section].clear()
-
-        _refresh_controls()
-        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
-        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
-        if state_manager:
-            state_manager.update(
-                "settings_data",
-                copy.deepcopy(current_settings),
-                source="settings_view_load",
-            )
-        if show_feedback:
-            show_success_message(page, "Settings loaded")
-
-    async def persist_settings(auto: bool = False) -> None:
-        errors = _validate_all()
-        if errors:
-            show_error_message(page, "; ".join(errors))
-            return
-
-        payload = copy.deepcopy(current_settings)
-
-        if server_bridge:
-            result = await run_sync_in_executor(safe_server_call, server_bridge, "save_settings", payload)
-            if not result.get("success"):
-                show_error_message(page, f"Save failed: {result.get('error', 'Unknown error')}")
-                return
-        else:
-            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(SETTINGS_FILE, "w") as fp:
-                await fp.write(json.dumps(payload, indent=2))
-
-        if state_manager:
-            state_manager.update("settings_data", copy.deepcopy(payload), source="settings_view_save")
-            state_manager.broadcast_settings_event("settings_saved", {"auto": auto})
-
-        for section in dirty_tracker:
-            dirty_tracker[section].clear()
-        _update_status()
-
-        if status_text:
-            status_text.value = "Settings synchronized" if auto else "Settings saved"
-            if status_text.page:
-                status_text.update()
-
-        if not auto:
-            show_success_message(page, "Settings saved")
-
-    @debounce(2.0)
-    async def autosave_worker() -> None:
-        await persist_settings(auto=True)
-
-    def _schedule_autosave() -> None:
-        if autosave_enabled:
-            _schedule(page, autosave_worker)
-
-    def _refresh_controls() -> None:
-        for (category, key), control in controls.items():
-            value = current_settings.get(category, {}).get(key)
-            if isinstance(control, ft.TextField):
-                control.value = str(value) if value is not None else ""
-            elif isinstance(control, (ft.Switch, ft.Checkbox)):
-                control.value = bool(value)
-            elif isinstance(control, ft.Dropdown):
-                control.value = value
-            elif isinstance(control, ft.Slider):
-                control.value = float(value or 0)
-            if isinstance(control, ft.TextField):
-                control.error_text = None
-            if control.page:
-                control.update()
-        _apply_dependent_states()
-        _update_status()
-
-    def _validate_all() -> list[str]:
-        errors: list[str] = []
-        for identifier, validator in validation_rules.items():
-            value = current_settings.get(identifier[0], {}).get(identifier[1])
-            control = controls.get(identifier)
-            if (identifier in {("server", "ssl_cert_path"), ("server", "ssl_key_path")} and
-                not current_settings.get("server", {}).get("enable_ssl", False)):
-                if control and isinstance(control, ft.TextField):
-                    control.error_text = None
-                if control and control.page:
-                    control.update()
-                continue
-            if (identifier == ("security", "api_key") and
-                not current_settings.get("security", {}).get("require_auth", False)):
-                if control and isinstance(control, ft.TextField):
-                    control.error_text = None
-                if control and control.page:
-                    control.update()
-                continue
-            ok, message = validator(value)
-            if not ok and message:
-                errors.append(message)
-                if control and isinstance(control, ft.TextField):
-                    control.error_text = message
-                if control and control.page:
-                    control.update()
-            else:
-                if control and isinstance(control, ft.TextField):
-                    control.error_text = None
-                if control and control.page:
-                    control.update()
-        return errors
-
-    def _apply_theme(mode: str) -> None:
-        if not page:
-            return
-        theme_mode = mode.lower()
-        if theme_mode == "light":
-            page.theme_mode = ft.ThemeMode.LIGHT
-        elif theme_mode == "dark":
-            page.theme_mode = ft.ThemeMode.DARK
-        else:
-            page.theme_mode = ft.ThemeMode.SYSTEM
-        page.update()
-        if state_manager:
-            state_manager.broadcast_settings_event("theme_change", {"theme_mode": theme_mode})
-
-    def _apply_color_seed(seed_key: str) -> None:
-        seed = COLOR_SEEDS.get(seed_key, COLOR_SEEDS["blue"])
-        theme = page.theme or ft.Theme()
-        theme.color_scheme_seed = seed
-        theme.use_material3 = True
-        page.theme = theme
-        page.update()
-        if state_manager:
-            state_manager.broadcast_settings_event("color_seed_change", {"color": seed_key})
-
-    def _apply_dependent_states() -> None:
-        enable_ssl = bool(current_settings.get("server", {}).get("enable_ssl"))
-        server_cert.disabled = not enable_ssl
-        server_key.disabled = not enable_ssl
-        require_auth = bool(current_settings.get("security", {}).get("require_auth"))
-        security_api_key.disabled = not require_auth
-        for control in (server_cert, server_key, security_api_key):
-            if hasattr(control, "update") and control.page:
-                control.update()
-
-    def _update_status() -> None:
-        if not status_text:
-            return
-        dirty_count = sum(len(items) for items in dirty_tracker.values())
-        if dirty_count:
-            status_text.value = f"{dirty_count} pending change(s); auto-save in 2s"
-        else:
-            status_text.value = ""
-        if status_text.page:
-            status_text.update()
-
-    def _record_dirty(category: str, key: str) -> None:
-        dirty_tracker.setdefault(category, set()).add(key)
-        _update_status()
-
-    def _update_state(category: str, key: str, value: Any) -> None:
-        current_settings.setdefault(category, {})[key] = value
-        _record_dirty(category, key)
-        if state_manager:
-            state_manager.update(
-                f"settings.{category}.{key}",
-                value,
-                source="settings_view_change",
-            )
-
-    def _handle_validation(category: str, key: str, value: Any, control: ft.Control) -> bool:
-        validator = validation_rules.get((category, key))
-        if (category, key) in {
-            ("server", "ssl_cert_path"),
-            ("server", "ssl_key_path"),
-        }:
-            # Conditional requirement based on SSL state
-            if not current_settings.get("server", {}).get("enable_ssl", False):
-                if isinstance(control, ft.TextField):
-                    control.error_text = None
-                if isinstance(control, ft.TextField):
-                    control.disabled = True
-                    if control.page:
-                        control.update()
-                return True
-            if isinstance(control, ft.TextField):
-                control.disabled = False
-                if control.page:
-                    control.update()
-        if (category, key) == ("security", "api_key"):
-            if not current_settings.get("security", {}).get("require_auth", False):
-                if isinstance(control, ft.TextField):
-                    control.error_text = None
-                if isinstance(control, ft.TextField):
-                    control.disabled = True
-                    if control.page:
-                        control.update()
-                return True
-            if isinstance(control, ft.TextField):
-                control.disabled = False
-                if control.page:
-                    control.update()
-        if not validator:
-            if isinstance(control, ft.TextField):
-                control.error_text = None
-            return True
-        ok, message = validator(value)
-        if isinstance(control, ft.TextField):
-            control.error_text = message
-        if control.page:
-            control.update()
-        return ok
-
-    def _apply_and_schedule(category: str, key: str, value: Any, control: ft.Control) -> None:
-        if not _handle_validation(category, key, value, control):
-            return
-        _update_state(category, key, value)
-
-        if category == "gui" and key == "theme_mode":
-            _apply_theme(str(value))
-        if category == "gui" and key == "color_scheme":
-            _apply_color_seed(str(value))
-        if category == "gui" and key == "refresh_interval" and state_manager:
-            state_manager.broadcast_settings_event("refresh_interval_change", {"interval": value})
-        if category == "logging" and key == "level" and state_manager:
-            state_manager.broadcast_settings_event("logging_level_change", {"level": value})
-        if category == "server" and key == "enable_ssl":
-            server_cert.disabled = not bool(value)
-            server_key.disabled = not bool(value)
-            if server_cert.page:
-                server_cert.update()
-            if server_key.page:
-                server_key.update()
-        if category == "security" and key == "require_auth":
-            security_api_key.disabled = not bool(value)
-            if security_api_key.page:
-                security_api_key.update()
-        _update_status()
-
-        _schedule_autosave()
-
-    def _bind_control(
-        category: str,
-        key: str,
-        control: ft.Control,
-        *,
-        parser: Parser | None = None,
-        validator: Validator | None = None,
-    ) -> ft.Control:
-        controls[(category, key)] = control
-        if validator:
-            validation_rules[(category, key)] = validator
-        if parser:
-            parsers[(category, key)] = parser
-
-        def _on_change(event: ft.ControlEvent) -> None:
-            raw_value = getattr(event.control, "value", None)
-            parse = parsers.get((category, key))
-            value = parse(raw_value) if parse else raw_value
-            _apply_and_schedule(category, key, value, event.control)
-
-        if isinstance(control, ft.TextField):
-            control.on_change = _on_change
-        elif isinstance(control, (ft.Switch, ft.Checkbox, ft.Dropdown, ft.Slider)):
-            control.on_change = _on_change
-
-        return control
-
-    # Server tab controls
-    server_port = _bind_control(
-        "server",
-        "port",
-        ft.TextField(width=140, label="Port", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1024, 65535, "Port"),
-    )
-    server_host = _bind_control(
-        "server",
-        "host",
-        ft.TextField(width=220, label="Host"),
-        validator=_validate_required("Host"),
-    )
-    server_max_clients = _bind_control(
-        "server",
-        "max_clients",
-        ft.TextField(width=160, label="Max clients", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 1000, "Max clients"),
-    )
-    server_timeout = _bind_control(
-        "server",
-        "timeout",
-        ft.TextField(width=160, label="Timeout (s)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(5, 600, "Timeout"),
-    )
-    server_ssl = _bind_control("server", "enable_ssl", ft.Switch(label="Enable SSL"))
-    server_cert = _bind_control(
-        "server",
-        "ssl_cert_path",
-        ft.TextField(label="SSL certificate path", expand=True),
-        validator=_validate_required("Certificate path"),
-    )
-    server_key = _bind_control(
-        "server",
-        "ssl_key_path",
-        ft.TextField(label="SSL key path", expand=True),
-        validator=_validate_required("Key path"),
-    )
-
-    # Interface tab
-    theme_dropdown = _bind_control(
-        "gui",
-        "theme_mode",
-        ft.Dropdown(
-            width=180,
-            label="Theme mode",
-            options=[
-                ft.dropdown.Option("light", "Light"),
-                ft.dropdown.Option("dark", "Dark"),
-                ft.dropdown.Option("system", "System"),
-            ],
-        ),
-    )
-    color_dropdown = _bind_control(
-        "gui",
-        "color_scheme",
-        ft.Dropdown(
-            width=200,
-            label="Color seed",
-            options=[ft.dropdown.Option(key, key.title()) for key in COLOR_SEEDS],
-        ),
-    )
-    auto_refresh = _bind_control("gui", "auto_refresh", ft.Switch(label="Auto refresh"))
-    refresh_interval = _bind_control(
-        "gui",
-        "refresh_interval",
-        ft.TextField(width=180, label="Refresh interval (s)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 300, "Refresh interval"),
-    )
-    auto_resize = _bind_control("gui", "auto_resize", ft.Switch(label="Responsive layout"))
-
-    # Monitoring tab
-    monitoring_enabled = _bind_control("monitoring", "enabled", ft.Switch(label="Enable monitoring"))
-    monitoring_refresh = _bind_control(
-        "monitoring",
-        "refresh_interval",
-        ft.TextField(width=200, label="Refresh interval (s)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(5, 600, "Monitoring interval"),
-    )
-    monitoring_cpu = _bind_control(
-        "monitoring",
-        "cpu_threshold",
-        ft.TextField(width=200, label="CPU threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 100, "CPU threshold"),
-    )
-    monitoring_memory = _bind_control(
-        "monitoring",
-        "memory_threshold",
-        ft.TextField(width=200, label="Memory threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 100, "Memory threshold"),
-    )
-    monitoring_disk = _bind_control(
-        "monitoring",
-        "disk_threshold",
-        ft.TextField(width=200, label="Disk threshold (%)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 100, "Disk threshold"),
-    )
-
-    # Logging tab
-    logging_enabled = _bind_control("logging", "enabled", ft.Switch(label="Enable logging"))
-    logging_level = _bind_control(
-        "logging",
-        "level",
-        ft.Dropdown(
-            width=180,
-            label="Log level",
-            options=[
-                ft.dropdown.Option("DEBUG"),
-                ft.dropdown.Option("INFO"),
-                ft.dropdown.Option("WARNING"),
-                ft.dropdown.Option("ERROR"),
-            ],
-        ),
-    )
-    logging_file = _bind_control(
-        "logging",
-        "file_path",
-        ft.TextField(label="Log file path", expand=True),
-        validator=_validate_required("Log file path"),
-    )
-    logging_max_size = _bind_control(
-        "logging",
-        "max_size_mb",
-        ft.TextField(width=200, label="Max size (MB)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 10240, "Max file size"),
-    )
-    logging_max_files = _bind_control(
-        "logging",
-        "max_files",
-        ft.TextField(width=200, label="Max files", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 50, "Rotation count"),
-    )
-
-    # Security tab
-    security_require_auth = _bind_control(
-        "security",
-        "require_auth",
-        ft.Switch(label="Require authentication"),
-    )
-    security_api_key = _bind_control(
-        "security",
-        "api_key",
-        ft.TextField(label="API key", password=True, can_reveal_password=True, expand=True),
-        validator=_validate_required("API key")
-    )
-    security_max_attempts = _bind_control(
-        "security",
-        "max_login_attempts",
-        ft.TextField(width=220, label="Max login attempts", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 10, "Max login attempts"),
-    )
-    security_session_timeout = _bind_control(
-        "security",
-        "session_timeout",
-        ft.TextField(width=220, label="Session timeout (s)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(60, 86400, "Session timeout"),
-    )
-
-    # Backup tab
-    backup_auto = _bind_control("backup", "auto_backup", ft.Switch(label="Auto backups"))
-    backup_path = _bind_control(
-        "backup",
-        "backup_path",
-        ft.TextField(label="Backup path", expand=True),
-        validator=_validate_required("Backup path"),
-    )
-    backup_interval = _bind_control(
-        "backup",
-        "backup_interval_hours",
-        ft.TextField(width=220, label="Backup interval (hours)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 168, "Backup interval"),
-    )
-    backup_retention = _bind_control(
-        "backup",
-        "retention_days",
-        ft.TextField(width=220, label="Retention (days)", keyboard_type=ft.KeyboardType.NUMBER),
-        parser=_safe_int,
-        validator=_validate_range(1, 365, "Retention"),
-    )
-    backup_compress = _bind_control("backup", "compress_backups", ft.Switch(label="Compress backups"))
-
-    server_section = create_settings_section(
-        "Server",
-        [
-            create_setting_row("Connection", ft.Row([server_host, server_port], spacing=12)),
-            create_setting_row("Capacity", ft.Row([server_max_clients, server_timeout], spacing=12)),
-            create_setting_row("Security", server_ssl, "Enable TLS for client connections"),
-            create_setting_row("Certificate", server_cert),
-            create_setting_row("Key", server_key),
-        ],
-    )
-
-    interface_section = create_settings_section(
-        "Interface",
-        [
-            create_setting_row("Theme", ft.Row([theme_dropdown, color_dropdown], spacing=12)),
-            create_setting_row("Refresh", ft.Row([auto_refresh, refresh_interval], spacing=12)),
-            create_setting_row("Layout", auto_resize, "Automatically adapt layout to window size"),
-        ],
-    )
-
-    monitoring_section = create_settings_section(
-        "Monitoring",
-        [
-            create_setting_row("Status", monitoring_enabled),
-            create_setting_row("Sampling", monitoring_refresh, "Frequency for health polls"),
-            create_setting_row(
-                "Thresholds",
-                ft.Row([monitoring_cpu, monitoring_memory, monitoring_disk], spacing=12),
-            ),
-        ],
-    )
-
-    logging_section = create_settings_section(
-        "Logging",
-        [
-            create_setting_row("Status", logging_enabled),
-            create_setting_row("Level", logging_level),
-            create_setting_row("Storage", logging_file),
-            create_setting_row("Rotation", ft.Row([logging_max_size, logging_max_files], spacing=12)),
-        ],
-    )
-
-    security_section = create_settings_section(
-        "Security",
-        [
-            create_setting_row("Authentication", security_require_auth),
-            create_setting_row("API key", security_api_key),
-            create_setting_row(
-                "Login policy",
-                ft.Row([security_max_attempts, security_session_timeout], spacing=12),
-            ),
-        ],
-    )
-
-    backup_section = create_settings_section(
-        "Backup",
-        [
-            create_setting_row("Automation", backup_auto),
-            create_setting_row("Destination", backup_path),
-            create_setting_row("Cadence", ft.Row([backup_interval, backup_retention], spacing=12)),
-            create_setting_row("Compression", backup_compress),
-        ],
-    )
-
-    tabs = ft.Tabs(
-        expand=True,
-        animation_duration=300,
-        divider_color=ft.Colors.TRANSPARENT,
-        tabs=[
-            ft.Tab(text="Server", icon=ft.Icons.DNS, content=server_section),
-            ft.Tab(text="Interface", icon=ft.Icons.PALETTE, content=interface_section),
-            ft.Tab(text="Monitoring", icon=ft.Icons.MONITOR_HEART, content=monitoring_section),
-            ft.Tab(text="Logging", icon=ft.Icons.ARTICLE, content=logging_section),
-            ft.Tab(text="Security", icon=ft.Icons.SECURITY, content=security_section),
-            ft.Tab(text="Backup", icon=ft.Icons.BACKUP, content=backup_section),
-        ],
-    )
-
-    async def _export_settings(path: str) -> None:
-        payload = copy.deepcopy(current_settings)
-        async with aiofiles.open(path, "w") as fp:
-            await fp.write(json.dumps(payload, indent=2))
-        show_success_message(page, f"Settings exported to {path}")
-
-    async def _import_settings(path: str) -> None:
-        nonlocal current_settings
-        async with aiofiles.open(path) as fp:
-            data = json.loads(await fp.read())
-        if not isinstance(data, dict):
-            raise ValueError("Invalid settings file")
-        merged = _default_settings()
-        for category, values in data.items():
-            if category in merged and isinstance(values, dict):
-                merged[category].update(values)
-        current_settings = merged
-        _refresh_controls()
-        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
-        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
-        if state_manager:
-            state_manager.update(
-                "settings_data",
-                copy.deepcopy(current_settings),
-                source="settings_view_import",
-            )
-        show_success_message(page, "Settings imported")
-
-    def _handle_export(_: ft.ControlEvent) -> None:
-        def _on_export_result(e: ft.FilePickerResultEvent) -> None:
-            if e.path:
-                _schedule(page, lambda: _export_settings(e.path))
-
-        picker = ft.FilePicker(on_result=_on_export_result)
-        page.overlay.append(picker)
-        picker.save_file(
-            dialog_title="Export settings",
-            file_name="settings.json",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["json"],
-        )
-
-    def _handle_import(_: ft.ControlEvent) -> None:
-        def _on_import_result(e: ft.FilePickerResultEvent) -> None:
-            if e.files and len(e.files) > 0 and e.files[0] and getattr(e.files[0], "path", None):
-                path = e.files[0].path
-                _schedule(page, lambda: _import_settings(path))
-
-        picker = ft.FilePicker(on_result=_on_import_result)
-        page.overlay.append(picker)
-        picker.pick_files(
-            dialog_title="Import settings",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["json"],
-        )
-
-    def _handle_reset(_: ft.ControlEvent) -> None:
-        nonlocal current_settings
-        current_settings = _default_settings()
-        _refresh_controls()
-        _apply_theme(current_settings["gui"].get("theme_mode", "system"))
-        _apply_color_seed(current_settings["gui"].get("color_scheme", "blue"))
-        if state_manager:
-            state_manager.update(
-                "settings_data",
-                copy.deepcopy(current_settings),
-                source="settings_view_reset",
-            )
-        show_success_message(page, "Settings reset to defaults")
-
-    def _handle_save(_: ft.ControlEvent) -> None:
-        _schedule(page, lambda: persist_settings(auto=False))
-
-    utilities = ft.Row(
-        [
-            create_action_button("Export", _handle_export, icon=ft.Icons.UPLOAD, primary=False),
-            create_action_button("Import", _handle_import, icon=ft.Icons.DOWNLOAD, primary=False),
-            create_action_button("Reset", _handle_reset, icon=ft.Icons.RESTORE, primary=False),
-        ],
-        spacing=12,
-        wrap=True,
-    )
-
-    header = create_view_header(
-        "Settings",
-        icon=ft.Icons.SETTINGS,
-        description="Configure server connectivity, interface preferences, monitoring, and automation.",
-        actions=[create_action_button("Save", _handle_save, icon=ft.Icons.SAVE)],
-    )
-
-    utility_card = AppCard(utilities, title="Utilities", expand_content=False)
-    tabs_card = AppCard(tabs, title="Configuration")
-    message_bar = ft.Container(content=status_text, padding=ft.padding.symmetric(vertical=4))
-
-    content = ft.Column(
-        [
-            header,
-            message_bar,
-            utility_card,
-            tabs_card,
-        ],
-        spacing=16,
-        expand=True,
-        scroll=ft.ScrollMode.AUTO,
-    )
-
-    layout = ft.Container(
-        content=content,
-        expand=True,
-        padding=ft.padding.symmetric(horizontal=20, vertical=16),
-    )
-
-    async def setup() -> None:
-        status_text.value = "Loading settings…"
-        status_text.update()
-        await load_settings()
-        status_text.value = ""
-        status_text.update()
-
-    def dispose() -> None:
-        logger.debug("Disposing settings view")
-
-    return layout, dispose, setup
+    view = _SettingsView(page, server_bridge, state_manager)
+    root = view.build()
+    return root, view.dispose, view.setup

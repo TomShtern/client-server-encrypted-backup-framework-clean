@@ -99,7 +99,7 @@ def rebuild_table(page):
 
     # Replace the content entirely
     if table_container_ref.current:
-        table_container_ref.current.content = ft.Column([fresh_table], scroll="auto")
+        table_container_ref.current.content = ft.Column([fresh_table], scroll=ft.ScrollMode.AUTO)
         table_container_ref.current.update()
         print("Table rebuilt successfully!")
 
@@ -112,7 +112,7 @@ def main(page: ft.Page):
     # Container to hold the table (will be replaced)
     table_container = ft.Container(
         ref=table_container_ref,
-        content=ft.Column([initial_table], scroll="auto"),
+        content=ft.Column([initial_table], scroll=ft.ScrollMode.AUTO),
         expand=True,
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8,

@@ -4,6 +4,7 @@ Dialog Consolidation Utilities for FletV2
 Standardized dialog patterns and user feedback to eliminate the 15+ repeated AlertDialog implementations.
 """
 
+import asyncio
 from collections.abc import Callable
 
 import flet as ft
@@ -59,8 +60,11 @@ class DialogManager:
                     import inspect
 
                     if inspect.iscoroutinefunction(on_confirm):
-                        # Run async callback using page.run_task()
-                        page.run_task(lambda: on_confirm(e))
+                        # Run async callback using page.run_task() when available
+                        if hasattr(page, "run_task"):
+                            page.run_task(on_confirm, e)
+                        else:
+                            asyncio.get_event_loop().create_task(on_confirm(e))
                     else:
                         # Run sync callback normally
                         on_confirm(e)

@@ -999,7 +999,7 @@ class FletV2App(ft.Row):
                             "This is a diagnostics panel. Navigate to another view to continue.",
                             size=12, color=ft.Colors.ON_SURFACE_VARIANT
                         )
-                    ], spacing=8, scroll="always"),
+                    ], spacing=8, scroll=ft.ScrollMode.ALWAYS),
                     padding=20,
                     bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
                     border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),

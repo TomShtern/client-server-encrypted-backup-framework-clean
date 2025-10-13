@@ -59,7 +59,7 @@ def create_dashboard_stub(page: ft.Page | None = None) -> ft.Control:
                     spacing=4,
                 ),
             ],
-            scroll="auto",
+            scroll=ft.ScrollMode.AUTO,
             spacing=16,
         ),
         padding=24,

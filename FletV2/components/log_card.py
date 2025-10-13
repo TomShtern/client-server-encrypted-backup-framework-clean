@@ -329,7 +329,7 @@ class LogCard(ft.Container):
                     ft.TextSpan(
                         part,
                         ft.TextStyle(
-                            background_color=ft.Colors.YELLOW_200,
+                            bgcolor=ft.Colors.YELLOW_200,
                             color=ft.Colors.BLACK,
                             weight=ft.FontWeight.BOLD
                         )

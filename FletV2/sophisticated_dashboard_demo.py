@@ -387,7 +387,7 @@ def main(page: ft.Page):
             metrics_grid,
             gauge_grid,
             create_activity_panel(),
-        ], spacing=24, scroll="auto"),
+        ], spacing=24, scroll=ft.ScrollMode.AUTO),
         padding=28,
         expand=True,
     # SURFACE_VARIANT not available; use SURFACE tint

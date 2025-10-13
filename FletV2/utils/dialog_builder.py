@@ -168,7 +168,7 @@ def create_form_dialog(
             content=ft.Column(
                 controls=form_controls,
                 spacing=15,
-                scroll="auto",
+                scroll=ft.ScrollMode.AUTO,
             ),
             width=500,
             padding=ft.Padding(20, 20, 20, 20),

@@ -12,7 +12,7 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 - Production-grade encrypted backup stack combining Flet 0.28.3 GUI, Flask bridge, native C++ client, Python TCP server, and SQLite telemetry.
 - Security envelope: RSA-1024 key exchange, AES-256-CBC streaming, CRC32 integrity, monotonic timestamping, structured logging.
 - Designed for Windows-first deployments; PowerShell launchers enforce environment hygiene before Python spins up.
-- All entry points (`main.py`, `server.py`, `start_with_server.py`) must import `Shared.utils.utf8_solution` immediately or subprocess I/O degrades on Windows.
+- All entry points (`main.py`, `server.py`, `start_with_server.py`, `start_integrated_gui.py`) must import `Shared.utils.utf8_solution` immediately or subprocess I/O degrades on Windows.
 - `server_bridge` mediates GUI ↔ server calls and can fall back to a mock bridge when TCP 1256 is unavailable—guards required around async behaviors.
 - Expect real server to run on TCP 1256, Flask bridge on HTTP 9090, Flet GUI exposed at http://localhost:8570 when launched via the PowerShell script.
 - `defensive.db` stores normalized metadata; binary payloads land inside `python_server/server/received_files/`.
@@ -93,6 +93,7 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - `FLET_V2_DEBUG=1`: surfaces theming diagnostics; disable when performing performance measurements.
 - Set variables before launching Python; PowerShell scripts already front-load them.
 - The `claude-code.environmentVariables` setting in VS Code is an array of environment variable strings in the format `"KEY=VALUE"`. These variables are made available to the Claude Code extension during execution. Example: `["PYTHONNOUSERSITE=1", "FLET_NAV_SMOKE=1", "FLET_DASHBOARD_DEBUG=1", "FLET_V2_DEBUG=1", "CYBERBACKUP_DISABLE_INTEGRATED_GUI=1"]`
+- **Flet 0.28.3 is installed inside the `flet_venv` venv; ensure all necessary packages exist within this environment.**
 
 ## Flet View Lifecycle
 - Factories return `(control, dispose_fn, setup_fn)`; never call `.update()` during construction.
@@ -111,6 +112,7 @@ The workspace linter may flag the `mcpServers` property as invalid for this proj
 - **Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations. This prevents `ListView Control must be added to the page first` errors.**
 - **When using `create_logs_view` in `enhanced_logs.py`, ensure the correct return type annotation is used: `tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]`. This requires importing `Coroutine` from the `typing` module.**
 - **When using `page.run_task` in `settings.py`'s `_schedule` function, ensure the function adheres to its `-> None` return type by not returning anything in either branch. The coroutine should still be scheduled correctly.**
+- **Add null checks before accessing control attributes, especially when dealing with optional controls. For example, when updating the `disabled` property of a TextField in `settings.py`, check if the control and its page are not None before calling `control.update()`. Use `if control and isinstance(control, ft.TextField):` and `if control.page:` for safety.**
 
 ## Theme & Styling
 - Reuse `theme.py` constants such as `PRONOUNCED_NEUMORPHIC_SHADOWS`, `GLASS_MODERATE`, and gradient helpers.
@@ -203,7 +205,7 @@ C:\\Backups\\payload.bin
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
 - **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
-- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page before attempting to update it, especially when using asynchronous operations.
+- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page, especially when using asynchronous operations.
 - **When encountering `Type "Task[None]" is not assignable to return type "None"` in `settings.py`, ensure the `_schedule` function adheres to its `-> None` return type by not returning anything in either branch. The coroutine should still be scheduled correctly.**
 - **Optional member access errors**: Add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.
 - **Uninitialized `status_text`**: Properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.
@@ -226,6 +228,7 @@ C:\\Backups\\payload.bin
 - Communicate progress via repo issues and project status channels.
 - **Prioritize fixes for async safety, memory leaks, security vulnerabilities, and performance bottlenecks.**
 - **Ensure no changes are made that could break the system or the code.**
+- **Before addressing errors or flaws, always present a summary of the identified issues for review and approval.**
 
 ## Command Reference
 - Launch stack: `cd FletV2 && .\start_with_server.ps1`.
@@ -298,7 +301,14 @@ C:\\Backups\\payload.bin
 - **Using `time.sleep()` in async contexts will freeze the UI.**
 - **Files exceeding 1000 LOC, specifically `views/enhanced_logs.py`, `views/database_pro.py`, and `views/dashboard.py`, and `main.py` require decomposition to improve maintainability.**
 - **The project has 572 TODO/FIXME comments across 97 files, indicating areas needing attention and potential improvements. However, a recent analysis found only a small number of actual TODO comments within the FletV2 project itself. The original analysis may have included comments from build system dependencies.**
-- **Inconsistent Code Analysis:** Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.
+- **Inconsistent Code Analysis:** Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.**
+- **String literals passed to `scroll` instead of `ft.ScrollMode`**: The following files use string literals for the `scroll` property instead of `ft.ScrollMode`: `FletV2/main.py:1002`, `FletV2/views/clients.py:295, 433, 494`, `FletV2/views/files.py:373`, `FletV2/views/database_pro.py:1242, 1317`, `FletV2/views/dashboard_stub.py:62`, `FletV2/views/experimental.py:140`, `FletV2/utils/dialog_builder.py:171`, `FletV2/sophisticated_dashboard_demo.py:390`, `FletV2/theme_usage_examples.py:269`, `FletV2/tests/test_production_fix.py:93`, `FletV2/tests/test_rebuild_approach.py:102, 115`.
+- **`ft.TextStyle` uses unsupported `background_color`**: The `ft.TextStyle` in `FletV2/components/log_card.py:332` uses the unsupported `background_color` keyword; use `bgcolor` instead.
+- **Blocking `time.sleep()` calls**: Blocking `time.sleep()` calls persist in Flet flows (`FletV2/server_with_fletv2_gui.py:166, 179`; `FletV2/fletv2_gui_manager.py:290`) and supporting examples/tests (`FletV2/tests/test_async_patterns.py:28, 45, 191`; `FletV2/performance_benchmark.py:146`; `FletV2/quick_performance_validation.py:33, 43`). Avoid `time.sleep()` in Flet.
+- **Direct imports without the required relative→absolute fallback still exist in several helper modules**: `action_buttons.py` imports `theme`/`ui_components` using plain module names instead of the `try` relative / `except ImportError` absolute pattern mandated in the guide; `dialog_builder.py` pulls `theme` the same way. These will fail whenever the package isn’t on `sys.path` exactly as expected.
+- **Test helpers mirror the same issue**: `test_logs_integration.py` (and similar test files) reach into `utils.*` and `views.*` with absolute imports, again skipping the fallback structure the instructions require.
+- **The `settings.py` file is completely broken and needs to be re-implemented fully.**
+- **The `run_integrated_server` module is missing. Implement `find_available_port` directly in the `start_integrated_gui.py` file to eliminate the external dependency. Use Python's `socket` module to check port availability by attempting to bind to ports incrementally.**
 
 ## Quick Diagnostics
 - `python python_server/server/server.py --dry-run` verifies protocol bindings without client traffic.
@@ -319,6 +329,7 @@ C:\\Backups\\payload.bin
 - **Avoid using `print()` statements for logging; use proper logging mechanisms instead.**
 - **Minimize full-page redraws (`page.update()`) by updating individual controls.**
 - **Decompose files exceeding 1000 lines of code.**
+- **Flet 0.28.3 is installed inside the `flet_venv` venv; ensure all necessary packages exist within this environment.**
 
 ## Coding Style
 - Simplify conditional expressions using the `or` operator where appropriate to improve code conciseness and readability (e.g., `expansion_icon or ft.Container(width=0)`). Run linting tools like Ruff to confirm no new issues are introduced after applying such changes.
@@ -330,27 +341,4 @@ C:\\Backups\\payload.bin
 - **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
-- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
-- **`ListView Control must be added to the page first`**: This error indicates that you are trying to update a ListView before it has been added to the page. Ensure that the ListView control is added to the page, especially when using asynchronous operations.
-- **Use proper relative imports instead of absolute imports within try/except blocks.** Example: `from ..utils.debug_setup import get_logger` instead of absolute imports that may fail.
-- **When using `ft.ScrollMode`, use the proper enum values (e.g., `ft.ScrollMode.AUTO`) instead of string literals (e.g., `"auto"`).**
-- **When using `page.run_task()` with a function that requires arguments, wrap the function call in a lambda expression to ensure the function reference is passed correctly.** Example: `page.run_task(lambda: on_save_click(event))`
-- **YAML front matter must not have leading indentation; it must be flush left after the opening `---`.**
-- **When using conditional expressions, avoid negations for better readability. For example, use `"Settings synchronized" if auto else "Settings saved"` instead of `"Settings saved" if not auto else "Settings synchronized"`.**
-- **Combine nested if conditions into single compound conditions where appropriate to improve code clarity.**
-- **When addressing optional member access errors, add null checks for `control` before accessing `control.error_text` and `control.page`. Use `if control and hasattr(control, "error_text"):` instead of `if hasattr(control, "error_text"):`.**
-- **When encountering uninitialized `status_text`, properly initialize `status_text` as an `ft.Text` object instead of `None`. Update the type annotation from `ft.Text | None = None` to `ft.Text = ft.Text(...)`.**
-- **Inconsistent code analysis results in VS Code can be caused by language server state inconsistency, type checking/linting configuration conflicts, extension conflicts, or memory-related issues.** To address this:
-    - Standardize configuration files (e.g., `*.pylintrc`, `pyproject.toml`, `setup.cfg`, `.flake8`).
-    - Ensure a clear extension setup in VS Code by verifying Python linting and analysis settings. Avoid conflicting settings.
-    - Restart VS Code with a clean environment: close VS Code, delete temporary directories (`.vscode/.ropeproject/`, `.vscode/.pylint.d/`, ``), and restart VS Code with extensions disabled (`code --disable-extensions .`). Re-enable essential extensions one by one.
-    - Create a consistent validation process by adding a command to your project that runs the same validation tools used in VS Code (e.g., `python -m ruff check .`, `python -m pyright`).
-    - Check for memory issues by monitoring the Output panel for memory warnings. Increase memory limits for extensions or run heavier analysis tools on-demand.
-- **Errors from temporary VS Code editing snapshots:** Errors with paths like `chat-editing-snapshot-text-model:/c%3A/...` or `git:/c%3A/...` indicate temporary snapshots or git diff views, not real file errors. Real file errors would show paths like `c:\Users\tom7s\...`. Close the chat editing session, reload VS Code, and run the linter to verify the actual files.
-- **Deprecated imports:** Replace deprecated imports such as `typing.Coroutine` with `collections.abc.Coroutine`.
-- **Import sorting:** Ensure imports are properly sorted to improve code readability and maintainability.
-
-## Active Tasks
-
-- Implement a mechanism to read from all available log files, including rotated logs, to get a comprehensive log history.
-- Fix the "Flet logs" display to connect it
+- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28
