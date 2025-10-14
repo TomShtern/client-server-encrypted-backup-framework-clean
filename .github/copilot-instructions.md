@@ -243,6 +243,20 @@ C:\\Backups\\payload.bin
 - Download a file from a URL: `mkdir -p "$(dirname ~/.claude/commands/update-claudemd.md)" && curl -o ~/.claude/commands/update-claudemd.md https://claudecodecommands.directory/api/download/update-claudemd.md`.
 - The `update-claudemd.md` file is a Claude Code command that automatically updates `CLAUDE.md` documentation files based on recent git changes. It analyzes Git status, code changes, configuration updates, and API changes to generate an updated `CLAUDE.md` file.
 - Install Factory CLI (Windows): `irm https://app.factory.ai/cli/windows | iex`.
+- **Creating a Git Bundle:**
+  ```bash
+  cd C:\path\to\YourProject
+  # Create a bundle with all refs (branches, tags)
+  git bundle create ..\YourProject.bundle --all
+  # Verify the bundle
+  git bundle verify ..\YourProject.bundle
+  ```
+  Example usage within the project:
+  ```bash
+  cd C:\path\to\YourProject
+  git bundle create Client_Server_Encrypted_Backup_Framework.bundle --all
+  git bundle verify Client_Server_Encrypted_Backup_Framework.bundle
+  ```
 
 ## Communication & Hygiene
 - Issues should cite component, command invoked, commit hash, environment flags, and log excerpts.
@@ -338,7 +352,8 @@ C:\\Backups\\payload.bin
 - Use `len([...])` instead of `sum(1 for ...)` for counting operations.
 - **`page.run_task()`**: Always pass the coroutine function itself (e.g., `page.run_task(my_async_function)`) and not the result of calling the function (e.g., NOT `page.run_task(my_async_function())` or `page.run_task(lambda: my_async_function())`). Passing the result will lead to an `AssertionError`.
 - **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: This error indicates that the specified Flet icon `SAVE_AS_OUTLINE` is not available in the current Flet version (0.28.3). Replace it with `ft.Icons.SAVE_OUTLINED`. Verify icon availability in the target Flet version.
+- **`
 - **`AttributeError: module 'flet' has no attribute 'SelectableText'`**: When using `SelectableText`, use `ft.Text` with `selectable=True` instead.
 - **`Dropdown.__init__() got an unexpected keyword argument 'height'`**: Remove the `height` parameter from the `ft.Dropdown` constructor.
 - When using `ft.TextField`, avoid setting the `height` parameter, as it is not supported in Flet 0.28.3.
-- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28
+- **`TypeError: Text.__init__() got an unexpected keyword argument 'text_style'`**: In Flet 0.28.3, the `text_style` parameter is not supported in the `ft.Text` constructor. Use direct properties like `size=14` instead of `text_style=ft.TextStyle(size=14)`.
