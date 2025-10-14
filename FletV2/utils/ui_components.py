@@ -766,8 +766,13 @@ def AppCard(
     tooltip: str | None = None,
     expand_content: bool = True,
 ) -> ft.Container:
-    """Unified card: subtle border + elevation, consistent padding & radius."""
-    body = content
+    """Unified card: subtle border + elevation, consistent padding & radius.
+
+    When expand_content=True, the card will allocate remaining vertical space to its body
+    so that children like Tabs can render properly. We do this by wrapping the body in
+    a Container(expand=True) to make it an expanding child inside the card's Column.
+    """
+    body = ft.Container(content=content, expand=True) if expand_content else content
     header_controls: list[ft.Control] = []
     if title is not None or actions:
         header_controls.extend(
@@ -789,6 +794,9 @@ def AppCard(
             *header_controls,
             body
         ], spacing=_SP["lg"], expand=expand_content, scroll=(ft.ScrollMode.AUTO if expand_content else None)),
+        # Key fix: when expand_content is True, allow this card to expand within parent layouts (e.g., Column)
+        # so children like Tabs (with expand=True) actually receive vertical space.
+        expand=1 if expand_content else None,
         padding=ft.padding.all(padding if padding is not None else _SP["xl"]),
         border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
         border_radius=_RD["lg"],
