@@ -100,6 +100,8 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 
 ## Common Breakages & Fix Patterns
 - **UTF-8 corruption**: if console output shows mojibake, verify `Shared.utils.utf8_solution` import is first in the file.
+- **ResponsiveRow column_spacing**: Flet 0.28.3 `ResponsiveRow` does NOT support `column_spacing` parameter. Use only `run_spacing` for vertical spacing between wrapped rows.
+- **ft.Colors.SURFACE_VARIANT**: Does not exist in Flet 0.28.3. Use `ft.Colors.SURFACE` or `ft.Colors.GREY_100` instead. Valid Material 3 colors: `PRIMARY`, `SECONDARY`, `SURFACE`, `PRIMARY_CONTAINER`, `ON_SURFACE_VARIANT`.
 - **Mock bridge confusion**: Many operations quietly no-op in mock mode. Check `server_bridge.is_real()` and surface warning banners before destructive actions (delete file, reset DB).
 - **Database contention**: Use `DatabaseManager().get_connection()` context managers; never keep a connection past the with-block. Leaked cursors trigger `database is locked` under load.
 - **Protocol mismatch**: When handshake fails, compare Python `OPCODE_*` values with `Client/include/ProtocolEnums.h`. Regenerate C++ client if enums diverge.
@@ -114,6 +116,79 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 - **`ListView Control must be added...`**: Delay updates until after `setup_fn` or guard with `if control.page:`.
 - **`AttributeError: type object 'Icons' has no attribute 'SAVE_AS_OUTLINE'`**: Replace with `ft.Icons.SAVE_OUTLINED` (existing icon set).
 - **`sum(1 for ...)` pattern**: Replace with `len([...])` to satisfy lint guidelines.
+
+## View Development Best Practices (Learned from Settings View Redesign)
+
+### Critical Initialization Patterns:
+- **Always initialize all instance attributes in `__init__`** before they're referenced in `build()` or helper methods. Missing attributes cause `AttributeError` at runtime.
+  - Example: `_autosave_ref` must be created in `__init__` if referenced in `_build_status_bar()`.
+  - Use `ft.Ref[ft.ControlType]()` pattern for controls that need to be referenced before the view is built.
+
+- **Prefer dynamic calculation over stored state** for derived values:
+  - ❌ Bad: Store validation errors in `self._settings_errors` and try to keep it synchronized
+  - ✅ Good: Calculate `validation_errors = self._collect_validation_errors()` on-the-fly when needed
+  - Reason: Eliminates state synchronization bugs and makes code more maintainable
+
+### UI Simplification Principles:
+- **Simpler is better**: When redesigning views, remove complexity rather than adding it
+  - Heavy gradients, multiple shadows, and complex decorations increase code complexity and maintenance burden
+  - Clean borders, subtle backgrounds, and simple layouts are easier to debug and modify
+
+- **Follow community patterns**: Research Flet examples and use established patterns
+  - ListTile-style rows for settings (label left/top, control right/below)
+  - Clean section headers with simple dividers
+  - Subtle borders instead of heavy card decorations
+  - Professional apps favor minimalism over decoration
+
+- **One responsibility per component**:
+  - Status bars should show status, not duplicate functionality of action buttons
+  - Section cards should group related fields, not try to be decorative hero banners
+  - Keep validation, display, and data management separate
+
+### Common Redesign Mistakes:
+- **Removing UI elements before updating references**: When removing hero banners or complex components, search the entire file for references to their child elements
+- **Assuming state exists**: Never reference `self.attribute` without initializing it in `__init__` or checking if it exists
+- **Changing too much at once**: Make incremental changes and test after each modification
+- **Breaking existing patterns**: If other views use a pattern successfully, reuse it rather than inventing new approaches
+
+### Testing After Changes:
+1. Always run `python -m compileall <file>` to catch syntax errors
+2. Actually launch the app and navigate to the changed view
+3. Check console output for AttributeError or runtime exceptions
+4. Test all tabs/sections if the view has multiple states
+5. Verify autosave, validation, and other dynamic features still work
+
+### Space-Efficient Layout Patterns (Compact Design):
+- **Horizontal label+control layout**: For forms and settings, use `Row([Container(Text(label), width=fixed), control])` instead of vertical `Column([Text(label), control])` stacking
+  - Example: `Row([Container(Text("Port", size=13), width=140), TextField(expand=True)], spacing=10)`
+  - Saves 30-40px per field by eliminating vertical stacking
+  - Fixed label width (120-150px) ensures alignment across all fields
+
+- **Use tooltips over visible descriptions**: Set `control.tooltip = description` instead of adding a separate `Text(description)` control
+  - Saves 20-25px per field that has helper text
+  - Follows Material Design 3 guidelines for progressive disclosure
+
+- **Compact padding values**: Use smaller padding for space-constrained views
+  - ListView: `padding=ft.padding.all(10-12)` instead of 20px
+  - Field rows: `vertical=6-8` instead of 14-16px
+  - Section margins: `bottom=10-12` instead of 18-20px
+  - Icon/text spacing: `spacing=6-10` instead of 12-16px
+
+- **Smaller fonts and icons for secondary elements**:
+  - Status text: 11px instead of 12-13px
+  - Status icons: 14-16px instead of 18-20px
+  - Section headers: 14px instead of 16-18px
+
+- **When to use compact layout**:
+  - ✅ Settings views with many fields (need to fit without scrolling)
+  - ✅ Forms with 5+ input fields
+  - ✅ Dashboard cards with multiple data points
+  - ❌ Landing pages or marketing content (needs breathing room)
+  - ❌ Single-field dialogs (compact not necessary)
+
+- **Responsive considerations**: Add breakpoints to switch between horizontal and vertical layouts based on window width
+  - Horizontal layout: width > 800px
+  - Vertical layout: width ≤ 800px (mobile/narrow windows)
 
 ## Security & Compliance
 - Never commit private keys or credentials. Key rotation scripts live under `scripts/`; document runs in `security_notes.md`.
