@@ -14,7 +14,7 @@ from typing import Any, Callable, Coroutine
 import flet as ft
 
 try:  # pragma: no cover - UTF-8 bootstrap required by project
-    import Shared.utils.utf8_solution as _  # type: ignore
+    import Shared.utils.utf8_solution as _
 except Exception:  # pragma: no cover - allow running in isolation
     pass
 
@@ -31,10 +31,10 @@ try:
     )
     from ..utils.data_export import export_to_csv, generate_export_filename
 except Exception:  # pragma: no cover - fallback when executing directly
-    from FletV2.utils.async_helpers import run_sync_in_executor  # type: ignore
-    from FletV2.utils.ui_builders import create_action_button  # type: ignore
-    from FletV2.utils.ui_components import AppCard, create_pulsing_status_indicator  # type: ignore
-    from FletV2.utils.loading_states import (  # type: ignore
+    from FletV2.utils.async_helpers import run_sync_in_executor
+    from FletV2.utils.ui_builders import create_action_button
+    from FletV2.utils.ui_components import AppCard, create_pulsing_status_indicator
+    from FletV2.utils.loading_states import (
         create_empty_state,
         create_error_display,
         create_loading_indicator,
@@ -64,8 +64,9 @@ class DashboardSnapshot:
 @dataclass(slots=True)
 class MetricBlock:
     wrapper: ft.Container
-    value_text: ft.Text
-    footnote_text: ft.Text
+    # Use the generic Control type for static typing compatibility (ft.Text is a callable factory)
+    value_text: ft.Control
+    footnote_text: ft.Control
 
 
 def _normalize_text(value: Any) -> str:
@@ -373,6 +374,7 @@ def create_dashboard_view(
     snapshot_ref: DashboardSnapshot | None = None
     disposed = False
     refresh_lock = asyncio.Lock()
+    # Do not modify page.scroll; keep page-level scroll behavior unchanged
 
     metrics_config = [
         ("total_clients", "Clients", "Registered endpoints", ft.Icons.PEOPLE_OUTLINED, ft.Colors.PRIMARY, "clients"),
@@ -408,7 +410,7 @@ def create_dashboard_view(
     version_value_text = ft.Text("—", size=13, color=ft.Colors.ON_SURFACE)
     port_value_text = ft.Text("—", size=13, color=ft.Colors.ON_SURFACE)
 
-    def _info_tile(icon: str, label: str, value_control: ft.Text) -> ft.Row:
+    def _info_tile(icon: str, label: str, value_control: ft.Control) -> ft.Row:
         return ft.Row(
             [
                 ft.Icon(icon, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
@@ -578,46 +580,29 @@ def create_dashboard_view(
         width=160,
     )
 
-    # Use a bounded ListView to avoid nested unbounded scroll/expand issues inside the card.
-    activity_list = ft.ListView(spacing=10, padding=0, auto_scroll=False)
-    activity_list.controls = [
-        ft.Row(
-            [
-                ft.ProgressRing(),
-                ft.Text("Loading activity…", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
-            ],
-            spacing=10,
-            alignment=ft.MainAxisAlignment.CENTER,
-        )
-    ]
+    # Match enhanced_logs pattern EXACTLY: Column with expand=True and scroll=AUTO
+    activity_items_column = ft.Column(spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+    activity_items_column.controls = [create_loading_indicator("Loading activity…")]
 
-    activity_body = ft.Column(
+    # Put filters and activity in separate AppCards like enhanced_logs does
+    activity_filters_row = ft.Row(
         [
-            ft.Row(
-                [
-                    activity_search_field,
-                    activity_filter_dropdown,
-                    ft.Container(expand=True),
-                    activity_summary_text,
-                ],
-                spacing=12,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                wrap=True,
-                run_spacing=12,
-            ),
-            ft.Container(
-                height=1,
-                bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE),
-                # No expand - divider naturally spans full width; expand in Column affects HEIGHT not width
-            ),
-            # Bound the list height so the card remains content-sized and does not produce long gray areas.
-            ft.Container(content=activity_list, height=360),
+            activity_search_field,
+            activity_filter_dropdown,
+            ft.Container(expand=True),
+            activity_summary_text,
         ],
         spacing=12,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        wrap=True,
+        run_spacing=12,
     )
 
-    # Make the card content-sized to avoid nested scroll/expand conflicts with page-level scroll.
-    activity_section = AppCard(activity_body, title="Recent activity", expand_content=False, disable_hover=True)
+    activity_filters_card = AppCard(activity_filters_row, title="Activity filters", disable_hover=True)
+
+    # Match enhanced_logs: AppCard wraps the scrollable Column directly, then set expand on AppCard
+    activity_section = AppCard(activity_items_column, title="Recent activity")
+    activity_section.expand = True
 
     footer_text = ft.Text("Last updated: —", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
     footer_container = ft.Container(content=footer_text, alignment=ft.alignment.bottom_right)
@@ -639,7 +624,8 @@ def create_dashboard_view(
         [
             header,
             metrics_row,
-            activity_section,
+            activity_filters_card,  # Separate filters card
+            activity_section,  # Activity list card (expand=True set above)
             footer_container,
             error_panel,
         ],
@@ -649,13 +635,14 @@ def create_dashboard_view(
         scroll=ft.ScrollMode.AUTO,
     )
 
-    root = ft.Stack(
-        [
-            ft.Container(content=content_column, padding=ft.padding.symmetric(horizontal=16, vertical=12), expand=True),
-            loading_overlay,
-        ],
+    main_layout = ft.Container(
+        content=content_column,
+        padding=ft.padding.symmetric(horizontal=16, vertical=12),
         expand=True,
     )
+
+    # Match enhanced_logs: Use Stack for proper overlay handling
+    root = ft.Stack([main_layout, loading_overlay], expand=True)
 
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
         bridge_connected = False
@@ -772,25 +759,36 @@ def create_dashboard_view(
         if disposed:
             return
         async with refresh_lock:
-            loading_overlay.visible = True
-            loading_overlay.update()
+            # Inline loading overlay doesn't cover content; just show ring via snackbar-like
+            try:
+                page.snack_bar = ft.SnackBar(content=ft.Row([ft.ProgressRing(), ft.Text("Synchronizing dashboard…", size=12)], spacing=8))
+                page.snack_bar.open = True
+                page.update()
+            except Exception:
+                pass
 
             try:
                 snapshot = await _fetch_snapshot(server_bridge)
             except Exception as exc:  # pragma: no cover - defensive guard
-                loading_overlay.visible = False
-                loading_overlay.update()
+                with contextlib.suppress(Exception):
+                    if getattr(page, "snack_bar", None):
+                        page.snack_bar.open = False
+                        page.update()
                 show_error_snackbar(page, f"Dashboard refresh failed: {exc}")
                 return
 
             if disposed:
-                loading_overlay.visible = False
-                loading_overlay.update()
+                with contextlib.suppress(Exception):
+                    if getattr(page, "snack_bar", None):
+                        page.snack_bar.open = False
+                        page.update()
                 return
 
             await _apply_snapshot(snapshot)
-            loading_overlay.visible = False
-            loading_overlay.update()
+            with contextlib.suppress(Exception):
+                if getattr(page, "snack_bar", None):
+                    page.snack_bar.open = False
+                    page.update()
 
     def _on_refresh(_: ft.ControlEvent) -> None:
         if disposed:
@@ -951,10 +949,9 @@ def create_dashboard_view(
                 )
             )
             activity_summary_text.value = "No activity"
-            activity_list.controls = new_controls
-            activity_list.update()
+            activity_items_column.controls = new_controls
+            activity_items_column.update()
             activity_summary_text.update()
-            activity_section.update()
             return
 
         filtered: list[dict[str, Any]] = []
@@ -1005,10 +1002,9 @@ def create_dashboard_view(
                 summary_bits.append(f"{severity_counter[key]} {key}")
         activity_summary_text.value = " • ".join(summary_bits)
 
-        activity_list.controls = new_controls
-        activity_list.update()
+        activity_items_column.controls = new_controls
+        activity_items_column.update()
         activity_summary_text.update()
-        activity_section.update()
 
     def _on_activity_search_change(event: ft.ControlEvent) -> None:
         nonlocal activity_search_term

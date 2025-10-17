@@ -14,10 +14,10 @@ import flet as ft
 def create_loading_indicator(message="Loading..."):
     """
     Create standardized loading indicator.
-    
+
     Args:
         message: Message to display with the loading indicator
-        
+
     Returns:
         Container with loading indicator and message
     """
@@ -34,10 +34,10 @@ def create_loading_indicator(message="Loading..."):
 def create_error_display(error_message):
     """
     Create standardized error display.
-    
+
     Args:
         error_message: Error message to display
-        
+
     Returns:
         Container with error icon and message
     """
@@ -55,12 +55,12 @@ def create_error_display(error_message):
 def create_empty_state(title, message, icon=None):
     """
     Create standardized empty state display.
-    
+
     Args:
         title: Title for the empty state
         message: Message for the empty state
         icon: Icon to display (default: INBOX_OUTLINED)
-        
+
     Returns:
         Container with icon, title, and message for empty state
     """

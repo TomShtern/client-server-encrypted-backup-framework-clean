@@ -765,12 +765,15 @@ def AppCard(
     padding: int | None = None,
     tooltip: str | None = None,
     expand_content: bool = True,
+    disable_hover: bool = False,
 ) -> ft.Container:
     """Unified card: subtle border + elevation, consistent padding & radius.
 
     When expand_content=True, the card will allocate remaining vertical space to its body
     so that children like Tabs can render properly. We do this by wrapping the body in
     a Container(expand=True) to make it an expanding child inside the card's Column.
+
+    Set disable_hover=True to disable the scale animation on hover (fixes gray area issues).
     """
     body = ft.Container(content=content, expand=True) if expand_content else content
     header_controls: list[ft.Control] = []
@@ -807,10 +810,10 @@ def AppCard(
             color=ft.Colors.with_opacity(0.16, ft.Colors.SURFACE_TINT),
         ),
         bgcolor=ft.Colors.SURFACE,
-        # Micro-interactions
-        animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-        animate_scale=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-        on_hover=lambda e: (setattr(e.control, 'scale', 1.01 if e.data == 'true' else 1.0), e.control.update()),
+        # Micro-interactions (disabled if disable_hover=True to fix gray area issues)
+        animate=None if disable_hover else ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+        animate_scale=None if disable_hover else ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+        on_hover=None if disable_hover else lambda e: (setattr(e.control, 'scale', 1.01 if e.data == 'true' else 1.0), e.control.update()),
         tooltip=tooltip,
     )
 

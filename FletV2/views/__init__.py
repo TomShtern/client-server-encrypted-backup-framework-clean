@@ -9,32 +9,16 @@ __all__ = []  # Dynamic discovery; static list removed to avoid stale exports
 
 # Import modules on demand to prevent startup failures
 def __getattr__(name):
+    import importlib
     try:
-        if name == "dashboard":
-            from . import dashboard
-            return dashboard
-        if name == "clients":
-            from . import clients
-            return clients
-        if name == "analytics":
-            from . import analytics
-            return analytics
-        if name == "database":
-            from . import database
-            return database
-        if name == "files":
-            from . import files
-            return files
-        if name == "logs":
-            from . import logs
-            return logs
-        if name == "settings":
-            from . import settings
-            return settings
-        if name == "experimental":
-            from . import experimental
-            return experimental
+        # Use importlib to dynamically load submodules without recursion
+        module_path = f"views.{name}"
+        module = importlib.import_module(module_path)
+        # Cache the imported module in globals to avoid re-importing
+        globals()[name] = module
+        return module
     except ImportError as e:
         print(f"Warning: Could not import {name}: {e}")
         return None
-    raise AttributeError(f"module 'views' has no attribute '{name}'")
+    except Exception as e:
+        raise AttributeError(f"module 'views' has no attribute '{name}': {e}")
