@@ -908,21 +908,18 @@ def create_dashboard_view(
                 spacing=4,
                 tight=True,
             ),
-            trailing=ft.IconButton(
-                icon=ft.Icons.OPEN_IN_NEW,
-                tooltip="View details",
-                icon_size=18,
-                on_click=lambda _: _open_activity_details(entry),
-            ),
+            trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
         )
 
-        # Enhanced container with stronger colors, left border, and hover animation
+        # Enhanced container with stronger colors, left border, hover animation, and click handling
         tile_container = ft.Container(
             content=tile,
-            bgcolor=ft.Colors.with_opacity(0.10, palette["accent"]),  # Increased from 0.06
+            bgcolor=ft.Colors.with_opacity(0.10, palette["accent"]),
             border_radius=12,
-            border=ft.border.only(left=ft.BorderSide(4, palette["accent"])),  # Color-coded accent stripe
+            border=ft.border.only(left=ft.BorderSide(4, palette["accent"])),
             animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
+            ink=True,
+            on_click=lambda e: _open_activity_details(entry),
         )
 
         # Add hover effect for interactivity
@@ -931,12 +928,10 @@ def create_dashboard_view(
             tile_container.update()
 
         tile_container.on_hover = on_tile_hover
-        tile_container.on_click = lambda _: _open_activity_details(entry)
-        tile_container.ink = True
 
         return ft.Card(
             content=tile_container,
-            elevation=2,  # Slightly elevated for depth
+            elevation=2,
         )
 
     def _apply_activity_filters() -> None:
