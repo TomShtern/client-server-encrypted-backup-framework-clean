@@ -408,7 +408,7 @@ def create_dashboard_view(
     port_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
 
     # --- Helper: simple chip/pill for header stats (FilterChip not reliable in 0.28.3)
-    def _pill(icon: str, text_ctrl: ft.Text, bg: str, fg: str) -> ft.Container:
+    def _pill(icon: str, text_ctrl: ft.Text, bg: str, fg: str) -> ft.Control:
         return ft.Container(
             content=ft.Row(
                 [ft.Icon(icon, size=14, color=fg), text_ctrl],
@@ -576,11 +576,28 @@ def create_dashboard_view(
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
         # Check if bridge has real server instance
         bridge_connected = False
+        direct_bridge_present = False
         if server_bridge and hasattr(server_bridge, "is_connected"):
             with contextlib.suppress(Exception):
                 bridge_connected = bool(server_bridge.is_connected())
+        # In integrated mode, a real server object can be present even if is_connected() is False
+        # (e.g., network listener not started). Detect that and report as Connected (Direct).
+        if server_bridge and hasattr(server_bridge, "real_server"):
+            try:
+                direct_bridge_present = bool(getattr(server_bridge, "real_server"))
+            except Exception:
+                direct_bridge_present = False
 
         raw_status = _normalize_text(snapshot.server_status).lower()
+
+        # Additional evidence that the server is live even if status says stopped
+        evidence_connected = any([
+            snapshot.uptime_seconds and snapshot.uptime_seconds > 0,
+            (snapshot.total_clients or 0) > 0,
+            (snapshot.total_files or 0) > 0,
+            bool(snapshot.server_version),
+            snapshot.port is not None,
+        ])
 
         # Priority 1: Check actual server running status from snapshot
         if raw_status in {"running", "online", "active", "operational"}:
@@ -594,7 +611,7 @@ def create_dashboard_view(
         if raw_status in {"offline", "stopped", "disconnected"}:
             # In integrated GUI mode, network listener may be stopped while direct bridge is alive.
             # Reflect that as Connected (Direct) to avoid alarming red statuses.
-            if bridge_connected:
+            if bridge_connected or direct_bridge_present or evidence_connected:
                 return "excellent", "Server: Connected (Direct)"
             return "critical", f"Server: {snapshot.server_status.title()}"
 
