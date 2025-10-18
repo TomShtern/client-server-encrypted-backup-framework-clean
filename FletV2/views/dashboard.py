@@ -545,104 +545,86 @@ def create_dashboard_view(
     )
 
     activity_full_data: list[dict[str, Any]] = []
-    activity_filter_value = "all"
-    activity_search_term = ""
 
     activity_summary_text = ft.Text("No activity", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
-    activity_search_field = ft.TextField(
-        label="Search activity…",
-        prefix_icon=ft.Icons.SEARCH,
-        border=ft.InputBorder.OUTLINE,
-        border_radius=12,
-        filled=True,
-        fill_color=ft.Colors.SURFACE,
-        content_padding=ft.padding.symmetric(horizontal=16, vertical=12),
-        width=280,
+    ACTIVITY_MAX_VISIBLE = 4
+    ACTIVITY_ROW_HEIGHT = 96
+    ACTIVITY_ROW_SPACING = 12
+    ACTIVITY_PLACEHOLDER_HEIGHT = 220
+    activity_list = ft.Column(spacing=12, tight=True, scroll=ft.ScrollMode.AUTO)
+
+    # Remove fixed height - let content determine size naturally
+    activity_list_container = ft.Container(
+        content=activity_list,
+        clip_behavior=ft.ClipBehavior.NONE,  # Changed from HARD_EDGE to prevent clipping
+        padding=ft.padding.symmetric(vertical=6),
+        animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
     )
 
-    activity_filter_dropdown = ft.Dropdown(
-        label="Severity",
-        border=ft.InputBorder.OUTLINE,
-        border_radius=12,
-        filled=True,
-        fill_color=ft.Colors.SURFACE,
-        value="all",
-        options=[
-            ft.dropdown.Option("all", "All events"),
-            ft.dropdown.Option("critical", "Critical"),
-            ft.dropdown.Option("error", "Errors"),
-            ft.dropdown.Option("warning", "Warnings"),
-            ft.dropdown.Option("success", "Success"),
-            ft.dropdown.Option("audit", "Audit"),
-            ft.dropdown.Option("info", "Info"),
-        ],
-        width=160,
-    )
+    def _calculate_activity_height(entry_count: int) -> int:
+        if entry_count <= 0:
+            return ACTIVITY_PLACEHOLDER_HEIGHT
+        visible_rows = max(1, min(entry_count, ACTIVITY_MAX_VISIBLE))
+        spacing_total = ACTIVITY_ROW_SPACING * (visible_rows - 1)
+        return (ACTIVITY_ROW_HEIGHT * visible_rows) + spacing_total
 
-    # Match enhanced_logs pattern EXACTLY: Column with expand=True and scroll=AUTO
-    activity_items_column = ft.Column(spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
-    activity_items_column.controls = [create_loading_indicator("Loading activity…")]
+    def _update_activity_section(controls: list[ft.Control], *, entry_count: int, placeholder: bool) -> None:
+        # No longer set fixed height - let container size naturally
+        activity_list.controls.clear()
+        activity_list.controls.extend(controls)
+        with contextlib.suppress(Exception):
+            activity_list.update()
+        with contextlib.suppress(Exception):
+            activity_list_container.update()
 
-    # Put filters and activity in separate AppCards like enhanced_logs does
-    activity_filters_row = ft.Row(
+    _update_activity_section([create_loading_indicator("Loading activity…")], entry_count=0, placeholder=True)
+
+    # Activity section with summary text in the header
+    activity_header = ft.Row(
         [
-            activity_search_field,
-            activity_filter_dropdown,
+            ft.Text("Recent activity", size=16, weight=ft.FontWeight.W_600),
             ft.Container(expand=True),
             activity_summary_text,
         ],
         spacing=12,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        wrap=True,
-        run_spacing=12,
     )
 
-    activity_filters_card = AppCard(activity_filters_row, title="Activity filters", disable_hover=True)
-
-    # Match enhanced_logs: AppCard wraps the scrollable Column directly, then set expand on AppCard
-    activity_section = AppCard(activity_items_column, title="Recent activity")
-    activity_section.expand = True
+    activity_section = ft.Column(
+        [
+            activity_header,
+            activity_list_container,
+        ],
+        spacing=12,
+    )
 
     footer_text = ft.Text("Last updated: —", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-    footer_container = ft.Container(content=footer_text, alignment=ft.alignment.bottom_right)
+    # The footer should be part of the main content column, not a separate container that might cause layout issues.
+    # It should also be aligned to the end of the column, not necessarily the bottom right of a separate container.
+    footer_container = ft.Container(content=footer_text, alignment=ft.alignment.center_right)
 
     error_panel = ft.Container(visible=False)
-    loading_overlay = ft.Container(
-        content=ft.Column(
-            [ft.ProgressRing(), ft.Text("Synchronizing dashboard…", size=12)],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
-        ),
-        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY_CONTAINER),
-        alignment=ft.alignment.center,
-        visible=False,
-        expand=True,
-    )
 
     content_column = ft.Column(
         [
             header,
             metrics_row,
-            activity_filters_card,  # Separate filters card
-            activity_section,  # Activity list card (expand=True set above)
+            activity_section,  # Activity section without filters
             footer_container,
             error_panel,
         ],
         spacing=18,
-        expand=True,
         horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-        scroll=ft.ScrollMode.AUTO,
+        scroll=ft.ScrollMode.AUTO,  # Enable scrolling on the column itself
     )
 
-    main_layout = ft.Container(
+    # Main layout container with proper scrolling support
+    root = ft.Container(
         content=content_column,
         padding=ft.padding.symmetric(horizontal=16, vertical=12),
-        expand=True,
+        expand=True,  # Allow container to fill available space
     )
-
-    # Match enhanced_logs: Use Stack for proper overlay handling
-    root = ft.Stack([main_layout, loading_overlay], expand=True)
 
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
         bridge_connected = False
@@ -759,36 +741,16 @@ def create_dashboard_view(
         if disposed:
             return
         async with refresh_lock:
-            # Inline loading overlay doesn't cover content; just show ring via snackbar-like
-            try:
-                page.snack_bar = ft.SnackBar(content=ft.Row([ft.ProgressRing(), ft.Text("Synchronizing dashboard…", size=12)], spacing=8))
-                page.snack_bar.open = True
-                page.update()
-            except Exception:
-                pass
-
             try:
                 snapshot = await _fetch_snapshot(server_bridge)
             except Exception as exc:  # pragma: no cover - defensive guard
-                with contextlib.suppress(Exception):
-                    if getattr(page, "snack_bar", None):
-                        page.snack_bar.open = False
-                        page.update()
                 show_error_snackbar(page, f"Dashboard refresh failed: {exc}")
                 return
 
             if disposed:
-                with contextlib.suppress(Exception):
-                    if getattr(page, "snack_bar", None):
-                        page.snack_bar.open = False
-                        page.update()
                 return
 
             await _apply_snapshot(snapshot)
-            with contextlib.suppress(Exception):
-                if getattr(page, "snack_bar", None):
-                    page.snack_bar.open = False
-                    page.update()
 
     def _on_refresh(_: ft.ControlEvent) -> None:
         if disposed:
@@ -926,98 +888,43 @@ def create_dashboard_view(
         )
 
     def _apply_activity_filters() -> None:
-        new_controls: list[ft.Control] = []
-
+        """Display all activity without filtering."""
         if not activity_full_data:
-            new_controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Icon(ft.Icons.HISTORY, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text("No recent activity", size=16),
-                            ft.Text(
-                                "Operational events will appear here once the server receives requests.",
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                text_align=ft.TextAlign.CENTER,
-                            ),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=8,
-                    ),
-                    padding=20,
-                )
+            placeholder = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Icon(ft.Icons.HISTORY, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text("No recent activity", size=16, weight=ft.FontWeight.W_600),
+                        ft.Text(
+                            "Operational events will appear here once the server receives requests.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=8,
+                ),
+                padding=40,
+                alignment=ft.alignment.center,
             )
+            _update_activity_section([placeholder], entry_count=0, placeholder=True)
             activity_summary_text.value = "No activity"
-            activity_items_column.controls = new_controls
-            activity_items_column.update()
             activity_summary_text.update()
             return
 
-        filtered: list[dict[str, Any]] = []
-        query = activity_search_term.lower()
-        for entry in activity_full_data:
-            severity = _infer_severity(entry)
-            if activity_filter_value != "all" and severity != activity_filter_value:
-                continue
+        # Show all events without filtering
+        tiles = [_build_activity_tile(entry) for entry in activity_full_data]
+        _update_activity_section(tiles, entry_count=len(activity_full_data), placeholder=False)
 
-            if query:
-                haystack = " ".join(
-                    _normalize_text(entry.get(key))
-                    for key in ("message", "details", "description", "component", "client_id", "category")
-                ).lower()
-                if query not in haystack:
-                    continue
-
-            filtered.append(entry)
-
-        if not filtered:
-            new_controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Icon(ft.Icons.FILTER_ALT_OUTLINED, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Text("No events match", size=16),
-                            ft.Text(
-                                "Adjust your search or severity filter to see activity entries.",
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                text_align=ft.TextAlign.CENTER,
-                            ),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=8,
-                    ),
-                    padding=20,
-                )
-            )
-        else:
-            for entry in filtered:
-                new_controls.append(_build_activity_tile(entry))
-
+        # Update summary with severity counts
         severity_counter = Counter(_infer_severity(entry) for entry in activity_full_data)
-        summary_bits = [f"{len(filtered)} events"]
+        summary_bits = [f"{len(activity_full_data)} events"]
         for key in ("critical", "error", "warning", "info"):
             if severity_counter.get(key):
                 summary_bits.append(f"{severity_counter[key]} {key}")
         activity_summary_text.value = " • ".join(summary_bits)
-
-        activity_items_column.controls = new_controls
-        activity_items_column.update()
         activity_summary_text.update()
-
-    def _on_activity_search_change(event: ft.ControlEvent) -> None:
-        nonlocal activity_search_term
-        activity_search_term = (event.control.value or "").strip()
-        _apply_activity_filters()
-
-    def _on_activity_filter_change(event: ft.ControlEvent) -> None:
-        nonlocal activity_filter_value
-        activity_filter_value = event.control.value or "all"
-        _apply_activity_filters()
-
-    activity_search_field.on_change = _on_activity_search_change
-    activity_filter_dropdown.on_change = _on_activity_filter_change
 
     auto_refresh_task: asyncio.Task | None = None
 

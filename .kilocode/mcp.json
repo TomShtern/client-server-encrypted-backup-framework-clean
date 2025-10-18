@@ -5,6 +5,40 @@
       "args": [
         "mcp-server-time"
       ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {
+        "DEFAULT_MINIMUM_TOKENS": "8000"
+      },
+      "alwaysAllow": [
+        "get-library-docs",
+        "resolve-library-id"
+      ]
+    },
+    "sequentialthinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "tavily": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tavily-mcp@0.2.3"
+      ],
+      "env": {
+        "TAVILY_API_KEY": "5da39d04c6c4442dbf27d7bded1dd961.WIp3MGX4W1GcMYn0UqZkWvg8"
+      },
+      "alwaysAllow": [
+        "tavily-search"
+      ]
     }
   }
 }
