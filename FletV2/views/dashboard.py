@@ -31,6 +31,7 @@ try:
         show_success_snackbar,
     )
     from ..utils.data_export import export_to_csv, generate_export_filename
+    from ..theme import create_skeleton_loader
 except Exception:  # pragma: no cover - fallback when executing directly
     from FletV2.utils.async_helpers import run_sync_in_executor
     from FletV2.utils.ui_builders import create_action_button, create_info_row, create_view_header
@@ -43,6 +44,7 @@ except Exception:  # pragma: no cover - fallback when executing directly
         show_success_snackbar,
     )
     from FletV2.utils.data_export import export_to_csv, generate_export_filename  # type: ignore
+    from FletV2.theme import create_skeleton_loader
 
 
 @dataclass(slots=True)
@@ -336,7 +338,7 @@ def _build_metric_block(
     navigate_callback: Callable[[str], None] | None,
     route: str | None,
 ) -> dict[str, ft.Control]:
-    """Build metric block and return dict with wrapper and text controls."""
+    """Build enhanced metric block with neumorphic styling and hover effects."""
     value_text = ft.Text("—", size=30, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE)
     footnote_text = ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
@@ -356,10 +358,31 @@ def _build_metric_block(
         spacing=6,
     )
 
-    card = AppCard(body, title=None, expand_content=False)
+    # Clean card with subtle shadow and color accent
+    card_content = ft.Container(
+        content=body,
+        padding=ft.padding.all(20),
+        bgcolor=ft.Colors.SURFACE,
+        border_radius=12,
+        border=ft.border.only(top=ft.BorderSide(3, accent)),
+        shadow=[ft.BoxShadow(
+            blur_radius=8,
+            spread_radius=1,
+            color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+            offset=ft.Offset(0, 2),
+        )],
+        animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+    )
+
+    # Add hover effect
+    def on_hover(e):
+        card_content.scale = 1.02 if e.data == "true" else 1.0
+        card_content.update()
+
+    card_content.on_hover = on_hover
 
     wrapper = ft.Container(
-        content=card,
+        content=card_content,
         col=column_span,
         on_click=(lambda _: navigate_callback(route)) if route and navigate_callback else None,
         ink=True if route and navigate_callback else False,
@@ -410,9 +433,11 @@ def create_dashboard_view(
     status_chip_holder = ft.Container(content=create_pulsing_status_indicator("neutral", "Server: Unknown"))
     uptime_value_text = ft.Text("—", size=13, weight=ft.FontWeight.W_600)
 
-    cpu_bar = ft.ProgressBar(value=0.0, bar_height=8)
+    # Simple text displays for CPU and Memory
     cpu_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+    cpu_bar = ft.ProgressBar(value=0.0, bar_height=8)
     memory_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+
     db_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
     connections_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
     version_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
@@ -496,6 +521,7 @@ def create_dashboard_view(
         alignment=ft.MainAxisAlignment.START,
     )
 
+    # Clean status header with subtle depth
     status_header_panel = ft.Container(
         content=ft.Row(
             [
@@ -506,9 +532,10 @@ def create_dashboard_view(
             spacing=12,
             vertical_alignment=ft.CrossAxisAlignment.START,
         ),
-        padding=ft.padding.all(14),
-        border_radius=16,
-        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY_CONTAINER),
+        padding=ft.padding.all(16),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE_TINT),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
     )
 
     header_actions = [
@@ -535,7 +562,23 @@ def create_dashboard_view(
 
     # Use ListView instead of Column for automatic scrolling and height management
     activity_list = ft.ListView(spacing=12, padding=ft.padding.symmetric(vertical=6), expand=True)
-    activity_list.controls.append(create_loading_indicator("Loading activity…"))
+
+    # Add skeleton loaders matching final content structure
+    for _ in range(4):  # Show 4 skeleton tiles
+        skeleton_tile = ft.Container(
+            content=ft.Row([
+                create_skeleton_loader(height=40, width=40, radius=20),  # Icon placeholder
+                ft.Column([
+                    create_skeleton_loader(height=16, width=200),  # Title
+                    create_skeleton_loader(height=12, width=300),  # Subtitle
+                    create_skeleton_loader(height=10, width=150),  # Timestamp
+                ], spacing=4),
+            ], spacing=12),
+            padding=ft.padding.all(12),
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
+            border_radius=12,
+        )
+        activity_list.controls.append(skeleton_tile)
 
     # Activity section with summary text in the header
     activity_header = ft.Row(
@@ -816,7 +859,7 @@ def create_dashboard_view(
             page.update()
 
     def _build_activity_tile(entry: dict[str, Any]) -> ft.Control:
-        """Build activity tile using simplified pattern."""
+        """Build enhanced activity tile with strong color coding and hover effects."""
         severity = _infer_severity(entry)
         scheme = page.theme.color_scheme if getattr(page, "theme", None) and getattr(page.theme, "color_scheme", None) else None
         palette = _activity_palette(severity, scheme)
@@ -832,36 +875,68 @@ def create_dashboard_view(
         if client_id := _normalize_text(entry.get("client_id") or entry.get("client") or ""):
             subtitle_parts.append(f"Client: {client_id}")
 
-        # Use ListTile for cleaner structure
-        return ft.Card(
-            content=ft.ListTile(
-                leading=ft.Container(
-                    content=ft.Icon(palette["icon"], size=20, color=palette["text"]),
-                    width=40,
-                    height=40,
-                    bgcolor=ft.Colors.with_opacity(0.18, palette["accent"]),
-                    border_radius=20,
-                    alignment=ft.alignment.center,
-                ),
-                title=ft.Text(f"{severity.title()} • {category}", size=14, weight=ft.FontWeight.W_600),
-                subtitle=ft.Column(
-                    [
-                        ft.Text(message, size=13, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                        ft.Text(" • ".join(subtitle_parts), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ],
-                    spacing=4,
-                    tight=True,
-                ),
-                on_click=lambda _: _open_activity_details(entry),
-                trailing=ft.IconButton(
-                    icon=ft.Icons.OPEN_IN_NEW,
-                    tooltip="View details",
-                    icon_size=18,
-                    on_click=lambda _: _open_activity_details(entry),
-                ),
+        # Build tile with severity badge pill for quick visual scanning
+        tile = ft.ListTile(
+            leading=ft.Container(
+                content=ft.Icon(palette["icon"], size=20, color=palette["text"]),
+                width=40,
+                height=40,
+                bgcolor=ft.Colors.with_opacity(0.18, palette["accent"]),
+                border_radius=20,
+                alignment=ft.alignment.center,
             ),
-            elevation=1,
-            color=ft.Colors.with_opacity(0.06, palette["accent"]),
+            title=ft.Row([
+                # Severity badge pill
+                ft.Container(
+                    content=ft.Text(
+                        severity.upper(),
+                        size=10,
+                        weight=ft.FontWeight.W_700,
+                        color=palette["text"]
+                    ),
+                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                    bgcolor=ft.Colors.with_opacity(0.2, palette["accent"]),
+                    border_radius=8,
+                ),
+                ft.Text(f" • {category}", size=14, weight=ft.FontWeight.W_600),
+            ]),
+            subtitle=ft.Column(
+                [
+                    ft.Text(message, size=13, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Text(" • ".join(subtitle_parts), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                ],
+                spacing=4,
+                tight=True,
+            ),
+            trailing=ft.IconButton(
+                icon=ft.Icons.OPEN_IN_NEW,
+                tooltip="View details",
+                icon_size=18,
+                on_click=lambda _: _open_activity_details(entry),
+            ),
+        )
+
+        # Enhanced container with stronger colors, left border, and hover animation
+        tile_container = ft.Container(
+            content=tile,
+            bgcolor=ft.Colors.with_opacity(0.10, palette["accent"]),  # Increased from 0.06
+            border_radius=12,
+            border=ft.border.only(left=ft.BorderSide(4, palette["accent"])),  # Color-coded accent stripe
+            animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
+        )
+
+        # Add hover effect for interactivity
+        def on_tile_hover(e):
+            tile_container.scale = 1.01 if e.data == "true" else 1.0
+            tile_container.update()
+
+        tile_container.on_hover = on_tile_hover
+        tile_container.on_click = lambda _: _open_activity_details(entry)
+        tile_container.ink = True
+
+        return ft.Card(
+            content=tile_container,
+            elevation=2,  # Slightly elevated for depth
         )
 
     def _apply_activity_filters() -> None:
