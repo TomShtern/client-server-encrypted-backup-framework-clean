@@ -9,6 +9,7 @@ import json
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
+import time
 from typing import Any, Callable, Coroutine
 
 import flet as ft
@@ -247,6 +248,14 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     snapshot = DashboardSnapshot()
     issues: list[str] = []
 
+    # Gracefully handle GUI-only mode (no real server/bridge). In this case, don't
+    # spam errors; return neutral, empty snapshot so the UI renders clean placeholders.
+    if not server_bridge or (hasattr(server_bridge, "real_server") and not getattr(server_bridge, "real_server")):
+        snapshot.server_status = "offline"
+        snapshot.errors = None
+        snapshot.recent_activity = []
+        return snapshot
+
     summary = await _call_bridge(server_bridge, "get_dashboard_summary")
     if summary.get("success"):
         payload = summary.get("data") or {}
@@ -370,6 +379,8 @@ def create_dashboard_view(
     snapshot_ref: DashboardSnapshot | None = None
     disposed = False
     refresh_lock = asyncio.Lock()
+    # Fallback uptime tracking when server reports 0 but direct bridge is active
+    fallback_uptime_start: float | None = None
     # Do not modify page.scroll; keep page-level scroll behavior unchanged
 
     metrics_config = [
@@ -408,7 +419,7 @@ def create_dashboard_view(
     port_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
 
     # --- Helper: simple chip/pill for header stats (FilterChip not reliable in 0.28.3)
-    def _pill(icon: str, text_ctrl: ft.Text, bg: str, fg: str) -> ft.Control:
+    def _pill(icon: str, text_ctrl: ft.Control, bg: str, fg: str) -> ft.Control:
         return ft.Container(
             content=ft.Row(
                 [ft.Icon(icon, size=14, color=fg), text_ctrl],
@@ -574,6 +585,10 @@ def create_dashboard_view(
     )
 
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
+        # If there's no server bridge or no real server behind it, we're in GUI-only
+        # standalone mode. Show a neutral banner instead of critical/offline.
+        if not server_bridge or (hasattr(server_bridge, "real_server") and not getattr(server_bridge, "real_server")):
+            return "neutral", "GUI: Standalone mode"
         # Check if bridge has real server instance
         bridge_connected = False
         direct_bridge_present = False
@@ -629,7 +644,31 @@ def create_dashboard_view(
 
     async def _apply_snapshot(snapshot: DashboardSnapshot) -> None:
         nonlocal snapshot_ref
+        nonlocal fallback_uptime_start
         snapshot_ref = snapshot
+
+        # Compute display uptime with monotonic fallback when uptime_seconds is 0 but evidence suggests server is alive
+        display_uptime_seconds = snapshot.uptime_seconds if snapshot.uptime_seconds and snapshot.uptime_seconds > 0 else 0.0
+
+        if display_uptime_seconds <= 0:
+            direct_bridge_present = False
+            if server_bridge and hasattr(server_bridge, "real_server"):
+                with contextlib.suppress(Exception):
+                    direct_bridge_present = bool(getattr(server_bridge, "real_server"))
+
+            evidence_connected = any([
+                (snapshot.total_clients or 0) > 0,
+                (snapshot.total_files or 0) > 0,
+                bool(snapshot.server_version),
+                snapshot.port is not None,
+            ])
+
+            if direct_bridge_present or evidence_connected:
+                if fallback_uptime_start is None:
+                    fallback_uptime_start = time.monotonic()
+                display_uptime_seconds = max(0.0, time.monotonic() - fallback_uptime_start)
+            else:
+                fallback_uptime_start = None
 
         # Update metric blocks
         clients_block = metric_blocks["total_clients"]
@@ -644,8 +683,9 @@ def create_dashboard_view(
         _update_control(files_block["value_text"], f"{snapshot.total_files:,}" if snapshot.total_files else "0")
 
         uptime_block = metric_blocks["uptime"]
-        _update_control(uptime_block["value_text"], _format_uptime(snapshot.uptime_seconds))
-        _update_control(uptime_block["footnote_text"], f"Status: {snapshot.server_status.title()}")
+        _update_control(uptime_block["value_text"], _format_uptime(display_uptime_seconds))
+        chip_level, chip_label = _derive_status(snapshot)
+        _update_control(uptime_block["footnote_text"], chip_label)
 
         # Update status chip
         chip_level, chip_label = _derive_status(snapshot)
@@ -653,7 +693,7 @@ def create_dashboard_view(
         status_chip_holder.update()
 
         # Update status summary cards
-        _update_control(uptime_value_text, _format_uptime(snapshot.uptime_seconds))
+        _update_control(uptime_value_text, _format_uptime(display_uptime_seconds))
 
         if snapshot.cpu_usage is not None:
             cpu_bar.value = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
@@ -754,9 +794,14 @@ def create_dashboard_view(
             modal=True,
             title=ft.Text("Event details"),
             content=ft.Container(
-                content=ft.Text(pretty, size=12, selectable=True),
-                width=480,
-                height=320,
+                content=ft.ListView(
+                    controls=[ft.Text(pretty, size=12, selectable=True)],
+                    spacing=6,
+                    padding=ft.padding.all(6),
+                    expand=True,
+                ),
+                width=600,
+                height=420,
             ),
             actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
@@ -807,6 +852,7 @@ def create_dashboard_view(
                     spacing=4,
                     tight=True,
                 ),
+                on_click=lambda _: _open_activity_details(entry),
                 trailing=ft.IconButton(
                     icon=ft.Icons.OPEN_IN_NEW,
                     tooltip="View details",
