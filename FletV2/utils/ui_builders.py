@@ -144,16 +144,71 @@ def create_view_header(
     )
 
 
+def create_info_row(
+    icon: str,
+    label: str,
+    value: str | ft.Control,
+    *,
+    label_size: int = 12,
+    value_size: int = 14,
+) -> ft.Row:
+    """Create standardized info row with icon, label, and value.
+
+    Used consistently across all dashboard/detail views for metadata display.
+    Pattern: [Icon] Label
+                    Value
+
+    Args:
+        icon: Material icon name (e.g., ft.Icons.HUB)
+        label: Label text (e.g., "Connections")
+        value: Value text or Control (e.g., "42" or ft.Text(...))
+        label_size: Size of label text (default: 12)
+        value_size: Size of value text (default: 14)
+
+    Returns:
+        Properly styled Row with icon, label column, and value
+
+    Example:
+        >>> create_info_row(ft.Icons.HUB, "Connections", "5")
+        >>> create_info_row(ft.Icons.STORAGE, "DB response", db_value_text)
+    """
+    if isinstance(value, str):
+        value_control = ft.Text(
+            value,
+            size=value_size,
+            weight=ft.FontWeight.W_600,
+            color=ft.Colors.ON_SURFACE
+        )
+    else:
+        value_control = value
+
+    return ft.Row(
+        [
+            ft.Icon(icon, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Column(
+                [
+                    ft.Text(label, size=label_size, color=ft.Colors.ON_SURFACE_VARIANT),
+                    value_control,
+                ],
+                spacing=2,
+                tight=True,
+            ),
+        ],
+        spacing=10,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+
 def create_confirmation_dialog(title, message, on_confirm, on_cancel):
     """
     Create standardized confirmation dialog.
-    
+
     Args:
         title: Title of the dialog
         message: Message to display in the dialog
         on_confirm: Function to call if user confirms
         on_cancel: Function to call if user cancels
-        
+
     Returns:
         AlertDialog configured as a confirmation dialog
     """

@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover - allow running in isolation
 
 try:
     from ..utils.async_helpers import run_sync_in_executor
-    from ..utils.ui_builders import create_action_button
+    from ..utils.ui_builders import create_action_button, create_info_row, create_view_header
     from ..utils.ui_components import AppCard, create_pulsing_status_indicator
     from ..utils.loading_states import (
         create_empty_state,
@@ -32,7 +32,7 @@ try:
     from ..utils.data_export import export_to_csv, generate_export_filename
 except Exception:  # pragma: no cover - fallback when executing directly
     from FletV2.utils.async_helpers import run_sync_in_executor
-    from FletV2.utils.ui_builders import create_action_button
+    from FletV2.utils.ui_builders import create_action_button, create_info_row, create_view_header
     from FletV2.utils.ui_components import AppCard, create_pulsing_status_indicator
     from FletV2.utils.loading_states import (
         create_empty_state,
@@ -61,12 +61,7 @@ class DashboardSnapshot:
     errors: list[str] | None = None
 
 
-@dataclass(slots=True)
-class MetricBlock:
-    wrapper: ft.Container
-    # Use the generic Control type for static typing compatibility (ft.Text is a callable factory)
-    value_text: ft.Control
-    footnote_text: ft.Control
+# Removed MetricBlock dataclass - using simple dict instead for metric tracking
 
 
 def _normalize_text(value: Any) -> str:
@@ -331,7 +326,8 @@ def _build_metric_block(
     column_span: dict[str, int],
     navigate_callback: Callable[[str], None] | None,
     route: str | None,
-) -> MetricBlock:
+) -> dict[str, ft.Control]:
+    """Build metric block and return dict with wrapper and text controls."""
     value_text = ft.Text("—", size=30, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE)
     footnote_text = ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
@@ -360,7 +356,7 @@ def _build_metric_block(
         ink=True if route and navigate_callback else False,
     )
 
-    return MetricBlock(wrapper=wrapper, value_text=value_text, footnote_text=footnote_text)
+    return {"wrapper": wrapper, "value_text": value_text, "footnote_text": footnote_text}
 
 
 def create_dashboard_view(
@@ -390,121 +386,118 @@ def create_dashboard_view(
         ("uptime", "Uptime", "Since last restart", ft.Icons.SCHEDULE, ft.Colors.GREEN, None),
     ]
 
-    metric_blocks: dict[str, MetricBlock] = {}
+    metric_blocks: dict[str, dict[str, ft.Control]] = {}
     metric_controls: list[ft.Control] = []
     for key, title, subtitle, icon, accent, route in metrics_config:
         block = _build_metric_block(title, subtitle, icon, accent, {"xs": 12, "sm": 6, "md": 3}, navigate_callback, route)
         metric_blocks[key] = block
-        metric_controls.append(block.wrapper)
+        metric_controls.append(block["wrapper"])
 
     metrics_row = ft.ResponsiveRow(metric_controls, spacing=12, run_spacing=12)
 
+    # --- Live-updated controls used in the header panel
     status_chip_holder = ft.Container(content=create_pulsing_status_indicator("neutral", "Server: Unknown"))
-    uptime_value_text = ft.Text("—", size=18, weight=ft.FontWeight.W_600)
+    uptime_value_text = ft.Text("—", size=13, weight=ft.FontWeight.W_600)
 
     cpu_bar = ft.ProgressBar(value=0.0, bar_height=8)
-    cpu_value_text = ft.Text("—", size=14, weight=ft.FontWeight.W_600)
-    memory_value_text = ft.Text("—", size=14, weight=ft.FontWeight.W_600)
-    db_value_text = ft.Text("—", size=14, weight=ft.FontWeight.W_600)
-    connections_value_text = ft.Text("—", size=14, weight=ft.FontWeight.W_600)
-    version_value_text = ft.Text("—", size=13, color=ft.Colors.ON_SURFACE)
-    port_value_text = ft.Text("—", size=13, color=ft.Colors.ON_SURFACE)
+    cpu_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+    memory_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+    db_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+    connections_value_text = ft.Text("—", size=12, weight=ft.FontWeight.W_600)
+    version_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
+    port_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
 
-    def _info_tile(icon: str, label: str, value_control: ft.Control) -> ft.Row:
-        return ft.Row(
-            [
-                ft.Icon(icon, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Column(
-                    [
-                        ft.Text(label, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                        value_control,
-                    ],
-                    spacing=2,
-                    tight=True,
-                ),
-            ],
-            spacing=10,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    # --- Helper: simple chip/pill for header stats (FilterChip not reliable in 0.28.3)
+    def _pill(icon: str, text_ctrl: ft.Text, bg: str, fg: str) -> ft.Container:
+        return ft.Container(
+            content=ft.Row(
+                [ft.Icon(icon, size=14, color=fg), text_ctrl],
+                spacing=6,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            bgcolor=ft.Colors.with_opacity(0.10, bg),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.18, bg)),
+            border_radius=12,
         )
 
-    status_summary = ft.ResponsiveRow(
+    def _create_status_card(content: ft.Control, bgcolor_color: str = ft.Colors.PRIMARY_CONTAINER, opacity: float = 0.06) -> ft.Container:
+        """Create a consistently styled status card with standard padding, border radius, and responsive columns."""
+        return ft.Container(
+            content=content,
+            padding=ft.padding.all(14),
+            bgcolor=ft.Colors.with_opacity(opacity, bgcolor_color),
+            border_radius=16,
+            col={"xs": 12, "md": 4},
+        )
+
+    # --- New 2025-style compact status header (glass + pills)
+    header_status_left = ft.Column(
         [
-            ft.Container(
-                content=ft.Column(
-                    [
-                        status_chip_holder,
-                        ft.Row(
-                            [
-                                ft.Icon(ft.Icons.HOURGLASS_BOTTOM, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
-                                ft.Column(
-                                    [
-                                        ft.Text("Uptime", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                                        uptime_value_text,
-                                    ],
-                                    spacing=2,
-                                ),
-                            ],
-                            spacing=10,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                    ],
-                    spacing=12,
-                ),
-                padding=ft.padding.all(14),
-                bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.PRIMARY_CONTAINER),
-                border_radius=16,
-                col={"xs": 12, "md": 4},
-            ),
-            ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.Icon(ft.Icons.TRENDING_UP, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
-                                ft.Text("CPU load", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                                ft.Container(expand=True),
-                                cpu_value_text,
-                            ],
-                            spacing=10,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                        cpu_bar,
-                        ft.Row(
-                            [
-                                ft.Icon(ft.Icons.MEMORY, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
-                                ft.Text("Memory", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                                ft.Container(expand=True),
-                                memory_value_text,
-                            ],
-                            spacing=10,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                    ],
-                    spacing=10,
-                ),
-                padding=ft.padding.all(14),
-                bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.SECONDARY_CONTAINER),
-                border_radius=16,
-                col={"xs": 12, "md": 4},
-            ),
-            ft.Container(
-                content=ft.Column(
-                    [
-                        _info_tile(ft.Icons.HUB, "Connections", connections_value_text),
-                        _info_tile(ft.Icons.STORAGE, "DB response", db_value_text),
-                        _info_tile(ft.Icons.BUILD_OUTLINED, "Version", version_value_text),
-                        _info_tile(ft.Icons.SETTINGS_ETHERNET, "Port", port_value_text),
-                    ],
-                    spacing=10,
-                ),
-                padding=ft.padding.all(14),
-                bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.PRIMARY_CONTAINER),
-                border_radius=16,
-                col={"xs": 12, "md": 4},
+            status_chip_holder,
+            ft.Row(
+                [
+                    _pill(ft.Icons.HOURGLASS_BOTTOM, uptime_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
+                    _pill(ft.Icons.HUB, connections_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
+                    _pill(ft.Icons.STORAGE, db_value_text, ft.Colors.PRIMARY_CONTAINER, ft.Colors.ON_PRIMARY_CONTAINER),
+                ],
+                spacing=8,
+                wrap=True,
             ),
         ],
-        spacing=12,
-        run_spacing=12,
+        spacing=10,
+        alignment=ft.MainAxisAlignment.START,
+    )
+
+    header_status_right = ft.Column(
+        [
+            ft.Row(
+                [
+                    ft.Icon(ft.Icons.TRENDING_UP, size=16, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text("CPU", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(expand=True),
+                    cpu_value_text,
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            cpu_bar,
+            ft.Row(
+                [
+                    ft.Icon(ft.Icons.MEMORY, size=16, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text("Memory", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(expand=True),
+                    memory_value_text,
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            ft.Row(
+                [
+                    _pill(ft.Icons.BUILD_OUTLINED, version_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
+                    _pill(ft.Icons.SETTINGS_ETHERNET, port_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
+                ],
+                spacing=8,
+                wrap=True,
+            ),
+        ],
+        spacing=8,
+        alignment=ft.MainAxisAlignment.START,
+    )
+
+    status_header_panel = ft.Container(
+        content=ft.Row(
+            [
+                ft.Container(content=header_status_left, expand=True),
+                ft.Container(width=12),
+                ft.Container(content=header_status_right, width=340),
+            ],
+            spacing=12,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        ),
+        padding=ft.padding.all(14),
+        border_radius=16,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY_CONTAINER),
     )
 
     header_actions = [
@@ -512,73 +505,26 @@ def create_dashboard_view(
         create_action_button("Export activity", None, icon=ft.Icons.DOWNLOAD, primary=False),
     ]
 
-    header = ft.Container(
-        content=ft.Column(
-            [
-                ft.Row(
-                    [
-                        ft.Row(
-                            [
-                                ft.Icon(ft.Icons.DASHBOARD, size=26, color=ft.Colors.PRIMARY),
-                                ft.Text("System dashboard", size=26, weight=ft.FontWeight.BOLD),
-                            ],
-                            spacing=12,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                        ft.Container(expand=True),
-                        *header_actions,
-                    ],
-                    spacing=16,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    wrap=False,
-                ),
-                ft.Text(
-                    "Live overview of clients, throughput, and operational health.",
-                    size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                ),
-                status_summary,
-            ],
-            spacing=10,
-        ),
-        padding=ft.padding.only(bottom=12),
+    header = ft.Column(
+        [
+            create_view_header(
+                "System dashboard",
+                icon=ft.Icons.DASHBOARD,
+                description="Live overview of clients, throughput, and operational health.",
+                actions=header_actions,
+            ),
+            status_header_panel,
+        ],
+        spacing=12,
     )
 
     activity_full_data: list[dict[str, Any]] = []
 
     activity_summary_text = ft.Text("No activity", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
-    ACTIVITY_MAX_VISIBLE = 4
-    ACTIVITY_ROW_HEIGHT = 96
-    ACTIVITY_ROW_SPACING = 12
-    ACTIVITY_PLACEHOLDER_HEIGHT = 220
-    activity_list = ft.Column(spacing=12, tight=True, scroll=ft.ScrollMode.AUTO)
-
-    # Remove fixed height - let content determine size naturally
-    activity_list_container = ft.Container(
-        content=activity_list,
-        clip_behavior=ft.ClipBehavior.NONE,  # Changed from HARD_EDGE to prevent clipping
-        padding=ft.padding.symmetric(vertical=6),
-        animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
-    )
-
-    def _calculate_activity_height(entry_count: int) -> int:
-        if entry_count <= 0:
-            return ACTIVITY_PLACEHOLDER_HEIGHT
-        visible_rows = max(1, min(entry_count, ACTIVITY_MAX_VISIBLE))
-        spacing_total = ACTIVITY_ROW_SPACING * (visible_rows - 1)
-        return (ACTIVITY_ROW_HEIGHT * visible_rows) + spacing_total
-
-    def _update_activity_section(controls: list[ft.Control], *, entry_count: int, placeholder: bool) -> None:
-        # No longer set fixed height - let container size naturally
-        activity_list.controls.clear()
-        activity_list.controls.extend(controls)
-        with contextlib.suppress(Exception):
-            activity_list.update()
-        with contextlib.suppress(Exception):
-            activity_list_container.update()
-
-    _update_activity_section([create_loading_indicator("Loading activity…")], entry_count=0, placeholder=True)
+    # Use ListView instead of Column for automatic scrolling and height management
+    activity_list = ft.ListView(spacing=12, padding=ft.padding.symmetric(vertical=6), expand=True)
+    activity_list.controls.append(create_loading_indicator("Loading activity…"))
 
     # Activity section with summary text in the header
     activity_header = ft.Row(
@@ -594,9 +540,10 @@ def create_dashboard_view(
     activity_section = ft.Column(
         [
             activity_header,
-            activity_list_container,
+            activity_list,  # ListView handles its own container
         ],
         spacing=12,
+        expand=True,
     )
 
     footer_text = ft.Text("Last updated: —", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
@@ -627,63 +574,72 @@ def create_dashboard_view(
     )
 
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
+        # Check if bridge has real server instance
         bridge_connected = False
         if server_bridge and hasattr(server_bridge, "is_connected"):
             with contextlib.suppress(Exception):
                 bridge_connected = bool(server_bridge.is_connected())
 
         raw_status = _normalize_text(snapshot.server_status).lower()
-        if bridge_connected:
-            if raw_status in {"offline", "stopped", "disconnected", "unknown", ""}:
-                return "excellent", "Server: Connected"
-            if raw_status in {"degraded", "warning", "maintenance"}:
-                return "warning", f"Server: {snapshot.server_status.title()}"
+
+        # Priority 1: Check actual server running status from snapshot
+        if raw_status in {"running", "online", "active", "operational"}:
             return "excellent", f"Server: {snapshot.server_status.title()}"
 
-        if raw_status in {"maintenance", "degraded", "warning"}:
+        # Priority 2: Server in degraded/warning state
+        if raw_status in {"degraded", "warning", "maintenance"}:
             return "warning", f"Server: {snapshot.server_status.title()}"
-        if raw_status:
+
+        # Priority 3: Server explicitly offline/stopped
+        if raw_status in {"offline", "stopped", "disconnected"}:
+            # In integrated GUI mode, network listener may be stopped while direct bridge is alive.
+            # Reflect that as Connected (Direct) to avoid alarming red statuses.
+            if bridge_connected:
+                return "excellent", "Server: Connected (Direct)"
             return "critical", f"Server: {snapshot.server_status.title()}"
+
+        # Priority 4: Bridge connected but no clear status
+        if bridge_connected:
+            return "warning", "Server: Unknown status"
+
+        # Default: Disconnected
         return "critical", "Server: Disconnected"
+
+    def _update_control(control: ft.Control, value: Any) -> None:
+        """Helper to update a control's value and trigger UI update."""
+        control.value = value
+        control.update()
 
     async def _apply_snapshot(snapshot: DashboardSnapshot) -> None:
         nonlocal snapshot_ref
         snapshot_ref = snapshot
 
+        # Update metric blocks
         clients_block = metric_blocks["total_clients"]
-        clients_block.value_text.value = f"{snapshot.total_clients:,}" if snapshot.total_clients else "0"
-        clients_block.value_text.update()
+        _update_control(clients_block["value_text"], f"{snapshot.total_clients:,}" if snapshot.total_clients else "0")
 
         active_block = metric_blocks["active_clients"]
-        active_block.value_text.value = f"{snapshot.connected_clients:,}" if snapshot.connected_clients else "0"
-        if snapshot.total_clients > 0:
-            ratio = (snapshot.connected_clients / snapshot.total_clients) * 100
-            active_block.footnote_text.value = f"{ratio:.0f}% online"
-        else:
-            active_block.footnote_text.value = "Currently connected"
-        active_block.value_text.update()
-        active_block.footnote_text.update()
+        _update_control(active_block["value_text"], f"{snapshot.connected_clients:,}" if snapshot.connected_clients else "0")
+        ratio_text = f"{(snapshot.connected_clients / snapshot.total_clients) * 100:.0f}% online" if snapshot.total_clients > 0 else "Currently connected"
+        _update_control(active_block["footnote_text"], ratio_text)
 
         files_block = metric_blocks["total_files"]
-        files_block.value_text.value = f"{snapshot.total_files:,}" if snapshot.total_files else "0"
-        files_block.value_text.update()
+        _update_control(files_block["value_text"], f"{snapshot.total_files:,}" if snapshot.total_files else "0")
 
         uptime_block = metric_blocks["uptime"]
-        uptime_block.value_text.value = _format_uptime(snapshot.uptime_seconds)
-        uptime_block.footnote_text.value = f"Status: {snapshot.server_status.title()}"
-        uptime_block.value_text.update()
-        uptime_block.footnote_text.update()
+        _update_control(uptime_block["value_text"], _format_uptime(snapshot.uptime_seconds))
+        _update_control(uptime_block["footnote_text"], f"Status: {snapshot.server_status.title()}")
 
+        # Update status chip
         chip_level, chip_label = _derive_status(snapshot)
         status_chip_holder.content = create_pulsing_status_indicator(chip_level, chip_label)
         status_chip_holder.update()
 
-        uptime_value_text.value = _format_uptime(snapshot.uptime_seconds)
-        uptime_value_text.update()
+        # Update status summary cards
+        _update_control(uptime_value_text, _format_uptime(snapshot.uptime_seconds))
 
         if snapshot.cpu_usage is not None:
-            clamped = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
-            cpu_bar.value = clamped
+            cpu_bar.value = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
             cpu_value_text.value = f"{snapshot.cpu_usage:.1f}%"
         else:
             cpu_bar.value = 0.0
@@ -691,26 +647,11 @@ def create_dashboard_view(
         cpu_bar.update()
         cpu_value_text.update()
 
-        if snapshot.memory_usage_mb is not None:
-            memory_value_text.value = f"{snapshot.memory_usage_mb:.1f} MB"
-        else:
-            memory_value_text.value = "—"
-        memory_value_text.update()
-
-        if snapshot.db_response_ms is not None and snapshot.db_response_ms >= 0:
-            db_value_text.value = f"{snapshot.db_response_ms} ms"
-        else:
-            db_value_text.value = "—"
-        db_value_text.update()
-
-        connections_value_text.value = str(max(snapshot.active_connections, snapshot.connected_clients))
-        connections_value_text.update()
-
-        version_value_text.value = snapshot.server_version or "—"
-        version_value_text.update()
-
-        port_value_text.value = str(snapshot.port) if snapshot.port is not None else "—"
-        port_value_text.update()
+        _update_control(memory_value_text, f"{snapshot.memory_usage_mb:.1f} MB" if snapshot.memory_usage_mb is not None else "—")
+        _update_control(db_value_text, f"{snapshot.db_response_ms} ms" if snapshot.db_response_ms is not None and snapshot.db_response_ms >= 0 else "—")
+        _update_control(connections_value_text, str(max(snapshot.active_connections, snapshot.connected_clients)))
+        _update_control(version_value_text, snapshot.server_version or "—")
+        _update_control(port_value_text, str(snapshot.port) if snapshot.port is not None else "—")
 
         rows: list[list[str]] = []
         for item in (snapshot.recent_activity or [])[:12]:
@@ -813,117 +754,94 @@ def create_dashboard_view(
             page.update()
 
     def _build_activity_tile(entry: dict[str, Any]) -> ft.Control:
+        """Build activity tile using simplified pattern."""
         severity = _infer_severity(entry)
-        scheme = None
-        if getattr(page, "theme", None) and getattr(page.theme, "color_scheme", None):
-            scheme = page.theme.color_scheme
+        scheme = page.theme.color_scheme if getattr(page, "theme", None) and getattr(page.theme, "color_scheme", None) else None
         palette = _activity_palette(severity, scheme)
+
         timestamp = _format_timestamp(entry.get("timestamp") or entry.get("time"))
         category = _normalize_text(entry.get("type") or entry.get("category") or "event").title() or "Event"
         message = _normalize_text(entry.get("message") or entry.get("details") or entry.get("description") or "—")
-        component = _normalize_text(entry.get("component") or entry.get("origin") or "")
-        client_id = _normalize_text(entry.get("client_id") or entry.get("client") or "")
 
-        meta_controls: list[ft.Control] = []
-        if component:
-            meta_controls.append(ft.Text(f"Component: {component}", size=12, color=ft.Colors.ON_SURFACE_VARIANT))
-        if client_id:
-            meta_controls.append(ft.Text(f"Client: {client_id}", size=12, color=ft.Colors.ON_SURFACE_VARIANT))
+        # Build subtitle with timestamp and metadata
+        subtitle_parts = [timestamp]
+        if component := _normalize_text(entry.get("component") or entry.get("origin") or ""):
+            subtitle_parts.append(f"Component: {component}")
+        if client_id := _normalize_text(entry.get("client_id") or entry.get("client") or ""):
+            subtitle_parts.append(f"Client: {client_id}")
 
-        metadata = entry.get("metadata")
-        if isinstance(metadata, dict):
-            for key, value in metadata.items():
-                text = f"{_normalize_text(key)}: {_normalize_text(value)}"
-                if text.strip():
-                    meta_controls.append(ft.Text(text, size=12, color=ft.Colors.ON_SURFACE_VARIANT))
-
-        badge = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(palette["icon"], size=16, color=palette["text"]),
-                    ft.Text(severity.title(), size=12, color=palette["text"], weight=ft.FontWeight.W_600),
-                ],
-                spacing=6,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.padding.symmetric(horizontal=12, vertical=6),
-            bgcolor=ft.Colors.with_opacity(0.18, palette["accent"]),
-            border_radius=20,
-        )
-
-        header_row = ft.Row(
-            [
-                badge,
-                ft.Text(timestamp, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Container(expand=True),
-                ft.IconButton(
+        # Use ListTile for cleaner structure
+        return ft.Card(
+            content=ft.ListTile(
+                leading=ft.Container(
+                    content=ft.Icon(palette["icon"], size=20, color=palette["text"]),
+                    width=40,
+                    height=40,
+                    bgcolor=ft.Colors.with_opacity(0.18, palette["accent"]),
+                    border_radius=20,
+                    alignment=ft.alignment.center,
+                ),
+                title=ft.Text(f"{severity.title()} • {category}", size=14, weight=ft.FontWeight.W_600),
+                subtitle=ft.Column(
+                    [
+                        ft.Text(message, size=13, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.Text(" • ".join(subtitle_parts), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=4,
+                    tight=True,
+                ),
+                trailing=ft.IconButton(
                     icon=ft.Icons.OPEN_IN_NEW,
-                    tooltip="View raw event",
+                    tooltip="View details",
                     icon_size=18,
                     on_click=lambda _: _open_activity_details(entry),
                 ),
-            ],
-            spacing=12,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        )
-
-        message_text = ft.Text(
-            message,
-            size=13,
-            color=ft.Colors.ON_SURFACE,
-            max_lines=3,
-            overflow=ft.TextOverflow.ELLIPSIS,
-        )
-
-        tile_controls: list[ft.Control] = [header_row, ft.Text(category, size=12, color=ft.Colors.ON_SURFACE_VARIANT), message_text]
-        if meta_controls:
-            tile_controls.append(ft.Column(meta_controls, spacing=4))
-
-        return ft.Container(
-            content=ft.Column(tile_controls, spacing=8),
-            padding=ft.padding.symmetric(horizontal=16, vertical=14),
-            bgcolor=ft.Colors.with_opacity(0.06, palette["accent"]),
-            border_radius=16,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.12, palette["accent"])),
+            ),
+            elevation=1,
+            color=ft.Colors.with_opacity(0.06, palette["accent"]),
         )
 
     def _apply_activity_filters() -> None:
         """Display all activity without filtering."""
+        activity_list.controls.clear()
+
         if not activity_full_data:
-            placeholder = ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Icon(ft.Icons.HISTORY, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
-                        ft.Text("No recent activity", size=16, weight=ft.FontWeight.W_600),
-                        ft.Text(
-                            "Operational events will appear here once the server receives requests.",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=8,
-                ),
-                padding=40,
-                alignment=ft.alignment.center,
+            # Empty state
+            activity_list.controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.HISTORY, size=48, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text("No recent activity", size=16, weight=ft.FontWeight.W_600),
+                            ft.Text(
+                                "Operational events will appear here once the server receives requests.",
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                    ),
+                    padding=40,
+                    alignment=ft.alignment.center,
+                )
             )
-            _update_activity_section([placeholder], entry_count=0, placeholder=True)
             activity_summary_text.value = "No activity"
-            activity_summary_text.update()
-            return
+        else:
+            # Show all events
+            for entry in activity_full_data:
+                activity_list.controls.append(_build_activity_tile(entry))
 
-        # Show all events without filtering
-        tiles = [_build_activity_tile(entry) for entry in activity_full_data]
-        _update_activity_section(tiles, entry_count=len(activity_full_data), placeholder=False)
+            # Update summary with severity counts
+            severity_counter = Counter(_infer_severity(entry) for entry in activity_full_data)
+            summary_bits = [f"{len(activity_full_data)} events"]
+            for key in ("critical", "error", "warning", "info"):
+                if severity_counter.get(key):
+                    summary_bits.append(f"{severity_counter[key]} {key}")
+            activity_summary_text.value = " • ".join(summary_bits)
 
-        # Update summary with severity counts
-        severity_counter = Counter(_infer_severity(entry) for entry in activity_full_data)
-        summary_bits = [f"{len(activity_full_data)} events"]
-        for key in ("critical", "error", "warning", "info"):
-            if severity_counter.get(key):
-                summary_bits.append(f"{severity_counter[key]} {key}")
-        activity_summary_text.value = " • ".join(summary_bits)
+        activity_list.update()
         activity_summary_text.update()
 
     auto_refresh_task: asyncio.Task | None = None
