@@ -59,6 +59,10 @@ except Exception:  # pragma: no cover - fallback when executing directly
     from FletV2.theme import create_skeleton_loader
 
 
+# ============================================================================
+# DATA STRUCTURES
+# ============================================================================
+
 @dataclass(slots=True)
 class DashboardSnapshot:
     total_clients: int = 0
@@ -81,6 +85,11 @@ class DashboardSnapshot:
 # Formatters moved to FletV2.utils.formatters module:
 # - normalize_text, format_uptime, format_timestamp, as_float, as_int
 
+
+# ============================================================================
+# SECTION 2: BUSINESS LOGIC HELPERS
+# Severity inference, color palettes, data transformations
+# ============================================================================
 
 def _infer_severity(entry: dict[str, Any]) -> str:
     if not isinstance(entry, dict):
@@ -190,6 +199,11 @@ def _activity_palette(severity: str, scheme: ft.ColorScheme | None = None) -> di
     return palette.get(severity, palette["info"])
 
 
+# ============================================================================
+# SECTION 1: DATA FETCHING
+# Async wrappers for ServerBridge calls with proper run_in_executor
+# ============================================================================
+
 async def _call_bridge(server_bridge: Any | None, method_name: str, *args: Any) -> dict[str, Any]:
     if not server_bridge:
         return {"success": False, "data": None, "error": "Server bridge unavailable"}
@@ -294,6 +308,11 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     return snapshot
 
 
+# ============================================================================
+# SECTION 3: UI COMPONENTS
+# Flet control builders for metrics, activity, status displays
+# ============================================================================
+
 def _build_metric_block(
     title: str,
     subtitle: str,
@@ -355,6 +374,11 @@ def _build_metric_block(
 
     return {"wrapper": wrapper, "value_text": value_text, "footnote_text": footnote_text}
 
+
+# ============================================================================
+# SECTION 5: MAIN VIEW
+# Dashboard composition, setup, and lifecycle management
+# ============================================================================
 
 def create_dashboard_view(
     server_bridge: Any | None,

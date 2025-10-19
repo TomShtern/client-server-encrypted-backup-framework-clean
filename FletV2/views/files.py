@@ -62,7 +62,12 @@ from FletV2.utils.ui_builders import (
 
 logger = get_logger(__name__)
 
-# Metric card builder moved to FletV2.utils.ui_builders.create_metric_card
+# ==============================================================================
+# MAIN VIEW
+# All logic is organized within create_files_view as nested functions
+# ==============================================================================
+
+# Note: Helper builders moved to FletV2.utils.ui_builders module
 
 
 def create_files_view(

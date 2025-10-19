@@ -61,10 +61,11 @@ from FletV2.utils.ui_builders import (
 logger = get_logger(__name__)
 
 # ==============================================================================
-# Helper builders
+# MAIN VIEW
+# All logic is organized within create_clients_view as nested functions
 # ==============================================================================
 
-# Metric card builder moved to FletV2.utils.ui_builders.create_metric_card
+# Note: Helper builders moved to FletV2.utils.ui_builders module
 
 
 def create_clients_view(

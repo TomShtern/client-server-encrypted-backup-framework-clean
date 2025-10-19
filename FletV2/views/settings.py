@@ -112,6 +112,11 @@ DEFAULT_SETTINGS: dict[str, dict[str, Any]] = {
 }
 
 
+# ==============================================================================
+# SECTION 1: HELPER FUNCTIONS
+# Validators, parsers, and utility functions for settings management
+# ==============================================================================
+
 def _merge_settings(data: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     merged = copy.deepcopy(DEFAULT_SETTINGS)
     if isinstance(data, dict):
@@ -178,6 +183,11 @@ def _row(label: str, control: ft.Control, desc: str | None = None) -> ft.Contain
         border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))),
     )
 
+
+# ==============================================================================
+# SECTION 2: SETTINGS VIEW CLASS
+# Main settings management with embedded state and UI logic
+# ==============================================================================
 
 class _SettingsView:
     def __init__(self, page: ft.Page, server_bridge: ServerBridge | None, state_manager: StateManager | None) -> None:
@@ -771,6 +781,11 @@ class _SettingsView:
             h = 0
         return max(420, min(900, (h - 280) if h else 560))
 
+
+# ==============================================================================
+# SECTION 3: VIEW FACTORY
+# Creates and initializes the settings view with proper lifecycle management
+# ==============================================================================
 
 def create_settings_view(
     server_bridge: ServerBridge | None,

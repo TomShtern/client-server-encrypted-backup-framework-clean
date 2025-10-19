@@ -50,6 +50,7 @@ from FletV2.theme import (
     create_neumorphic_metric_card,
     themed_button,
 )
+from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
 from FletV2.utils.debug_setup import get_logger
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
@@ -1441,25 +1442,21 @@ def create_database_view(
                 columns = table_columns or list(filtered_records[0].keys())
                 records_to_export = filtered_records[:MAX_EXPORT_RECORDS]
 
-                # Generate filename
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{current_table}_{timestamp}.{format_type}"
+                # Prepare export data with stringified values
+                export_data = [
+                    {col: stringify_value(record.get(col, "")) for col in columns}
+                    for record in records_to_export
+                ]
+
+                # Generate filename using utility
+                filename = generate_export_filename(current_table, format_type)
                 filepath = os.path.join(_repo_root, filename)
 
-                # Export based on format
+                # Export using shared utilities
                 if format_type == "csv":
-                    with open(filepath, "w", encoding="utf-8", newline="") as f:
-                        writer = csv.writer(f)
-                        writer.writerow(columns)
-                        for record in records_to_export:
-                            writer.writerow([stringify_value(record.get(col, "")) for col in columns])
+                    export_to_csv(export_data, filepath, fieldnames=columns)
                 else:  # json
-                    export_data = [
-                        {col: stringify_value(record.get(col, "")) for col in columns}
-                        for record in records_to_export
-                    ]
-                    with open(filepath, "w", encoding="utf-8") as f:
-                        json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    export_to_json(export_data, filepath)
 
                 show_success_message(page, f"Exported {len(records_to_export)} records to {filename}")
                 logger.info(f"Exported {len(records_to_export)} records to {filepath}")
