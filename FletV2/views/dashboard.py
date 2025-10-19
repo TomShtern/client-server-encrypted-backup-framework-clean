@@ -27,10 +27,16 @@ try:
         create_empty_state,
         create_error_display,
         create_loading_indicator,
-        show_error_snackbar,
-        show_success_snackbar,
     )
+    from ..utils.user_feedback import show_error_message, show_success_message
     from ..utils.data_export import export_to_csv, generate_export_filename
+    from ..utils.formatters import (
+        as_float,
+        as_int,
+        format_timestamp,
+        format_uptime,
+        normalize_text,
+    )
     from ..theme import create_skeleton_loader
 except Exception:  # pragma: no cover - fallback when executing directly
     from FletV2.utils.async_helpers import run_sync_in_executor
@@ -40,10 +46,16 @@ except Exception:  # pragma: no cover - fallback when executing directly
         create_empty_state,
         create_error_display,
         create_loading_indicator,
-        show_error_snackbar,
-        show_success_snackbar,
     )
+    from FletV2.utils.user_feedback import show_error_message, show_success_message
     from FletV2.utils.data_export import export_to_csv, generate_export_filename  # type: ignore
+    from FletV2.utils.formatters import (
+        as_float,
+        as_int,
+        format_timestamp,
+        format_uptime,
+        normalize_text,
+    )
     from FletV2.theme import create_skeleton_loader
 
 
@@ -66,55 +78,8 @@ class DashboardSnapshot:
 
 # Removed MetricBlock dataclass - using simple dict instead for metric tracking
 
-
-def _normalize_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-def _format_uptime(seconds: float) -> str:
-    if seconds <= 0:
-        return "—"
-    minutes, _ = divmod(int(seconds), 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    parts: list[str] = []
-    if days:
-        parts.append(f"{days}d")
-    if hours:
-        parts.append(f"{hours}h")
-    if minutes:
-        parts.append(f"{minutes}m")
-    return " ".join(parts) or "<1m"
-
-
-def _format_timestamp(value: Any) -> str:
-    if not value:
-        return "—"
-    try:
-        parsed = datetime.fromisoformat(str(value))
-        return parsed.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        return str(value)
-
-
-def _as_float(value: Any) -> float | None:
-    try:
-        if value is None:
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _as_int(value: Any) -> int | None:
-    try:
-        if value is None:
-            return None
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+# Formatters moved to FletV2.utils.formatters module:
+# - normalize_text, format_uptime, format_timestamp, as_float, as_int
 
 
 def _infer_severity(entry: dict[str, Any]) -> str:
@@ -273,10 +238,10 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     performance = await _call_bridge(server_bridge, "get_performance_metrics")
     if performance.get("success"):
         payload = performance.get("data") or {}
-        snapshot.cpu_usage = _as_float(payload.get("cpu_usage_percent"))
-        snapshot.memory_usage_mb = _as_float(payload.get("memory_usage_mb"))
-        snapshot.db_response_ms = _as_int(payload.get("database_response_time_ms"))
-        active = _as_int(payload.get("active_connections"))
+        snapshot.cpu_usage = as_float(payload.get("cpu_usage_percent"))
+        snapshot.memory_usage_mb = as_float(payload.get("memory_usage_mb"))
+        snapshot.db_response_ms = as_int(payload.get("database_response_time_ms"))
+        active = as_int(payload.get("active_connections"))
         if active is not None:
             snapshot.active_connections = max(active, 0)
     else:
@@ -290,10 +255,10 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
         files_block = payload.get("files") if isinstance(payload, dict) else {}
 
         if isinstance(server_block, dict):
-            port = _as_int(server_block.get("port"))
+            port = as_int(server_block.get("port"))
             if port is not None:
                 snapshot.port = port
-            uptime = _as_float(server_block.get("uptime_seconds"))
+            uptime = as_float(server_block.get("uptime_seconds"))
             if uptime is not None and uptime > snapshot.uptime_seconds:
                 snapshot.uptime_seconds = uptime
             version = server_block.get("version")
@@ -301,12 +266,12 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
                 snapshot.server_version = str(version)
 
         if isinstance(clients_block, dict):
-            current = _as_int(clients_block.get("currently_connected"))
+            current = as_int(clients_block.get("currently_connected"))
             if current is not None:
                 snapshot.connected_clients = current
 
         if isinstance(files_block, dict):
-            totals = _as_int(files_block.get("total_files"))
+            totals = as_int(files_block.get("total_files"))
             if totals is not None:
                 snapshot.total_files = totals
     else:
@@ -646,7 +611,7 @@ def create_dashboard_view(
             except Exception:
                 direct_bridge_present = False
 
-        raw_status = _normalize_text(snapshot.server_status).lower()
+        raw_status = normalize_text(snapshot.server_status).lower()
 
         # Additional evidence that the server is live even if status says stopped
         evidence_connected = any([
@@ -726,7 +691,7 @@ def create_dashboard_view(
         _update_control(files_block["value_text"], f"{snapshot.total_files:,}" if snapshot.total_files else "0")
 
         uptime_block = metric_blocks["uptime"]
-        _update_control(uptime_block["value_text"], _format_uptime(display_uptime_seconds))
+        _update_control(uptime_block["value_text"], format_uptime(display_uptime_seconds))
         chip_level, chip_label = _derive_status(snapshot)
         _update_control(uptime_block["footnote_text"], chip_label)
 
@@ -736,7 +701,7 @@ def create_dashboard_view(
         status_chip_holder.update()
 
         # Update status summary cards
-        _update_control(uptime_value_text, _format_uptime(display_uptime_seconds))
+        _update_control(uptime_value_text, format_uptime(display_uptime_seconds))
 
         if snapshot.cpu_usage is not None:
             cpu_bar.value = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
@@ -757,7 +722,7 @@ def create_dashboard_view(
         for item in (snapshot.recent_activity or [])[:12]:
             if not isinstance(item, dict):
                 continue
-            timestamp = _format_timestamp(item.get("timestamp") or item.get("time"))
+            timestamp = format_timestamp(item.get("timestamp") or item.get("time"))
             category = str(item.get("type") or item.get("level") or "Info").title()
             message = str(item.get("message") or item.get("details") or "")
             rows.append([timestamp, category, message])
@@ -785,7 +750,7 @@ def create_dashboard_view(
             try:
                 snapshot = await _fetch_snapshot(server_bridge)
             except Exception as exc:  # pragma: no cover - defensive guard
-                show_error_snackbar(page, f"Dashboard refresh failed: {exc}")
+                show_error_message(page, f"Dashboard refresh failed: {exc}")
                 return
 
             if disposed:
@@ -802,7 +767,7 @@ def create_dashboard_view(
         if disposed:
             return
         if not snapshot_ref or not snapshot_ref.recent_activity:
-            show_error_snackbar(page, "No activity available for export")
+            show_error_message(page, "No activity available for export")
             return
 
         try:
@@ -812,21 +777,21 @@ def create_dashboard_view(
                     continue
                 export_rows.append(
                     {
-                        "timestamp": _format_timestamp(item.get("timestamp") or item.get("time")),
+                        "timestamp": format_timestamp(item.get("timestamp") or item.get("time")),
                         "category": str(item.get("type") or item.get("level") or "info"),
                         "message": str(item.get("message") or item.get("details") or ""),
                     }
                 )
 
             if not export_rows:
-                show_error_snackbar(page, "No activity entries to export")
+                show_error_message(page, "No activity entries to export")
                 return
 
             filename = generate_export_filename("dashboard_activity", "csv")
             export_to_csv(export_rows, filename, fieldnames=["timestamp", "category", "message"])
-            show_success_snackbar(page, f"Activity exported to {filename}")
+            show_success_message(page, f"Activity exported to {filename}")
         except Exception as exc:  # pragma: no cover - defensive guard
-            show_error_snackbar(page, f"Export failed: {exc}")
+            show_error_message(page, f"Export failed: {exc}")
 
     header_actions[0].on_click = _on_refresh
     header_actions[1].on_click = _on_export
@@ -864,15 +829,15 @@ def create_dashboard_view(
         scheme = page.theme.color_scheme if getattr(page, "theme", None) and getattr(page.theme, "color_scheme", None) else None
         palette = _activity_palette(severity, scheme)
 
-        timestamp = _format_timestamp(entry.get("timestamp") or entry.get("time"))
-        category = _normalize_text(entry.get("type") or entry.get("category") or "event").title() or "Event"
-        message = _normalize_text(entry.get("message") or entry.get("details") or entry.get("description") or "—")
+        timestamp = format_timestamp(entry.get("timestamp") or entry.get("time"))
+        category = normalize_text(entry.get("type") or entry.get("category") or "event").title() or "Event"
+        message = normalize_text(entry.get("message") or entry.get("details") or entry.get("description") or "—")
 
         # Build subtitle with timestamp and metadata
         subtitle_parts = [timestamp]
-        if component := _normalize_text(entry.get("component") or entry.get("origin") or ""):
+        if component := normalize_text(entry.get("component") or entry.get("origin") or ""):
             subtitle_parts.append(f"Component: {component}")
-        if client_id := _normalize_text(entry.get("client_id") or entry.get("client") or ""):
+        if client_id := normalize_text(entry.get("client_id") or entry.get("client") or ""):
             subtitle_parts.append(f"Client: {client_id}")
 
         # Build tile with severity badge pill for quick visual scanning

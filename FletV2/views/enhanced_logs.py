@@ -32,9 +32,8 @@ from FletV2.utils.loading_states import (
     create_empty_state,
     create_error_display,
     create_loading_indicator,
-    show_error_snackbar,
-    show_success_snackbar,
 )
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -329,13 +328,13 @@ def create_logs_view(
             apply_filters_and_render()
 
             if toast and not initial:
-                show_success_snackbar(page, "Logs refreshed")
+                show_success_message(page, "Logs refreshed")
         except Exception as exc:  # pragma: no cover - defensive UI feedback
             logger.exception("Failed to refresh logs")
             error_container.content = AppCard(create_error_display(str(exc)), title="Error")
             error_container.visible = True
             error_container.update()
-            show_error_snackbar(page, f"Failed to refresh logs: {exc}")
+            show_error_message(page, f"Failed to refresh logs: {exc}")
         finally:
             loading_overlay.visible = False
             loading_overlay.update()
@@ -383,7 +382,7 @@ def create_logs_view(
     def handle_export(format_type: str) -> None:
         logs = state["filtered_logs"]
         if not logs:
-            show_error_snackbar(page, "No logs to export")
+            show_error_message(page, "No logs to export")
             return
 
         filename = generate_export_filename("logs", format_type)
@@ -394,9 +393,9 @@ def create_logs_view(
                 export_to_json(logs, filename)
             else:
                 raise ValueError(f"Unsupported export format: {format_type}")
-            show_success_snackbar(page, f"Exported {len(logs)} logs to {filename}")
+            show_success_message(page, f"Exported {len(logs)} logs to {filename}")
         except Exception as exc:  # pragma: no cover - defensive UI feedback
-            show_error_snackbar(page, f"Export failed: {exc}")
+            show_error_message(page, f"Export failed: {exc}")
 
     search_field = create_search_bar(on_change=on_search_change, placeholder="Search logs…")
 

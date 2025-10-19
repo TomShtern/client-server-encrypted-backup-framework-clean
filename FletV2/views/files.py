@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - fallback logging
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
 
-from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
+from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
 from FletV2.utils.ui_components import AppCard, create_status_pill
@@ -55,26 +55,14 @@ from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
+    create_metric_card,
     create_search_bar,
     create_view_header,
 )
 
 logger = get_logger(__name__)
 
-
-def _build_metric_card(title: str, value_control: ft.Control, icon: str) -> ft.Card:
-    """Create a reusable metric card for the files overview."""
-
-    return ft.Card(
-        content=ft.Container(
-            content=ft.Column([
-                ft.Row([ft.Icon(icon, size=24), ft.Text(title, size=14)]),
-                value_control,
-            ], spacing=8),
-            padding=20,
-        ),
-        elevation=2,
-    )
+# Metric card builder moved to FletV2.utils.ui_builders.create_metric_card
 
 
 def create_files_view(
@@ -91,20 +79,8 @@ def create_files_view(
     type_filter = "all"
     files_data = []
 
-    # Load file data from server - ASYNC VERSION to prevent UI blocking
-    async def _fetch_files_async() -> list[dict[str, Any]]:
-        """Fetch files from server asynchronously."""
-        if not server_bridge:
-            return []
-
-        result = await run_sync_in_executor(safe_server_call, server_bridge, 'get_files')
-        if result.get('success'):
-            data = result.get('data', [])
-            if isinstance(data, list):
-                return data
-
-        logger.error(f"Failed to fetch files from server: {result.get('error', 'Unknown error')}")
-        return []
+    # Create async fetch function using proven pattern from async_helpers
+    _fetch_files_async = create_async_fetch_function('get_files', empty_default=[])
 
     def load_files_data() -> None:
         """Load file data using async pattern to avoid blocking UI."""
@@ -112,7 +88,7 @@ def create_files_view(
 
         async def _load_and_apply() -> None:
             nonlocal files_data
-            new_files = await _fetch_files_async()
+            new_files = await _fetch_files_async(server_bridge)
             files_data = new_files
             update_table()
 
@@ -489,19 +465,19 @@ def create_files_view(
 
     stats_row = ft.ResponsiveRow([
         ft.Container(
-            content=_build_metric_card("Total files", total_files_value, ft.Icons.FOLDER),
+            content=create_metric_card("Total files", total_files_value, ft.Icons.FOLDER),
             col={"sm": 12, "md": 6, "lg": 3},
         ),
         ft.Container(
-            content=_build_metric_card("Complete", complete_files_value, ft.Icons.CHECK_CIRCLE),
+            content=create_metric_card("Complete", complete_files_value, ft.Icons.CHECK_CIRCLE),
             col={"sm": 12, "md": 6, "lg": 3},
         ),
         ft.Container(
-            content=_build_metric_card("Total size", total_size_value, ft.Icons.STORAGE),
+            content=create_metric_card("Total size", total_size_value, ft.Icons.STORAGE),
             col={"sm": 12, "md": 6, "lg": 3},
         ),
         ft.Container(
-            content=_build_metric_card("Failed", failed_files_value, ft.Icons.ERROR),
+            content=create_metric_card("Failed", failed_files_value, ft.Icons.ERROR),
             col={"sm": 12, "md": 6, "lg": 3},
         ),
     ], spacing=16, run_spacing=16)

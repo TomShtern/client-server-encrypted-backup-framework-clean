@@ -61,12 +61,12 @@
 - **Savings: 300-360px** (52-56% reduction)
 
 ### Other Components:
-| Component | Before | After | Savings |
-|-----------|--------|-------|---------|
-| Status bar | 40px | 26px | 14px |
-| Status text | 20px | 16px | 4px |
-| Section header | 46px | 32px | 14px |
-| ListView padding | 40px | 20px | 20px |
+| Component          | Before    | After    | Savings  |
+|--------------------|-----------|----------|----------|
+| Status bar         | 40px      | 26px     | 14px     |
+| Status text        | 20px      | 16px     | 4px      |
+| Section header     | 46px      | 32px     | 14px     |
+| ListView padding   | 40px      | 20px     | 20px     |
 | **Total overhead** | **146px** | **94px** | **52px** |
 
 ## Final Calculations

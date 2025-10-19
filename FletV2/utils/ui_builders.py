@@ -221,3 +221,48 @@ def create_confirmation_dialog(title, message, on_confirm, on_cancel):
         ],
         actions_alignment=ft.MainAxisAlignment.END
     )
+
+
+def create_metric_card(
+    title: str,
+    value_control: ft.Control,
+    icon: str,
+    description: str = "",
+) -> ft.Card:
+    """
+    Create a metric card matching the EXACT pattern from clients.py and files.py.
+
+    This is the duplicated code from:
+    - clients.py:67-80
+    - files.py:65-77
+
+    Now consolidated into a single reusable function.
+
+    Args:
+        title: Card title
+        value_control: Control displaying the value (e.g., ft.Text("42"))
+        icon: Material icon name (e.g., ft.Icons.PEOPLE)
+        description: Optional description for accessibility
+
+    Returns:
+        Configured Card with metric display
+
+    Example:
+        total_value = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
+        card = create_metric_card("Total Clients", total_value, ft.Icons.PEOPLE)
+    """
+    card = ft.Card(
+        content=ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Icon(icon, size=24),
+                    ft.Text(title, size=14, weight=ft.FontWeight.W_500),
+                ], spacing=8),
+                value_control,
+            ], spacing=8, tight=True),
+            padding=20,
+        ),
+        elevation=2,
+    )
+    card.is_semantic_container = True  # Accessibility
+    return card

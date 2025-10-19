@@ -29,9 +29,8 @@ from FletV2.utils.loading_states import (
     create_empty_state,
     create_error_display,
     create_loading_indicator,
-    show_error_snackbar,
-    show_success_snackbar,
 )
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import create_action_button, create_view_header
 from FletV2.utils.ui_components import AppCard
 
@@ -236,13 +235,13 @@ def create_analytics_view(
             state["data"] = data
             apply_data(data)
             if toast:
-                show_success_snackbar(page, "Analytics refreshed")
+                show_success_message(page, "Analytics refreshed")
         except Exception as exc:  # pragma: no cover - defensive UI feedback
             logger.exception("Analytics refresh failed")
             error_panel.content = AppCard(create_error_display(str(exc)), title="Error")
             error_panel.visible = True
             error_panel.update()
-            show_error_snackbar(page, f"Analytics load failed: {exc}")
+            show_error_message(page, f"Analytics load failed: {exc}")
         finally:
             overlay_container.visible = False
             overlay_container.update()

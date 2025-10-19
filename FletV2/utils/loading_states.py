@@ -77,40 +77,8 @@ def create_empty_state(title, message, icon=None):
     )
 
 
-def show_snackbar(page, message, bgcolor=None):
-    """
-    Show standardized snackbar notification.
-    
-    Args:
-        page: Flet page to show the snackbar on
-        message: Message to display
-        bgcolor: Background color for the snackbar (optional)
-    """
-    page.snack_bar = ft.SnackBar(
-        content=ft.Text(message),
-        bgcolor=bgcolor or ft.Colors.SURFACE
-    )
-    page.snack_bar.open = True
-    page.update()
-
-
-def show_error_snackbar(page, error_message):
-    """
-    Show error snackbar.
-    
-    Args:
-        page: Flet page to show the snackbar on
-        error_message: Error message to display
-    """
-    show_snackbar(page, error_message, bgcolor=ft.Colors.ERROR_CONTAINER)
-
-
-def show_success_snackbar(page, message):
-    """
-    Show success snackbar.
-    
-    Args:
-        page: Flet page to show the snackbar on
-        message: Success message to display
-    """
-    show_snackbar(page, message, bgcolor=ft.Colors.PRIMARY_CONTAINER)
+# Snackbar functions removed - use user_feedback.py instead
+# - show_success_message(page, message)
+# - show_error_message(page, message)
+# - show_info_message(page, message)
+# - show_warning_message(page, message)

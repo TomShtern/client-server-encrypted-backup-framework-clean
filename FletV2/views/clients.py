@@ -45,7 +45,7 @@ except ImportError:  # pragma: no cover - fallback logging
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
 
-from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
+from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
 from FletV2.utils.ui_components import AppCard, create_status_pill
@@ -53,6 +53,7 @@ from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
+    create_metric_card,
     create_search_bar,
     create_view_header,
 )
@@ -63,22 +64,7 @@ logger = get_logger(__name__)
 # Helper builders
 # ==============================================================================
 
-
-def _build_metric_card(title: str, value_control: Any, icon: str, card_description: str):
-    """Create a reusable metric card wrapper."""
-    card = ft.Card(
-        content=ft.Container(
-            content=ft.Column([
-                ft.Row([ft.Icon(icon, size=24), ft.Text(title, size=14)]),
-                value_control,
-            ], spacing=8),
-            padding=20,
-        ),
-        elevation=2,
-    )
-    card.is_semantic_container = True  # Semantic accessibility for card (using card_description parameter for context)
-    return card
-
+# Metric card builder moved to FletV2.utils.ui_builders.create_metric_card
 
 
 def create_clients_view(
@@ -97,20 +83,8 @@ def create_clients_view(
     status_filter = "all"
     clients_data = []
 
-    async def _fetch_clients_async() -> list[dict[str, Any]]:
-        if not server_bridge:
-            logger.debug("Server bridge not available (GUI-only mode)")
-            return []
-
-        result = await run_sync_in_executor(safe_server_call, server_bridge, 'get_clients')
-        if result.get('success'):
-            data = result.get('data', [])
-            if isinstance(data, list):
-                return data
-
-        error = result.get('error', 'Unknown error')
-        logger.error(f"Failed to fetch clients from server: {error}")
-        return []
+    # Create async fetch function using proven pattern from async_helpers
+    _fetch_clients_async = create_async_fetch_function('get_clients', empty_default=[])
 
     # Load client data from server or use mock
     def load_clients_data(*, broadcast: bool | None = None) -> None:
@@ -118,7 +92,7 @@ def create_clients_view(
         should_broadcast = state_manager is not None if broadcast is None else broadcast
 
         async def _load_and_apply() -> None:
-            new_clients = await _fetch_clients_async()
+            new_clients = await _fetch_clients_async(server_bridge)
             apply_clients_data(new_clients, broadcast=should_broadcast)
 
         if hasattr(page, "run_task"):
@@ -554,13 +528,13 @@ def create_clients_view(
     # Client stats using simple metric cards
     # Responsive stats row for all screen sizes
     stats_row = ft.ResponsiveRow([
-        ft.Column([_build_metric_card("Total Clients", total_clients_value, ft.Icons.PEOPLE, "Total clients metric")],
+        ft.Column([create_metric_card("Total Clients", total_clients_value, ft.Icons.PEOPLE, "Total clients metric")],
                  col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([_build_metric_card("Connected", connected_clients_value, ft.Icons.WIFI, "Connected clients metric")],
+        ft.Column([create_metric_card("Connected", connected_clients_value, ft.Icons.WIFI, "Connected clients metric")],
                  col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([_build_metric_card("Disconnected", disconnected_clients_value, ft.Icons.WIFI_OFF, "Disconnected clients metric")],
+        ft.Column([create_metric_card("Disconnected", disconnected_clients_value, ft.Icons.WIFI_OFF, "Disconnected clients metric")],
                  col={"sm": 12, "md": 6, "lg": 3}),
-        ft.Column([_build_metric_card("Total Files", total_files_value, ft.Icons.FOLDER, "Total client files metric")],
+        ft.Column([create_metric_card("Total Files", total_files_value, ft.Icons.FOLDER, "Total client files metric")],
                  col={"sm": 12, "md": 6, "lg": 3}),
     ])
 
