@@ -1,3 +1,0 @@
-This is a test file for backup transfer testing.
-Created at: 2025-08-12 20:17
-Content: Sample data for testing the file transfer functionality

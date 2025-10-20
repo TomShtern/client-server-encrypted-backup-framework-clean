@@ -1,3 +1,0 @@
-This project now uses Ruff for Python linting and formatting.
-
-The legacy Pylint configuration has been archived at `.config-backup/pylintrc.archive.ini` for reference.
