@@ -4,12 +4,25 @@
 This script:
  1. Verifies environment & dependencies
  2. Builds the C++ client (via CMake & vcpkg toolchain)
- 3. Launches backup server (optionally disables embedded GUI)
- 4. Launches standalone Server GUI if embedded disabled
- 5. Launches API bridge server
- 6. Opens Web GUI in browser
+ 3. Launches FletV2 Desktop GUI with integrated BackupServer
+ 4. Launches API Bridge Server (for C++ client's web GUI)
 
-Corrupted header block was repaired on 2025-08-11 after accidental paste.
+ARCHITECTURE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Two Separate GUI Systems:
+
+1. FletV2 Desktop GUI (Server Administration)
+   • Direct Python method calls via ServerBridge
+   • Integrated BackupServer with network listener (port 1256)
+   • Material Design 3 interface for administrators
+
+2. JavaScript Web GUI (End-User Backups)
+   • API Server (port 9090) serves HTML/CSS/JS files
+   • RealBackupExecutor launches C++ client subprocess
+   • C++ client connects to BackupServer for file transfers
+
+Both systems share the same SQLite database (defensive.db)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 # IMMEDIATE UTF-8 SETUP - Must be FIRST to prevent Unicode errors
@@ -123,11 +136,7 @@ def print_server_not_found_help(server_path: Path, expected_location: str):
     print(f"Expected location: {expected_location}")
     print("Please verify the server components are installed correctly.")
 
-def print_gui_configuration_help():
-    """Print GUI configuration help (extracted duplicate code)"""
-    print("[INFO] Standalone Server GUI launch skipped (embedded GUI is enabled)")
-    print("       - Use CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 to disable embedded GUI")
-    print("       - Use CYBERBACKUP_STANDALONE_GUI=1 to force standalone GUI launch")
+# TkInter GUI helper function removed - deprecated in favor of FletV2
 
 def print_error_with_newline(error_message: str):
     """Print error message with preceding newline (extracted duplicate code)"""
@@ -484,11 +493,11 @@ def _report_terminated_processes(terminated_processes: list[str]):
 
 def check_executable_locations(locations: list[Path] | None = None, context: str = "C++ client") -> tuple[Path | None, list[Path]]:
     """Check multiple potential locations for the EncryptedBackupClient.exe file
-    
+
     Args:
         locations: List of Path objects to check. Uses default locations if None.
         context: Description of what we're looking for (for error messages)
-    
+
     Returns:
         tuple: (found_path, locations_checked) where found_path is Path object or None
     """
@@ -822,98 +831,113 @@ def main():
     print_success_with_spacing("[OK] Configuration verification completed!")
 
     # ========================================================================
-    # PHASE 6: LAUNCH SERVICES
+    # PHASE 6: LAUNCH FLETV2 DESKTOP GUI WITH INTEGRATED SERVER
     # ========================================================================
-    print_phase(6, 7, "Launching Services")
+    print_phase(6, 7, "Launching FletV2 Desktop GUI")
 
-    print("Starting the complete CyberBackup 3.0 system...")
+    print("Starting FletV2 Desktop GUI with integrated BackupServer...")
     print()
     print_multiline(
-        "Services that will be started:",
-        "   - Backup Server (Port 1256)",
-        "   - API Bridge Server (Port 9090)",
-        "   - Web GUI (Browser interface)",
+        "FletV2 Desktop GUI features:",
+        "   • Material Design 3 interface",
+        "   • Real-time server monitoring",
+        "   • Client and file management",
+        "   • Database administration panel",
+        "   • Enhanced logging with search/export",
+        "   • Analytics dashboard with charts",
+        "   • Server settings management",
+    )
+    print()
+    print_multiline(
+        "Integrated BackupServer capabilities:",
+        "   • Network listener on port 1256 (for C++ client connections)",
+        "   • SQLite database (defensive.db)",
+        "   • Client session management",
+        "   • File encryption and storage",
     )
     print()
 
-    print("Starting Python Backup Server with integrated GUI...")
-    server_path = Path("python_server/server/server.py")
+    # Validate FletV2 launcher exists
+    fletv2_launcher = Path("FletV2/start_with_server.py")
+    fletv2_running = False
+    fletv2_process = None
 
-    # Validate server path exists with proper error handling
-    if not server_path.exists():
-        print_server_not_found_help(server_path, "python_server/server/server.py")
-        print("\nTrying alternative server startup...")
-        # Continue execution to attempt other startup methods
+    if not fletv2_launcher.exists():
+        print_server_not_found_help(fletv2_launcher, "FletV2/start_with_server.py")
+        handle_error_and_exit("[ERROR] FletV2 launcher not found - cannot start GUI", wait_for_input=True)
 
-    if server_path.exists():
-        # Check if AppMap is available for recording
-        appmap_available = check_appmap_available()
+    print(f"Launching: {fletv2_launcher}")
+    print(f"Command: python FletV2/start_with_server.py")
+    print()
 
-        if appmap_available:
-            print("[INFO] AppMap detected but using normal startup for stability")
-        else:
-            print("[INFO] AppMap not available - starting server normally")
+    # Prepare environment for FletV2
+    fletv2_env = os.environ.copy()
+    fletv2_env['PYTHONPATH'] = os.getcwd()  # Ensure module imports work
+    fletv2_env['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'  # Prevent dual GUI managers
+    fletv2_env['CYBERBACKUP_DISABLE_GUI'] = '1'  # Force console mode for server
+    fletv2_env['BACKUP_DATABASE_PATH'] = str(Path(os.getcwd()) / "defensive.db")  # Database location
 
-        # Start backup server normally using module syntax (same for both cases)
-        server_command = [sys.executable, "-m", "python_server.server.server"]
-        print(f"Command: {sys.executable} -m python_server.server.server")
-
-        # Set up server environment (GUI is integrated, no separate GUI launch needed)
-        server_env = os.environ.copy()
-        # CRITICAL: Set PYTHONPATH so Python can find project modules
-        server_env['PYTHONPATH'] = os.getcwd()
-
-        # Start backup server with integrated GUI in new console window
-        server_process = subprocess.Popen(
-            server_command,
+    # Launch FletV2 in new console window
+    try:
+        fletv2_process = subprocess.Popen(
+            [sys.executable, str(fletv2_launcher)],
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0,
-            env=server_env
+            env=fletv2_env,
+            cwd=os.getcwd()
         )
-        print(f"Python Backup Server (with integrated GUI) started with PID: {server_process.pid}")
+        print(f"[OK] FletV2 Desktop GUI launched (PID: {fletv2_process.pid})")
+        print("     Native desktop window will appear momentarily...")
+        print()
 
-        if appmap_available:
-            print("[INFO] AppMap available but not used for stability reasons")
-            print("       Run manually with AppMap if needed: appmap-python --record process python -m python_server.server.server")
+        # Brief initialization delay
+        print("Waiting for FletV2 initialization...")
+        time.sleep(3)
 
-        # Wait for backup server to actually start listening on port 1256
-        print("Waiting for backup server to start listening...")
-        backup_server_ready = False
-        for attempt in range(30):  # Try for 30 seconds (extended for GUI initialization)
-            if check_backup_server_status():
-                backup_server_ready = True
-                print(f"[OK] Backup server is listening on port 1256 after {attempt + 1} seconds")
-                break
-            print(f"  Attempt {attempt + 1}/30: Waiting for backup server...")
-            time.sleep(1)
-
-        if not backup_server_ready:
-            print_backup_server_failure()
-            print("Check the server console window for error messages.")
+        # Verify process didn't crash immediately
+        if fletv2_process.poll() is None:
+            print("[OK] FletV2 process is running")
+            print("     BackupServer network listener starting on port 1256...")
+            print("     Desktop GUI initialization in progress...")
+            fletv2_running = True
         else:
-            print("[OK] Backup server with integrated GUI is ready!")
-            print("[INFO] Server GUI should be visible in a separate window")
-    else:
-        print(f"[WARNING] Server file not found: {server_path}")
-        # Try alternative server locations
-        alt_locations = [
-            Path("src/server/server.py"),
-            Path("server.py"),
-            Path("backup_server.py")
-        ]
-        print("Checking alternative server locations:")
-        for alt_path in alt_locations:
-            if alt_path.exists():
-                print("[INFO] Found alternative server:", alt_path)
-                print("Consider updating the script to use the correct path.")
-                break
-            else:
-                print(f"  - {alt_path}: Not found")
+            print("[ERROR] FletV2 process terminated unexpectedly")
+            print("        Check the FletV2 console window for error details")
+            print()
+            print("Common issues:")
+            print("  • Missing flet_venv virtual environment")
+            print("  • Flet package not installed (pip install flet==0.28.3)")
+            print("  • Database path issues (defensive.db not found)")
+            print("  • Import errors (check PYTHONPATH)")
+            fletv2_running = False
+
+    except Exception as launch_err:
+        print(f"[ERROR] Failed to launch FletV2: {launch_err}")
+        print()
+        print("Troubleshooting:")
+        print("1. Verify FletV2/start_with_server.py exists")
+        print("2. Check flet_venv is installed: cd FletV2 && ../flet_venv/Scripts/python --version")
+        print("3. Try manual launch: python FletV2/start_with_server.py")
+        print("4. Check logs in logs/build_script.log")
+        fletv2_running = False
+
+    print()
 
     # ========================================================================
-    # ENHANCED API SERVER STARTUP WITH ROBUST VERIFICATION
+    # API BRIDGE SERVER STARTUP (FOR C++ CLIENT WEB GUI)
     # ========================================================================
+    # CRITICAL: This API server enables the C++ client's JavaScript web interface.
+    # It is NOT used by FletV2 (which uses direct ServerBridge method calls).
+    #
+    # Architecture:
+    #   Web GUI (browser) → API Server (port 9090) → RealBackupExecutor
+    #     → C++ Client (subprocess) → BackupServer (port 1256 in FletV2 process)
+    #
+    # DO NOT REMOVE - The C++ backup client requires this API to function.
 
-    print("Preparing API Bridge Server (cyberbackup_api_server.py)...")
+    print("Preparing API Bridge Server for C++ Client Web GUI...")
+    print("[INFO] This API server is for C++ client operations, NOT FletV2 admin GUI")
+    print("[INFO] FletV2 uses direct ServerBridge calls to BackupServer")
+    print()
 
     # Step 1: Check Python dependencies with enhanced reporting
     print("\nChecking Python dependencies...")
@@ -1016,97 +1040,160 @@ def main():
                 print(f"  - {alt_path}")
             server_started_successfully = False
 
-    # Step 5: Open Web GUI only if server started successfully
+    # API Server status check (for C++ client connectivity)
     if server_started_successfully:
-        open_web_gui(gui_url)
-    else:
-        print_multiline(
-            "\n[FALLBACK] Manual startup instructions:",
-            "Since automatic startup failed, you can try:",
-            "1. Open a new terminal/command prompt",
-            "2. Navigate to this directory",
-        )
-        print("3. Run: python api_server/cyberbackup_api_server.py")
-        print(f"4. Wait for server to start, then open: {gui_url}")
+        print("[OK] API Bridge Server is operational")
+        print(f"     C++ client web GUI available at: {gui_url}")
+        print("     (Open in browser to perform backups via C++ client)")
         print()
-        with contextlib.suppress(EOFError):
-            choice = input("Would you like to try opening the browser anyway? (y/N): ").strip().lower()
-            if choice in ['y', 'yes']:
-                open_web_gui(gui_url)
+        print("[INFO] FletV2 Desktop GUI handles its own window - no browser needed")
+    else:
+        print("[WARNING] API Bridge Server failed to start")
+        print("          C++ client backups will not be available")
+        print()
+        print("Troubleshooting:")
+        print("1. Check if port 9090 is already in use: netstat -an | findstr 9090")
+        print("2. Verify Flask installed: pip install flask flask-cors")
+        print("3. Try manual launch: python api_server/cyberbackup_api_server.py")
+        print("4. Check API server console window for error messages")
 
     # Enhanced success/status message
     print()
-    print("=" * 72)
-    if server_started_successfully:
+    print("=" * 70)
+    if fletv2_running and server_started_successfully:
         safe_print("   [SUCCESS] ONE-CLICK BUILD AND RUN COMPLETED SUCCESSFULLY!")
     else:
         safe_print("   [WARNING] ONE-CLICK BUILD AND RUN COMPLETED WITH ISSUES")
-    print("=" * 72)
+    print("=" * 70)
     print()
     print("CyberBackup 3.0 System Status:")
+    print("=" * 70)
     print()
 
-    # Check actual server status for final report
-    backup_server_running = check_backup_server_status()
-    api_server_running = check_api_server_status()
+    # Check component status
+    backup_server_running = check_backup_server_status()  # Port 1256 (in FletV2 process)
+    api_server_running = check_api_server_status()  # Port 9090 (API server process)
 
+    # Component status overview
     try:
-        print(f"   [SERVER] Backup Server + GUI:  {f'[OK] Running on port {server_port}' if backup_server_running else f'[ERROR] Not responding on port {server_port}'}")
-        print(f"   [API] API Bridge Server:    {f'[OK] Running on port {api_port}' if api_server_running else f'[ERROR] Not responding on port {api_port}'}")
-        print(f"   [GUI] Web Interface:        {f'[OK] {gui_url}' if api_server_running else '[ERROR] Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:           {'[OK] Integrated with server' if backup_server_running else '[ERROR] Check server console window'}")
+        print("Components:")
+        fletv2_pid_str = f"PID: {fletv2_process.pid}" if fletv2_process and fletv2_running else "Not started"
+        print(f"   [FletV2] Desktop GUI:       {f'✅ Running ({fletv2_pid_str})' if fletv2_running else '❌ Process terminated'}")
+        print(f"   [SERVER] BackupServer:      {f'✅ Listening on port {server_port}' if backup_server_running else '⚠️  Not responding on port {server_port}'}")
+        print(f"   [API] C++ Client Bridge:    {f'✅ Running on port {api_port}' if api_server_running else '❌ Not responding on port {api_port}'}")
+        print(f"   [WEB] Client Web GUI:       {f'✅ Available at {gui_url}' if api_server_running else '❌ API server down'}")
     except UnicodeEncodeError:
-        print(f"   [SERVER] Backup Server + GUI:  {f'Running on port {server_port}' if backup_server_running else f'Not responding on port {server_port}'}")
-        print(f"   [API] API Bridge Server:    {f'Running on port {api_port}' if api_server_running else f'Not responding on port {api_port}'}")
-        print(f"   [GUI] Web Interface:        {gui_url if api_server_running else 'Not available (API server down)'}")
-        print(f"   [GUI] Server GUI:           {'Integrated with server' if backup_server_running else 'Check server console window'}")
+        # Fallback for terminals without emoji support
+        print("Components:")
+        fletv2_pid_str = f"PID: {fletv2_process.pid}" if fletv2_process and fletv2_running else "Not started"
+        print(f"   [FletV2] Desktop GUI:       {f'[OK] Running ({fletv2_pid_str})' if fletv2_running else '[ERROR] Process terminated'}")
+        print(f"   [SERVER] BackupServer:      {f'[OK] Listening on port {server_port}' if backup_server_running else '[WARNING] Not responding on port {server_port}'}")
+        print(f"   [API] C++ Client Bridge:    {f'[OK] Running on port {api_port}' if api_server_running else '[ERROR] Not responding on port {api_port}'}")
+        print(f"   [WEB] Client Web GUI:       {f'[OK] Available at {gui_url}' if api_server_running else '[ERROR] API server down'}")
+
+    print()
+    print("Component Details:")
+    print("─" * 70)
     print()
 
-    if server_started_successfully and api_server_running and backup_server_running:
+    print("FletV2 Desktop GUI:")
+    print("  Purpose:   Server administration and monitoring")
+    print("  Interface: Native desktop window (Material Design 3)")
+    print("  Status:    " + ("✅ Running" if fletv2_running else "❌ Not running"))
+    print()
+
+    print("BackupServer (integrated in FletV2):")
+    print("  Purpose:   Accept encrypted file backups from C++ clients")
+    print("  Protocol:  Binary protocol with AES-256-CBC encryption")
+    print("  Network:   Port 1256 (TCP listener)")
+    print("  Database:  defensive.db (SQLite)")
+    print("  Status:    " + ("✅ Listening" if backup_server_running else "❌ Not listening"))
+    print()
+
+    print("API Bridge Server:")
+    print("  Purpose:   Enable C++ client's JavaScript web interface")
+    print("  Protocol:  HTTP + WebSocket")
+    print("  Network:   Port 9090")
+    print("  Features:  File upload, real-time progress, backup history")
+    print("  Status:    " + ("✅ Running" if api_server_running else "❌ Not running"))
+    print()
+
+    print("=" * 70)
+    print()
+
+    if fletv2_running and api_server_running and backup_server_running:
         print_multiline(
-            "[SUCCESS] All components are running properly:",
-            "   1. The web interface should have opened automatically",
-            "   2. The server GUI should be visible in a separate window",
-            "   3. You can upload files through either interface",
+            "✅ [SUCCESS] All components are running properly:",
+            "",
+            "   1. FletV2 Desktop GUI is open (native window for server admin)",
+            "   2. BackupServer is accepting connections on port 1256",
+            "   3. API Server is serving C++ client web GUI on port 9090",
+            "   4. Both GUIs can manage backups and clients",
+            "   5. Shared database: defensive.db (SQLite with file locking)",
         )
-        print("   4. All components are properly coupled and communicating")
-        if check_appmap_available():
-            print("   5. AppMap traces will be generated when services stop")
-    elif server_started_successfully and api_server_running:
+        print()
+        print("Next Steps:")
+        print("  • Use FletV2 Desktop GUI window for server administration")
+        print(f"  • Open {gui_url} in browser for C++ client backup operations")
+        print("  • All components share the same database and file storage")
+        print()
+
+    elif fletv2_running and backup_server_running:
         print_multiline(
-            "[WARNING] Web interface is working, but server may have issues:",
-            "   1. The web interface should work for basic operations",
-            "   2. Check the server console window for error messages",
-            "   3. File uploads may not work properly",
+            "⚠️  [PARTIAL SUCCESS] FletV2 running but API server has issues:",
+            "",
+            "   ✅ FletV2 Desktop GUI operational (server administration works)",
+            "   ✅ BackupServer accepting client connections (port 1256)",
+            "   ❌ API Server not responding (C++ client backups disabled)",
         )
-        print("   4. Restart the script if server issues persist")
+        print()
+        print("Impact:")
+        print("  • Server administration via FletV2: FULLY FUNCTIONAL")
+        print("  • C++ client backup operations: UNAVAILABLE")
+        print()
+        print("To fix API server:")
+        print("  1. Check API server console window for errors")
+        print("  2. Verify port 9090 not in use: netstat -an | findstr 9090")
+        print("  3. Try manual start: python api_server/cyberbackup_api_server.py")
+        print()
+
+    elif fletv2_running:
+        print_multiline(
+            "⚠️  [PARTIAL SUCCESS] FletV2 GUI running but server issues:",
+            "",
+            "   ✅ FletV2 Desktop GUI operational",
+            "   ❌ BackupServer not listening (C++ clients cannot connect)",
+            "   " + ("❌" if not api_server_running else "✅") + f" API Server {'not responding' if not api_server_running else 'operational'}",
+        )
+        print()
+        print("Impact:")
+        print("  • GUI interface works but cannot accept file backups")
+        print()
+        print("To fix BackupServer:")
+        print("  1. Check FletV2 console window for BackupServer errors")
+        print("  2. Verify port 1256 available: netstat -an | findstr 1256")
+        print("  3. Check database exists: defensive.db in project root")
+        print()
+
     else:
         print_multiline(
-            "[ERROR] System has issues - troubleshooting needed:",
-            "   1. Check console windows for error messages",
-            "   2. Verify all dependencies: pip install -r requirements.txt",
-            "   3. Try manual startup: python python_server/server/server.py",
+            "❌ [SYSTEM FAILURE] Critical components not running:",
+            "",
+            "   ❌ FletV2 Desktop GUI process terminated or failed to start",
+            "   " + ("❌" if not backup_server_running else "✅") + " BackupServer " + ("not listening" if not backup_server_running else "operational"),
+            "   " + ("❌" if not api_server_running else "✅") + " API Server " + ("not responding" if not api_server_running else "operational"),
         )
-        print("   4. Check if ports 9090/1256 are blocked by firewall")
-        print("   5. Restart the script after fixing issues")
-    print()
+        print()
+        print("Troubleshooting Steps:")
+        print("  1. Check FletV2 console window for error messages")
+        print("  2. Verify virtual environment: cd FletV2 && ../flet_venv/Scripts/python --version")
+        print("  3. Check database exists: defensive.db in project root")
+        print("  4. Verify Flet installed: cd FletV2 && ../flet_venv/Scripts/pip list | grep flet")
+        print("  5. Review build script logs: logs/build_script.log")
+        print("  6. Try manual FletV2 launch: python FletV2/start_with_server.py")
+        print()
 
-    print_multiline(
-        "[INFO] Available commands:",
-        "   • Run tests: python scripts\\testing\\master_test_suite.py",
-        "   • Quick validation: python scripts\\testing\\quick_validation.py",
-        "   • Stop all services: Close console windows or press Ctrl+C",
-    )
-    print("   • View logs: Check logs/ directory for detailed information")
-    if check_appmap_available():
-        print("   • View AppMap data: Use AppMap tools after stopping services")
-    print()
-
-    if server_started_successfully and api_server_running and backup_server_running:
-        safe_print("Ready for secure backup operations!")
-    else:
-        safe_print("Please check the troubleshooting steps above")
-    print("=" * 72)
+    print("=" * 70)
 
 
 def print_missing_and_optional_deps(header: str, deps: list[tuple[str, str]], footer: str):

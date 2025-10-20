@@ -72,7 +72,13 @@ try:
     print("[INIT] Creating BackupServer instance in main thread (signals enabled)...")
     server_instance = BackupServer()
     print("[OK] BackupServer instance created successfully")
-    print("[INFO] Network server NOT started (integration mode) - call start() separately if needed")
+
+    # CRITICAL: Start network server to accept C++ client connections
+    print("[INIT] Starting network server on port 1256...")
+    server_instance.start()  # Launches NetworkServer in daemon thread (non-blocking)
+    print("[OK] Network server started - ready for client connections")
+    print("[INFO] C++ backup clients can now connect via API server")
+
 except Exception as init_err:
     print(f"[ERROR] BackupServer initialization failed: {init_err}")
     import traceback as _tb
@@ -89,17 +95,25 @@ _app_instance = None
 
 def gui_with_server_main(page: ft.Page):
     """
-    Initialize FletV2App with real server instance.
+    Initialize FletV2App with real server instance as native desktop application.
 
-    The server object will be passed to server_bridge, which will call
-    its methods directly (no API calls needed).
-
-    Note: This function may be called multiple times in WEB_BROWSER mode
-    (once per page connection/tab). We create a fresh app for each page.
+    Configures desktop window properties and integrates with BackupServer.
+    The server object is passed to ServerBridge for direct method calls (no API layer).
     """
     global _app_instance
 
+    # Configure desktop window (only works in FLET_APP mode)
+    page.title = "CyberBackup 3.0 - Server Administration"
+    page.window.width = 1200
+    page.window.height = 800
+    page.window.min_width = 900
+    page.window.min_height = 600
+    page.window.resizable = True
+    page.window.center()  # Center window on screen at launch
+    page.update()  # Apply window configuration immediately
+
     print("🟢 [START] gui_with_server_main function ENTERED")
+    print(f"🟢 [WINDOW] Desktop window configured: 1200x800, resizable, centered")
     print(f"🟢 [START] Page object: {page}")
     print(f"🟢 [START] Server instance available: {server_instance is not None}")
 
@@ -154,35 +168,34 @@ def gui_with_server_main(page: ft.Page):
     print("[DEBUG] Task scheduled")
 
 if __name__ == "__main__":
-    preferred_ports = [8570, 8571, 8572]
-    launched = False
-    for cand in preferred_ports:
-        try:
-            print(f"[PORT] Attempting Flet launch on {cand}...")
-            ft.app(target=gui_with_server_main, view=ft.AppView.WEB_BROWSER, port=cand)
-            launched = True
-            print(f"[BOOT] Flet launched successfully on port {cand}")
-            break
-        except OSError as ose:
-            print(f"[WARN] Port {cand} failed: {ose}")
-        except Exception as ex:
-            print(f"[ERROR] Unexpected launch error on {cand}: {ex}")
-    if not launched:
-        # Fallback to ephemeral port
-        print("[FALLBACK] All preferred ports busy; launching on ephemeral port (0)...")
-        try:
-            ft.app(target=gui_with_server_main, view=ft.AppView.WEB_BROWSER, port=0)
-            launched = True
-            print("[BOOT] Flet launched on ephemeral port (check console for actual port)")
-        except Exception as final_err:
-            print(f"[FATAL] Flet application failed to launch on any port: {final_err}")
-            raise SystemExit(1) from final_err
+    print("[LAUNCH] Starting FletV2 as native desktop application...")
+    print("[INFO] FletV2 will open in a desktop window with:")
+    print("       • Material Design 3 interface")
+    print("       • Real-time server monitoring")
+    print("       • 1200x800 resizable window")
+    print("       • Native OS window controls")
+    print()
+
+    try:
+        # Launch as native desktop application (default mode)
+        ft.app(target=gui_with_server_main, view=ft.AppView.FLET_APP)
+        print("[OK] FletV2 desktop application closed normally")
+
+    except Exception as launch_err:
+        print(f"[FATAL] FletV2 failed to launch: {launch_err}")
+        import traceback
+        traceback.print_exc()
+        raise SystemExit(1) from launch_err
 
     # Cleanup on exit
     if server_instance:
-        print("\n[STOP] Shutting down BackupServer...")
+        print("\n[STOP] Shutting down BackupServer (network + database)...")
         try:
-            server_instance.stop()
-            print("[OK] Server stopped cleanly")
+            server_instance.stop()  # Stops network server and cleans up resources
+            print("[OK] BackupServer stopped cleanly")
+            print("[INFO] Network listener on port 1256 closed")
+            print("[INFO] Database connections released")
         except Exception as e:
-            print(f"[WARN]  Server shutdown error: {e}")
+            print(f"[WARN] Server shutdown error: {e}")
+            import traceback
+            traceback.print_exc()
