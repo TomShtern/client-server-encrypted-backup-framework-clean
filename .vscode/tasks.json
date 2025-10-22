@@ -37,7 +37,8 @@
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
 				"-m",
-				"pylint",
+				"ruff",
+				"check",
 				"FletV2",
 				"Shared",
 				"python_server",
@@ -60,12 +61,13 @@
 			"group": "build"
 		},
 		{
-			"label": "Lint Python Code",
+			"label": "Format Python Code",
 			"type": "shell",
 			"command": "c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\flet_venv\\Scripts\\python.exe",
 			"args": [
 				"-m",
-				"pylint",
+				"ruff",
+				"format",
 				"FletV2",
 				"Shared",
 				"python_server",

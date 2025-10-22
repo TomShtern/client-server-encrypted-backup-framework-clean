@@ -161,7 +161,7 @@ rg "server_bridge\." utils/              # Find server bridge usage
 ```bash
 # Static analysis
 pyright                                  # Type checking
-pylint main.py views/ utils/             # Code quality
+ruff check .                             # Code quality and linting
 
 # Testing (avoid automated UI tests - they don't work well with Flet)
 python -m pytest tests/ -v              # Run existing tests
@@ -176,7 +176,7 @@ python performance_benchmark.py         # Full benchmark suite
 - **JSON Validation**: `python -m json.tool <file>` to validate config files
 - **Fast Search**: Use `rg` (ripgrep) for pattern searching across codebase
 - **State Issues**: Check `FLET_V2_DEBUG=true` for detailed state change logs
-- **Lint**: `pyright`, `pylint main.py views/ utils/`. Always fix all errors and warnings
+- **Lint**: `pyright`, `ruff check .`. Always fix all errors and warnings
 - **Tests**: `python -m pytest tests -v` (manual smoke preferred for UI). **Avoid running tests; Flet UI is not testable by standard frameworks.**
 - **Codacy**: **Codacy checks are currently ignored. DO NOT USE CODACY.**
 - **Search**: Use ripgrep (rg) to search for patterns more efficiently

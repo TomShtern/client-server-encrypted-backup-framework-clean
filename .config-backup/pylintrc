@@ -1,9 +1,0 @@
-# Legacy pylint configuration placeholder.
-#
-# The full configuration now lives in pylintrc.archive.ini within this
-# directory. VS Code previously treated this file as Python code and
-# surfaced hundreds of errors, so the heavy configuration was archived
-# separately.
-#
-# To restore pylint, copy pylintrc.archive.ini to the repository root as
-# .pylintrc (or point tooling at that archive file explicitly).

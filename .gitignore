@@ -290,3 +290,6 @@ FletV2/.env
 FletV2/.vscode/mcp.json
 FletV2/.vscode/settings.json
 FletV2/.env
+scripts/setup_zai_key.ps1
+scripts/setup_zai_key.bat
+scripts/run_with_zai_key.ps1

@@ -15,7 +15,6 @@
   "python.languageServer": "Pylance",
   "python.linting.enabled": true,
   "python.linting.ruffEnabled": true,
-  "python.linting.pylintEnabled": false,
   "python.linting.flake8Enabled": false,
   "python.linting.isortEnabled": false,
   "python.formatting.blackEnabled": false,
@@ -29,16 +28,9 @@
     },
     "editor.formatOnSave": true
   },
-  "files.associations": {
-    ".pylintrc": "plaintext",
-    "*.pylintrc": "plaintext",
-    "pylintrc": "plaintext",
-    "pylintrc.txt": "plaintext"
-  },
+
   "terminal.integrated.env.windows": {
     "PYTHONIOENCODING": "utf-8",
-    "CYBERBACKUP_DISABLE_INTEGRATED_GUI": "1",
-    "CYBERBACKUP_DISABLE_GUI": "1",
     "FLET_V2_DEBUG": "true"
   },
 
@@ -47,7 +39,8 @@
     "**/*.pyc": true,
     "**/node_modules": true,
     "logs": true,
-    ".config-backup/pylintrc": true
+    "**/*.md": true,
+    "**/*.txt": true
   },
 
   "problems.exclude": {
