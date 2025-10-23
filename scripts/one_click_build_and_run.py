@@ -51,6 +51,7 @@ import traceback
 import webbrowser
 from pathlib import Path
 from typing import Any
+import shutil
 
 from Shared.utils.unified_config import get_config
 
@@ -254,6 +255,10 @@ def run_command(command: str | list[str], shell: bool = True, check_exit: bool =
         if isinstance(command, str) and command.endswith('.bat'):
             # Use absolute path and proper shell execution for batch files
             command = os.path.abspath(command)
+            # For batch scripts, ensure we run from project root
+            if cwd is None:
+                script_dir = Path(__file__).parent.parent
+                cwd = str(script_dir)
 
         result = subprocess.run(
             command,
@@ -515,6 +520,39 @@ def check_executable_locations(locations: list[Path] | None = None, context: str
 
     return None, locations
 
+def _latest_mtime(paths: list[Path]) -> float:
+    """Return latest modification time across all files under given paths."""
+    latest = 0.0
+    for p in paths:
+        if p.is_file():
+            try:
+                latest = max(latest, p.stat().st_mtime)
+            except Exception:
+                pass
+        elif p.is_dir():
+            with contextlib.suppress(Exception):
+                for root, _, files in os.walk(p):
+                    for f in files:
+                        fp = Path(root) / f
+                        with contextlib.suppress(Exception):
+                            latest = max(latest, fp.stat().st_mtime)
+    return latest
+
+def should_rebuild_cpp(exe_path: Path) -> bool:
+    """Determine if the C++ client should be rebuilt based on source changes."""
+    if not exe_path.exists():
+        return True
+    exe_mtime = exe_path.stat().st_mtime
+    # Consider key inputs that affect the binary
+    inputs = [
+        Path("Client/src"),
+        Path("Client/include"),
+        Path("Client/CMakeLists.txt"),
+        Path("CMakeLists.txt"),
+    ]
+    latest_input = _latest_mtime(inputs)
+    return latest_input > exe_mtime
+
 def cleanup_existing_processes():  # sourcery skip: low-code-quality
     """Clean up existing CyberBackup processes with improved reliability"""
     if not psutil:
@@ -530,7 +568,7 @@ def cleanup_existing_processes():  # sourcery skip: low-code-quality
     # Define process patterns to look for
     process_patterns = {
         "API Server": ["cyberbackup_api_server.py", "api_server"],
-        "Backup Server": ["python_server/server/server.py", "server.py", "backup_server"],
+        "Backup Server": ["python_server/server.py", "server.py", "backup_server"],
         "C++ Client": ["encryptedbackupclient.exe", "EncryptedBackupClient.exe"],
         "Server GUI": ["ServerGUI.py", "server_gui"]
     }
@@ -716,14 +754,100 @@ def main():
         if not check_and_fix_vcpkg_dependencies():
             handle_error_and_exit("[ERROR] Failed to verify vcpkg dependencies!")
 
-        print("Calling scripts\\build\\configure_cmake.bat for CMake + vcpkg setup...")
+        print("Configuring CMake with vcpkg toolchain...")
         print()
 
-        if not run_command("scripts\\build\\configure_cmake.bat", timeout=300):
-            print_error_with_newline("[ERROR] CMake configuration failed!")
-            print("Check the output above for details.")
+        # Configure CMake directly to avoid batch script issues
+        print("[1/4] Ensuring vcpkg is bootstrapped...")
+        vcpkg_dir = Path("vcpkg")
+        if vcpkg_dir.exists() and (vcpkg_dir / "vcpkg.exe").exists():
+            print("[OK] vcpkg is already bootstrapped")
+        else:
+            print("[ERROR] vcpkg not found or not bootstrapped properly")
             wait_for_exit()
             sys.exit(1)
+
+        # Enable/augment vcpkg binary caching to a repo-local cache as well
+        try:
+            vcpkg_cache = Path("vcpkg_cache")
+            vcpkg_cache.mkdir(exist_ok=True)
+            current_sources = os.environ.get("VCPKG_BINARY_SOURCES", "")
+            local_files_source = f"files,{vcpkg_cache.resolve()},readwrite"
+            # Prepend our local files cache while keeping defaults
+            if current_sources:
+                os.environ["VCPKG_BINARY_SOURCES"] = f"{local_files_source};{current_sources}"
+            else:
+                os.environ["VCPKG_BINARY_SOURCES"] = f"{local_files_source};default"
+        except Exception:
+            # Best-effort; safe to continue without
+            pass
+
+        # Optional flag to skip vcpkg install for faster iterations when deps are already present
+        skip_vcpkg = ("--no-vcpkg" in sys.argv) or (os.environ.get("SKIP_VCPKG") == "1")
+        if skip_vcpkg:
+            print("[2/4] Skipping vcpkg install due to --no-vcpkg flag/SKIP_VCPKG=1")
+        else:
+            print("[2/4] Installing vcpkg dependencies...")
+
+        # Retry mechanism for vcpkg install (handles file locking issues)
+            max_retries = 3
+            install_success = False
+
+            for attempt in range(1, max_retries + 1):
+                print(f"\\nAttempt {attempt}/{max_retries}...")
+
+                if run_command(["vcpkg\\vcpkg.exe", "install", "--triplet", "x64-windows", "--recurse"], shell=False, timeout=600):
+                    install_success = True
+                    break
+
+                if attempt < max_retries:
+                    print(f"\\n[WARNING] vcpkg install failed (attempt {attempt}/{max_retries})")
+                    print("Cleaning buildtrees to resolve file locks...")
+
+                    # Clean problematic package buildtrees (common offenders on Windows)
+                    import shutil
+                    for pkg in ("boost-mpl", "zstd"):
+                        bt = Path("vcpkg") / "buildtrees" / pkg
+                        if bt.exists():
+                            shutil.rmtree(bt, ignore_errors=True)
+                            print(f"[OK] Cleaned {pkg} buildtree")
+
+                    print("Waiting 3 seconds before retry...")
+                    time.sleep(3)
+
+            if not install_success:
+                print("[ERROR] vcpkg dependency installation failed after all retries!")
+                print("\\nPossible solutions:")
+                print("1. Close any programs that might have files locked (antivirus, Windows Explorer)")
+                print("2. Move the project to a shorter path (e.g., C:\\\\cyberbackup)")
+                print("3. Manually run: vcpkg\\\\vcpkg.exe remove boost-mpl:x64-windows")
+                print("   Then run this script again")
+                wait_for_exit()
+                sys.exit(1)
+
+        print("[3/4] Preparing CMake build directory...")
+        build_dir = Path("build")
+        clean_build = ("--clean" in sys.argv) or (os.environ.get("CLEAN_BUILD") == "1")
+        if clean_build and build_dir.exists():
+            print("--clean detected: removing existing build directory...")
+            shutil.rmtree(build_dir, ignore_errors=True)
+        build_dir.mkdir(exist_ok=True)
+
+        print("[4/4] Configuring CMake with vcpkg integration (incremental)...")
+        cmake_cache = build_dir / "CMakeCache.txt"
+        reconfigure = ("--reconfigure" in sys.argv) or clean_build or (not cmake_cache.exists())
+        if reconfigure:
+            if not run_command([
+                "cmake", "-B", "build", "-S", ".",
+                "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "-DVCPKG_TARGET_TRIPLET=x64-windows",
+                "-A", "x64"
+            ], shell=False, timeout=300):
+                print_error_with_newline("[ERROR] CMake configuration failed!")
+                wait_for_exit()
+                sys.exit(1)
+        else:
+            print("CMake cache detected - skipping reconfigure. Use --reconfigure to force it.")
 
         print_success_with_spacing("[OK] CMake configuration completed successfully!")
 
@@ -732,29 +856,44 @@ def main():
         # ========================================================================
         print_phase(3, 7, "Building C++ Client")
 
-        print_build_command_info("Building EncryptedBackupClient.exe with CMake...", "cmake --build build --config Release")
-        print()
+        # Determine if a rebuild is actually needed
+        exe_path_default = Path("build/Release/EncryptedBackupClient.exe")
+        exe_path_alt = Path("build/EncryptedBackupClient.exe")
+        exe_path = exe_path_default if exe_path_default.exists() else exe_path_alt
 
-        if not run_command("cmake --build build --config Release", timeout=180):
-            print_build_failure_help()
-
-            # Offer to try automatic fix
+        if not should_rebuild_cpp(exe_path):
+            print("No C++ source changes detected since last build — skipping rebuild.")
+        else:
+            # Speed up builds by enabling parallelism
             try:
-                choice = input("Would you like to try automatic vcpkg dependency reinstall? (y/N): ").strip().lower()
-                if choice in ['y', 'yes']:
-                    print("\nAttempting automatic fix...")
-                    if force_vcpkg_reinstall():
-                        print("Retrying build...")
-                        if run_command("cmake --build build --config Release", timeout=180):
-                            print("[OK] Build succeeded after vcpkg reinstall!")
+                os.environ.setdefault("CMAKE_BUILD_PARALLEL_LEVEL", str(os.cpu_count() or 4))
+            except Exception:
+                pass
+
+            build_cmd = "cmake --build build --config Release --parallel"
+            print_build_command_info("Building EncryptedBackupClient.exe with CMake...", build_cmd)
+            print()
+
+            if not run_command(build_cmd, timeout=600):
+                print_build_failure_help()
+
+                # Offer to try automatic fix
+                try:
+                    choice = input("Would you like to try automatic vcpkg dependency reinstall? (y/N): ").strip().lower()
+                    if choice in ['y', 'yes']:
+                        print("\nAttempting automatic fix...")
+                        if force_vcpkg_reinstall():
+                            print("Retrying build...")
+                            if run_command(build_cmd, timeout=600):
+                                print("[OK] Build succeeded after vcpkg reinstall!")
+                            else:
+                                handle_error_and_exit("[ERROR] Build still failed after vcpkg reinstall\nManual intervention may be required")
                         else:
-                            handle_error_and_exit("[ERROR] Build still failed after vcpkg reinstall\nManual intervention may be required")
+                            handle_error_and_exit("[ERROR] vcpkg reinstall failed")
                     else:
-                        handle_error_and_exit("[ERROR] vcpkg reinstall failed")
-                else:
-                    handle_error_and_exit("", wait_for_input=True)
-            except (EOFError, KeyboardInterrupt):
-                handle_error_and_exit("\nExiting...", wait_for_input=False)
+                        handle_error_and_exit("", wait_for_input=True)
+                except (EOFError, KeyboardInterrupt):
+                    handle_error_and_exit("\nExiting...", wait_for_input=False)
 
         # Verify the executable was created with fallback locations
         found_exe, checked_locations = check_executable_locations()
@@ -1163,7 +1302,7 @@ def main():
             "",
             "   ✅ FletV2 Desktop GUI operational",
             "   ❌ BackupServer not listening (C++ clients cannot connect)",
-            "   " + ("❌" if not api_server_running else "✅") + f" API Server {'not responding' if not api_server_running else 'operational'}",
+            "   " + ("✅" if api_server_running else "❌") + f" API Server {'operational' if api_server_running else 'not responding'}",
         )
         print()
         print("Impact:")
@@ -1180,8 +1319,8 @@ def main():
             "❌ [SYSTEM FAILURE] Critical components not running:",
             "",
             "   ❌ FletV2 Desktop GUI process terminated or failed to start",
-            "   " + ("❌" if not backup_server_running else "✅") + " BackupServer " + ("not listening" if not backup_server_running else "operational"),
-            "   " + ("❌" if not api_server_running else "✅") + " API Server " + ("not responding" if not api_server_running else "operational"),
+            "   " + ("✅" if backup_server_running else "❌") + " BackupServer " + ("operational" if backup_server_running else "not listening"),
+            "   " + ("✅" if api_server_running else "❌") + " API Server " + ("operational" if api_server_running else "not responding"),
         )
         print()
         print("Troubleshooting Steps:")

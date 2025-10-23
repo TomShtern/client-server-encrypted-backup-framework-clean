@@ -1,7 +1,0 @@
--e git+https://github.com/tomshtern/client-server-encrypted-backup-framework.git@313e28437deb179192c959f764b12414c3baa243#egg=python_server&subdirectory=python_server
--e git+https://github.com/tomshtern/client-server-encrypted-backup-framework.git@313e28437deb179192c959f764b12414c3baa243#egg=shared&subdirectory=shared
-aiosqlite
-black
-emoji
-pytokens
-sourcery

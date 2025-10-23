@@ -967,28 +967,149 @@ def create_dashboard_view(
         activity_summary_text.update()
 
     auto_refresh_task: asyncio.Task | None = None
+    stop_event = asyncio.Event()
 
     async def _auto_refresh_loop() -> None:
-        try:
-            while not disposed:
-                await asyncio.sleep(45)
-                if disposed:
-                    break
-                await _refresh()
-        except asyncio.CancelledError:  # pragma: no cover - cancellation path
-            return
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=45)
+            except asyncio.TimeoutError:
+                if not stop_event.is_set():
+                    await _refresh()
 
     async def setup() -> None:
-        await asyncio.sleep(0.1)
+        # Show skeleton layout immediately for instant UI feedback
+        await asyncio.sleep(0.05)  # Very short delay for skeleton to render
+
         if not disposed:
-            await _refresh()
+            # Start progressive loading with page.run_task to avoid blocking UI
+            page.run_task(_start_progressive_loading)
+
         if not disposed:
             nonlocal auto_refresh_task
             auto_refresh_task = page.run_task(_auto_refresh_loop)
 
+    async def _start_progressive_loading() -> None:
+        """Start progressive loading of dashboard data with phased updates."""
+        if disposed:
+            return
+
+        try:
+            # Phase 1: Critical metrics (server status, basic stats)
+            await _load_critical_metrics()
+
+            # Phase 2: Performance data (CPU, memory, database)
+            await _load_performance_data()
+
+            # Phase 3: Activity data (recent events)
+            await _load_activity_data()
+
+        except Exception as e:
+            show_error_message(page, f"Dashboard loading failed: {e}")
+
+    async def _load_critical_metrics() -> None:
+        """Load critical metrics without blocking UI."""
+        if disposed:
+            return
+
+        try:
+            # _call_bridge is already async, so we just await it
+            summary = await _call_bridge(server_bridge, "get_dashboard_summary")
+
+            if summary and summary.get("success"):
+                # Update UI with critical metrics
+                payload = summary.get("data") or {}
+                snapshot = DashboardSnapshot(
+                    total_clients=int(payload.get("total_clients") or 0),
+                    connected_clients=int(payload.get("connected_clients") or 0),
+                    total_files=int(payload.get("total_files") or 0),
+                    uptime_seconds=float(payload.get("uptime") or 0.0),
+                    server_status=str(payload.get("server_status") or "offline"),
+                    server_version=str(payload.get("server_version") or ""),
+                )
+
+                # Apply critical metrics to UI
+                await _apply_snapshot(snapshot)
+
+        except Exception as e:
+            print(f"Failed to load critical metrics: {e}")
+
+    async def _load_performance_data() -> None:
+        """Load performance data without blocking UI."""
+        if disposed:
+            return
+
+        try:
+            # _call_bridge is already async, so we just await it
+            performance = await _call_bridge(server_bridge, "get_performance_metrics")
+
+            if performance and performance.get("success"):
+                # Update UI with performance data
+                payload = performance.get("data") or {}
+
+                # Update CPU usage
+                cpu_usage = as_float(payload.get("cpu_usage_percent"))
+                if cpu_usage is not None:
+                    cpu_value_text.value = f"{cpu_usage:.1f}%"
+                    cpu_bar.value = cpu_usage / 100.0
+                cpu_value_text.update()
+                cpu_bar.update()
+
+                # Update memory usage
+                memory_usage = as_float(payload.get("memory_usage_mb"))
+                if memory_usage is not None:
+                    memory_value_text.value = f"{memory_usage:.1f} MB"
+                memory_value_text.update()
+
+                # Update database response time
+                db_response = as_int(payload.get("database_response_time_ms"))
+                if db_response is not None:
+                    db_value_text.value = f"{db_response}ms"
+                db_value_text.update()
+
+                # Update active connections
+                active_connections = as_int(payload.get("active_connections"))
+                if active_connections is not None:
+                    connections_value_text.value = str(active_connections)
+                connections_value_text.update()
+
+        except Exception as e:
+            print(f"Failed to load performance data: {e}")
+
+    async def _load_activity_data() -> None:
+        """Load activity data without blocking UI."""
+        if disposed:
+            return
+
+        try:
+            # Try async version first
+            activity = await _call_bridge(server_bridge, "get_recent_activity_async", 12)
+
+            if not activity or not activity.get("success"):
+                # Fallback to sync version
+                activity = await _call_bridge(server_bridge, "get_recent_activity", 12)
+
+            if activity and activity.get("success"):
+                data = activity.get("data")
+                if isinstance(data, list) and data:
+                    # Update UI with activity data
+                    activity_list.controls.clear()
+                    for entry in data[:12]:  # Limit to 12 most recent items
+                        activity_list.controls.append(_build_activity_tile(entry))
+
+                    # Update summary
+                    activity_summary_text.value = f"{len(data)} recent events"
+
+                    activity_list.update()
+                    activity_summary_text.update()
+
+        except Exception as e:
+            print(f"Failed to load activity data: {e}")
+
     def dispose() -> None:
         nonlocal disposed
         disposed = True
+        stop_event.set()
         if auto_refresh_task and not auto_refresh_task.done():
             auto_refresh_task.cancel()
 

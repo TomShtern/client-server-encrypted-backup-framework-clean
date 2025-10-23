@@ -1,9 +1,8 @@
 ---
 description: AI coding agent instructions for FletV2 encrypted backup server GUI
-globs: *
 ---
 
-# FletV2 – AI Coding Agent Instructions (December 2025)
+# FletV2 – AI Coding Agent Instructions (October 2025)
 
 ## 🎯 Project Overview
 **FletV2** is a production-ready Flet desktop application for encrypted backup server management. The codebase exemplifies "Framework Harmony" - maximizing Flet's built-in capabilities while avoiding over-engineering.
