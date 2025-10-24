@@ -325,6 +325,8 @@ class FletV2App(ft.Row):
         self._startup_profile: list[tuple[str, float]] = []
         # Track last view loading error for diagnostics UI
         self._last_view_error: str | None = None
+        # Ensure initial view is loaded exactly once to avoid duplicate dashboard instances
+        self._initial_view_loaded: bool = False
 
         # Startup profiling helpers (opt-in via FLET_STARTUP_PROFILER=1)
         def _profile_enabled() -> bool:
@@ -463,9 +465,19 @@ class FletV2App(ft.Row):
             self.content_area
         ]
 
-        # Set up page connection handler to load initial view
+        # Set up page connection handler to load initial view (guarded)
         logger.info("Setting up page connection handler")
-        page.on_connect = self._on_page_connect
+        def _guarded_on_connect(e: ft.ControlEvent) -> None:
+            try:
+                # Prevent duplicate loads: only navigate here if initialize() hasn't done it
+                if not self._initial_view_loaded and not getattr(self, "_initialized", False):
+                    logger.info("Page connected - loading initial dashboard view (guarded)")
+                    self.navigate_to("dashboard")
+                    # Mark to prevent any further on_connect-triggered loads
+                    self._initial_view_loaded = True
+            except Exception as connect_error:
+                logger.error(f"Page connect error: {connect_error}")
+        page.on_connect = _guarded_on_connect
 
         # Add disconnect cleanup to release resources and return DB connections
         def _on_disconnect(e: ft.ControlEvent | None = None):
@@ -872,13 +884,15 @@ class FletV2App(ft.Row):
             logger.info("✅ FletV2 application initialized successfully")
             print("🔴 [DEBUG] About to load dashboard")
 
-            # Load initial dashboard view (page.on_connect won't fire since page is already connected)
+            # Load initial dashboard view. Mark as loaded to prevent on_connect from loading again.
             try:
                 logger.info("📊 Loading initial dashboard view...")
                 print("🔴 [DEBUG] Calling navigate_to('dashboard')")
                 self.navigate_to("dashboard")
                 print("🔴 [DEBUG] navigate_to returned")
                 logger.info("✅ Dashboard navigation completed")
+                # Guard: mark that initial view is loaded to avoid duplicate loads via on_connect
+                self._initial_view_loaded = True
             except Exception as dash_err:
                 print(f"🔴 [DEBUG] Dashboard navigation raised exception: {dash_err}")
                 logger.error(f"❌ Failed to load dashboard: {dash_err}")

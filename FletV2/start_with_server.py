@@ -18,6 +18,7 @@ Features:
 
 import os
 import sys
+import socket
 
 # Add repository root to path for imports
 _flet_v2_root = os.path.dirname(os.path.abspath(__file__))
@@ -168,24 +169,62 @@ def gui_with_server_main(page: ft.Page):
     print("[DEBUG] Task scheduled")
 
 if __name__ == "__main__":
-    print("[LAUNCH] Starting FletV2 as native desktop application...")
-    print("[INFO] FletV2 will open in a desktop window with:")
-    print("       • Material Design 3 interface")
-    print("       • Real-time server monitoring")
-    print("       • 1200x800 resizable window")
-    print("       • Native OS window controls")
-    print()
-
+    # Allow switching between desktop and web mode via environment variables for testing/automation
+    view_mode = os.environ.get("FLET_VIEW", "DESKTOP").upper().strip()
+    port_env = os.environ.get("FLET_PORT")
     try:
-        # Launch as native desktop application (default mode)
-        ft.app(target=gui_with_server_main, view=ft.AppView.FLET_APP)
-        print("[OK] FletV2 desktop application closed normally")
+        port = int(port_env) if port_env else 8550
+    except Exception:
+        port = 8550
 
-    except Exception as launch_err:
-        print(f"[FATAL] FletV2 failed to launch: {launch_err}")
-        import traceback
-        traceback.print_exc()
-        raise SystemExit(1) from launch_err
+    def _pick_port(preferred: int) -> int:
+        """Pick an available port, starting from preferred and trying a few fallbacks."""
+        candidates = [preferred, preferred + 1, preferred + 2, preferred + 3, preferred + 4]
+        for p in candidates:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    s.bind(("0.0.0.0", p))
+                    return p
+                except OSError:
+                    continue
+        # If somehow none are available, return preferred and let ft.app error loudly
+        return preferred
+
+    if view_mode == "WEB":
+        print("[LAUNCH] Starting FletV2 as WEB application (browser)...")
+        print("[INFO] This mode enables Playwright/browser-based verification while keeping direct server integration.")
+        chosen_port = _pick_port(port)
+        if chosen_port != port:
+            print(f"[INFO] Preferred port {port} is busy; auto-selected free port {chosen_port}")
+        try:
+            # Launch in WEB_BROWSER view so automated tools can capture screenshots
+            ft.app(target=gui_with_server_main, view=ft.AppView.WEB_BROWSER, port=chosen_port)
+            print("[OK] FletV2 web application closed normally")
+        except Exception as launch_err:
+            print(f"[FATAL] FletV2 failed to launch (web): {launch_err}")
+            import traceback
+            traceback.print_exc()
+            raise SystemExit(1) from launch_err
+    else:
+        print("[LAUNCH] Starting FletV2 as native desktop application...")
+        print("[INFO] FletV2 will open in a desktop window with:")
+        print("       • Material Design 3 interface")
+        print("       • Real-time server monitoring")
+        print("       • 1200x800 resizable window")
+        print("       • Native OS window controls")
+        print()
+
+        try:
+            # Launch as native desktop application (default mode)
+            ft.app(target=gui_with_server_main, view=ft.AppView.FLET_APP)
+            print("[OK] FletV2 desktop application closed normally")
+
+        except Exception as launch_err:
+            print(f"[FATAL] FletV2 failed to launch: {launch_err}")
+            import traceback
+            traceback.print_exc()
+            raise SystemExit(1) from launch_err
 
     # Cleanup on exit
     if server_instance:

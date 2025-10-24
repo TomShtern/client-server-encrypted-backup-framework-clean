@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Run FletV2 App",
+			"label": "Run FletV2 App in the browser WITHOUT server",
 			"type": "shell",
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
@@ -32,6 +32,45 @@
 			"group": "build"
 		},
 		{
+			"label": "Run FletV2 App in browser WITH Python Server",
+			"type": "shell",
+			"dependsOn": [
+				"Run Python Server"
+			],
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"flet",
+				"run",
+				"main.py",
+				"--web"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/FletV2"
+			},
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			}
+		},
+		{
+			"label": "Run FletV2 App(Desktop mode-NO browser) with Server (PS1)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\FletV2\\start_with_server.ps1"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
 			"label": "Lint Python Code",
 			"type": "shell",
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
@@ -47,20 +86,6 @@
 			"group": "test"
 		},
 		{
-			"label": "Run FletV2 with Server (PS1)",
-			"type": "shell",
-			"command": "pwsh",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\FletV2\\start_with_server.ps1"
-			],
-			"isBackground": true,
-			"group": "build"
-		},
-		{
 			"label": "Format Python Code",
 			"type": "shell",
 			"command": "c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\flet_venv\\Scripts\\python.exe",
@@ -74,20 +99,6 @@
 				"api_server"
 			],
 			"group": "test"
-		},
-		{
-			"label": "Run FletV2 with Server (PS1)",
-			"type": "shell",
-			"command": "pwsh",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\Users\\tom7s\\Desktopp\\Claude_Folder_2\\Client_Server_Encrypted_Backup_Framework\\FletV2\\start_with_server.ps1"
-			],
-			"isBackground": true,
-			"group": "build"
 		}
 	]
 }

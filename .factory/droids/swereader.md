@@ -1,7 +1,7 @@
 ---
 name: SWEReader
 description: Claude should use this agent when he needs to read a lot, to find, to look, to see, and when he needs to do a fast research
-model: claude-haiku-4-5-20251001
+model: glm-4.6
 tools: Read, Grep, Glob, WebSearch, LS, FetchUrl, TodoWrite
 ---
 

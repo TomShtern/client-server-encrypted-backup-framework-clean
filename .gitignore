@@ -299,3 +299,4 @@ scripts/run_with_zai_key.ps1
 .factory/droids/deep-research-synthesis-agent.md
 .factory/droids/swereader.md
 .vscode/tasks.json
+.factory/

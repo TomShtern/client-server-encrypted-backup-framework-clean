@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import time
 from typing import Any, Callable, Coroutine
+import os
 
 import flet as ft
 
@@ -205,7 +206,10 @@ def _activity_palette(severity: str, scheme: ft.ColorScheme | None = None) -> di
 # ============================================================================
 
 async def _call_bridge(server_bridge: Any | None, method_name: str, *args: Any) -> dict[str, Any]:
+    DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
     if not server_bridge:
+        if DEBUG:
+            print(f"[DASH] _call_bridge('{method_name}') skipped - no server bridge")
         return {"success": False, "data": None, "error": "Server bridge unavailable"}
 
     method = getattr(server_bridge, method_name, None)
@@ -213,19 +217,28 @@ async def _call_bridge(server_bridge: Any | None, method_name: str, *args: Any) 
         return {"success": False, "data": None, "error": f"Method {method_name} not found"}
 
     try:
+        if DEBUG:
+            print(f"[DASH] _call_bridge → calling {method_name} ({'async' if asyncio.iscoroutinefunction(method) else 'sync'}) with args={args}")
         if asyncio.iscoroutinefunction(method):
             result = await method(*args)
         else:
             result = await run_sync_in_executor(method, *args)
     except Exception as exc:  # pragma: no cover - defensive guard
+        if DEBUG:
+            print(f"[DASH] _call_bridge('{method_name}') raised: {exc}")
         return {"success": False, "data": None, "error": str(exc)}
 
     if isinstance(result, dict):
+        if DEBUG:
+            print(f"[DASH] _call_bridge('{method_name}') returned (dict): success={result.get('success')} keys={list(result.keys())}")
         return result
+    if DEBUG:
+        print(f"[DASH] _call_bridge('{method_name}') returned (raw): type={type(result)}")
     return {"success": True, "data": result, "error": None}
 
 
 async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
+    DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
     snapshot = DashboardSnapshot()
     issues: list[str] = []
 
@@ -237,6 +250,8 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
         snapshot.recent_activity = []
         return snapshot
 
+    if DEBUG:
+        print("[DASH] _fetch_snapshot → fetching get_dashboard_summary")
     summary = await _call_bridge(server_bridge, "get_dashboard_summary")
     if summary.get("success"):
         payload = summary.get("data") or {}
@@ -249,6 +264,8 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     else:
         issues.append(summary.get("error") or "Dashboard summary unavailable")
 
+    if DEBUG:
+        print("[DASH] _fetch_snapshot → fetching get_performance_metrics")
     performance = await _call_bridge(server_bridge, "get_performance_metrics")
     if performance.get("success"):
         payload = performance.get("data") or {}
@@ -261,6 +278,8 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     else:
         issues.append(performance.get("error") or "Performance metrics unavailable")
 
+    if DEBUG:
+        print("[DASH] _fetch_snapshot → fetching get_server_statistics")
     stats = await _call_bridge(server_bridge, "get_server_statistics")
     if stats.get("success"):
         payload = stats.get("data") or {}
@@ -291,8 +310,12 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
     else:
         issues.append(stats.get("error") or "Server statistics unavailable")
 
+    if DEBUG:
+        print("[DASH] _fetch_snapshot → fetching get_recent_activity_async (limit=12)")
     activity = await _call_bridge(server_bridge, "get_recent_activity_async", 12)
     if not activity.get("success"):
+        if DEBUG:
+            print("[DASH] _fetch_snapshot → async activity failed, trying sync get_recent_activity")
         activity = await _call_bridge(server_bridge, "get_recent_activity", 12)
 
     if activity.get("success"):
@@ -323,8 +346,13 @@ def _build_metric_block(
     route: str | None,
 ) -> dict[str, ft.Control]:
     """Build enhanced metric block with neumorphic styling and hover effects."""
-    value_text = ft.Text("—", size=30, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE)
-    footnote_text = ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+    # Use ft.Ref for controls that need to be updated
+    value_text_ref = ft.Ref[ft.Text]()
+    footnote_text_ref = ft.Ref[ft.Text]()
+
+    # Create Text controls with refs
+    value_text = ft.Text("—", size=30, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE, ref=value_text_ref)
+    footnote_text = ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT, ref=footnote_text_ref)
 
     body = ft.Column(
         [
@@ -372,7 +400,14 @@ def _build_metric_block(
         ink=True if route and navigate_callback else False,
     )
 
-    return {"wrapper": wrapper, "value_text": value_text, "footnote_text": footnote_text}
+    # Return refs for direct access to controls
+    return {
+        "wrapper": wrapper,
+        "value_text": value_text,
+        "value_text_ref": value_text_ref,
+        "footnote_text": footnote_text,
+        "footnote_text_ref": footnote_text_ref
+    }
 
 
 # ============================================================================
@@ -616,19 +651,18 @@ def create_dashboard_view(
         expand=True,  # Allow container to fill available space
     )
 
+    # Store content_column in a closure for _apply_snapshot to access
+    def get_content_column():
+        return content_column
+
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
         # If there's no server bridge or no real server behind it, we're in GUI-only
         # standalone mode. Show a neutral banner instead of critical/offline.
         if not server_bridge or (hasattr(server_bridge, "real_server") and not getattr(server_bridge, "real_server")):
             return "neutral", "GUI: Standalone mode"
-        # Check if bridge has real server instance
-        bridge_connected = False
+
+        # Check if bridge has real server instance (but DON'T call is_connected() - it blocks!)
         direct_bridge_present = False
-        if server_bridge and hasattr(server_bridge, "is_connected"):
-            with contextlib.suppress(Exception):
-                bridge_connected = bool(server_bridge.is_connected())
-        # In integrated mode, a real server object can be present even if is_connected() is False
-        # (e.g., network listener not started). Detect that and report as Connected (Direct).
         if server_bridge and hasattr(server_bridge, "real_server"):
             try:
                 direct_bridge_present = bool(getattr(server_bridge, "real_server"))
@@ -658,120 +692,255 @@ def create_dashboard_view(
         if raw_status in {"offline", "stopped", "disconnected"}:
             # In integrated GUI mode, network listener may be stopped while direct bridge is alive.
             # Reflect that as Connected (Direct) to avoid alarming red statuses.
-            if bridge_connected or direct_bridge_present or evidence_connected:
+            if direct_bridge_present or evidence_connected:
                 return "excellent", "Server: Connected (Direct)"
             return "critical", f"Server: {snapshot.server_status.title()}"
 
-        # Priority 4: Bridge connected but no clear status
-        if bridge_connected:
+        # Priority 4: Direct bridge present but no clear status
+        if direct_bridge_present:
             return "warning", "Server: Unknown status"
 
         # Default: Disconnected
         return "critical", "Server: Disconnected"
 
-    def _update_control(control: ft.Control, value: Any) -> None:
-        """Helper to update a control's value and trigger UI update."""
-        control.value = value
-        control.update()
+    def _update_control(control: ft.Control, value: Any, parent: ft.Control | None = None, force_page_update: bool = False) -> None:
+        """Set control value and perform hierarchical updates for Flet 0.28.3.
+
+        Notes for Flet 0.28.3:
+        - Child property changes are not always propagated by updating an ancestor.
+        - Must call update() on control, parent, and sometimes page for reliable propagation.
+        - For critical controls like metric values, force a page update to ensure visibility.
+        """
+        try:
+            control.value = value
+            # Flet 0.28.3 requires hierarchical updates to ensure visual changes
+            with contextlib.suppress(Exception):
+                control.update()
+
+            # Update parent if provided (important for nested controls)
+            if parent:
+                with contextlib.suppress(Exception):
+                    parent.update()
+
+            # Force page update for critical controls that aren't showing up
+            if force_page_update:
+                with contextlib.suppress(Exception):
+                    page.update()
+
+            if os.environ.get("FLET_DASHBOARD_DEBUG") == "1":
+                print(f"[DASH] _update_control: set {type(control).__name__} to '{value}'")
+
+        except Exception as e:
+            if os.environ.get("FLET_DASHBOARD_DEBUG") == "1":
+                print(f"[DASH][WARN] control value set failed: {e}")
 
     async def _apply_snapshot(snapshot: DashboardSnapshot) -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         nonlocal snapshot_ref
         nonlocal fallback_uptime_start
-        snapshot_ref = snapshot
+        nonlocal metrics_row
+        if DEBUG:
+            print("[DASH] _apply_snapshot ENTER")
+            print(f"[DASH] snapshot: clients={snapshot.total_clients}, connected={snapshot.connected_clients}, files={snapshot.total_files}, status={snapshot.server_status}, uptime={snapshot.uptime_seconds}")
+        try:
+            snapshot_ref = snapshot
 
-        # Compute display uptime with monotonic fallback when uptime_seconds is 0 but evidence suggests server is alive
-        display_uptime_seconds = snapshot.uptime_seconds if snapshot.uptime_seconds and snapshot.uptime_seconds > 0 else 0.0
+            # Get reference to content column for aggressive rebuilds
+            content_col = get_content_column()
 
-        if display_uptime_seconds <= 0:
-            direct_bridge_present = False
-            if server_bridge and hasattr(server_bridge, "real_server"):
-                with contextlib.suppress(Exception):
-                    direct_bridge_present = bool(getattr(server_bridge, "real_server"))
+            # Compute display uptime with monotonic fallback when uptime_seconds is 0 but evidence suggests server is alive
+            display_uptime_seconds = snapshot.uptime_seconds if snapshot.uptime_seconds and snapshot.uptime_seconds > 0 else 0.0
 
-            evidence_connected = any([
-                (snapshot.total_clients or 0) > 0,
-                (snapshot.total_files or 0) > 0,
-                bool(snapshot.server_version),
-                snapshot.port is not None,
-            ])
+            if display_uptime_seconds <= 0:
+                direct_bridge_present = False
+                if server_bridge and hasattr(server_bridge, "real_server"):
+                    with contextlib.suppress(Exception):
+                        direct_bridge_present = bool(getattr(server_bridge, "real_server"))
 
-            if direct_bridge_present or evidence_connected:
-                if fallback_uptime_start is None:
-                    fallback_uptime_start = time.monotonic()
-                display_uptime_seconds = max(0.0, time.monotonic() - fallback_uptime_start)
+                evidence_connected = any([
+                    (snapshot.total_clients or 0) > 0,
+                    (snapshot.total_files or 0) > 0,
+                    bool(snapshot.server_version),
+                    snapshot.port is not None,
+                ])
+
+                if direct_bridge_present or evidence_connected:
+                    if fallback_uptime_start is None:
+                        fallback_uptime_start = time.monotonic()
+                    display_uptime_seconds = max(0.0, time.monotonic() - fallback_uptime_start)
+                else:
+                    fallback_uptime_start = None
+
+            # Update metric blocks with COMPLETE REBUILD for Flet 0.28.3 compatibility
+            if DEBUG:
+                print("[DASH] _apply_snapshot → REBUILDING metric blocks (complete replacement)")
+
+            # CRITICAL: Complete metric block replacement to ensure visibility
+            # This works around Flet 0.28.3's update propagation issues
+
+            # Update all metric blocks efficiently - set values first, update container once
+            clients_block = metric_blocks["total_clients"]
+            new_clients_value = f"{snapshot.total_clients:,}" if snapshot.total_clients else "0"
+            if "value_text_ref" in clients_block and clients_block["value_text_ref"].current:
+                clients_block["value_text_ref"].current.value = new_clients_value
+                if DEBUG:
+                    print(f"[DASH] Updated clients metric to: {new_clients_value}")
+
+            active_block = metric_blocks["active_clients"]
+            new_active_value = f"{snapshot.connected_clients:,}" if snapshot.connected_clients else "0"
+            ratio_text = f"{(snapshot.connected_clients / snapshot.total_clients) * 100:.0f}% online" if snapshot.total_clients > 0 else "Currently connected"
+            if "value_text_ref" in active_block and active_block["value_text_ref"].current:
+                active_block["value_text_ref"].current.value = new_active_value
+                if "footnote_text_ref" in active_block and active_block["footnote_text_ref"].current:
+                    active_block["footnote_text_ref"].current.value = ratio_text
+                if DEBUG:
+                    print(f"[DASH] Updated active clients metric to: {new_active_value}")
+
+            files_block = metric_blocks["total_files"]
+            new_files_value = f"{snapshot.total_files:,}" if snapshot.total_files else "0"
+            if "value_text_ref" in files_block and files_block["value_text_ref"].current:
+                files_block["value_text_ref"].current.value = new_files_value
+                if DEBUG:
+                    print(f"[DASH] Updated files metric to: {new_files_value}")
+
+            try:
+                if DEBUG:
+                    print(f"[DASH] About to update uptime block...")
+                uptime_block = metric_blocks["uptime"]
+                if DEBUG:
+                    print(f"[DASH] Got uptime_block reference, display_uptime_seconds={display_uptime_seconds}")
+                new_uptime_value = format_uptime(display_uptime_seconds)
+                if DEBUG:
+                    print(f"[DASH] format_uptime() returned: {new_uptime_value}")
+                chip_level, chip_label = _derive_status(snapshot)
+                if DEBUG:
+                    print(f"[DASH] _derive_status() returned: {chip_level}, {chip_label}")
+                if "value_text_ref" in uptime_block and uptime_block["value_text_ref"].current:
+                    uptime_block["value_text_ref"].current.value = new_uptime_value
+                    if "footnote_text_ref" in uptime_block and uptime_block["footnote_text_ref"].current:
+                        uptime_block["footnote_text_ref"].current.value = chip_label
+                    if DEBUG:
+                        print(f"[DASH] Updated uptime metric to: {new_uptime_value}")
+            except Exception as e:
+                print(f"[DASH][CRITICAL ERROR] Uptime block update failed: {e}")
+                import traceback
+                traceback.print_exc()
+
+            # CRITICAL: Yield control back to event loop before updating
+            # This prevents deadlock in Flet 0.28.3 where .update() waits for event loop
+            if DEBUG:
+                print("[DASH] Yielding to event loop before metrics_row update")
+            await asyncio.sleep(0)  # Allow event loop to process pending tasks
+
+            if DEBUG:
+                print("[DASH] Triggering single metrics_row update")
+            # Safety: Only update if attached to page
+            if metrics_row.page:
+                metrics_row.update()
+                if DEBUG:
+                    print("[DASH] metrics_row.update() completed")
             else:
-                fallback_uptime_start = None
+                if DEBUG:
+                    print("[DASH] WARNING: metrics_row not attached to page, skipping update")
+            if DEBUG:
+                print("[DASH] Metric blocks rebuilt completely")
 
-        # Update metric blocks
-        clients_block = metric_blocks["total_clients"]
-        _update_control(clients_block["value_text"], f"{snapshot.total_clients:,}" if snapshot.total_clients else "0")
+            # Update status chip
+            try:
+                chip_level, chip_label = _derive_status(snapshot)
+                status_chip_holder.content = create_pulsing_status_indicator(chip_level, chip_label)
+                with contextlib.suppress(Exception):
+                    status_chip_holder.update()
+            except Exception as e:
+                if DEBUG:
+                    print(f"[DASH][ERROR] status chip update failed: {e}")
 
-        active_block = metric_blocks["active_clients"]
-        _update_control(active_block["value_text"], f"{snapshot.connected_clients:,}" if snapshot.connected_clients else "0")
-        ratio_text = f"{(snapshot.connected_clients / snapshot.total_clients) * 100:.0f}% online" if snapshot.total_clients > 0 else "Currently connected"
-        _update_control(active_block["footnote_text"], ratio_text)
+            # Update status summary cards
+            _update_control(uptime_value_text, format_uptime(display_uptime_seconds), parent=status_header_panel, force_page_update=True)
 
-        files_block = metric_blocks["total_files"]
-        _update_control(files_block["value_text"], f"{snapshot.total_files:,}" if snapshot.total_files else "0")
+            try:
+                if snapshot.cpu_usage is not None:
+                    cpu_bar.value = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
+                    cpu_value_text.value = f"{snapshot.cpu_usage:.1f}%"
+                else:
+                    cpu_bar.value = 0.0
+                    cpu_value_text.value = "—"
+                with contextlib.suppress(Exception):
+                    cpu_bar.update()
+                    cpu_value_text.update()
+                    # Force header panel update to show CPU changes
+                    status_header_panel.update()
+            except Exception as e:
+                if DEBUG:
+                    print(f"[DASH][WARN] CPU controls update failed: {e}")
 
-        uptime_block = metric_blocks["uptime"]
-        _update_control(uptime_block["value_text"], format_uptime(display_uptime_seconds))
-        chip_level, chip_label = _derive_status(snapshot)
-        _update_control(uptime_block["footnote_text"], chip_label)
+            try:
+                _update_control(memory_value_text, f"{snapshot.memory_usage_mb:.1f} MB" if snapshot.memory_usage_mb is not None else "—", parent=status_header_panel, force_page_update=True)
+                _update_control(db_value_text, f"{snapshot.db_response_ms} ms" if snapshot.db_response_ms is not None and snapshot.db_response_ms >= 0 else "—", parent=status_header_panel, force_page_update=True)
+                _update_control(connections_value_text, str(max(snapshot.active_connections, snapshot.connected_clients)), parent=status_header_panel, force_page_update=True)
+                _update_control(version_value_text, snapshot.server_version or "—", parent=status_header_panel)
+                _update_control(port_value_text, str(snapshot.port) if snapshot.port is not None else "—", parent=status_header_panel)
+            except Exception as e:
+                if DEBUG:
+                    print(f"[DASH][WARN] Header values update failed: {e}")
 
-        # Update status chip
-        chip_level, chip_label = _derive_status(snapshot)
-        status_chip_holder.content = create_pulsing_status_indicator(chip_level, chip_label)
-        status_chip_holder.update()
+            # Targeted parent updates to ensure children diffs are propagated in 0.28.3
+            if DEBUG:
+                print("[DASH] _apply_snapshot → updating header containers")
+            with contextlib.suppress(Exception):
+                status_header_panel.update()
+            with contextlib.suppress(Exception):
+                metrics_row.update()
 
-        # Update status summary cards
-        _update_control(uptime_value_text, format_uptime(display_uptime_seconds))
+            # Early flush so metrics and header appear even if later sections fail
+            if DEBUG:
+                print("[DASH] _apply_snapshot → early flush after metrics/header")
+            with contextlib.suppress(Exception):
+                root.update()
+            with contextlib.suppress(Exception):
+                if getattr(page, 'update', None):
+                    page.update()
 
-        if snapshot.cpu_usage is not None:
-            cpu_bar.value = max(0.0, min(snapshot.cpu_usage / 100.0, 1.0))
-            cpu_value_text.value = f"{snapshot.cpu_usage:.1f}%"
-        else:
-            cpu_bar.value = 0.0
-            cpu_value_text.value = "—"
-        cpu_bar.update()
-        cpu_value_text.update()
+            if DEBUG:
+                print("[DASH] _apply_snapshot → applying activity filters")
+            nonlocal activity_full_data
+            activity_full_data = snapshot.recent_activity or []
+            try:
+                _apply_activity_filters()
+            except Exception as e:
+                if DEBUG:
+                    print(f"[DASH][WARN] Activity filters failed: {e}")
 
-        _update_control(memory_value_text, f"{snapshot.memory_usage_mb:.1f} MB" if snapshot.memory_usage_mb is not None else "—")
-        _update_control(db_value_text, f"{snapshot.db_response_ms} ms" if snapshot.db_response_ms is not None and snapshot.db_response_ms >= 0 else "—")
-        _update_control(connections_value_text, str(max(snapshot.active_connections, snapshot.connected_clients)))
-        _update_control(version_value_text, snapshot.server_version or "—")
-        _update_control(port_value_text, str(snapshot.port) if snapshot.port is not None else "—")
+            footer_text.value = f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            with contextlib.suppress(Exception):
+                footer_text.update()
 
-        rows: list[list[str]] = []
-        for item in (snapshot.recent_activity or [])[:12]:
-            if not isinstance(item, dict):
-                continue
-            timestamp = format_timestamp(item.get("timestamp") or item.get("time"))
-            category = str(item.get("type") or item.get("level") or "Info").title()
-            message = str(item.get("message") or item.get("details") or "")
-            rows.append([timestamp, category, message])
-
-        nonlocal activity_full_data
-        activity_full_data = snapshot.recent_activity or []
-        _apply_activity_filters()
-
-        footer_text.value = f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        footer_text.update()
-
-        if snapshot.errors:
-            joined = "\n".join(snapshot.errors)
-            error_panel.content = AppCard(create_error_display(joined), title="Dashboard issues", expand_content=False, disable_hover=True)
-            error_panel.visible = True
-        else:
-            error_panel.content = None
-            error_panel.visible = False
-        error_panel.update()
+            if snapshot.errors:
+                joined = "\n".join(snapshot.errors)
+                error_panel.content = AppCard(create_error_display(joined), title="Dashboard issues", expand_content=False, disable_hover=True)
+                error_panel.visible = True
+                with contextlib.suppress(Exception):
+                    error_panel.update()
+            else:
+                error_panel.content = None
+                error_panel.visible = False
+                with contextlib.suppress(Exception):
+                    error_panel.update()
+        except Exception as e:
+            if DEBUG:
+                import traceback
+                print(f"[DASH][ERROR] _apply_snapshot exception: {e}\n{traceback.format_exc()}")
+            if DEBUG:
+                print("[DASH] _apply_snapshot EXIT (UI updated)")
 
     async def _refresh() -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         if disposed:
             return
         async with refresh_lock:
             try:
+                if DEBUG:
+                    print("[DASH] _refresh → calling _fetch_snapshot()")
                 snapshot = await _fetch_snapshot(server_bridge)
             except Exception as exc:  # pragma: no cover - defensive guard
                 show_error_message(page, f"Dashboard refresh failed: {exc}")
@@ -781,6 +950,8 @@ def create_dashboard_view(
                 return
 
             await _apply_snapshot(snapshot)
+            if DEBUG:
+                print("[DASH] _refresh → snapshot applied")
 
     def _on_refresh(_: ft.ControlEvent) -> None:
         if disposed:
@@ -924,7 +1095,11 @@ def create_dashboard_view(
         )
 
     def _apply_activity_filters() -> None:
-        """Display all activity without filtering."""
+        """Display all activity without filtering.
+
+        IMPORTANT: Do not call control.update() here. Let the caller batch and
+        flush updates once to avoid render thrashing in Flet 0.28.3.
+        """
         activity_list.controls.clear()
 
         if not activity_full_data:
@@ -950,6 +1125,10 @@ def create_dashboard_view(
                 )
             )
             activity_summary_text.value = "No activity"
+            with contextlib.suppress(Exception):
+                activity_summary_text.update()
+            with contextlib.suppress(Exception):
+                activity_list.update()
         else:
             # Show all events
             for entry in activity_full_data:
@@ -962,9 +1141,10 @@ def create_dashboard_view(
                 if severity_counter.get(key):
                     summary_bits.append(f"{severity_counter[key]} {key}")
             activity_summary_text.value = " • ".join(summary_bits)
-
-        activity_list.update()
-        activity_summary_text.update()
+            with contextlib.suppress(Exception):
+                activity_summary_text.update()
+            with contextlib.suppress(Exception):
+                activity_list.update()
 
     auto_refresh_task: asyncio.Task | None = None
     stop_event = asyncio.Event()
@@ -978,42 +1158,68 @@ def create_dashboard_view(
                     await _refresh()
 
     async def setup() -> None:
-        # Show skeleton layout immediately for instant UI feedback
-        await asyncio.sleep(0.05)  # Very short delay for skeleton to render
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
+        # CRITICAL: Wait for CanvasKit to fully render controls before updating them
+        # Flet 0.28.3 requires delay for proper control attachment
+        await asyncio.sleep(0.3)  # Reasonable delay for control attachment
+        if DEBUG:
+            print("[DASH] setup → controls should now be fully attached")
 
         if not disposed:
             # Start progressive loading with page.run_task to avoid blocking UI
+            if DEBUG:
+                print("[DASH] setup → scheduling _start_progressive_loading")
             page.run_task(_start_progressive_loading)
 
         if not disposed:
             nonlocal auto_refresh_task
+            if DEBUG:
+                print("[DASH] setup → scheduling _auto_refresh_loop")
             auto_refresh_task = page.run_task(_auto_refresh_loop)
 
+        # Proactively force an initial full refresh to populate all sections
+        if not disposed:
+            if DEBUG:
+                print("[DASH] setup → scheduling initial _refresh")
+            page.run_task(_refresh)
+
     async def _start_progressive_loading() -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         """Start progressive loading of dashboard data with phased updates."""
         if disposed:
             return
 
         try:
+            if DEBUG:
+                print("[DASH] _start_progressive_loading → Phase 1: critical metrics")
             # Phase 1: Critical metrics (server status, basic stats)
             await _load_critical_metrics()
 
             # Phase 2: Performance data (CPU, memory, database)
+            if DEBUG:
+                print("[DASH] _start_progressive_loading → Phase 2: performance data")
             await _load_performance_data()
 
             # Phase 3: Activity data (recent events)
+            if DEBUG:
+                print("[DASH] _start_progressive_loading → Phase 3: activity data")
             await _load_activity_data()
 
+            if DEBUG:
+                print("[DASH] _start_progressive_loading → Completed all phases")
         except Exception as e:
             show_error_message(page, f"Dashboard loading failed: {e}")
 
     async def _load_critical_metrics() -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         """Load critical metrics without blocking UI."""
         if disposed:
             return
 
         try:
             # _call_bridge is already async, so we just await it
+            if DEBUG:
+                print("[DASH] _load_critical_metrics → calling get_dashboard_summary")
             summary = await _call_bridge(server_bridge, "get_dashboard_summary")
 
             if summary and summary.get("success"):
@@ -1029,79 +1235,105 @@ def create_dashboard_view(
                 )
 
                 # Apply critical metrics to UI
+                if DEBUG:
+                    print("[DASH] _load_critical_metrics → applying snapshot")
                 await _apply_snapshot(snapshot)
+                if DEBUG:
+                    print("[DASH] _load_critical_metrics → snapshot applied")
+            else:
+                if DEBUG:
+                    print(f"[DASH] _load_critical_metrics → FAILED: {summary}")
 
         except Exception as e:
             print(f"Failed to load critical metrics: {e}")
 
     async def _load_performance_data() -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         """Load performance data without blocking UI."""
         if disposed:
             return
 
         try:
             # _call_bridge is already async, so we just await it
+            if DEBUG:
+                print("[DASH] _load_performance_data → calling get_performance_metrics")
             performance = await _call_bridge(server_bridge, "get_performance_metrics")
 
             if performance and performance.get("success"):
-                # Update UI with performance data
+                # Merge performance data into a snapshot and apply via unified updater
                 payload = performance.get("data") or {}
 
-                # Update CPU usage
-                cpu_usage = as_float(payload.get("cpu_usage_percent"))
-                if cpu_usage is not None:
-                    cpu_value_text.value = f"{cpu_usage:.1f}%"
-                    cpu_bar.value = cpu_usage / 100.0
-                cpu_value_text.update()
-                cpu_bar.update()
+                # Build partial snapshot based on latest snapshot_ref to preserve existing values
+                base = snapshot_ref or DashboardSnapshot()
+                merged = DashboardSnapshot(
+                    total_clients=base.total_clients,
+                    connected_clients=base.connected_clients,
+                    total_files=base.total_files,
+                    uptime_seconds=base.uptime_seconds,
+                    server_status=base.server_status,
+                    server_version=base.server_version,
+                    port=base.port,
+                    cpu_usage=as_float(payload.get("cpu_usage_percent")),
+                    memory_usage_mb=as_float(payload.get("memory_usage_mb")),
+                    db_response_ms=as_int(payload.get("database_response_time_ms")),
+                    active_connections=max(0, as_int(payload.get("active_connections")) or 0),
+                    recent_activity=base.recent_activity,
+                    errors=base.errors,
+                )
 
-                # Update memory usage
-                memory_usage = as_float(payload.get("memory_usage_mb"))
-                if memory_usage is not None:
-                    memory_value_text.value = f"{memory_usage:.1f} MB"
-                memory_value_text.update()
-
-                # Update database response time
-                db_response = as_int(payload.get("database_response_time_ms"))
-                if db_response is not None:
-                    db_value_text.value = f"{db_response}ms"
-                db_value_text.update()
-
-                # Update active connections
-                active_connections = as_int(payload.get("active_connections"))
-                if active_connections is not None:
-                    connections_value_text.value = str(active_connections)
-                connections_value_text.update()
+                await _apply_snapshot(merged)
+            else:
+                if DEBUG:
+                    print(f"[DASH] _load_performance_data → FAILED: {performance}")
 
         except Exception as e:
             print(f"Failed to load performance data: {e}")
 
     async def _load_activity_data() -> None:
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         """Load activity data without blocking UI."""
         if disposed:
             return
 
         try:
             # Try async version first
+            if DEBUG:
+                print("[DASH] _load_activity_data → calling get_recent_activity_async")
             activity = await _call_bridge(server_bridge, "get_recent_activity_async", 12)
 
             if not activity or not activity.get("success"):
                 # Fallback to sync version
+                if DEBUG:
+                    print("[DASH] _load_activity_data → async failed, trying sync get_recent_activity")
                 activity = await _call_bridge(server_bridge, "get_recent_activity", 12)
 
             if activity and activity.get("success"):
                 data = activity.get("data")
-                if isinstance(data, list) and data:
-                    # Update UI with activity data
-                    activity_list.controls.clear()
-                    for entry in data[:12]:  # Limit to 12 most recent items
-                        activity_list.controls.append(_build_activity_tile(entry))
-
-                    # Update summary
-                    activity_summary_text.value = f"{len(data)} recent events"
-
-                    activity_list.update()
-                    activity_summary_text.update()
+                if isinstance(data, list):
+                    # Merge activity into a snapshot and apply via unified updater
+                    base = snapshot_ref or DashboardSnapshot()
+                    merged = DashboardSnapshot(
+                        total_clients=base.total_clients,
+                        connected_clients=base.connected_clients,
+                        total_files=base.total_files,
+                        uptime_seconds=base.uptime_seconds,
+                        server_status=base.server_status,
+                        server_version=base.server_version,
+                        port=base.port,
+                        cpu_usage=base.cpu_usage,
+                        memory_usage_mb=base.memory_usage_mb,
+                        db_response_ms=base.db_response_ms,
+                        active_connections=base.active_connections,
+                        recent_activity=list(data[:12]),
+                        errors=base.errors,
+                    )
+                    await _apply_snapshot(merged)
+                else:
+                    if DEBUG:
+                        print("[DASH] _load_activity_data → success but no data")
+            else:
+                if DEBUG:
+                    print(f"[DASH] _load_activity_data → FAILED: {activity}")
 
         except Exception as e:
             print(f"Failed to load activity data: {e}")
@@ -1112,5 +1344,124 @@ def create_dashboard_view(
         stop_event.set()
         if auto_refresh_task and not auto_refresh_task.done():
             auto_refresh_task.cancel()
+
+    # ============================================================================
+    # SECTION 2.5: AGGRESSIVE VISIBILITY FIXES
+    # Workarounds for Flet 0.28.3 rendering issues
+    # ============================================================================
+
+    def _force_rebuild_metrics_row(
+        snapshot: DashboardSnapshot,
+        metrics_config: list[tuple],
+        metric_blocks: dict[str, dict[str, ft.Control]],
+        navigate_callback: Callable[[str], None] | None,
+        display_uptime_seconds: float,
+    ) -> ft.ResponsiveRow:
+        """Force complete rebuild of metrics row to ensure visibility in Flet 0.28.3."""
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
+
+        if DEBUG:
+            print("[DASH] _force_rebuild_metrics_row → rebuilding all metric blocks")
+
+        # Create new metric blocks with actual values
+        new_metric_controls = []
+
+        for key, title, subtitle, icon, accent, route in metrics_config:
+            # Get the actual value to display
+            if key == "total_clients":
+                display_value = f"{snapshot.total_clients:,}" if snapshot.total_clients else "0"
+                display_subtitle = subtitle
+            elif key == "active_clients":
+                display_value = f"{snapshot.connected_clients:,}" if snapshot.connected_clients else "0"
+                ratio_text = f"{(snapshot.connected_clients / snapshot.total_clients) * 100:.0f}% online" if snapshot.total_clients > 0 else "Currently connected"
+                display_subtitle = ratio_text
+            elif key == "total_files":
+                display_value = f"{snapshot.total_files:,}" if snapshot.total_files else "0"
+                display_subtitle = subtitle
+            elif key == "uptime":
+                display_value = format_uptime(display_uptime_seconds)
+                chip_level, chip_label = _derive_status(snapshot)
+                display_subtitle = chip_label
+            else:
+                display_value = "0"
+                display_subtitle = subtitle
+
+            # Create Text control with the actual value (not placeholder)
+            value_text = ft.Text(
+                display_value,
+                size=30,
+                weight=ft.FontWeight.W_700,
+                color=ft.Colors.ON_SURFACE
+            )
+
+            footnote_text = ft.Text(
+                display_subtitle,
+                size=12,
+                color=ft.Colors.ON_SURFACE_VARIANT
+            )
+
+            # Build the metric block with real values
+            body = ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(icon, size=22, color=accent),
+                            ft.Text(title, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ],
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    value_text,
+                    footnote_text,
+                ],
+                spacing=6,
+            )
+
+            card_content = ft.Container(
+                content=body,
+                padding=ft.padding.all(20),
+                bgcolor=ft.Colors.SURFACE,
+                border_radius=12,
+                border=ft.border.only(top=ft.BorderSide(3, accent)),
+                shadow=[ft.BoxShadow(
+                    blur_radius=8,
+                    spread_radius=1,
+                    color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                    offset=ft.Offset(0, 2),
+                )],
+                animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            )
+
+            # Add hover effect
+            def on_hover(e):
+                card_content.scale = 1.02 if e.data == "true" else 1.0
+                card_content.update()
+
+            card_content.on_hover = on_hover
+
+            wrapper = ft.Container(
+                content=card_content,
+                col={"xs": 12, "sm": 6, "md": 3},
+                on_click=(lambda _: navigate_callback(route)) if route and navigate_callback else None,
+                ink=True if route and navigate_callback else False,
+            )
+
+            new_metric_controls.append(wrapper)
+
+            # Update the metric_blocks reference
+            block_data = {
+                "wrapper": wrapper,
+                "value_text": value_text,
+                "footnote_text": footnote_text,
+            }
+            metric_blocks[key] = block_data
+
+        # Create and return new ResponsiveRow
+        new_metrics_row = ft.ResponsiveRow(new_metric_controls, spacing=12, run_spacing=12)
+
+        if DEBUG:
+            print(f"[DASH] _force_rebuild_metrics_row → created new row with {len(new_metric_controls)} blocks")
+
+        return new_metrics_row
 
     return root, dispose, setup
