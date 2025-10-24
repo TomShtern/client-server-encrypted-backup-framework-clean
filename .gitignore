@@ -293,3 +293,9 @@ FletV2/.env
 scripts/setup_zai_key.ps1
 scripts/setup_zai_key.bat
 scripts/run_with_zai_key.ps1
+.factory/droids/swereader.md
+.gitignore
+.factory/droids/fast-reader-agent.md
+.factory/droids/deep-research-synthesis-agent.md
+.factory/droids/swereader.md
+.vscode/tasks.json
