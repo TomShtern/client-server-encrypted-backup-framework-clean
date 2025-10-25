@@ -24,19 +24,38 @@ description: AI rules derived by SpecStory from the project AI interaction histo
 
 ## Critical Integration Patterns (Updated October 2025)
 
-### 🚨 CRITICAL: Async/Sync Integration
-**99% of GUI freezes come from awaiting sync methods**. ServerBridge methods are SYNCHRONOUS - always wrap with `run_in_executor`:
+### 🚨 CRITICAL: Async/Sync Integration & Deadlock Prevention
+**99% of GUI freezes come from blocking calls in async functions**. Dashboard deadlock (24 Oct 2025) was caused by `server_bridge.is_connected()` called from async context.
 
 ```python
-# ❌ WRONG - Causes permanent freeze
-async def load_data():
-    result = await bridge.get_clients()  # FREEZE!
+# ❌ WRONG - Causes deadlock/freeze
+async def _apply_snapshot(snapshot):
+    status = server_bridge.is_connected()  # BLOCKS EVENT LOOP!
 
-# ✅ CORRECT - Use run_in_executor for ALL server calls
+# ❌ ALSO WRONG - Direct await on sync method
+async def load_data():
+    result = await bridge.get_clients()  # FREEZE if get_clients() is sync!
+
+# ✅ CORRECT - Use run_sync_in_executor for ALL sync server calls
 async def load_data():
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, bridge.get_clients)
+
+# ✅ BETTER - Use helper from async_helpers
+from FletV2.utils.async_helpers import run_sync_in_executor
+async def load_data():
+    result = await run_sync_in_executor(bridge.get_clients)
 ```
+
+**Deadlock Prevention Rules:**
+1. **NEVER** call `server_bridge.is_connected()` from async functions - it can block
+2. **NEVER** call ANY `server_bridge.*()` sync method directly from async code
+3. **ALWAYS** wrap with `run_sync_in_executor()` or use `_async` variant
+4. **PREFER** snapshot data over live queries (faster, non-blocking)
+5. **ADD** `await asyncio.sleep(0)` before `.update()` calls to yield event loop
+6. **ServerBridge.is_connected()** now has 1-second cache - still avoid calling from async
+
+**See:** `AI-Context/DASHBOARD_DEADLOCK_FIX_24OCT2025.md` for full post-mortem
 
 ### The 5-Section Pattern for Views
 All new views must follow the 5-section architecture (see `FletV2/architecture_guide.md`):

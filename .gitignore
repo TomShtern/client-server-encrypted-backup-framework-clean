@@ -300,3 +300,12 @@ scripts/run_with_zai_key.ps1
 .factory/droids/swereader.md
 .vscode/tasks.json
 .factory/
+windows-terminal-info-bar-for-ai-coding-agents.zip
+windows-terminal-info-bar-for-ai-coding-agents/SKILL.md
+windows-terminal-info-bar-for-ai-coding-agents/assets/example-templates.md
+windows-terminal-info-bar-for-ai-coding-agents/assets/statusline-configs.json
+windows-terminal-info-bar-for-ai-coding-agents/references/claude-code-api.md
+windows-terminal-info-bar-for-ai-coding-agents/references/windows-setup-guide.md
+windows-terminal-info-bar-for-ai-coding-agents/scripts/bunx-statusline-safe.js
+windows-terminal-info-bar-for-ai-coding-agents/scripts/setup-statusline.ps1
+windows-terminal-info-bar-for-ai-coding-agents/scripts/windows-statusline.ps1

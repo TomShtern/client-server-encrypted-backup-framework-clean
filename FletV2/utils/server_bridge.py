@@ -9,6 +9,7 @@ Provides clean API surface for the FletV2 GUI:
 """
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -181,18 +182,43 @@ class ServerBridge:
     def __init__(self, real_server: Any | None = None):
         self.real_server = real_server
         self._connection_status = "connected" if real_server else "disconnected"
+
+        # Connection status cache to prevent repeated blocking calls
+        self._is_connected_cache: bool | None = None
+        self._is_connected_cache_timestamp: float = 0.0
+        self._IS_CONNECTED_CACHE_TTL = 1.0  # 1 second TTL
+
         if self.real_server:
             logger.info("ServerBridge initialized (real server connected)")
         else:
             logger.warning("ServerBridge initialized with NO real server (disconnected mode, no data)")
 
     def is_connected(self) -> bool:
-        """Return connection status based on real server availability."""
-        return bool(
+        """Return connection status based on real server availability with 1-second cache.
+
+        WARNING: This method can block if the server's is_connected() is slow.
+        Use snapshot data instead when possible, or call from async context with run_in_executor().
+
+        Cache prevents repeated blocking calls within 1 second.
+        """
+        # Check cache first
+        now = time.monotonic()
+        if (self._is_connected_cache is not None and
+            (now - self._is_connected_cache_timestamp) < self._IS_CONNECTED_CACHE_TTL):
+            return self._is_connected_cache
+
+        # Cache miss or expired - query server
+        result = bool(
             self.real_server
             and hasattr(self.real_server, 'is_connected')
             and self.real_server.is_connected()
         )
+
+        # Update cache
+        self._is_connected_cache = result
+        self._is_connected_cache_timestamp = now
+
+        return result
 
     def _call_real_server_method(self, method_name: str, *args, **kwargs) -> dict[str, Any]:
         """Helper to call real server method with data conversion."""
