@@ -627,6 +627,7 @@ class _SettingsView:
     def _apply_side_effects(self, section: str, key: str, value: Any) -> None:
         if section != "gui":
             return
+        theme_changed = False
         if key == "theme_mode":
             theme_mode = str(value or "system").lower()
             if theme_mode == "system":
@@ -635,13 +636,17 @@ class _SettingsView:
                 self.page.theme_mode = ft.ThemeMode.DARK
             else:
                 self.page.theme_mode = ft.ThemeMode.LIGHT
-            self.page.update()
+            theme_changed = True
         elif key == "color_scheme":
             seed = COLOR_SEEDS.get(str(value), COLOR_SEEDS["blue"]) if value else COLOR_SEEDS["blue"]
             theme = self.page.theme or ft.Theme()
             theme.color_scheme_seed = seed
             theme.use_material3 = True
             self.page.theme = theme
+            theme_changed = True
+
+        # Optimize: Single page update for all theme changes
+        if theme_changed:
             self.page.update()
 
     def _schedule_autosave(self) -> None:

@@ -88,18 +88,26 @@ def create_clients_view(
     _fetch_clients_async = create_async_fetch_function('get_clients', empty_default=[])
 
     # Load client data from server or use mock
-    def load_clients_data(*, broadcast: bool | None = None) -> None:
-        """Load client data using optional async scheduling to avoid blocking UI."""
-        should_broadcast = state_manager is not None if broadcast is None else broadcast
+    async def load_clients_data(*, broadcast: bool | None = None) -> None:
+        """Load client data with loading indicator and proper error handling."""
+        try:
+            # Show loading indicator
+            loading_ring.visible = True
+            loading_ring.update()
 
-        async def _load_and_apply() -> None:
+            should_broadcast = state_manager is not None if broadcast is None else broadcast
+
             new_clients = await _fetch_clients_async(server_bridge)
             apply_clients_data(new_clients, broadcast=should_broadcast)
 
-        if hasattr(page, "run_task"):
-            page.run_task(_load_and_apply)
-        else:
-            asyncio.get_event_loop().create_task(_load_and_apply())
+        except Exception as e:
+            logger.error(f"Error loading clients: {e}")
+            show_error_message(page, f"Failed to load clients: {e}")
+
+        finally:
+            # Hide loading indicator
+            loading_ring.visible = False
+            loading_ring.update()
 
     # Create DataTable using Flet's built-in functionality with enhanced header
     clients_table = ft.DataTable(
@@ -299,11 +307,20 @@ def create_clients_view(
 
             page.close(confirm_dialog)
 
-        def confirm_disconnect(event: ft.ControlEvent) -> None:
-            if hasattr(page, "run_task"):
-                page.run_task(confirm_disconnect_async, event)
-            else:
-                asyncio.get_event_loop().create_task(confirm_disconnect_async(event))
+        async def confirm_disconnect(event: ft.ControlEvent) -> None:
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
+                if hasattr(page, "run_task"):
+                    await page.run_task(confirm_disconnect_async, event)
+                else:
+                    await confirm_disconnect_async(event)
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
         confirm_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Disconnect"),
@@ -340,11 +357,20 @@ def create_clients_view(
 
             page.close(delete_dialog)
 
-        def confirm_delete(event: ft.ControlEvent) -> None:
-            if hasattr(page, "run_task"):
-                page.run_task(confirm_delete_async, event)
-            else:
-                asyncio.get_event_loop().create_task(confirm_delete_async(event))
+        async def confirm_delete(event: ft.ControlEvent) -> None:
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
+                if hasattr(page, "run_task"):
+                    await page.run_task(confirm_delete_async, event)
+                else:
+                    await confirm_delete_async(event)
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
         delete_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Delete"),
@@ -397,11 +423,20 @@ def create_clients_view(
             else:
                 show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
 
-        def save_client(event: ft.ControlEvent) -> None:
-            if hasattr(page, "run_task"):
-                page.run_task(save_client_async, event)
-            else:
-                asyncio.get_event_loop().create_task(save_client_async(event))
+        async def save_client(event: ft.ControlEvent) -> None:
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
+                if hasattr(page, "run_task"):
+                    await page.run_task(save_client_async, event)
+                else:
+                    await save_client_async(event)
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Client"),
@@ -458,11 +493,20 @@ def create_clients_view(
             else:
                 show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
 
-        def save_changes(event: ft.ControlEvent) -> None:
-            if hasattr(page, "run_task"):
-                page.run_task(save_changes_async, event)
-            else:
-                asyncio.get_event_loop().create_task(save_changes_async(event))
+        async def save_changes(event: ft.ControlEvent) -> None:
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
+                if hasattr(page, "run_task"):
+                    await page.run_task(save_changes_async, event)
+                else:
+                    await save_changes_async(event)
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
@@ -487,10 +531,24 @@ def create_clients_view(
         status_filter = e.control.value
         update_table()
 
-    def refresh_clients(_e: ft.ControlEvent) -> None:
+    async def refresh_clients(_e: ft.ControlEvent) -> None:
         """Refresh clients list."""
-        load_clients_data()
-        show_success_message(page, "Clients refreshed")
+        try:
+            # Show loading indicator
+            loading_ring.visible = True
+            loading_ring.update()
+
+            # Load data
+            load_clients_data()
+            show_success_message(page, "Clients refreshed")
+
+        finally:
+            # Hide loading indicator
+            loading_ring.visible = False
+            loading_ring.update()
+
+    # Loading indicators
+    loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
 
     # Create UI components
     search_field = create_search_bar(
@@ -511,12 +569,20 @@ def create_clients_view(
         width=200,
     )
 
+    refresh_button = create_action_button("Refresh", refresh_clients, icon=ft.Icons.REFRESH, primary=False)
+
     filters_row = ft.ResponsiveRow(
         controls=[
             ft.Container(content=search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
             ft.Container(content=status_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
             ft.Container(
-                content=create_action_button("Refresh", refresh_clients, icon=ft.Icons.REFRESH, primary=False),
+                content=ft.Row(
+                    [
+                        refresh_button,
+                        loading_ring,
+                    ],
+                    spacing=8,
+                ),
                 col={"xs": 12, "sm": 12, "md": 3, "lg": 2},
                 alignment=ft.alignment.center_left,
             ),
@@ -546,7 +612,7 @@ def create_clients_view(
 
     header_actions = [
         create_action_button("Add client", lambda _: add_client(), icon=ft.Icons.PERSON_ADD),
-        create_action_button("Refresh", refresh_clients, icon=ft.Icons.REFRESH, primary=False),
+        refresh_button,
     ]
 
     header = create_view_header(

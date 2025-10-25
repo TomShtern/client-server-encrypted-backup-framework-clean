@@ -26,7 +26,7 @@ for _path in (_flet_v2_root, _repo_root):
 import Shared.utils.utf8_solution as _  # noqa: F401
 
 from FletV2.components.log_card import LogCard
-from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
+from FletV2.utils.async_helpers import debounce
 from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
 from FletV2.utils.loading_states import (
     create_empty_state,
@@ -56,13 +56,16 @@ except Exception:  # pragma: no cover - log capture optional in GUI-only mode
 # SECTION 1: DATA FETCHING HELPERS
 # ============================================================================
 
-async def fetch_server_logs_async(bridge: Any | None) -> list[dict[str, Any]]:
+async def fetch_server_logs_async(bridge: Any | None, page: ft.Page) -> list[dict[str, Any]]:
     """Retrieve and normalize server logs without blocking the UI."""
 
     if not bridge:
         return []
 
-    result = await run_sync_in_executor(safe_server_call, bridge, "get_logs")
+    def blocking_operation():
+        return safe_server_call(bridge, "get_logs")
+
+    result = await page.run_thread(blocking_operation)
     if not result.get("success"):
         logger.debug("Server log fetch failed: %s", result.get("error"))
         return []
@@ -78,14 +81,17 @@ async def fetch_server_logs_async(bridge: Any | None) -> list[dict[str, Any]]:
     return [_normalize_log_entry(item, "Server") for item in raw_logs]
 
 
-async def fetch_app_logs_async() -> list[dict[str, Any]]:
+async def fetch_app_logs_async(page: ft.Page) -> list[dict[str, Any]]:
     """Fetch logs captured from the Flet application itself."""
 
     if not _flet_log_capture:
         return []
 
+    def blocking_operation():
+        return _flet_log_capture.get_app_logs()
+
     try:
-        app_logs = await run_sync_in_executor(_flet_log_capture.get_app_logs)
+        app_logs = await page.run_thread(blocking_operation)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.debug("App log fetch failed: %s", exc)
         return []
@@ -289,36 +295,39 @@ def create_logs_view(
         state["filtered_logs"] = filtered
         state["stats"] = _calculate_statistics(filtered)
 
+        # Batch UI updates for better performance
         log_list_container.controls.clear()
         if filtered:
             log_list_container.controls.extend(_render_log_controls(filtered, state["search_query"], page))
         else:
             log_list_container.controls.append(create_empty_state("No logs", "Adjust filters or refresh to load logs."))
-        log_list_container.update()
 
         stats_container.content = _build_stats_view(state["stats"])
-        stats_container.update()
 
         level_filter.options = [ft.dropdown.Option(value) for value in available_with_all]
         level_filter.value = state["selected_level"]
-        level_filter.update()
 
         if state["last_refresh"]:
             last_refresh_text.value = state["last_refresh"].strftime("Last refresh: %Y-%m-%d %H:%M:%S")
         else:
             last_refresh_text.value = "Last refresh: ?"
+
+        # Batch update all controls to minimize redraw operations
+        log_list_container.update()
+        stats_container.update()
+        level_filter.update()
         last_refresh_text.update()
 
     async def refresh_logs(initial: bool = False, toast: bool = False) -> None:
+        # Batch initial UI updates
         error_container.visible = False
-        error_container.update()
-
         loading_overlay.visible = True
+        error_container.update()
         loading_overlay.update()
 
         try:
-            server_task = fetch_server_logs_async(server_bridge)
-            app_task = fetch_app_logs_async()
+            server_task = fetch_server_logs_async(server_bridge, page)
+            app_task = fetch_app_logs_async(page)
             server_logs, app_logs = await asyncio.gather(server_task, app_task)
 
             state["server_logs"] = server_logs
@@ -336,6 +345,7 @@ def create_logs_view(
             error_container.update()
             show_error_message(page, f"Failed to refresh logs: {exc}")
         finally:
+            # Batch final UI updates
             loading_overlay.visible = False
             loading_overlay.update()
 

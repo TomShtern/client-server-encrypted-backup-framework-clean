@@ -716,16 +716,16 @@ def create_database_view(
                 # Delete each selected record
                 deleted_count = 0
                 failed_count = 0
-                loop = asyncio.get_running_loop()
 
-                for record_id in list(selected_row_ids):
-                    result = await loop.run_in_executor(
-                        None, bridge.delete_table_record, current_table, record_id
-                    )
-                    if result.get("success"):
-                        deleted_count += 1
-                    else:
-                        failed_count += 1
+                # Define blocking operation for page.run_thread
+                def delete_record_op():
+                    return bridge.delete_table_record(current_table, record_id)
+
+                result = await page.run_thread(delete_record_op)
+                if result.get("success"):
+                    deleted_count += 1
+                else:
+                    failed_count += 1
 
                 # Clear selection
                 selected_row_ids.clear()
@@ -1074,12 +1074,16 @@ def create_database_view(
                 return
 
             # SIMPLIFIED: Use basic client/file counts instead of complex database health checks
-            loop = asyncio.get_running_loop()
-
             # Get simple counts without database health checks (which cause freezing)
             # Note: get_clients() and get_files() return lists directly, not wrapped in dicts
-            clients_result: list[dict[str, Any]] = await loop.run_in_executor(None, bridge.get_clients)
-            files_result: list[dict[str, Any]] = await loop.run_in_executor(None, bridge.get_files)
+            def get_clients_data():
+                return bridge.get_clients()
+
+            def get_files_data():
+                return bridge.get_files()
+
+            clients_result: list[dict[str, Any]] = await page.run_thread(get_clients_data)
+            files_result: list[dict[str, Any]] = await page.run_thread(get_files_data)
 
             client_count = len(clients_result) if clients_result else 0
             file_count = len(files_result) if files_result else 0
@@ -1147,10 +1151,12 @@ def create_database_view(
                 table_columns = []
                 return
 
-            # CRITICAL: Use run_in_executor for sync ServerBridge method
-            loop = asyncio.get_running_loop()
+            # CRITICAL: Use page.run_thread for sync ServerBridge method
+            def get_table_data_op():
+                return bridge.get_table_data(current_table)
+
             print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
-            result = await loop.run_in_executor(None, bridge.get_table_data, current_table)
+            result = await page.run_thread(get_table_data_op)
             print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
 
             if result.get("success") and result.get("data"):
@@ -1261,9 +1267,11 @@ def create_database_view(
                     show_error_message(page, "Server disconnected")
                     return
 
-                # CRITICAL: Use run_in_executor for sync ServerBridge method
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, bridge.add_table_record, current_table, record_data)
+                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                def add_record_op():
+                    return bridge.add_table_record(current_table, record_data)
+
+                result = await page.run_thread(add_record_op)
 
                 if result.get("success"):
                     show_success_message(page, "Record added successfully")
@@ -1338,9 +1346,11 @@ def create_database_view(
                     show_error_message(page, "Server disconnected")
                     return
 
-                # CRITICAL: Use run_in_executor for sync ServerBridge method
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, bridge.update_table_record, current_table, updated_record)
+                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                def update_record_op():
+                    return bridge.update_table_record(current_table, updated_record)
+
+                result = await page.run_thread(update_record_op)
 
                 if result.get("success"):
                     show_success_message(page, "Record updated successfully")
@@ -1393,9 +1403,11 @@ def create_database_view(
                     show_error_message(page, "Server disconnected")
                     return
 
-                # CRITICAL: Use run_in_executor for sync ServerBridge method
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, bridge.delete_table_record, current_table, record_id)
+                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                def delete_record_op():
+                    return bridge.delete_table_record(current_table, record_id)
+
+                result = await page.run_thread(delete_record_op)
 
                 if result.get("success"):
                     show_success_message(page, "Record deleted successfully")

@@ -87,20 +87,25 @@ def create_files_view(
     # Create async fetch function using proven pattern from async_helpers
     _fetch_files_async = create_async_fetch_function('get_files', empty_default=[])
 
-    def load_files_data() -> None:
-        """Load file data using async pattern to avoid blocking UI."""
-        nonlocal files_data
+    async def load_files_data() -> None:
+        """Load file data with loading indicator and proper error handling."""
+        try:
+            # Show loading indicator
+            loading_ring.visible = True
+            loading_ring.update()
 
-        async def _load_and_apply() -> None:
-            nonlocal files_data
             new_files = await _fetch_files_async(server_bridge)
             files_data = new_files
             update_table()
 
-        if hasattr(page, "run_task"):
-            page.run_task(_load_and_apply)
-        else:
-            asyncio.get_event_loop().create_task(_load_and_apply())
+        except Exception as e:
+            logger.error(f"Error loading files: {e}")
+            show_error_message(page, f"Failed to load files: {e}")
+
+        finally:
+            # Hide loading indicator
+            loading_ring.visible = False
+            loading_ring.update()
 
     def format_file_size(size_bytes: int) -> str:
         """Format file size in human readable format."""
@@ -254,6 +259,10 @@ def create_files_view(
             if not e.path:
                 return
             try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
                 if server_bridge:
                     file_id = file.get('id')
                     if not file_id or not isinstance(file_id, str):
@@ -269,12 +278,16 @@ def create_files_view(
                     return
             except Exception as ex:
                 show_error_message(page, f"Download error: {ex}")
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
-        def handle_picker_result(event: ft.FilePickerResultEvent) -> None:
+        async def handle_picker_result(event: ft.FilePickerResultEvent) -> None:
             if hasattr(page, "run_task"):
-                page.run_task(save_file, event)
+                await page.run_task(save_file, event)
             else:
-                asyncio.get_event_loop().create_task(save_file(event))
+                await save_file(event)
 
         file_picker = ft.FilePicker(on_result=handle_picker_result)
         page.overlay.append(file_picker)
@@ -372,13 +385,25 @@ def create_files_view(
                 page.close(delete_dialog)
                 return
 
-            result = await run_sync_in_executor(safe_server_call, server_bridge, 'delete_file', file_id)
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
 
-            if result.get('success'):
-                show_success_message(page, f"File {file.get('name')} deleted")
-                load_files_data()
-            else:
-                show_error_message(page, f"Delete failed: {result.get('error', 'Unknown error')}")
+                result = await run_sync_in_executor(safe_server_call, server_bridge, 'delete_file', file_id)
+
+                if result.get('success'):
+                    show_success_message(page, f"File {file.get('name')} deleted")
+                    await load_files_data()
+                else:
+                    show_error_message(page, f"Delete failed: {result.get('error', 'Unknown error')}")
+
+            except Exception as ex:
+                show_error_message(page, f"Delete error: {ex}")
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
 
             page.close(delete_dialog)
 
@@ -411,10 +436,23 @@ def create_files_view(
         type_filter = e.control.value
         update_table()
 
-    def refresh_files(_e: ft.ControlEvent) -> None:
+    async def refresh_files(_e: ft.ControlEvent) -> None:
         """Refresh files list."""
-        load_files_data()
-        show_success_message(page, "Files refreshed")
+        try:
+            # Show loading indicator
+            loading_ring.visible = True
+            loading_ring.update()
+
+            load_files_data()
+            show_success_message(page, "Files refreshed")
+
+        finally:
+            # Hide loading indicator
+            loading_ring.visible = False
+            loading_ring.update()
+
+  # Loading indicators
+    loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
 
     # Create UI components
     search_field = create_search_bar(
@@ -452,13 +490,21 @@ def create_files_view(
         width=200,
     )
 
+    refresh_button = create_action_button("Refresh", refresh_files, icon=ft.Icons.REFRESH, primary=False)
+
     filters_row = ft.ResponsiveRow(
         controls=[
             ft.Container(content=search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
             ft.Container(content=status_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
             ft.Container(content=type_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
             ft.Container(
-                content=create_action_button("Refresh", refresh_files, icon=ft.Icons.REFRESH, primary=False),
+                content=ft.Row(
+                    [
+                        refresh_button,
+                        loading_ring,
+                    ],
+                    spacing=8,
+                ),
                 col={"xs": 12, "sm": 12, "md": 3, "lg": 2},
                 alignment=ft.alignment.center_left,
             ),

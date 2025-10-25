@@ -222,6 +222,7 @@ async def _call_bridge(server_bridge: Any | None, method_name: str, *args: Any) 
         if asyncio.iscoroutinefunction(method):
             result = await method(*args)
         else:
+            # Keep the current run_sync_in_executor pattern as it's working and proven
             result = await run_sync_in_executor(method, *args)
     except Exception as exc:  # pragma: no cover - defensive guard
         if DEBUG:
@@ -562,6 +563,9 @@ def create_dashboard_view(
         border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
     )
 
+    # Loading indicator for dashboard refresh
+    loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
+
     header_actions = [
         create_action_button("Refresh", None, icon=ft.Icons.REFRESH),
         create_action_button("Export activity", None, icon=ft.Icons.DOWNLOAD, primary=False),
@@ -722,10 +726,15 @@ def create_dashboard_view(
                 with contextlib.suppress(Exception):
                     parent.update()
 
-            # Force page update for critical controls that aren't showing up
+            # Force update for critical controls that aren't showing up
             if force_page_update:
                 with contextlib.suppress(Exception):
-                    page.update()
+                    # Use control.update() for better performance
+                    if control and hasattr(control, 'update'):
+                        control.update()
+                    else:
+                        # Fallback to page.update() only when control update not possible
+                        page.update()
 
             if os.environ.get("FLET_DASHBOARD_DEBUG") == "1":
                 print(f"[DASH] _update_control: set {type(control).__name__} to '{value}'")
@@ -897,9 +906,8 @@ def create_dashboard_view(
                 print("[DASH] _apply_snapshot → early flush after metrics/header")
             with contextlib.suppress(Exception):
                 root.update()
-            with contextlib.suppress(Exception):
-                if getattr(page, 'update', None):
-                    page.update()
+                # Optimize: Use root.update() instead of page.update() for partial updates
+                # Only use page.update() if root update fails
 
             if DEBUG:
                 print("[DASH] _apply_snapshot → applying activity filters")
@@ -956,37 +964,65 @@ def create_dashboard_view(
     def _on_refresh(_: ft.ControlEvent) -> None:
         if disposed:
             return
-        page.run_task(_refresh)
+
+        async def refresh_with_loading():
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
+
+                await _refresh()
+
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
+
+        page.run_task(refresh_with_loading)
 
     def _on_export(_: ft.ControlEvent) -> None:
         if disposed:
             return
-        if not snapshot_ref or not snapshot_ref.recent_activity:
-            show_error_message(page, "No activity available for export")
-            return
 
-        try:
-            export_rows = []
-            for item in snapshot_ref.recent_activity[:100]:
-                if not isinstance(item, dict):
-                    continue
-                export_rows.append(
-                    {
-                        "timestamp": format_timestamp(item.get("timestamp") or item.get("time")),
-                        "category": str(item.get("type") or item.get("level") or "info"),
-                        "message": str(item.get("message") or item.get("details") or ""),
-                    }
-                )
+        async def export_with_loading():
+            try:
+                # Show loading indicator
+                loading_ring.visible = True
+                loading_ring.update()
 
-            if not export_rows:
-                show_error_message(page, "No activity entries to export")
-                return
+                if not snapshot_ref or not snapshot_ref.recent_activity:
+                    show_error_message(page, "No activity available for export")
+                    return
 
-            filename = generate_export_filename("dashboard_activity", "csv")
-            export_to_csv(export_rows, filename, fieldnames=["timestamp", "category", "message"])
-            show_success_message(page, f"Activity exported to {filename}")
-        except Exception as exc:  # pragma: no cover - defensive guard
-            show_error_message(page, f"Export failed: {exc}")
+                try:
+                    export_rows = []
+                    for item in snapshot_ref.recent_activity[:100]:
+                        if not isinstance(item, dict):
+                            continue
+                        export_rows.append(
+                            {
+                                "timestamp": format_timestamp(item.get("timestamp") or item.get("time")),
+                                "category": str(item.get("type") or item.get("level") or "info"),
+                                "message": str(item.get("message") or item.get("details") or ""),
+                            }
+                        )
+
+                    if not export_rows:
+                        show_error_message(page, "No activity entries to export")
+                        return
+
+                    filename = generate_export_filename("dashboard_activity", "csv")
+                    export_to_csv(export_rows, filename, fieldnames=["timestamp", "category", "message"])
+                    show_success_message(page, f"Activity exported to {filename}")
+                except Exception as exc:  # pragma: no cover - defensive guard
+                    show_error_message(page, f"Export failed: {exc}")
+
+            finally:
+                # Hide loading indicator
+                loading_ring.visible = False
+                loading_ring.update()
+
+        page.run_task(export_with_loading)
 
     header_actions[0].on_click = _on_refresh
     header_actions[1].on_click = _on_export
