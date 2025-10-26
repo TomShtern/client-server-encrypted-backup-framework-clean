@@ -124,7 +124,7 @@ def calculate_log_statistics(logs: Iterable[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def highlight_text_with_search(text: str, query: str | None) -> ft.Text:
+def highlight_text_with_search(text: str, query: str | None) -> ft.Control:
     text = text or ""
     if not query:
         return ft.Text(text)
