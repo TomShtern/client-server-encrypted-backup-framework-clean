@@ -508,7 +508,8 @@ def create_neumorphic_metric_card(
         # GPU-accelerated hover effect
         def on_hover(e):
             container.scale = 1.02 if e.data == "true" else 1.0
-            container.update()
+            if getattr(container, "page", None):
+                container.update()
 
         container.on_hover = on_hover
 
@@ -773,7 +774,8 @@ def apply_interactive_animations(
 
         def on_hover(e):
             container.scale = hover_scale if e.data == "true" else 1.0
-            container.update()
+            if getattr(container, "page", None):
+                container.update()
 
         container.on_hover = on_hover
 

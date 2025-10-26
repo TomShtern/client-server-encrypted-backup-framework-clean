@@ -736,12 +736,21 @@ def create_modern_progress_indicator(operation: str, state_manager=None) -> ft.C
     )
 
 # File operations helpers
-def safe_update_control(control: ft.Control, force: bool = False) -> bool:
-    """Safe control update helper."""
+def safe_update_control(control: ft.Control | None, force: bool = False) -> bool:
+    """Safely call ``update()`` on a control if it's still attached."""
+
     with contextlib.suppress(Exception):
-        if hasattr(control, 'update'):
-            control.update()
-            return True
+        if control is None or not hasattr(control, "update"):
+            return False
+
+        if not force:
+            # Flet 0.28.3 requires controls to remain attached to a page when updated.
+            if getattr(control, "page", None) is None:
+                return False
+
+        control.update()
+        return True
+
     return False
 
 
@@ -792,7 +801,7 @@ def AppCard(
                 ft.Divider(height=1, color=ft.Colors.OUTLINE),
             )
         )
-    return ft.Container(
+    container = ft.Container(
         content=ft.Column([
             *header_controls,
             body
@@ -813,9 +822,21 @@ def AppCard(
         # Micro-interactions (disabled if disable_hover=True to fix gray area issues)
         animate=None if disable_hover else ft.Animation(150, ft.AnimationCurve.EASE_OUT),
         animate_scale=None if disable_hover else ft.Animation(120, ft.AnimationCurve.EASE_OUT),
-        on_hover=None if disable_hover else lambda e: (setattr(e.control, 'scale', 1.01 if e.data == 'true' else 1.0), e.control.update()),
         tooltip=tooltip,
     )
+
+    if not disable_hover:
+        def _handle_hover(event: ft.ControlEvent) -> None:
+            control = event.control
+            if control is None:
+                return
+
+            control.scale = 1.01 if event.data == "true" else 1.0
+            safe_update_control(control)
+
+        container.on_hover = _handle_hover
+
+    return container
 
 
 def AppButton(

@@ -13,7 +13,9 @@ This demonstrates the clean architecture:
 
 # Standard library imports
 import asyncio
+import builtins
 import contextlib
+import logging
 import os
 import sys
 import time  # For optional startup profiling
@@ -140,7 +142,26 @@ except ImportError:
 
 # Initialize logging and environment BEFORE any logger usage
 logger = setup_terminal_debugging(logger_name="FletV2.main")
+_VERBOSE_DIAGNOSTICS = os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
+_VERBOSE_NAV_LOGS = _VERBOSE_DIAGNOSTICS or os.getenv("FLET_V2_VERBOSE_NAV", "").strip().lower() in {"1", "true", "yes"}
 os.environ.setdefault("PYTHONUTF8", "1")
+
+_ORIGINAL_PRINT = builtins.print
+
+
+def _diagnostic_print(*args: Any, **kwargs: Any) -> None:
+    """Route legacy print-based diagnostics through the logger."""
+
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args)
+
+    if _VERBOSE_DIAGNOSTICS:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    else:
+        logger.debug(message)
+
+
+print = _diagnostic_print  # type: ignore[assignment]
 
 # Install global exception handlers early so any silent crashes are surfaced.
 def _install_global_exception_handlers() -> None:  # pragma: no cover - diagnostic utility
@@ -309,7 +330,8 @@ class FletV2App(ft.Row):
 
     def __init__(self, page: ft.Page, real_server: Any | None = None) -> None:
         super().__init__()
-        print("🚀🚀🚀 FletV2App __init__ called 🚀🚀🚀")
+        if _VERBOSE_DIAGNOSTICS:
+            logger.debug("FletV2App __init__ called")
         self.page: ft.Page = page  # Ensure page is never None
         self.expand = True
 
@@ -383,11 +405,13 @@ class FletV2App(ft.Row):
         logger.info(f"Real server available: {real_server_available}")
 
         # Initialize state manager for reactive UI updates - after server bridge is ready
-        print("🔧 About to initialize state manager...")
+        if _VERBOSE_DIAGNOSTICS:
+            logger.debug("About to initialize state manager")
         # TEMPORARILY DISABLED: State manager causes circular import with dashboard module
         # self._initialize_state_manager()
         self.state_manager = None  # Disable state manager for now
-        print("✅ State manager DISABLED (circular import fix)")
+        if _VERBOSE_DIAGNOSTICS:
+            logger.debug("State manager disabled (circular import fix)")
         self._profile_mark('state_manager:initialized')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
@@ -595,53 +619,42 @@ class FletV2App(ft.Row):
 
     def navigate_to(self, view_name: str) -> None:
         """Navigate to a specific view and sync navigation rail."""
-        print(f"🟡 [NAVIGATE_TO] FUNCTION CALLED WITH view_name='{view_name}'")
+
+        if not view_name:
+            return
+
+        if _VERBOSE_NAV_LOGS:
+            logger.debug("navigate_to(%s) invoked (current=%s)", view_name, self._current_view_name)
 
         # CRITICAL FIX: Prevent navigating to the same view twice (causes setup cancellation)
         if view_name == self._current_view_name:
-            print(f"🟡 [NAVIGATE_TO] Already on '{view_name}', skipping navigation")
-            logger.debug(f"Already on '{view_name}', skipping navigation")
+            if _VERBOSE_NAV_LOGS:
+                logger.debug("Navigation to %s skipped; already active", view_name)
             return
 
-        print(f"🟡 [NAVIGATE_TO] About to call logger.info")
-        logger.info(f"🟡 [NAVIGATE_TO] FUNCTION ENTERED with view_name='{view_name}'")
-        print(f"🟡 [NAVIGATE_TO] logger.info completed successfully")
+        logger.info("View change requested: %s", view_name)
+
         # Update navigation rail selected index
         view_names = [
             "dashboard", "clients", "files", "database",
             "analytics", "logs", "settings", "experimental"
         ]
-        print(f"🟡 [NAVIGATE_TO] Created view_names list")
-        logger.info(f"🔵 [NAV_DEBUG] Checking if '{view_name}' in view_names")
-        print(f"🟡 [NAVIGATE_TO] After first NAV_DEBUG logger.info")
-        if view_name in view_names:
-            print(f"🟡 [NAVIGATE_TO] view_name found in list")
-            logger.info(f"🔵 [NAV_DEBUG] Found '{view_name}' at index {view_names.index(view_name)}")
-            print(f"🟡 [NAVIGATE_TO] After second NAV_DEBUG logger.info")
+        if view_name in view_names and hasattr(self, "_nav_rail_control") and self._nav_rail_control:
             new_index = view_names.index(view_name)
-            if hasattr(self, '_nav_rail_control') and self._nav_rail_control:
-                print(f"🟡 [NAVIGATE_TO] Has nav_rail_control, updating")
-                logger.info(f"🔵 [NAV_DEBUG] Updating nav_rail_control to index {new_index}")
-                self._nav_rail_control.selected_index = new_index
-                print(f"🟡 [NAVIGATE_TO] Set selected_index, about to update")
-                try:
-                    self._nav_rail_control.update()
-                    print(f"🟡 [NAVIGATE_TO] nav_rail_control.update() completed")
-                    logger.info(f"🔵 [NAV_DEBUG] nav_rail_control.update() completed")
-                except Exception as rail_err:
-                    print(f"🟡 [NAVIGATE_TO] nav_rail_control.update() EXCEPTION: {rail_err}")
-                    logger.warning(f"🔵 [NAV_DEBUG] nav_rail_control.update() failed: {rail_err}")
+            self._nav_rail_control.selected_index = new_index
+            try:
+                self._nav_rail_control.update()
+            except Exception as rail_err:
+                logger.warning("Navigation rail update failed: %s", rail_err)
             else:
-                print(f"🟡 [NAVIGATE_TO] No nav_rail_control available")
-                logger.info(f"🔵 [NAV_DEBUG] No nav_rail_control available yet")
+                if _VERBOSE_NAV_LOGS:
+                    logger.debug("Navigation rail updated to index %s", new_index)
+        elif _VERBOSE_NAV_LOGS:
+            logger.debug("Navigation rail not available or view missing: %s", view_name)
 
-        # Load the view
-        print(f"🟡 [NAVIGATE_TO] About to call _perform_view_loading")
-        logger.info(f"🔵 [NAV_DEBUG] About to call _perform_view_loading('{view_name}')")
-        print(f"🟡 [NAVIGATE_TO] After logger.info, before _perform_view_loading call")
         self._perform_view_loading(view_name)
-        print(f"🟡 [NAVIGATE_TO] _perform_view_loading returned")
-        logger.info(f"🔵 [NAV_DEBUG] _perform_view_loading returned, navigated to {view_name}")
+        if _VERBOSE_NAV_LOGS:
+            logger.debug("Completed navigation to %s", view_name)
 
     def _create_navigation_rail(self) -> ft.Container:
         """Create collapsible navigation rail with premium neumorphic design (40-45% intensity)."""

@@ -23,6 +23,8 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import builtins
+import logging
 import os
 import sys
 from datetime import datetime
@@ -55,6 +57,27 @@ from FletV2.utils.state_manager import StateManager
 from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
+_VERBOSE_DB_DIAGNOSTICS = os.getenv("FLET_V2_VERBOSE_DB", "").strip().lower() in {"1", "true", "yes"} or os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
+
+if _VERBOSE_DB_DIAGNOSTICS:
+    logger.setLevel(logging.INFO)
+else:
+    logger.setLevel(logging.WARNING)
+
+_ORIGINAL_PRINT = builtins.print
+
+
+def _diagnostic_print(*args: Any, **kwargs: Any) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args)
+
+    if _VERBOSE_DB_DIAGNOSTICS:
+        _ORIGINAL_PRINT(*args, **kwargs)
+    else:
+        logger.debug(message)
+
+
+print = _diagnostic_print  # type: ignore[assignment]
 
 # Configuration Constants
 DEFAULT_TABLE = "clients"
