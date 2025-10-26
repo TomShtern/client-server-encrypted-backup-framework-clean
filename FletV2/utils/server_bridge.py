@@ -24,6 +24,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+ERR_NO_DATA_PROVIDED = 'No data provided'
+ERR_RECORD_IDENTIFIER_MISSING = 'Record identifier missing'
+ERR_DB_MANAGER_UNAVAILABLE = 'Database manager not available on server'
+
 # Data Format Conversion Utilities for BackupServer Compatibility
 
 def blob_to_uuid_string(blob_data: bytes) -> str:
@@ -34,6 +38,40 @@ def blob_to_uuid_string(blob_data: bytes) -> str:
         return str(uuid.UUID(bytes=blob_data))
     except (ValueError, TypeError):
         return str(uuid.uuid4())
+
+def _normalize_analytics_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize analytics response into FletV2 schema."""
+    if not isinstance(raw, dict) or not raw.get('success'):
+        return raw
+
+    src = raw.get('data') or {}
+
+    total_bytes = src.get('total_storage_bytes') or 0
+    avg_bytes = src.get('avg_backup_size_bytes') or 0.0
+    if not total_bytes:
+        db_stats = src.get('database_stats') or {}
+        total_bytes = (db_stats.get('database_size_bytes') if isinstance(db_stats, dict) else 0) or 0
+
+    total_storage_gb = round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0
+    avg_backup_size_gb = round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else float(src.get('avg_backup_size_gb', 0.0) or 0.0)
+
+    total_backups = src.get('total_backups') or src.get('total_files') or 0
+    normalized = {
+        'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
+        'total_storage_gb': total_storage_gb,
+        'success_rate': float(src.get('success_rate', 0.0) or 0.0),
+        'avg_backup_size_gb': avg_backup_size_gb,
+        'backup_trend': src.get('backup_trend') or [],
+        'client_storage': src.get('client_storage') or [],
+        'file_type_distribution': src.get('file_type_distribution') or [],
+    }
+
+    return {
+        'success': True,
+        'data': normalized,
+        'error': None,
+        'raw': raw.get('data')
+    }
 
 def uuid_string_to_blob(uuid_str: str) -> bytes:
     """Convert UUID string to BLOB format."""
@@ -600,72 +638,12 @@ class ServerBridge:
         }
         """
         raw = self._call_real_server_method('get_analytics_data')
-        # If call failed or unexpected, return as-is
-        if not isinstance(raw, dict) or not raw.get('success'):
-            return raw
-
-        src = raw.get('data') or {}
-        # Heuristic normalization from server-side keys to analytics view keys
-        total_backups = src.get('total_backups') or src.get('total_files') or 0
-        # Prefer explicit storage/average fields if provided by server; fall back to DB file size as last resort
-        total_bytes = src.get('total_storage_bytes') or 0
-        avg_bytes = src.get('avg_backup_size_bytes') or 0.0
-        if not total_bytes:
-            db_stats = src.get('database_stats') or {}
-            # Note: database_size_bytes is SQLite file size, not total storage of files; keep only as fallback
-            total_bytes = (db_stats.get('database_size_bytes') if isinstance(db_stats, dict) else 0) or 0
-        total_storage_gb = round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0
-        avg_backup_size_gb = round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else float(src.get('avg_backup_size_gb', 0.0) or 0.0)
-
-        normalized = {
-            'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
-            'total_storage_gb': total_storage_gb,
-            'success_rate': float(src.get('success_rate', 0.0) or 0.0),
-            'avg_backup_size_gb': avg_backup_size_gb,
-            'backup_trend': src.get('backup_trend') or [],
-            'client_storage': src.get('client_storage') or [],
-            'file_type_distribution': src.get('file_type_distribution') or [],
-        }
-
-        return {
-            'success': True,
-            'data': normalized,
-            'error': None,
-            'raw': raw.get('data')
-        }
+        return _normalize_analytics_payload(raw)
 
     async def get_analytics_data_async(self):
         """Get analytics data (async) with normalized schema."""
         raw = await self._call_real_server_method_async('get_analytics_data_async')
-        if not isinstance(raw, dict) or not raw.get('success'):
-            return raw
-
-        src = raw.get('data') or {}
-        total_bytes = src.get('total_storage_bytes') or 0
-        avg_bytes = src.get('avg_backup_size_bytes') or 0.0
-        if not total_bytes:
-            db_stats = src.get('database_stats') or {}
-            total_bytes = (db_stats.get('database_size_bytes') if isinstance(db_stats, dict) else 0) or 0
-        total_storage_gb = round(float(total_bytes) / (1024 * 1024 * 1024), 2) if total_bytes else 0.0
-        avg_backup_size_gb = round(float(avg_bytes) / (1024 * 1024 * 1024), 2) if avg_bytes else float(src.get('avg_backup_size_gb', 0.0) or 0.0)
-
-        total_backups = src.get('total_backups') or src.get('total_files') or 0
-        normalized = {
-            'total_backups': int(total_backups) if isinstance(total_backups, (int, float)) else 0,
-            'total_storage_gb': total_storage_gb,
-            'success_rate': float(src.get('success_rate', 0.0) or 0.0),
-            'avg_backup_size_gb': avg_backup_size_gb,
-            'backup_trend': src.get('backup_trend') or [],
-            'client_storage': src.get('client_storage') or [],
-            'file_type_distribution': src.get('file_type_distribution') or [],
-        }
-
-        return {
-            'success': True,
-            'data': normalized,
-            'error': None,
-            'raw': raw.get('data')
-        }
+        return _normalize_analytics_payload(raw)
 
     def get_performance_metrics(self):
         """Get performance metrics."""
@@ -743,6 +721,38 @@ class ServerBridge:
     # DATABASE OPERATIONS (for database view)
     # ============================================================================
 
+    def _apply_table_specific_normalization(
+        self,
+        table_name_lower: str,
+        source_row: dict[str, Any],
+        normalized_row: dict[str, Any],
+    ) -> None:
+        """Apply table-specific normalization rules."""
+        if table_name_lower == 'clients':
+            normalized_row.update(convert_backupserver_client_to_fletv2(source_row))
+            return
+        if table_name_lower == 'files':
+            normalized_row.update(convert_backupserver_file_to_fletv2(source_row))
+            return
+
+        for key, value in source_row.items():
+            if isinstance(key, str):
+                lowered = key.lower()
+                if lowered not in normalized_row:
+                    normalized_row[lowered] = value
+
+    @staticmethod
+    def _ensure_row_identifier(normalized_row: dict[str, Any], source_row: dict[str, Any]) -> None:
+        """Ensure every normalized row has an 'id' field."""
+        if 'id' in normalized_row:
+            return
+
+        raw_id = source_row.get('id') or source_row.get('ID')
+        if isinstance(raw_id, bytes):
+            normalized_row['id'] = raw_id.hex()
+        elif raw_id is not None:
+            normalized_row['id'] = str(raw_id)
+
     def _normalize_table_row(self, table_name: str, row: dict[str, Any]) -> dict[str, Any]:
         """Normalize table rows using known converters while preserving original data."""
         if not isinstance(row, dict):
@@ -751,30 +761,15 @@ class ServerBridge:
         normalized_row = dict(row)
         table_name_lower = table_name.lower()
 
-        if table_name_lower == 'clients':
-            normalized_row.update(convert_backupserver_client_to_fletv2(row))
-        elif table_name_lower == 'files':
-            normalized_row.update(convert_backupserver_file_to_fletv2(row))
-        else:
-            for key, value in list(row.items()):
-                if isinstance(key, str):
-                    lowered = key.lower()
-                    if lowered not in normalized_row:
-                        normalized_row[lowered] = value
-
-        if 'id' not in normalized_row:
-            raw_id = row.get('id') or row.get('ID')
-            if isinstance(raw_id, bytes):
-                normalized_row['id'] = raw_id.hex()
-            elif raw_id is not None:
-                normalized_row['id'] = str(raw_id)
+        self._apply_table_specific_normalization(table_name_lower, row, normalized_row)
+        self._ensure_row_identifier(normalized_row, row)
 
         return normalized_row
 
     def add_table_record(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
         """Insert a new database record via the real server."""
         if not record_data:
-            return {'success': False, 'data': None, 'error': 'No data provided'}
+            return {'success': False, 'data': None, 'error': ERR_NO_DATA_PROVIDED}
 
         result = self._call_real_server_method('add_row', table_name, record_data)
         if result.get('success') and isinstance(result.get('data'), dict):
@@ -790,7 +785,7 @@ class ServerBridge:
     def update_table_record(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
         """Update an existing database record via the real server."""
         if not record_data:
-            return {'success': False, 'data': None, 'error': 'No data provided'}
+            return {'success': False, 'data': None, 'error': ERR_NO_DATA_PROVIDED}
 
         record_identifier = record_data.get('id') or record_data.get('ID')
         if record_identifier is None:
@@ -807,11 +802,11 @@ class ServerBridge:
 
     async def update_table_record_async(self, table_name: str, record_data: dict[str, Any]) -> dict[str, Any]:
         if not record_data:
-            return {'success': False, 'data': None, 'error': 'No data provided'}
+            return {'success': False, 'data': None, 'error': ERR_NO_DATA_PROVIDED}
 
         record_identifier = record_data.get('id') or record_data.get('ID')
         if record_identifier is None:
-            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+            return {'success': False, 'data': None, 'error': ERR_RECORD_IDENTIFIER_MISSING}
 
         sanitized_data = dict(record_data)
         sanitized_data.pop('id', None)
@@ -827,13 +822,13 @@ class ServerBridge:
     def delete_table_record(self, table_name: str, record_identifier: Any) -> dict[str, Any]:
         """Delete a database record via the real server."""
         if record_identifier is None:
-            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+            return {'success': False, 'data': None, 'error': ERR_RECORD_IDENTIFIER_MISSING}
 
         if isinstance(record_identifier, dict):
             record_identifier = record_identifier.get('id') or record_identifier.get('ID')
 
         if record_identifier is None:
-            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+            return {'success': False, 'data': None, 'error': ERR_RECORD_IDENTIFIER_MISSING}
 
         return self._call_real_server_method('delete_row', table_name, record_identifier)
 
@@ -842,14 +837,14 @@ class ServerBridge:
             record_identifier = record_identifier.get('id') or record_identifier.get('ID')
 
         if record_identifier is None:
-            return {'success': False, 'data': None, 'error': 'Record identifier missing'}
+            return {'success': False, 'data': None, 'error': ERR_RECORD_IDENTIFIER_MISSING}
 
         return await self._call_real_server_method_async('delete_row_async', table_name, record_identifier)
 
     def get_database_info(self) -> dict[str, Any]:
         """Get database information and statistics."""
         if not self.real_server or not hasattr(self.real_server, 'db_manager'):
-            return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
+            return {'success': False, 'data': None, 'error': ERR_DB_MANAGER_UNAVAILABLE}
 
         try:
             db_manager = self.real_server.db_manager
@@ -876,7 +871,7 @@ class ServerBridge:
     async def get_database_info_async(self) -> dict[str, Any]:
         """Get database information and statistics (async version)."""
         if not self.real_server or not hasattr(self.real_server, 'db_manager'):
-            return {'success': False, 'data': None, 'error': 'Database manager not available on server'}
+            return {'success': False, 'data': None, 'error': ERR_DB_MANAGER_UNAVAILABLE}
 
         try:
             # Call BackupServer's async method

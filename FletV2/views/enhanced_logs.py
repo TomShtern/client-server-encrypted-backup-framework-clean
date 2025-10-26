@@ -26,7 +26,7 @@ for _path in (_flet_v2_root, _repo_root):
 import Shared.utils.utf8_solution as _  # noqa: F401
 
 from FletV2.components.log_card import LogCard
-from FletV2.utils.async_helpers import debounce
+from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
 from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
 from FletV2.utils.loading_states import (
     create_empty_state,
@@ -41,6 +41,7 @@ from FletV2.utils.ui_builders import (
     create_view_header,
 )
 from FletV2.utils.ui_components import AppCard
+from FletV2.utils.state_manager import StateManager
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ except Exception:  # pragma: no cover - log capture optional in GUI-only mode
 # SECTION 1: DATA FETCHING HELPERS
 # ============================================================================
 
-async def fetch_server_logs_async(bridge: Any | None, page: ft.Page) -> list[dict[str, Any]]:
+async def fetch_server_logs_async(bridge: Any | None, _page: ft.Page) -> list[dict[str, Any]]:
     """Retrieve and normalize server logs without blocking the UI."""
 
     if not bridge:
@@ -65,7 +66,7 @@ async def fetch_server_logs_async(bridge: Any | None, page: ft.Page) -> list[dic
     def blocking_operation():
         return safe_server_call(bridge, "get_logs")
 
-    result = await page.run_thread(blocking_operation)
+    result = await run_sync_in_executor(blocking_operation)
     if not result.get("success"):
         logger.debug("Server log fetch failed: %s", result.get("error"))
         return []
@@ -81,17 +82,18 @@ async def fetch_server_logs_async(bridge: Any | None, page: ft.Page) -> list[dic
     return [_normalize_log_entry(item, "Server") for item in raw_logs]
 
 
-async def fetch_app_logs_async(page: ft.Page) -> list[dict[str, Any]]:
+async def fetch_app_logs_async(_page: ft.Page) -> list[dict[str, Any]]:
     """Fetch logs captured from the Flet application itself."""
 
-    if not _flet_log_capture:
+    capture = _flet_log_capture
+    if not capture:
         return []
 
     def blocking_operation():
-        return _flet_log_capture.get_app_logs()
+        return capture.get_app_logs()
 
     try:
-        app_logs = await page.run_thread(blocking_operation)
+        app_logs = await run_sync_in_executor(blocking_operation)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.debug("App log fetch failed: %s", exc)
         return []
@@ -234,48 +236,104 @@ def _render_log_controls(logs: list[dict[str, Any]], search_query: str, page: ft
 
 
 # ============================================================================
-# SECTION 3: MAIN VIEW FACTORY
+# SECTION 3: LOGIC HELPERS
 # ============================================================================
 
-def create_logs_view(
-    server_bridge: Any | None,
-    page: ft.Page,
-    _state_manager: Any | None,
-    navigate_callback: Callable[[str], None] | None = None,
-) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    state = {
-        "server_logs": [],
-        "app_logs": [],
-        "filtered_logs": [],
-        "search_query": "",
-        "selected_level": "All",
-        "available_levels": [],
-        "include_app_logs": bool(_flet_log_capture),
-        "stats": {"total": 0, "by_level": {}},
-        "last_refresh": None,
-    }
-
-    log_list_container = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
-    stats_container = ft.Container(expand=False)
-    error_container = ft.Container(visible=False)
-
-    level_filter = create_filter_dropdown(
+def _create_level_filter() -> ft.Control:
+    """Create the level filter dropdown control."""
+    return create_filter_dropdown(
         "Level",
         [("All", "All")],
-        lambda _e: None,
+        lambda _: None,
         value="All",
         width=200,
     )
 
-    include_switch = ft.Switch(label="Include app logs", value=state["include_app_logs"])
-    last_refresh_text = ft.Text("Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
 
-    loading_overlay = ft.Container(
-        content=create_loading_indicator("Loading logs…"),
-        visible=False,
-        alignment=ft.alignment.center,
-        expand=True,
+def _create_filter_controls(
+    level_filter: ft.Control,
+    include_switch: ft.Switch,
+    last_refresh_text: ft.Control,
+    search_on_change: Callable[[ft.ControlEvent], None],
+    on_refresh: Callable[[ft.ControlEvent], None],
+) -> ft.ResponsiveRow:
+    """Create the filter controls layout."""
+    return ft.ResponsiveRow(
+        controls=[
+            ft.Container(content=create_search_bar(on_change=search_on_change, placeholder="Search logs…"),
+                        col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
+            ft.Container(content=level_filter, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+            ft.Container(
+                content=include_switch,
+                col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
+                alignment=ft.alignment.center_left,
+            ),
+            ft.Container(
+                content=create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH, primary=False),
+                col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
+                alignment=ft.alignment.center_left,
+            ),
+            ft.Container(
+                content=last_refresh_text,
+                padding=ft.padding.only(left=4),
+                col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
+                alignment=ft.alignment.center_left,
+            ),
+        ],
+        spacing=12,
+        run_spacing=12,
+        alignment=ft.MainAxisAlignment.START,
     )
+
+
+def _create_export_actions(handle_export: Callable[[str], None]) -> list[ft.Control]:
+    """Create export action buttons."""
+    return [
+        create_action_button("Export CSV", lambda _: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
+        create_action_button("Export JSON", lambda _: handle_export("json"), icon=ft.Icons.CODE, primary=False),
+    ]
+
+
+def _create_main_content(
+    header: ft.Control,
+    stats_section: ft.Control,
+    filter_section: ft.Control,
+    error_container: ft.Container,
+    logs_section: ft.Control,
+) -> ft.Column:
+    """Create the main content column."""
+    return ft.Column(
+        [
+            header,
+            stats_section,
+            filter_section,
+            error_container,
+            logs_section,
+        ],
+        spacing=16,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+
+# ============================================================================
+# SECTION 4: EVENT HANDLERS
+# ============================================================================
+
+def _create_event_handlers(
+    page: ft.Page,
+    state: dict[str, Any],
+    log_list_container: ft.Column,
+    stats_container: ft.Container,
+    level_filter: ft.Control,
+    last_refresh_text: ft.Control,
+) -> tuple[
+    Callable[[str], None],
+    Callable[[str | None], None],
+    Callable[[bool], None],
+    Callable[[], None],
+]:
+    """Create and return all event handlers."""
 
     def apply_filters_and_render() -> None:
         combined = list(state["server_logs"])
@@ -318,8 +376,71 @@ def create_logs_view(
         level_filter.update()
         last_refresh_text.update()
 
+    def handle_search(query: str) -> None:
+        state["search_query"] = query
+        apply_filters_and_render()
+
+    def handle_level_change(value: str | None) -> None:
+        state["selected_level"] = value or "All"
+        apply_filters_and_render()
+
+    def handle_include_toggle(value: bool) -> None:
+        state["include_app_logs"] = value
+        apply_filters_and_render()
+
+    def handle_refresh() -> None:
+        apply_filters_and_render()
+
+    return handle_search, handle_level_change, handle_include_toggle, handle_refresh
+
+
+# ============================================================================
+# SECTION 5: MAIN VIEW FACTORY
+# ============================================================================
+
+def create_logs_view(  # noqa: PLR0915
+    server_bridge: Any | None,
+    page: ft.Page,
+    _state_manager: StateManager | None = None,
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+
+    # Initialize state
+    state = {
+        "server_logs": [],
+        "app_logs": [],
+        "filtered_logs": [],
+        "search_query": "",
+        "selected_level": "All",
+        "available_levels": [],
+        "include_app_logs": bool(_flet_log_capture),
+        "stats": {"total": 0, "by_level": {}},
+        "last_refresh": None,
+    }
+
+    # Create UI components
+    log_list_container = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
+    stats_container = ft.Container(expand=False)
+    error_container = ft.Container(visible=False)
+    level_filter = _create_level_filter()
+    include_switch = ft.Switch(label="Include app logs", value=state["include_app_logs"])
+    last_refresh_text = ft.Text("Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+    loading_overlay = ft.Container(
+        content=create_loading_indicator("Loading logs…"),
+        visible=False,
+        alignment=ft.alignment.center,
+        expand=True,
+    )
+
+    # Create event handlers
+    handle_search, handle_level_change, handle_include_toggle, handle_refresh = _create_event_handlers(
+        page, state, log_list_container, stats_container, level_filter, last_refresh_text
+    )
+
+    async def handle_search_async(query: str) -> None:
+        await asyncio.sleep(0)
+        handle_search(query)
+
     async def refresh_logs(initial: bool = False, toast: bool = False) -> None:
-        # Batch initial UI updates
         error_container.visible = False
         loading_overlay.visible = True
         error_container.update()
@@ -334,7 +455,7 @@ def create_logs_view(
             state["app_logs"] = app_logs
             state["last_refresh"] = datetime.now()
 
-            apply_filters_and_render()
+            handle_refresh()
 
             if toast and not initial:
                 show_success_message(page, "Logs refreshed")
@@ -345,49 +466,8 @@ def create_logs_view(
             error_container.update()
             show_error_message(page, f"Failed to refresh logs: {exc}")
         finally:
-            # Batch final UI updates
             loading_overlay.visible = False
             loading_overlay.update()
-
-    async def handle_search(query: str) -> None:
-        state["search_query"] = query
-        apply_filters_and_render()
-
-    async def handle_level_change(value: str | None) -> None:
-        state["selected_level"] = value or "All"
-        apply_filters_and_render()
-
-    async def handle_include_toggle(value: bool) -> None:
-        state["include_app_logs"] = value
-        apply_filters_and_render()
-
-    def schedule_task(task: Any) -> None:
-        async def runner() -> None:
-            if inspect.isawaitable(task):
-                await task
-                return
-            result = task()
-            if inspect.isawaitable(result):
-                await result
-
-        if hasattr(page, "run_task"):
-            page.run_task(runner)
-        else:
-            asyncio.get_event_loop().create_task(runner())
-
-    debounced_search = debounce(0.4)(handle_search)
-
-    def on_search_change(event: ft.ControlEvent) -> None:
-        schedule_task(debounced_search(event.control.value or ""))
-
-    def on_level_change(event: ft.ControlEvent) -> None:
-        schedule_task(handle_level_change(event.control.value))
-
-    def on_include_change(event: ft.ControlEvent) -> None:
-        schedule_task(handle_include_toggle(bool(event.control.value)))
-
-    def on_refresh(event: ft.ControlEvent) -> None:
-        schedule_task(lambda: refresh_logs(toast=True))
 
     def handle_export(format_type: str) -> None:
         logs = state["filtered_logs"]
@@ -407,43 +487,50 @@ def create_logs_view(
         except Exception as exc:  # pragma: no cover - defensive UI feedback
             show_error_message(page, f"Export failed: {exc}")
 
-    search_field = create_search_bar(on_change=on_search_change, placeholder="Search logs…")
+    # Schedule task helper
+    def schedule_task(task: Any) -> None:
+        async def runner() -> None:
+            if inspect.isawaitable(task):
+                await task
+                return
+            result = task()
+            if inspect.isawaitable(result):
+                await result
 
+        if hasattr(page, "run_task"):
+            page.run_task(runner)
+        else:
+            asyncio.get_event_loop().create_task(runner())
+
+    # Debounce search
+    debounced_search = debounce(0.4)(handle_search_async)
+
+    # Event handlers
+    def on_search_change(event: ft.ControlEvent) -> None:
+        schedule_task(debounced_search(event.control.value or ""))
+
+    def on_level_change(event: ft.ControlEvent) -> None:
+        schedule_task(handle_level_change(event.control.value))
+
+    def on_include_change(event: ft.ControlEvent) -> None:
+        schedule_task(handle_include_toggle(bool(event.control.value)))
+
+    def on_refresh(event: ft.ControlEvent) -> None:
+        schedule_task(lambda: refresh_logs(toast=True))
+
+    # Set up component event handlers
     level_filter.on_change = on_level_change
     include_switch.on_change = on_include_change
 
-    filters_layout = ft.ResponsiveRow(
-        controls=[
-            ft.Container(content=search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
-            ft.Container(content=level_filter, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
-            ft.Container(
-                content=include_switch,
-                col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
-                alignment=ft.alignment.center_left,
-            ),
-            ft.Container(
-                content=create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH, primary=False),
-                col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
-                alignment=ft.alignment.center_left,
-            ),
-            ft.Container(
-                content=last_refresh_text,
-                padding=ft.padding.only(left=4),
-                col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
-                alignment=ft.alignment.center_left,
-            ),
-        ],
-        spacing=12,
-        run_spacing=12,
-        alignment=ft.MainAxisAlignment.START,
+    # Create filter controls layout
+    filters_layout = _create_filter_controls(
+        level_filter, include_switch, last_refresh_text,
+        on_search_change, on_refresh
     )
 
-    filter_actions = [
-        create_action_button("Export CSV", lambda _: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
-        create_action_button("Export JSON", lambda _: handle_export("json"), icon=ft.Icons.CODE, primary=False),
-    ]
-
+    # Create sections
     stats_section = AppCard(stats_container, title="Summary")
+    filter_actions = _create_export_actions(handle_export)
     filter_section = AppCard(filters_layout, title="Filters", actions=filter_actions)
     logs_section = AppCard(log_list_container, title="Log entries")
     logs_section.expand = True
@@ -455,18 +542,7 @@ def create_logs_view(
         actions=[create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH)],
     )
 
-    content_column = ft.Column(
-        [
-            header,
-            stats_section,
-            filter_section,
-            error_container,
-            logs_section,
-        ],
-        spacing=16,
-        expand=True,
-        scroll=ft.ScrollMode.AUTO,
-    )
+    content_column = _create_main_content(header, stats_section, filter_section, error_container, logs_section)
 
     main_layout = ft.Container(
         content=content_column,

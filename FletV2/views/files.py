@@ -10,10 +10,8 @@ Clean file management with server integration and graceful fallbacks.
 # Standard library imports
 import asyncio
 import contextlib
-import hashlib
 import os
 import sys
-from datetime import datetime
 from typing import Any
 
 # Ensure repository and package roots are on sys.path for runtime resolution
@@ -62,6 +60,9 @@ from FletV2.utils.ui_builders import (
 
 logger = get_logger(__name__)
 
+INVALID_FILE_ID_MSG = "Invalid file ID"
+SERVER_NOT_CONNECTED_MSG = "Server not connected. Please start the backup server."
+
 # ==============================================================================
 # MAIN VIEW
 # All logic is organized within create_files_view as nested functions
@@ -70,7 +71,7 @@ logger = get_logger(__name__)
 # Note: Helper builders moved to FletV2.utils.ui_builders module
 
 
-def create_files_view(
+def create_files_view(  # noqa: PLR0915
     server_bridge: ServerBridge | None,
     page: ft.Page,
     _state_manager: StateManager | None = None
@@ -89,6 +90,7 @@ def create_files_view(
 
     async def load_files_data() -> None:
         """Load file data with loading indicator and proper error handling."""
+        nonlocal files_data
         try:
             # Show loading indicator
             loading_ring.visible = True
@@ -266,7 +268,7 @@ def create_files_view(
                 if server_bridge:
                     file_id = file.get('id')
                     if not file_id or not isinstance(file_id, str):
-                        show_error_message(page, "Invalid file ID")
+                        show_error_message(page, INVALID_FILE_ID_MSG)
                         return
                     result = await run_sync_in_executor(safe_server_call, server_bridge, 'download_file', file_id, e.path)
                     if result.get('success'):
@@ -274,7 +276,7 @@ def create_files_view(
                     else:
                         show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
                 else:
-                    show_error_message(page, "Server not connected. Please start the backup server.")
+                    show_error_message(page, SERVER_NOT_CONNECTED_MSG)
                     return
             except Exception as ex:
                 show_error_message(page, f"Download error: {ex}")
@@ -337,7 +339,7 @@ def create_files_view(
     def verify_file(file: dict[str, Any]) -> None:
         """Verify file integrity without blocking the UI."""
         if not server_bridge:
-            show_error_message(page, "Server not connected. Please start the backup server.")
+            show_error_message(page, SERVER_NOT_CONNECTED_MSG)
             return
 
         if hasattr(page, "run_task"):
@@ -375,13 +377,13 @@ def create_files_view(
         """Delete file with confirmation."""
         async def confirm_delete(_e: ft.ControlEvent) -> None:
             if not server_bridge:
-                show_error_message(page, "Server not connected. Please start the backup server.")
+                show_error_message(page, SERVER_NOT_CONNECTED_MSG)
                 page.close(delete_dialog)
                 return
 
             file_id = file.get('id')
             if not file_id or not isinstance(file_id, str):
-                show_error_message(page, "Invalid file ID")
+                show_error_message(page, INVALID_FILE_ID_MSG)
                 page.close(delete_dialog)
                 return
 
@@ -443,7 +445,7 @@ def create_files_view(
             loading_ring.visible = True
             loading_ring.update()
 
-            load_files_data()
+            await load_files_data()
             show_success_message(page, "Files refreshed")
 
         finally:
@@ -562,9 +564,9 @@ def create_files_view(
         expand=True,
     )
 
-    def setup_subscriptions() -> None:
+    async def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
-        load_files_data()
+        await load_files_data()
 
     def dispose() -> None:
         """Clean up subscriptions and resources."""

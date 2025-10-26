@@ -7,7 +7,6 @@ Core Principle: Use Flet's built-in DataTable, AlertDialog, and TextField.
 Clean client management with server integration and graceful fallbacks.
 """
 
-import asyncio
 import contextlib
 import os
 import sys
@@ -301,7 +300,7 @@ def create_clients_view(
 
             if result.get('success'):
                 show_success_message(page, f"Client {client.get('name')} disconnected")
-                load_clients_data()
+                await load_clients_data()
             else:
                 show_error_message(page, f"Failed to disconnect: {result.get('error', 'Unknown error')}")
 
@@ -351,7 +350,7 @@ def create_clients_view(
 
             if result.get('success'):
                 show_success_message(page, f"Client {client.get('name')} deleted")
-                load_clients_data()
+                await load_clients_data()
             else:
                 show_error_message(page, f"Failed to delete: {result.get('error', 'Unknown error')}")
 
@@ -418,7 +417,7 @@ def create_clients_view(
 
             if result.get('success'):
                 show_success_message(page, f"Client {new_client['name']} added")
-                load_clients_data()
+                await load_clients_data()
                 page.close(add_dialog)
             else:
                 show_error_message(page, f"Failed to add client: {result.get('error', 'Unknown error')}")
@@ -488,7 +487,7 @@ def create_clients_view(
 
             if result.get('success'):
                 show_success_message(page, f"Client {updated_client['name']} updated")
-                load_clients_data()
+                await load_clients_data()
                 page.close(edit_dialog)
             else:
                 show_error_message(page, f"Failed to update client: {result.get('error', 'Unknown error')}")
@@ -539,7 +538,7 @@ def create_clients_view(
             loading_ring.update()
 
             # Load data
-            load_clients_data()
+            await load_clients_data()
             show_success_message(page, "Clients refreshed")
 
         finally:
@@ -640,7 +639,7 @@ def create_clients_view(
         expand=True,
     )
 
-    def setup_subscriptions() -> None:
+    async def setup_subscriptions() -> None:
         """Setup subscriptions and initial data loading after view is added to page."""
         existing_clients: list[dict[str, Any]] = []
         if state_manager is not None:
@@ -652,7 +651,7 @@ def create_clients_view(
         if existing_clients:
             apply_clients_data(existing_clients, broadcast=False, source="state_manager_init")
         else:
-            load_clients_data()
+            await load_clients_data()
 
     def dispose() -> None:
         """Clean up subscriptions and resources."""

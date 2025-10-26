@@ -23,9 +23,6 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
-import csv
-import io
-import json
 import os
 import sys
 from datetime import datetime
@@ -50,6 +47,7 @@ from FletV2.theme import (
     create_neumorphic_metric_card,
     themed_button,
 )
+from FletV2.utils.async_helpers import run_sync_in_executor
 from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
 from FletV2.utils.debug_setup import get_logger
 from FletV2.utils.server_bridge import ServerBridge
@@ -68,10 +66,338 @@ SETUP_DELAY = 0.5  # Seconds to wait for control attachment
 SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "token"}
 
 
+def stringify_value(value: Any) -> str:
+    """Convert any value to a display-friendly string."""
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        hex_str = value.hex()
+        return hex_str[:32] + "..." if len(hex_str) > 32 else hex_str
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    str_value = str(value)
+    if len(str_value) > MAX_DISPLAY_LENGTH:
+        return f"{str_value[:MAX_DISPLAY_LENGTH]}..."
+    return str_value
+
+# UI Message Constants
+MSG_SERVER_NOT_CONNECTED = "Server not connected"
+MSG_SERVER_DISCONNECTED = "Server disconnected"
+MSG_UNKNOWN_ERROR = "Unknown error"
+MSG_NO_DATA_TO_EXPORT = "No data to export"
+MSG_NO_EDITABLE_COLUMNS = "No editable columns in this table"
+MSG_RECORD_ADDED_SUCCESSFULLY = "Record added successfully"
+MSG_RECORD_UPDATED_SUCCESSFULLY = "Record updated successfully"
+MSG_RECORD_DELETED_SUCCESSFULLY = "Record deleted successfully"
+MSG_ERROR_PREFIX = "Error: "
+MSG_FAILED_PREFIX = "Failed to "
+
+
+def _format_table_cell_value(value: Any, col_name: str) -> str:
+    """Format table cell values with smart truncation."""
+    if value is None:
+        return "—"  # Em dash for NULL values
+
+    # Handle binary/hex data (IDs, keys)
+    if isinstance(value, (bytes, bytearray)):
+        hex_str = value.hex()
+        if len(hex_str) > 16:
+            # Show first 8 + ... + last 6 chars for readability
+            return f"{hex_str[:8]}...{hex_str[-6:]}"
+        return hex_str
+
+    # Handle datetime
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")  # Shorter format for table
+
+    # Handle strings
+    str_value = str(value)
+
+    # Context-aware truncation based on column name
+    if any(key in col_name.lower() for key in ['id', 'uuid', 'guid']):
+        # IDs: show start and end
+        if len(str_value) > 20:
+            return f"{str_value[:10]}...{str_value[-8:]}"
+    elif any(key in col_name.lower() for key in ['key', 'hash', 'token']):
+        # Keys/hashes: show first 12 chars
+        if len(str_value) > 16:
+            return f"{str_value[:12]}..."
+    elif any(key in col_name.lower() for key in ['name', 'description']):
+        # Names: standard truncation
+        if len(str_value) > 30:
+            return f"{str_value[:30]}..."
+    else:
+        # Default: moderate truncation
+        if len(str_value) > 40:
+            return f"{str_value[:40]}..."
+
+    return str_value
+
+
+def _load_database_stats_async(
+    page: ft.Page,
+    current_db_stats: dict,
+    is_server_connected_fn: Callable[[], bool],
+    update_db_stats_ui_fn: Callable[[], None],
+    update_status_fn: Callable[[str, str | None, bool], None],
+    get_active_bridge_fn: Callable[[], ServerBridge | None],
+) -> asyncio.Task:
+    """Load database statistics from server."""
+    async def load_stats():
+        nonlocal current_db_stats
+
+        if not is_server_connected_fn():
+            current_db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
+            update_db_stats_ui_fn()
+            return
+
+        try:
+            update_status_fn("Loading database info...", ft.Colors.BLUE, True)
+            bridge = get_active_bridge_fn()
+            if bridge is None:
+                current_db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
+                return
+
+            # SIMPLIFIED: Use basic client/file counts instead of complex database health checks
+            # Get simple counts without database health checks (which cause freezing)
+            # Note: get_clients() and get_files() return lists directly, not wrapped in dicts
+            def get_clients_data():
+                return bridge.get_clients()
+
+            def get_files_data():
+                return bridge.get_files()
+
+            clients_result: list[dict[str, Any]] = await run_sync_in_executor(get_clients_data)
+            files_result: list[dict[str, Any]] = await run_sync_in_executor(get_files_data)
+
+            client_count = len(clients_result) if clients_result else 0
+            file_count = len(files_result) if files_result else 0
+
+            current_db_stats = {
+                "status": "Connected",
+                "tables": 2,  # clients and files
+                "total_records": client_count + file_count,
+                "size": "N/A"  # Skip size calculation to avoid database locks
+            }
+            logger.info(f"Database stats loaded: {current_db_stats}")
+
+        except Exception as e:
+            logger.exception(f"Error loading database stats: {e}")
+            current_db_stats["status"] = f"Error: {e}"
+            current_db_stats["tables"] = 0
+            current_db_stats["total_records"] = 0
+            current_db_stats["size"] = "0 MB"
+
+        finally:
+            update_status_fn("Ready", ft.Colors.GREY_400, False)
+            update_db_stats_ui_fn()
+
+    return asyncio.create_task(load_stats())
+
+
+def _load_table_names_async(
+    current_available_tables: list[str],
+    is_server_connected_fn: Callable[[], bool],
+    update_table_dropdown_ui_fn: Callable[[], None],
+    update_status_fn: Callable[[str, str | None, bool], None],
+) -> asyncio.Task:
+    """Load available table names from server."""
+    async def load_tables():
+        nonlocal current_available_tables
+
+        if not is_server_connected_fn():
+            current_available_tables = DEFAULT_TABLES.copy()
+            update_table_dropdown_ui_fn()
+            return
+
+        try:
+            update_status_fn("Loading tables...", ft.Colors.BLUE, True)
+
+            # SIMPLIFIED: Use fixed table list instead of querying database schema
+            # Querying schema can cause database locks in multi-threaded environment
+            current_available_tables = DEFAULT_TABLES.copy()
+            logger.info(f"Using default tables: {current_available_tables}")
+
+        except Exception as e:
+            logger.exception(f"Error loading table names: {e}")
+            current_available_tables = DEFAULT_TABLES.copy()
+
+        finally:
+            update_status_fn("Ready", ft.Colors.GREY_400, False)
+            update_table_dropdown_ui_fn()
+
+    return asyncio.create_task(load_tables())
+
+
+def _load_table_data_async(
+    page: ft.Page,
+    current_table_fn: Callable[[], str],
+    all_records: list,
+    table_columns: list,
+    filtered_records: list,
+    is_server_connected_fn: Callable[[], bool],
+    get_active_bridge_fn: Callable[[], ServerBridge | None],
+    apply_search_filter_fn: Callable[[], None],
+    refresh_records_display_fn: Callable[[], None],
+    update_status_fn: Callable[[str, str | None, bool], None],
+    force_records_area_update_fn: Callable[[], None],
+) -> asyncio.Task:
+    """Load data for currently selected table."""
+    async def load_data():
+        if not is_server_connected_fn():
+            all_records.clear()
+            table_columns.clear()
+            refresh_records_display_fn()
+            return
+
+        try:
+            current_table = current_table_fn()
+            update_status_fn(f"Loading {current_table}...", ft.Colors.BLUE, True)
+            bridge = get_active_bridge_fn()
+            if bridge is None:
+                all_records.clear()
+                table_columns.clear()
+                return
+
+            # Run synchronous ServerBridge call in executor to avoid blocking UI
+            def get_table_data_op():
+                return bridge.get_table_data(current_table)
+
+            print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
+            result = await run_sync_in_executor(get_table_data_op)
+            print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
+
+            if result.get("success") and result.get("data"):
+                data = result["data"]
+                table_columns.clear()
+                table_columns.extend(data.get("columns", []))
+                all_records.clear()
+                all_records.extend(data.get("rows", []))
+                print(f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns")
+                logger.info(f"Loaded {len(all_records)} records from {current_table}")
+            else:
+                error = result.get("error", MSG_UNKNOWN_ERROR)
+                print(f"🟧 [LOAD_TABLE] FAILED: {error}")
+                logger.warning(f"Failed to load table data: {error}")
+                all_records.clear()
+                table_columns.clear()
+
+        except Exception as e:
+            print(f"🟧 [LOAD_TABLE] EXCEPTION: {e}")
+            logger.exception(f"Error loading table data: {e}")
+            all_records.clear()
+            table_columns.clear()
+
+        finally:
+            print("🟧 [LOAD_TABLE] Finally block - applying search filter")
+            print(f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}")
+            apply_search_filter_fn()
+            print(f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}")
+            update_status_fn("Ready", ft.Colors.GREY_400, False)
+            force_records_area_update_fn()
+
+    return asyncio.create_task(load_data())
+
+
+def _build_record_card(
+    record: dict[str, Any],
+    index: int,
+    current_table: str,
+    table_columns: list[str],
+    is_server_connected: bool,
+    stringify_value_fn: Callable[[Any], str],
+    edit_callback: Callable[[dict[str, Any]], None],
+    delete_callback: Callable[[dict[str, Any]], None],
+) -> ft.Container:
+    """Build a card UI for a single record."""
+    display_keys = table_columns or list(record.keys())
+    rows: list[ft.Control] = []
+
+    # Build field rows (limit to 10 fields for readability)
+    shown = 0
+    for key in display_keys:
+        if not isinstance(key, str) or key.lower() in SENSITIVE_FIELDS:
+            continue
+
+        value = stringify_value_fn(record.get(key))
+        if not value and value != "0":
+            continue
+
+        rows.append(
+            ft.Row(
+                [
+                    ft.Text(
+                        key.replace("_", " ").title() + ":",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        width=140,
+                        weight=ft.FontWeight.W_500,
+                    ),
+                    ft.Text(value, size=12, selectable=True, expand=True),
+                ],
+                spacing=8,
+            )
+        )
+        shown += 1
+        if shown >= 10:
+            break
+
+    if not rows:
+        rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500, italic=True))
+
+    # Action buttons
+    actions_row = None
+    if is_server_connected:
+        actions_row = ft.Row(
+            [
+                ft.IconButton(
+                    icon=ft.Icons.EDIT_OUTLINED,
+                    tooltip="Edit record",
+                    icon_size=18,
+                    on_click=lambda _e, r=record: edit_callback(r),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINED,
+                    tooltip="Delete record",
+                    icon_size=18,
+                    icon_color=ft.Colors.ERROR,
+                    on_click=lambda _e, r=record: delete_callback(r),
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.END,
+        )
+
+    # Card header
+    header = ft.Row(
+        [
+            ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=16, color=ft.Colors.PRIMARY),
+            ft.Text(
+                f"{current_table.title()} #{index + 1}",
+                size=14,
+                weight=ft.FontWeight.BOLD,
+            ),
+        ],
+        spacing=8,
+    )
+
+    card_content = [header, ft.Divider(height=1, thickness=0.5), ft.Column(rows, spacing=4, tight=True)]
+    if actions_row:
+        card_content.append(actions_row)
+
+    return ft.Container(
+        content=ft.Column(card_content, spacing=10, tight=True),
+        padding=ft.Padding(14, 12, 14, 12),
+        border_radius=12,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+    )
+
+
 def create_database_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    state_manager: StateManager | None = None,
+    _state_manager: StateManager | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create professional database management view.
 
@@ -84,7 +410,7 @@ def create_database_view(
         Tuple of (main_container, dispose_func, setup_func)
     """
     logger.info("Initializing professional database view")
-    print(f"🟧 [DATABASE_PRO] create_database_view CALLED")
+    print("🟧 [DATABASE_PRO] create_database_view CALLED")
     print(f"🟧 [DATABASE_PRO] server_bridge: {server_bridge is not None}")
     print(f"🟧 [DATABASE_PRO] page: {page is not None}")
 
@@ -132,65 +458,6 @@ def create_database_view(
     def is_control_attached(control: ft.Control) -> bool:
         """Check if control is attached to page."""
         return getattr(control, "page", None) is not None
-
-    def stringify_value(value: Any) -> str:
-        """Convert any value to display string with truncation for readability."""
-        if value is None:
-            return ""
-        if isinstance(value, (bytes, bytearray)):
-            hex_str = value.hex()
-            return hex_str[:32] + "..." if len(hex_str) > 32 else hex_str
-        if isinstance(value, datetime):
-            return value.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Convert to string
-        str_value = str(value)
-
-        # Truncate long strings for display
-        if len(str_value) > MAX_DISPLAY_LENGTH:
-            return f"{str_value[:MAX_DISPLAY_LENGTH]}..."
-
-        return str_value
-
-    def format_table_cell_value(value: Any, col_name: str) -> str:
-        """Smart formatting for table cells with context-aware truncation."""
-        if value is None:
-            return "—"  # Em dash for NULL values
-
-        # Handle binary/hex data (IDs, keys)
-        if isinstance(value, (bytes, bytearray)):
-            hex_str = value.hex()
-            if len(hex_str) > 16:
-                # Show first 8 + ... + last 6 chars for readability
-                return f"{hex_str[:8]}...{hex_str[-6:]}"
-            return hex_str
-
-        # Handle datetime
-        if isinstance(value, datetime):
-            return value.strftime("%Y-%m-%d %H:%M")  # Shorter format for table
-
-        # Handle strings
-        str_value = str(value)
-
-        # Context-aware truncation based on column name
-        if any(key in col_name.lower() for key in ['id', 'uuid', 'guid']):
-            # IDs: show start and end
-            if len(str_value) > 20:
-                return f"{str_value[:10]}...{str_value[-8:]}"
-        elif any(key in col_name.lower() for key in ['key', 'hash', 'token']):
-            # Keys/hashes: show first 12 chars
-            if len(str_value) > 16:
-                return f"{str_value[:12]}..."
-        elif any(key in col_name.lower() for key in ['name', 'description']):
-            # Names: standard truncation
-            if len(str_value) > 30:
-                return f"{str_value[:30]}..."
-        else:
-            # Default: moderate truncation
-            if len(str_value) > 40:
-                return f"{str_value[:40]}..."
-
-        return str_value
 
     # ========================================================================
     # UI CONTROLS
@@ -489,107 +756,23 @@ def create_database_view(
         table_dropdown.disabled = not is_server_connected()
         table_dropdown.update()
 
-    def build_record_card(record: dict[str, Any], index: int) -> ft.Container:
-        """Build a card UI for a single record."""
-        display_keys = table_columns or list(record.keys())
-        rows: list[ft.Control] = []
-
-        # Build field rows (limit to 10 fields for readability)
-        shown = 0
-        for key in display_keys:
-            if not isinstance(key, str) or key.lower() in SENSITIVE_FIELDS:
-                continue
-
-            value = stringify_value(record.get(key))
-            if not value and value != "0":
-                continue
-
-            rows.append(
-                ft.Row(
-                    [
-                        ft.Text(
-                            key.replace("_", " ").title() + ":",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            width=140,
-                            weight=ft.FontWeight.W_500,
-                        ),
-                        ft.Text(value, size=12, selectable=True, expand=True),
-                    ],
-                    spacing=8,
-                )
-            )
-            shown += 1
-            if shown >= 10:
-                break
-
-        if not rows:
-            rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500, italic=True))
-
-        # Action buttons
-        actions_row = None
-        if is_server_connected():
-            actions_row = ft.Row(
-                [
-                    ft.IconButton(
-                        icon=ft.Icons.EDIT_OUTLINED,
-                        tooltip="Edit record",
-                        icon_size=18,
-                        on_click=lambda _e, r=record: edit_record_dialog(r),
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.DELETE_OUTLINE,
-                        tooltip="Delete record",
-                        icon_size=18,
-                        icon_color=ft.Colors.ERROR,
-                        on_click=lambda _e, r=record: delete_record_dialog(r),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.END,
-            )
-
-        # Card header
-        header = ft.Row(
-            [
-                ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=16, color=ft.Colors.PRIMARY),
-                ft.Text(
-                    f"{current_table.title()} #{index + 1}",
-                    size=14,
-                    weight=ft.FontWeight.BOLD,
-                ),
-            ],
-            spacing=8,
-        )
-
-        card_content = [header, ft.Divider(height=1, thickness=0.5), ft.Column(rows, spacing=4, tight=True)]
-        if actions_row:
-            card_content.append(actions_row)
-
-        return ft.Container(
-            content=ft.Column(card_content, spacing=10, tight=True),
-            padding=ft.Padding(14, 12, 14, 12),
-            border_radius=12,
-            # SURFACE_VARIANT is not available in current Flet version; use SURFACE as base
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
-        )
 
     def refresh_records_display() -> None:
         """Refresh the records list (Column with cards)."""
         print(f"🟩 [REFRESH_DISPLAY] ENTERED - filtered_records: {len(filtered_records)}")
 
         if not is_control_attached(records_listview):
-            print(f"🟩 [REFRESH_DISPLAY] records_listview NOT ATTACHED - skipping")
+            print("🟩 [REFRESH_DISPLAY] records_listview NOT ATTACHED - skipping")
             logger.debug("Records list not attached, skipping refresh")
             return
 
-        print(f"🟩 [REFRESH_DISPLAY] records_listview IS ATTACHED - clearing controls")
+        print("🟩 [REFRESH_DISPLAY] records_listview IS ATTACHED - clearing controls")
         records_listview.controls.clear()
 
         # CRITICAL: Always ensure non-empty controls to prevent gray screen
         if not filtered_records:
             # Empty state
-            print(f"🟩 [REFRESH_DISPLAY] NO RECORDS - showing empty state")
+            print("🟩 [REFRESH_DISPLAY] NO RECORDS - showing empty state")
             message = "No records found" if is_server_connected() else "Server not connected"
             records_listview.controls.append(
                 ft.Container(
@@ -615,7 +798,18 @@ def create_database_view(
 
             # Record cards
             for idx, record in enumerate(filtered_records[:MAX_VISIBLE_RECORDS]):
-                records_listview.controls.append(build_record_card(record, idx))
+                records_listview.controls.append(
+                    _build_record_card(
+                        record,
+                        idx,
+                        current_table,
+                        table_columns,
+                        is_server_connected(),
+                        stringify_value,
+                        edit_record_dialog,
+                        delete_record_dialog,
+                    )
+                )
 
             # Overflow indicator
             if len(filtered_records) > MAX_VISIBLE_RECORDS:
@@ -630,7 +824,7 @@ def create_database_view(
 
         # CRITICAL: Final validation - NEVER render empty controls (prevents gray screen)
         if not records_listview.controls:
-            print(f"🟥 [REFRESH_DISPLAY] CRITICAL: Empty controls detected, adding fallback content!")
+            print("🟥 [REFRESH_DISPLAY] CRITICAL: Empty controls detected, adding fallback content!")
             records_listview.controls.append(
                 ft.Container(
                     content=ft.Column(
@@ -649,7 +843,7 @@ def create_database_view(
 
         print(f"🟩 [REFRESH_DISPLAY] About to call records_listview.update() - controls count: {len(records_listview.controls)}")
         records_listview.update()
-        print(f"🟩 [REFRESH_DISPLAY] records_listview.update() COMPLETED")
+        print("🟩 [REFRESH_DISPLAY] records_listview.update() COMPLETED")
         _force_records_area_update()
 
     def update_bulk_actions_toolbar() -> None:
@@ -710,22 +904,26 @@ def create_database_view(
 
                 bridge = get_active_bridge()
                 if bridge is None:
-                    show_error_message(page, "Server disconnected")
+                    show_error_message(page, MSG_SERVER_DISCONNECTED)
                     return
 
                 # Delete each selected record
                 deleted_count = 0
                 failed_count = 0
+                target_ids = list(selected_row_ids)
 
-                # Define blocking operation for page.run_thread
+                # Execute blocking deletions off the UI thread
                 def delete_record_op():
-                    return bridge.delete_table_record(current_table, record_id)
+                    nonlocal deleted_count, failed_count
+                    for row_id in target_ids:
+                        result = bridge.delete_table_record(current_table, row_id)
+                        if result.get("success"):
+                            deleted_count += 1
+                        else:
+                            failed_count += 1
+                    return {"success": True}
 
-                result = await page.run_thread(delete_record_op)
-                if result.get("success"):
-                    deleted_count += 1
-                else:
-                    failed_count += 1
+                await run_sync_in_executor(delete_record_op)
 
                 # Clear selection
                 selected_row_ids.clear()
@@ -911,7 +1109,7 @@ def create_database_view(
 
                 # Create data cells with smart formatting
                 for col_name in display_columns:
-                    value = format_table_cell_value(record.get(col_name), col_name)
+                    value = _format_table_cell_value(record.get(col_name), col_name)
                     cells.append(
                         ft.DataCell(
                             ft.Text(
@@ -961,10 +1159,10 @@ def create_database_view(
 
         # CRITICAL: Final validation - DataTable MUST have columns and rows (prevents gray screen)
         if not data_table.columns:
-            print(f"🟥 [REFRESH_TABLE] CRITICAL: Empty columns detected, adding fallback!")
+            print("🟥 [REFRESH_TABLE] CRITICAL: Empty columns detected, adding fallback!")
             data_table.columns.append(ft.DataColumn(ft.Text("Error", weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR)))
         if not data_table.rows:
-            print(f"🟥 [REFRESH_TABLE] CRITICAL: Empty rows detected, adding fallback!")
+            print("🟥 [REFRESH_TABLE] CRITICAL: Empty rows detected, adding fallback!")
             data_table.rows.append(
                 ft.DataRow(cells=[ft.DataCell(ft.Text("No data available", color=ft.Colors.GREY_500))])
             )
@@ -1036,10 +1234,10 @@ def create_database_view(
 
         # Refresh the active view
         if view_mode == "cards":
-            print(f"🟨 [SEARCH_FILTER] Calling refresh_records_display()")
+            print("🟨 [SEARCH_FILTER] Calling refresh_records_display()")
             refresh_records_display()
         else:
-            print(f"🟨 [SEARCH_FILTER] Calling refresh_data_table()")
+            print("🟨 [SEARCH_FILTER] Calling refresh_data_table()")
             refresh_data_table()
 
         # Update status
@@ -1059,132 +1257,39 @@ def create_database_view(
 
     async def load_database_stats() -> None:
         """Load database statistics from server."""
-        nonlocal db_stats
-
-        if not is_server_connected():
-            db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
-            update_db_stats_ui()
-            return
-
-        try:
-            update_status("Loading database info...", ft.Colors.BLUE, True)
-            bridge = get_active_bridge()
-            if bridge is None:
-                db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
-                return
-
-            # SIMPLIFIED: Use basic client/file counts instead of complex database health checks
-            # Get simple counts without database health checks (which cause freezing)
-            # Note: get_clients() and get_files() return lists directly, not wrapped in dicts
-            def get_clients_data():
-                return bridge.get_clients()
-
-            def get_files_data():
-                return bridge.get_files()
-
-            clients_result: list[dict[str, Any]] = await page.run_thread(get_clients_data)
-            files_result: list[dict[str, Any]] = await page.run_thread(get_files_data)
-
-            client_count = len(clients_result) if clients_result else 0
-            file_count = len(files_result) if files_result else 0
-
-            db_stats = {
-                "status": "Connected",
-                "tables": 2,  # clients and files
-                "total_records": client_count + file_count,
-                "size": "N/A"  # Skip size calculation to avoid database locks
-            }
-            logger.info(f"Database stats loaded: {db_stats}")
-
-        except Exception as e:
-            logger.exception(f"Error loading database stats: {e}")
-            db_stats["status"] = f"Error: {e}"
-            db_stats["tables"] = 0
-            db_stats["total_records"] = 0
-            db_stats["size"] = "0 MB"
-
-        finally:
-            update_status("Ready", ft.Colors.GREY_400, False)
-            update_db_stats_ui()
+        await _load_database_stats_async(
+            page,
+            db_stats,
+            is_server_connected,
+            update_db_stats_ui,
+            update_status,
+            get_active_bridge,
+        )
 
     async def load_table_names() -> None:
         """Load available table names from server."""
-        nonlocal available_tables
-
-        if not is_server_connected():
-            available_tables = DEFAULT_TABLES.copy()
-            update_table_dropdown_ui()
-            return
-
-        try:
-            update_status("Loading tables...", ft.Colors.BLUE, True)
-
-            # SIMPLIFIED: Use fixed table list instead of querying database schema
-            # Querying schema can cause database locks in multi-threaded environment
-            available_tables = DEFAULT_TABLES.copy()
-            logger.info(f"Using default tables: {available_tables}")
-
-        except Exception as e:
-            logger.exception(f"Error loading table names: {e}")
-            available_tables = DEFAULT_TABLES.copy()
-
-        finally:
-            update_status("Ready", ft.Colors.GREY_400, False)
-            update_table_dropdown_ui()
+        await _load_table_names_async(
+            available_tables,
+            is_server_connected,
+            update_table_dropdown_ui,
+            update_status,
+        )
 
     async def load_table_data() -> None:
         """Load data for currently selected table."""
-        nonlocal all_records, filtered_records, table_columns
-
-        if not is_server_connected():
-            all_records = []
-            filtered_records = []
-            table_columns = []
-            refresh_records_display()
-            return
-
-        try:
-            update_status(f"Loading {current_table}...", ft.Colors.BLUE, True)
-            bridge = get_active_bridge()
-            if bridge is None:
-                all_records = []
-                table_columns = []
-                return
-
-            # CRITICAL: Use page.run_thread for sync ServerBridge method
-            def get_table_data_op():
-                return bridge.get_table_data(current_table)
-
-            print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
-            result = await page.run_thread(get_table_data_op)
-            print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
-
-            if result.get("success") and result.get("data"):
-                data = result["data"]
-                table_columns = data.get("columns", [])
-                all_records = data.get("rows", [])
-                print(f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns")
-                logger.info(f"Loaded {len(all_records)} records from {current_table}")
-            else:
-                error = result.get("error", "Unknown error")
-                print(f"🟧 [LOAD_TABLE] FAILED: {error}")
-                logger.warning(f"Failed to load table data: {error}")
-                all_records = []
-                table_columns = []
-
-        except Exception as e:
-            print(f"🟧 [LOAD_TABLE] EXCEPTION: {e}")
-            logger.exception(f"Error loading table data: {e}")
-            all_records = []
-            table_columns = []
-
-        finally:
-            print(f"🟧 [LOAD_TABLE] Finally block - applying search filter")
-            print(f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}")
-            apply_search_filter()
-            print(f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}")
-            update_status("Ready", ft.Colors.GREY_400, False)
-            _force_records_area_update()
+        await _load_table_data_async(
+            page,
+            lambda: current_table,
+            all_records,
+            table_columns,
+            filtered_records,
+            is_server_connected,
+            get_active_bridge,
+            apply_search_filter,
+            refresh_records_display,
+            update_status,
+            _force_records_area_update,
+        )
 
     # ========================================================================
     # EVENT HANDLERS
@@ -1223,14 +1328,14 @@ def create_database_view(
     def add_record_dialog(e: ft.ControlEvent) -> None:
         """Show dialog to add new record."""
         if not is_server_connected():
-            show_error_message(page, "Server not connected")
+            show_error_message(page, MSG_SERVER_NOT_CONNECTED)
             return
 
         # Get editable columns (exclude ID, auto-generated fields)
         editable_cols = [col for col in table_columns if col.lower() not in {"id", "uuid", "created_at"}]
 
         if not editable_cols:
-            show_error_message(page, "No editable columns in this table")
+            show_error_message(page, MSG_NO_EDITABLE_COLUMNS)
             return
 
         # Create input fields
@@ -1264,21 +1369,21 @@ def create_database_view(
 
                 bridge = get_active_bridge()
                 if bridge is None:
-                    show_error_message(page, "Server disconnected")
+                    show_error_message(page, MSG_SERVER_DISCONNECTED)
                     return
 
-                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                # Execute sync ServerBridge call without blocking UI thread
                 def add_record_op():
                     return bridge.add_table_record(current_table, record_data)
 
-                result = await page.run_thread(add_record_op)
+                result = await run_sync_in_executor(add_record_op)
 
                 if result.get("success"):
-                    show_success_message(page, "Record added successfully")
+                    show_success_message(page, MSG_RECORD_ADDED_SUCCESSFULLY)
                     page.close(dialog)
                     await load_table_data()
                 else:
-                    error = result.get("error", "Unknown error")
+                    error = result.get("error", MSG_UNKNOWN_ERROR)
                     show_error_message(page, f"Failed to add record: {error}")
 
             except Exception as ex:
@@ -1298,14 +1403,14 @@ def create_database_view(
     def edit_record_dialog(record: dict[str, Any]) -> None:
         """Show dialog to edit existing record."""
         if not is_server_connected():
-            show_error_message(page, "Server not connected")
+            show_error_message(page, MSG_SERVER_NOT_CONNECTED)
             return
 
         # Get editable columns
         editable_cols = [col for col in table_columns if col.lower() not in {"id", "uuid"}]
 
         if not editable_cols:
-            show_error_message(page, "No editable columns in this table")
+            show_error_message(page, MSG_NO_EDITABLE_COLUMNS)
             return
 
         # Create input fields with current values
@@ -1343,21 +1448,21 @@ def create_database_view(
 
                 bridge = get_active_bridge()
                 if bridge is None:
-                    show_error_message(page, "Server disconnected")
+                    show_error_message(page, MSG_SERVER_DISCONNECTED)
                     return
 
-                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                # Execute sync ServerBridge call without blocking UI thread
                 def update_record_op():
                     return bridge.update_table_record(current_table, updated_record)
 
-                result = await page.run_thread(update_record_op)
+                result = await run_sync_in_executor(update_record_op)
 
                 if result.get("success"):
-                    show_success_message(page, "Record updated successfully")
+                    show_success_message(page, MSG_RECORD_UPDATED_SUCCESSFULLY)
                     page.close(dialog)
                     await load_table_data()
                 else:
-                    error = result.get("error", "Unknown error")
+                    error = result.get("error", MSG_UNKNOWN_ERROR)
                     show_error_message(page, f"Failed to update record: {error}")
 
             except Exception as ex:
@@ -1377,7 +1482,7 @@ def create_database_view(
     def delete_record_dialog(record: dict[str, Any]) -> None:
         """Show confirmation dialog to delete record."""
         if not is_server_connected():
-            show_error_message(page, "Server not connected")
+            show_error_message(page, MSG_SERVER_NOT_CONNECTED)
             return
 
         record_id = record.get("id") or record.get("ID")
@@ -1400,21 +1505,21 @@ def create_database_view(
 
                 bridge = get_active_bridge()
                 if bridge is None:
-                    show_error_message(page, "Server disconnected")
+                    show_error_message(page, MSG_SERVER_DISCONNECTED)
                     return
 
-                # CRITICAL: Use page.run_thread for sync ServerBridge method
+                # Execute sync ServerBridge call without blocking UI thread
                 def delete_record_op():
                     return bridge.delete_table_record(current_table, record_id)
 
-                result = await page.run_thread(delete_record_op)
+                result = await run_sync_in_executor(delete_record_op)
 
                 if result.get("success"):
-                    show_success_message(page, "Record deleted successfully")
+                    show_success_message(page, MSG_RECORD_DELETED_SUCCESSFULLY)
                     page.close(dialog)
                     await load_table_data()
                 else:
-                    error = result.get("error", "Unknown error")
+                    error = result.get("error", MSG_UNKNOWN_ERROR)
                     show_error_message(page, f"Failed to delete record: {error}")
 
             except Exception as ex:
@@ -1442,7 +1547,7 @@ def create_database_view(
     def export_data(format_type: str) -> None:
         """Export filtered records to file."""
         if not filtered_records:
-            show_error_message(page, "No data to export")
+            show_error_message(page, MSG_NO_DATA_TO_EXPORT)
             return
 
         async def do_export() -> None:
@@ -1464,11 +1569,14 @@ def create_database_view(
                 filename = generate_export_filename(current_table, format_type)
                 filepath = os.path.join(_repo_root, filename)
 
-                # Export using shared utilities
-                if format_type == "csv":
-                    export_to_csv(export_data, filepath, fieldnames=columns)
-                else:  # json
-                    export_to_json(export_data, filepath)
+                # Export using shared utilities in background thread
+                def export_operation() -> None:
+                    if format_type == "csv":
+                        export_to_csv(export_data, filepath, fieldnames=columns)
+                    else:
+                        export_to_json(export_data, filepath)
+
+                await run_sync_in_executor(export_operation)
 
                 show_success_message(page, f"Exported {len(records_to_export)} records to {filename}")
                 logger.info(f"Exported {len(records_to_export)} records to {filepath}")
@@ -1650,14 +1758,14 @@ def create_database_view(
         """Setup function - load initial data after attachment."""
         nonlocal _setup_cancelled
 
-        print(f"🟧 [DATABASE_PRO] setup() ENTERED")
+        print("🟧 [DATABASE_PRO] setup() ENTERED")
         print(f"🟧 [DATABASE_PRO] _setup_cancelled = {_setup_cancelled}")
         logger.info("Starting database view setup")
 
         try:
             # Check cancellation before proceeding
             if _setup_cancelled:
-                print(f"🟧 [DATABASE_PRO] Setup cancelled before start, exiting")
+                print("🟧 [DATABASE_PRO] Setup cancelled before start, exiting")
                 logger.info("Setup cancelled before start")
                 return
 
@@ -1666,27 +1774,27 @@ def create_database_view(
             logger.debug(f"Waiting {SETUP_DELAY}s for control attachment...")
             await asyncio.sleep(SETUP_DELAY)
 
-            print(f"🟧 [DATABASE_PRO] Sleep completed, checking cancellation again")
+            print("🟧 [DATABASE_PRO] Sleep completed, checking cancellation again")
             if _setup_cancelled:
-                print(f"🟧 [DATABASE_PRO] Setup cancelled after delay, exiting")
+                print("🟧 [DATABASE_PRO] Setup cancelled after delay, exiting")
                 logger.info("Setup cancelled after delay")
                 return
 
             # Load data from server FIRST (before UI updates)
-            print(f"🟧 [DATABASE_PRO] About to load database stats")
+            print("🟧 [DATABASE_PRO] About to load database stats")
             logger.debug("Loading database stats...")
             await load_database_stats()
 
-            print(f"🟧 [DATABASE_PRO] About to load table names")
+            print("🟧 [DATABASE_PRO] About to load table names")
             logger.debug("Loading table names...")
             await load_table_names()
 
-            print(f"🟧 [DATABASE_PRO] About to load table data")
+            print("🟧 [DATABASE_PRO] About to load table data")
             logger.debug("Loading table data...")
             await load_table_data()
 
             # THEN update UI with loaded data
-            print(f"🟧 [DATABASE_PRO] Data loaded, now updating UI")
+            print("🟧 [DATABASE_PRO] Data loaded, now updating UI")
             logger.debug("Updating UI with loaded data...")
             update_table_dropdown_ui()
             update_db_stats_ui()
@@ -1702,12 +1810,12 @@ def create_database_view(
             if is_control_attached(views_switcher):
                 views_switcher.update()
 
-            print(f"🟧 [DATABASE_PRO] All data loaded and UI updated successfully!")
+            print("🟧 [DATABASE_PRO] All data loaded and UI updated successfully!")
             logger.info("Database view setup completed successfully")
             _force_records_area_update()
 
         except asyncio.CancelledError:
-            print(f"🟧 [DATABASE_PRO] Setup was CANCELLED (CancelledError)")
+            print("🟧 [DATABASE_PRO] Setup was CANCELLED (CancelledError)")
             logger.info("Setup cancelled via CancelledError")
             raise
 
@@ -1738,7 +1846,7 @@ def create_database_view(
     # ========================================================================
 
     logger.info("Database view creation completed")
-    print(f"🟧 [DATABASE_PRO] About to return tuple")
+    print("🟧 [DATABASE_PRO] About to return tuple")
     print(f"🟧 [DATABASE_PRO] main_container type: {type(main_container)}")
     print(f"🟧 [DATABASE_PRO] dispose callable: {callable(dispose)}")
     print(f"🟧 [DATABASE_PRO] setup callable: {callable(setup)}")
