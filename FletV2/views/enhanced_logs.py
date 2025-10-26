@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import sys
+from concurrent.futures import Future
 from datetime import datetime
 from typing import Any, Callable, Coroutine, Iterable
 
@@ -202,19 +203,18 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
     if not stats["total"]:
         return ft.Container()
 
-    badges = []
-    for level, count in stats["by_level"].items():
-        badges.append(
-            ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.PRIMARY),
-                    ft.Text(f"{level}: {count}", size=12),
-                ], spacing=6),
-                padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                border_radius=8,
-                bgcolor=ft.Colors.SURFACE,
-            )
+    badges = [
+        ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.PRIMARY),
+                ft.Text(f"{level}: {count}", size=12),
+            ], spacing=6),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=8,
+            bgcolor=ft.Colors.SURFACE,
         )
+        for level, count in stats["by_level"].items()
+    ]
 
     return ft.Container(
         content=ft.Row([
@@ -229,10 +229,10 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
 
 
 def _render_log_controls(logs: list[dict[str, Any]], search_query: str, page: ft.Page) -> list[ft.Control]:
-    controls: list[ft.Control] = []
-    for index, entry in enumerate(logs):
-        controls.append(LogCard(entry, index=index, search_query=search_query, page=page))
-    return controls
+    return [
+        LogCard(entry, index=index, search_query=search_query, page=page)
+        for index, entry in enumerate(logs)
+    ]
 
 
 # ============================================================================
@@ -335,6 +335,11 @@ def _create_event_handlers(
 ]:
     """Create and return all event handlers."""
 
+    def _safe_control_update(control: ft.Control | None) -> None:
+        if control and getattr(control, "page", None):
+            with contextlib.suppress(Exception):
+                control.update()
+
     def apply_filters_and_render() -> None:
         combined = list(state["server_logs"])
         if state["include_app_logs"]:
@@ -371,10 +376,10 @@ def _create_event_handlers(
             last_refresh_text.value = "Last refresh: ?"
 
         # Batch update all controls to minimize redraw operations
-        log_list_container.update()
-        stats_container.update()
-        level_filter.update()
-        last_refresh_text.update()
+        _safe_control_update(log_list_container)
+        _safe_control_update(stats_container)
+        _safe_control_update(level_filter)
+        _safe_control_update(last_refresh_text)
 
     def handle_search(query: str) -> None:
         state["search_query"] = query
@@ -398,81 +403,225 @@ def _create_event_handlers(
 # SECTION 5: MAIN VIEW FACTORY
 # ============================================================================
 
-def create_logs_view(  # noqa: PLR0915
-    server_bridge: Any | None,
-    page: ft.Page,
-    _state_manager: StateManager | None = None,
-) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+# sourcery skip: high-cognitive-complexity
 
-    # Initialize state
-    state = {
-        "server_logs": [],
-        "app_logs": [],
-        "filtered_logs": [],
-        "search_query": "",
-        "selected_level": "All",
-        "available_levels": [],
-        "include_app_logs": bool(_flet_log_capture),
-        "stats": {"total": 0, "by_level": {}},
-        "last_refresh": None,
-    }
 
-    # Create UI components
-    log_list_container = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
-    stats_container = ft.Container(expand=False)
-    error_container = ft.Container(visible=False)
-    level_filter = _create_level_filter()
-    include_switch = ft.Switch(label="Include app logs", value=state["include_app_logs"])
-    last_refresh_text = ft.Text("Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-    loading_overlay = ft.Container(
-        content=create_loading_indicator("Loading logs…"),
-        visible=False,
-        alignment=ft.alignment.center,
-        expand=True,
-    )
+class _LogsViewController:
+    def __init__(self, server_bridge: Any | None, page: ft.Page) -> None:
+        self.server_bridge = server_bridge
+        self.page = page
+        self.state = {
+            "server_logs": [],
+            "app_logs": [],
+            "filtered_logs": [],
+            "search_query": "",
+            "selected_level": "All",
+            "available_levels": [],
+            "include_app_logs": bool(_flet_log_capture),
+            "stats": {"total": 0, "by_level": {}},
+            "last_refresh": None,
+        }
 
-    # Create event handlers
-    handle_search, handle_level_change, handle_include_toggle, handle_refresh = _create_event_handlers(
-        page, state, log_list_container, stats_container, level_filter, last_refresh_text
-    )
+        self.disposed = False
+        self.background_tasks: set[Any] = set()
 
-    async def handle_search_async(query: str) -> None:
+        # UI components
+        self.log_list_container = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
+        self.stats_container = ft.Container(expand=False)
+        self.error_container = ft.Container(visible=False)
+        self.level_filter = _create_level_filter()
+        self.include_switch = ft.Switch(label="Include app logs", value=self.state["include_app_logs"])
+        self.last_refresh_text = ft.Text("Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.loading_overlay = ft.Container(
+            content=create_loading_indicator("Loading logs…"),
+            visible=False,
+            alignment=ft.alignment.center,
+            expand=True,
+        )
+
+        (
+            self.handle_search,
+            self.handle_level_change,
+            self.handle_include_toggle,
+            self.handle_refresh,
+        ) = _create_event_handlers(
+            page,
+            self.state,
+            self.log_list_container,
+            self.stats_container,
+            self.level_filter,
+            self.last_refresh_text,
+        )
+
+        self.debounced_search = debounce(0.4)(self._handle_search_async)
+
+        # Wire events
+        self.level_filter.on_change = self._on_level_change
+        self.include_switch.on_change = self._on_include_change
+
+        self.filters_layout = _create_filter_controls(
+            self.level_filter,
+            self.include_switch,
+            self.last_refresh_text,
+            self._on_search_change,
+            self._on_refresh,
+        )
+
+        self.stats_section = AppCard(self.stats_container, title="Summary")
+        self.filter_actions = _create_export_actions(self._handle_export)
+        self.filter_section = AppCard(self.filters_layout, title="Filters", actions=self.filter_actions)
+        self.logs_section = AppCard(self.log_list_container, title="Log entries")
+        self.logs_section.expand = True
+
+        self.header = create_view_header(
+            "Logs",
+            icon=ft.Icons.RECEIPT_LONG,
+            description="Inspect server and GUI diagnostics.",
+            actions=[create_action_button("Refresh", self._on_refresh, icon=ft.Icons.REFRESH)],
+        )
+
+        content_column = _create_main_content(
+            self.header,
+            self.stats_section,
+            self.filter_section,
+            self.error_container,
+            self.logs_section,
+        )
+
+        main_layout = ft.Container(
+            content=content_column,
+            padding=ft.padding.symmetric(horizontal=20, vertical=16),
+            expand=True,
+        )
+
+        self.content_stack = ft.Stack([main_layout, self.loading_overlay], expand=True)
+
+    # ------------------------------------------------------------------
+    # Internal utilities
+    # ------------------------------------------------------------------
+
+    def _safe_update(self, control: ft.Control | None) -> None:
+        if self.disposed or not control:
+            return
+        if getattr(control, "page", None):
+            with contextlib.suppress(Exception):
+                control.update()
+
+    async def _handle_search_async(self, query: str) -> None:
         await asyncio.sleep(0)
-        handle_search(query)
+        self.handle_search(query)
 
-    async def refresh_logs(initial: bool = False, toast: bool = False) -> None:
-        error_container.visible = False
-        loading_overlay.visible = True
-        error_container.update()
-        loading_overlay.update()
+    async def _execute_task_source(self, task_source: Any) -> None:
+        if inspect.isawaitable(task_source):
+            await task_source
+            return
+
+        if callable(task_source):
+            result = task_source()
+            if inspect.isawaitable(result):
+                await result
+
+    async def _run_task(self, task_source: Any) -> None:
+        if self.disposed:
+            return
+        try:
+            await self._execute_task_source(task_source)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Logs background task failed")
+
+    def _schedule_task(self, task_source: Any) -> None:
+        if self.disposed:
+            return
+
+        async def runner() -> None:
+            await self._run_task(task_source)
+
+        scheduled: asyncio.Task[Any] | Future[Any] | None = None
 
         try:
-            server_task = fetch_server_logs_async(server_bridge, page)
-            app_task = fetch_app_logs_async(page)
+            if hasattr(self.page, "run_task"):
+                scheduled = self.page.run_task(runner)
+            else:
+                scheduled = asyncio.create_task(runner())
+        except AssertionError:
+            scheduled = asyncio.create_task(runner())
+        except RuntimeError as exc:
+            message = str(exc).lower()
+            if "shutdown" in message or "closed" in message:
+                logger.debug("Skipping log task scheduling after loop shutdown: %s", exc)
+                return
+            raise
+
+        if scheduled is None:
+            return
+
+        self.background_tasks.add(scheduled)
+
+        def _cleanup(fut: Any) -> None:
+            self.background_tasks.discard(fut)
+
+        scheduled.add_done_callback(_cleanup)
+
+    # ------------------------------------------------------------------
+    # Event bridges
+    # ------------------------------------------------------------------
+
+    def _on_search_change(self, event: ft.ControlEvent) -> None:
+        self._schedule_task(lambda: self.debounced_search(event.control.value or ""))
+
+    def _on_level_change(self, event: ft.ControlEvent) -> None:
+        self._schedule_task(lambda: self.handle_level_change(event.control.value))
+
+    def _on_include_change(self, event: ft.ControlEvent) -> None:
+        self._schedule_task(lambda: self.handle_include_toggle(bool(event.control.value)))
+
+    def _on_refresh(self, _event: ft.ControlEvent | None = None) -> None:
+        self._schedule_task(lambda: self.refresh_logs(toast=True))
+
+    # ------------------------------------------------------------------
+    # Core operations
+    # ------------------------------------------------------------------
+
+    async def refresh_logs(self, initial: bool = False, toast: bool = False) -> None:
+        if self.disposed:
+            return
+
+        self.error_container.visible = False
+        self.loading_overlay.visible = True
+        self._safe_update(self.error_container)
+        self._safe_update(self.loading_overlay)
+
+        try:
+            server_task = fetch_server_logs_async(self.server_bridge, self.page)
+            app_task = fetch_app_logs_async(self.page)
             server_logs, app_logs = await asyncio.gather(server_task, app_task)
 
-            state["server_logs"] = server_logs
-            state["app_logs"] = app_logs
-            state["last_refresh"] = datetime.now()
+            self.state["server_logs"] = server_logs
+            self.state["app_logs"] = app_logs
+            self.state["last_refresh"] = datetime.now()
 
-            handle_refresh()
+            self.handle_refresh()
 
             if toast and not initial:
-                show_success_message(page, "Logs refreshed")
+                show_success_message(self.page, "Logs refreshed")
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:  # pragma: no cover - defensive UI feedback
             logger.exception("Failed to refresh logs")
-            error_container.content = AppCard(create_error_display(str(exc)), title="Error")
-            error_container.visible = True
-            error_container.update()
-            show_error_message(page, f"Failed to refresh logs: {exc}")
+            self.error_container.content = AppCard(create_error_display(str(exc)), title="Error")
+            self.error_container.visible = True
+            self._safe_update(self.error_container)
+            show_error_message(self.page, f"Failed to refresh logs: {exc}")
         finally:
-            loading_overlay.visible = False
-            loading_overlay.update()
+            self.loading_overlay.visible = False
+            self._safe_update(self.loading_overlay)
 
-    def handle_export(format_type: str) -> None:
-        logs = state["filtered_logs"]
+    def _handle_export(self, format_type: str) -> None:
+        logs = self.state["filtered_logs"]
         if not logs:
-            show_error_message(page, "No logs to export")
+            show_error_message(self.page, "No logs to export")
             return
 
         filename = generate_export_filename("logs", format_type)
@@ -483,76 +632,43 @@ def create_logs_view(  # noqa: PLR0915
                 export_to_json(logs, filename)
             else:
                 raise ValueError(f"Unsupported export format: {format_type}")
-            show_success_message(page, f"Exported {len(logs)} logs to {filename}")
+            show_success_message(self.page, f"Exported {len(logs)} logs to {filename}")
         except Exception as exc:  # pragma: no cover - defensive UI feedback
-            show_error_message(page, f"Export failed: {exc}")
+            show_error_message(self.page, f"Export failed: {exc}")
 
-    # Schedule task helper
-    def schedule_task(task: Any) -> None:
-        async def runner() -> None:
-            if inspect.isawaitable(task):
-                await task
-                return
-            result = task()
-            if inspect.isawaitable(result):
-                await result
+    # ------------------------------------------------------------------
+    # Lifecycle hooks
+    # ------------------------------------------------------------------
 
-        if hasattr(page, "run_task"):
-            page.run_task(runner)
-        else:
-            asyncio.get_event_loop().create_task(runner())
+    def dispose(self) -> None:
+        if self.disposed:
+            return
+        self.disposed = True
+        with contextlib.suppress(AttributeError):
+            self.level_filter.on_change = None
+        with contextlib.suppress(AttributeError):
+            self.include_switch.on_change = None
 
-    # Debounce search
-    debounced_search = debounce(0.4)(handle_search_async)
+        for task in tuple(self.background_tasks):
+            if hasattr(task, "cancel") and not task.done():
+                task.cancel()
+        self.background_tasks.clear()
 
-    # Event handlers
-    def on_search_change(event: ft.ControlEvent) -> None:
-        schedule_task(debounced_search(event.control.value or ""))
+    async def setup(self) -> None:
+        await self.refresh_logs(initial=True)
 
-    def on_level_change(event: ft.ControlEvent) -> None:
-        schedule_task(handle_level_change(event.control.value))
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-    def on_include_change(event: ft.ControlEvent) -> None:
-        schedule_task(handle_include_toggle(bool(event.control.value)))
+    def build(self) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+        return self.content_stack, self.dispose, self.setup
 
-    def on_refresh(event: ft.ControlEvent) -> None:
-        schedule_task(lambda: refresh_logs(toast=True))
 
-    # Set up component event handlers
-    level_filter.on_change = on_level_change
-    include_switch.on_change = on_include_change
-
-    # Create filter controls layout
-    filters_layout = _create_filter_controls(
-        level_filter, include_switch, last_refresh_text,
-        on_search_change, on_refresh
-    )
-
-    # Create sections
-    stats_section = AppCard(stats_container, title="Summary")
-    filter_actions = _create_export_actions(handle_export)
-    filter_section = AppCard(filters_layout, title="Filters", actions=filter_actions)
-    logs_section = AppCard(log_list_container, title="Log entries")
-    logs_section.expand = True
-
-    header = create_view_header(
-        "Logs",
-        icon=ft.Icons.RECEIPT_LONG,
-        description="Inspect server and GUI diagnostics.",
-        actions=[create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH)],
-    )
-
-    content_column = _create_main_content(header, stats_section, filter_section, error_container, logs_section)
-
-    main_layout = ft.Container(
-        content=content_column,
-        padding=ft.padding.symmetric(horizontal=20, vertical=16),
-        expand=True,
-    )
-
-    content_stack = ft.Stack([main_layout, loading_overlay], expand=True)
-
-    async def setup() -> None:
-        await refresh_logs(initial=True)
-
-    return content_stack, (lambda: None), setup
+def create_logs_view(
+    server_bridge: Any | None,
+    page: ft.Page,
+    _state_manager: StateManager | None = None,
+) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+    controller = _LogsViewController(server_bridge, page)
+    return controller.build()

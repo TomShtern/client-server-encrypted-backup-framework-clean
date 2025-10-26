@@ -15,6 +15,7 @@ Kept functions:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any, TypeVar
@@ -49,12 +50,19 @@ async def run_sync_in_executor(func: Callable[..., T], *args: Any, **kwargs: Any
     """
     loop = asyncio.get_running_loop()
 
-    if kwargs:
-        def _wrapper() -> T:
-            return func(*args, **kwargs)
-        return await loop.run_in_executor(None, _wrapper)
+    try:
+        if kwargs:
+            def _wrapper() -> T:
+                return func(*args, **kwargs)
+            return await loop.run_in_executor(None, _wrapper)
 
-    return await loop.run_in_executor(None, func, *args)
+        return await loop.run_in_executor(None, func, *args)
+
+    except RuntimeError as exc:
+        message = str(exc)
+        if "cannot schedule new futures after shutdown" in message or "Event loop is closed" in message:
+            raise asyncio.CancelledError(message) from exc
+        raise
 
 
 def safe_server_call(server_bridge, method_name: str, *args, **kwargs) -> dict:
@@ -135,10 +143,8 @@ def debounce(wait: float):
             # Cancel any pending execution
             if pending_task and not pending_task.done():
                 pending_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await pending_task
-                except asyncio.CancelledError:
-                    pass  # Expected when we cancel
 
             # Schedule new execution after delay
             async def delayed_execution():

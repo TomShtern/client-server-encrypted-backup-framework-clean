@@ -430,6 +430,7 @@ def create_dashboard_view(
     snapshot_ref: DashboardSnapshot | None = None
     disposed = False
     refresh_lock = asyncio.Lock()
+    background_tasks: set[asyncio.Task[Any]] = set()
     # Fallback uptime tracking when server reports 0 but direct bridge is active
     fallback_uptime_start: float | None = None
     # Do not modify page.scroll; keep page-level scroll behavior unchanged
@@ -558,10 +559,23 @@ def create_dashboard_view(
 
     # Loading indicator for dashboard refresh
     loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
+    loading_indicator_slot = ft.Container(
+        content=loading_ring,
+        width=24,
+        height=24,
+        alignment=ft.alignment.center,
+    )
+
+    refresh_button = create_action_button("Refresh", None, icon=ft.Icons.REFRESH)
+    export_button = create_action_button("Export activity", None, icon=ft.Icons.DOWNLOAD, primary=False)
 
     header_actions = [
-        create_action_button("Refresh", None, icon=ft.Icons.REFRESH),
-        create_action_button("Export activity", None, icon=ft.Icons.DOWNLOAD, primary=False),
+        ft.Row(
+            [loading_indicator_slot, refresh_button],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        export_button,
     ]
 
     header = ft.Column(
@@ -717,9 +731,41 @@ def create_dashboard_view(
             if getattr(control, "page", None):
                 control.update()
 
+    def _register_task(task: asyncio.Task[Any] | None) -> asyncio.Task[Any] | None:
+        if not task:
+            return None
+
+        background_tasks.add(task)
+
+        def _cleanup(completed: asyncio.Task[Any]) -> None:
+            background_tasks.discard(completed)
+            if os.environ.get("FLET_DASHBOARD_DEBUG") == "1" and not completed.cancelled():
+                with contextlib.suppress(Exception):
+                    exc = completed.exception()
+                    if exc:
+                        print(f"[DASH] Background task finished with error: {exc}")
+
+        task.add_done_callback(_cleanup)
+        return task
+
+    def _schedule_task(coro_func: Callable[[], Coroutine[Any, Any, Any]]) -> asyncio.Task[Any] | None:
+        if disposed:
+            return None
+        return _register_task(page.run_task(coro_func))
+
     async def _set_loading_visible(visible: bool) -> None:
         """Toggle the dashboard loading indicator without risking attachment errors."""
+        if disposed:
+            return
+
+        if getattr(loading_ring, "visible", None) == visible:
+            return
+
         loading_ring.visible = visible
+
+        if not getattr(loading_ring, "page", None):
+            return
+
         await asyncio.sleep(0)
         _safe_update(loading_ring)
 
@@ -930,7 +976,7 @@ def create_dashboard_view(
             finally:
                 await _set_loading_visible(False)
 
-        page.run_task(refresh_with_loading)
+        _schedule_task(refresh_with_loading)
 
     def _on_export(_: ft.ControlEvent) -> None:
         if disposed:
@@ -970,10 +1016,10 @@ def create_dashboard_view(
             finally:
                 await _set_loading_visible(False)
 
-        page.run_task(export_with_loading)
+        _schedule_task(export_with_loading)
 
-    header_actions[0].on_click = _on_refresh
-    header_actions[1].on_click = _on_export
+    refresh_button.on_click = _on_refresh
+    export_button.on_click = _on_export
 
     def _open_activity_details(entry: dict[str, Any]) -> None:
         pretty = json.dumps(entry, indent=2, default=str)
@@ -1130,18 +1176,31 @@ def create_dashboard_view(
             with contextlib.suppress(Exception):
                 activity_list.update()
 
-    auto_refresh_task: asyncio.Task | None = None
+    auto_refresh_task: asyncio.Task[Any] | None = None
     stop_event = asyncio.Event()
 
     async def _auto_refresh_loop() -> None:
-        while not stop_event.is_set():
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=45)
-            except asyncio.TimeoutError:
-                if not stop_event.is_set():
+        DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
+        try:
+            while not stop_event.is_set():
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=45)
+                except asyncio.TimeoutError:
+                    if disposed or stop_event.is_set():
+                        continue
+                    if DEBUG:
+                        print("[DASH] _auto_refresh_loop → triggering periodic refresh")
                     await _refresh()
+        except asyncio.CancelledError:
+            if DEBUG:
+                print("[DASH] _auto_refresh_loop cancelled")
+            raise
+        except Exception as exc:  # pragma: no cover - defensive guard
+            if DEBUG:
+                print(f"[DASH] _auto_refresh_loop error: {exc}")
 
     async def setup() -> None:
+        nonlocal auto_refresh_task
         DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
         # CRITICAL: Wait for CanvasKit to fully render controls before updating them
         # Flet 0.28.3 requires delay for proper control attachment
@@ -1153,19 +1212,18 @@ def create_dashboard_view(
             # Start progressive loading with page.run_task to avoid blocking UI
             if DEBUG:
                 print("[DASH] setup → scheduling _start_progressive_loading")
-            page.run_task(_start_progressive_loading)
+            _schedule_task(_start_progressive_loading)
 
         if not disposed:
-            nonlocal auto_refresh_task
             if DEBUG:
                 print("[DASH] setup → scheduling _auto_refresh_loop")
-            auto_refresh_task = page.run_task(_auto_refresh_loop)
+            auto_refresh_task = _schedule_task(_auto_refresh_loop)
 
         # Proactively force an initial full refresh to populate all sections
         if not disposed:
             if DEBUG:
                 print("[DASH] setup → scheduling initial _refresh")
-            page.run_task(_refresh)
+            _schedule_task(_refresh)
 
     async def _start_progressive_loading() -> None:
         DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
@@ -1323,11 +1381,16 @@ def create_dashboard_view(
             print(f"Failed to load activity data: {e}")
 
     def dispose() -> None:
-        nonlocal disposed
+        nonlocal disposed, auto_refresh_task
         disposed = True
         stop_event.set()
+        for task in list(background_tasks):
+            if not task.done():
+                task.cancel()
+        background_tasks.clear()
         if auto_refresh_task and not auto_refresh_task.done():
             auto_refresh_task.cancel()
+        auto_refresh_task = None
 
     # ============================================================================
     # SECTION 2.5: AGGRESSIVE VISIBILITY FIXES

@@ -72,7 +72,7 @@ def stringify_value(value: Any) -> str:
         return ""
     if isinstance(value, (bytes, bytearray)):
         hex_str = value.hex()
-        return hex_str[:32] + "..." if len(hex_str) > 32 else hex_str
+        return f"{hex_str[:32]}..." if len(hex_str) > 32 else hex_str
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -136,7 +136,6 @@ def _format_table_cell_value(value: Any, col_name: str) -> str:
 
 
 def _load_database_stats_async(
-    page: ft.Page,
     current_db_stats: dict,
     is_server_connected_fn: Callable[[], bool],
     update_db_stats_ui_fn: Callable[[], None],
@@ -148,7 +147,13 @@ def _load_database_stats_async(
         nonlocal current_db_stats
 
         if not is_server_connected_fn():
-            current_db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
+            current_db_stats.clear()
+            current_db_stats.update({
+                "status": "Disconnected",
+                "tables": 0,
+                "total_records": 0,
+                "size": "0 MB",
+            })
             update_db_stats_ui_fn()
             return
 
@@ -156,7 +161,13 @@ def _load_database_stats_async(
             update_status_fn("Loading database info...", ft.Colors.BLUE, True)
             bridge = get_active_bridge_fn()
             if bridge is None:
-                current_db_stats = {"status": "Disconnected", "tables": 0, "total_records": 0, "size": "0 MB"}
+                current_db_stats.clear()
+                current_db_stats.update({
+                    "status": "Disconnected",
+                    "tables": 0,
+                    "total_records": 0,
+                    "size": "0 MB",
+                })
                 return
 
             # SIMPLIFIED: Use basic client/file counts instead of complex database health checks
@@ -174,12 +185,13 @@ def _load_database_stats_async(
             client_count = len(clients_result) if clients_result else 0
             file_count = len(files_result) if files_result else 0
 
-            current_db_stats = {
+            current_db_stats.clear()
+            current_db_stats.update({
                 "status": "Connected",
                 "tables": 2,  # clients and files
                 "total_records": client_count + file_count,
-                "size": "N/A"  # Skip size calculation to avoid database locks
-            }
+                "size": "N/A",  # Skip size calculation to avoid database locks
+            })
             logger.info(f"Database stats loaded: {current_db_stats}")
 
         except Exception as e:
@@ -204,6 +216,7 @@ def _load_table_names_async(
 ) -> asyncio.Task:
     """Load available table names from server."""
     async def load_tables():
+        await asyncio.sleep(0)
         nonlocal current_available_tables
 
         if not is_server_connected_fn():
@@ -231,7 +244,6 @@ def _load_table_names_async(
 
 
 def _load_table_data_async(
-    page: ft.Page,
     current_table_fn: Callable[[], str],
     all_records: list,
     table_columns: list,
@@ -1095,7 +1107,6 @@ def create_database_view(
 
             # Calculate pagination
             total_records = len(filtered_records)
-            total_pages = (total_records + records_per_page - 1) // records_per_page
             start_idx = current_page * records_per_page
             end_idx = min(start_idx + records_per_page, total_records)
             page_records = filtered_records[start_idx:end_idx]
@@ -1258,7 +1269,6 @@ def create_database_view(
     async def load_database_stats() -> None:
         """Load database statistics from server."""
         await _load_database_stats_async(
-            page,
             db_stats,
             is_server_connected,
             update_db_stats_ui,
@@ -1278,7 +1288,6 @@ def create_database_view(
     async def load_table_data() -> None:
         """Load data for currently selected table."""
         await _load_table_data_async(
-            page,
             lambda: current_table,
             all_records,
             table_columns,
