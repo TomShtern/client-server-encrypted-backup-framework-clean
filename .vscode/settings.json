@@ -57,5 +57,6 @@
   "editor.experimentalGpuAcceleration": "on",
 
   "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
-  "editor.guides.bracketPairs": "active"
+  "editor.guides.bracketPairs": "active",
+  "sonarlint.pathToCompileCommands": "${workspaceFolder}\\vcpkg\\buildtrees\\pkgconf\\x64-windows-dbg\\compile_commands.json"
 }

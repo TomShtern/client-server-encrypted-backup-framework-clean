@@ -404,15 +404,12 @@ class FletV2App(ft.Row):
         logger.info(f"Final server bridge configuration: {bridge_type}")
         logger.info(f"Real server available: {real_server_available}")
 
-        # Initialize state manager for reactive UI updates - after server bridge is ready
+        # ✅ PHASE 1.1 COMPLETED: StateManager eliminated (1,036 lines → 0 lines)
+        # Replaced complex reactive system with simple Flet-native patterns
+        # Framework harmony achieved - no circular import issues
         if _VERBOSE_DIAGNOSTICS:
-            logger.debug("About to initialize state manager")
-        # TEMPORARILY DISABLED: State manager causes circular import with dashboard module
-        # self._initialize_state_manager()
-        self.state_manager = None  # Disable state manager for now
-        if _VERBOSE_DIAGNOSTICS:
-            logger.debug("State manager disabled (circular import fix)")
-        self._profile_mark('state_manager:initialized')
+            logger.debug("State manager eliminated - using simple Flet patterns")
+        self._profile_mark('state_manager:eliminated')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
         self._current_view_dispose: Callable[[], None] | None = None
@@ -581,13 +578,8 @@ class FletV2App(ft.Row):
             # Clear loaded views
             self._loaded_views.clear()
 
-            # Cleanup state manager
-            if self.state_manager and hasattr(self.state_manager, 'cleanup'):
-                try:
-                    self.state_manager.cleanup()
-                    logger.debug("State manager cleaned up")
-                except Exception as e:
-                    logger.warning(f"Error cleaning up state manager: {e}")
+            # ✅ ELIMINATED: StateManager cleanup - no longer needed
+            # Simple state patterns are self-cleaning and framework-native
 
             logger.info("✅ FletV2App resources disposed successfully")
         except Exception as e:
@@ -656,11 +648,18 @@ class FletV2App(ft.Row):
         if _VERBOSE_NAV_LOGS:
             logger.debug("Completed navigation to %s", view_name)
 
-    def _create_navigation_rail(self) -> ft.Container:
-        """Create collapsible navigation rail with premium neumorphic design (40-45% intensity)."""
-        from theme import GLASS_MODERATE, PRONOUNCED_NEUMORPHIC_SHADOWS
+    def _create_navigation_rail(self) -> ft.NavigationRail:
+        """Create native navigation rail using Flet's built-in features.
 
+        Simplified from ~180 lines to ~90 lines by:
+        - Using ft.NavigationRail directly (no container wrapper)
+        - Native extended property (no custom width management)
+        - Built-in animation (no custom animate property)
+        - Standard styling (no manual shadows/borders)
+        - Framework-harmonious patterns (work WITH Flet, not against it)
+        """
         def on_nav_change(e: ft.ControlEvent) -> None:
+            """Handle navigation changes using Flet's native on_change."""
             try:
                 selected_index = e.control.selected_index
                 view_names = [
@@ -673,167 +672,99 @@ class FletV2App(ft.Row):
             except Exception as nav_error:
                 logger.error(f"Navigation error: {nav_error}")
 
-        def toggle_rail(e):
-            """Toggle navigation rail collapse state with smooth animation."""
+        def toggle_rail(e: ft.ControlEvent) -> None:
+            """Toggle rail using Flet's native extended property."""
             try:
                 self.nav_rail_extended = not self.nav_rail_extended
                 rail.extended = self.nav_rail_extended
 
-                # Update toggle button icon (access nested IconButton inside container)
-                toggle_button_inner = toggle_button_container.content
-                toggle_button_inner.icon = ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU
-                tooltip_text = "Collapse sidebar" if self.nav_rail_extended else "Expand sidebar"
-                toggle_button_inner.tooltip = tooltip_text
+                # Update toggle button icon
+                rail.leading.icon = ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU
+                rail.leading.tooltip = "Collapse sidebar" if self.nav_rail_extended else "Expand sidebar"
 
-                # Animate container width change
-                nav_container.width = 200 if self.nav_rail_extended else 100
-
-                # Update everything
-                nav_container.update()
-                toggle_button_container.update()
                 rail.update()
-
                 state_text = 'expanded' if self.nav_rail_extended else 'collapsed'
                 logger.info(f"Navigation rail {state_text}")
             except Exception as toggle_error:
                 logger.error(f"Toggle rail error: {toggle_error}")
 
-        # REDESIGNED: Slim, modern navigation rail with clean visual hierarchy
+        # Native NavigationRail - let Flet handle the complexity
         rail = ft.NavigationRail(
             selected_index=0,
             label_type=ft.NavigationRailLabelType.ALL,
-            # MODERNIZED: Sleeker widths for contemporary look
-            min_width=70,
-            min_extended_width=160,
-            group_alignment=-0.9,  # Tighter alignment for better use of space
+            extended=self.nav_rail_extended,
+            on_change=on_nav_change,
+            # Flet manages width automatically when extended=True/False
+            min_width=56,
+            min_extended_width=168,
             destinations=[
                 ft.NavigationRailDestination(
                     icon=ft.Icons.DASHBOARD_OUTLINED,
                     selected_icon=ft.Icons.DASHBOARD,
-                    label="Dashboard",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Dashboard"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.PEOPLE_OUTLINED,
                     selected_icon=ft.Icons.PEOPLE,
-                    label="Clients",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Clients"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.FOLDER_OUTLINED,
                     selected_icon=ft.Icons.FOLDER,
-                    label="Files",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Files"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.STORAGE_OUTLINED,
                     selected_icon=ft.Icons.STORAGE,
-                    label="Database",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Database"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.ANALYTICS_OUTLINED,
                     selected_icon=ft.Icons.ANALYTICS,
-                    label="Analytics",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Analytics"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.LIST_ALT_OUTLINED,
                     selected_icon=ft.Icons.LIST_ALT,
-                    label="Logs",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Logs"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
-                    label="Settings",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Settings"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SCIENCE_OUTLINED,
                     selected_icon=ft.Icons.SCIENCE,
-                    label="Experimental",
-                    padding=ft.Padding(8, 8, 8, 8)
+                    label="Experimental"
                 ),
             ],
-            on_change=on_nav_change,
-            extended=self.nav_rail_extended,
-            # ENHANCED: Premium neumorphic styling (40-45% intensity)
+            # Enhanced theme integration using native Flet styling
             bgcolor=ft.Colors.SURFACE,
-            # Pronounced selection indicator with inset neumorphic effect
-            indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),  # Increased from 0.12
-            indicator_shape=ft.RoundedRectangleBorder(radius=14),  # Increased from 12
+            indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),
+            indicator_shape=ft.RoundedRectangleBorder(radius=12),
             selected_label_text_style=ft.TextStyle(
                 size=13,
-                weight=ft.FontWeight.W_700,  # Increased from W_600
-                color=ft.Colors.PRIMARY,
-                letter_spacing=0.3  # Increased from 0.2
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.PRIMARY
             ),
             unselected_label_text_style=ft.TextStyle(
                 size=12,
-                weight=ft.FontWeight.W_500,  # Increased from W_400
-                color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE),  # Reduced from 0.65
-                letter_spacing=0.15  # Increased from 0.1
+                weight=ft.FontWeight.W_400,
+                color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
             ),
-        )
-
-        # Store rail control reference for programmatic navigation
-        self._nav_rail_control = rail
-
-        # MODERNIZED: Slim toggle button with subtle styling
-        toggle_button_container = ft.Container(
-            content=ft.IconButton(
+            # Native leading area for toggle button
+            leading=ft.IconButton(
                 icon=ft.Icons.MENU_OPEN if self.nav_rail_extended else ft.Icons.MENU,
-                icon_size=20,
-                icon_color=ft.Colors.PRIMARY,
                 tooltip="Collapse sidebar" if self.nav_rail_extended else "Expand sidebar",
                 on_click=toggle_rail,
-                style=ft.ButtonStyle(
-                    shape=ft.RoundedRectangleBorder(radius=10),
-                    padding=ft.Padding(8, 8, 8, 8),
-                    bgcolor=ft.Colors.SURFACE,  # Match container surface
-                )
-            ),
-            bgcolor=ft.Colors.SURFACE,
-            border_radius=12,
-            padding=2,
-            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE))
+                icon_color=ft.Colors.PRIMARY
+            )
         )
 
-        # MODERNIZED: Slim, contemporary navigation container
-        nav_container = ft.Container(
-            content=ft.Column([
-                # Toggle button at top - no wrapper padding to eliminate gray artifact
-                ft.Container(
-                    content=toggle_button_container,
-                    padding=ft.Padding(10, 8, 10, 8),  # Minimal symmetric padding
-                    alignment=ft.alignment.center,
-                    bgcolor=None  # Transparent - no background
-                ),
-                # Navigation rail (no divider for cleaner look)
-                ft.Container(
-                    content=rail,
-                    expand=True
-                )
-            ], spacing=0, expand=True),
-            width=200 if self.nav_rail_extended else 100,
-            # MODERNIZED: Subtle glassmorphic blend
-            bgcolor=ft.Colors.with_opacity(GLASS_MODERATE["bg_opacity"], ft.Colors.SURFACE),
-            border=ft.border.all(
-                width=1,  # Thin border for modern look
-                color=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)  # Subtle border
-            ),
-            border_radius=ft.BorderRadius(0, 16, 16, 0),  # Softer, smaller radius
-            padding=ft.Padding(0, 12, 0, 12),  # Reduced padding
-            # SUBTLE: Lighter shadows for modern, floating appearance
-            shadow=PRONOUNCED_NEUMORPHIC_SHADOWS,
-            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT_CUBIC),  # Smooth collapse animation
-            # DISABLED: blur causing rendering issues in Flet 0.28.3
-            # blur=ft.Blur(sigma_x=10, sigma_y=10)
-        )
-
-        return nav_container
+        # Store reference for programmatic navigation
+        self._nav_rail_control = rail
+        return rail
 
     def _on_page_connect(self, e: ft.ControlEvent) -> None:
         """Handle page connection event."""
@@ -972,9 +903,10 @@ class FletV2App(ft.Row):
             # Dashboard needs navigate_callback for hero card clicks
             print(f"🔴 [CALL] About to call view function for '{view_name}'")
             if view_name == "dashboard":
-                result = view_function(self.server_bridge, self.page, self.state_manager, self.navigate_to)
+                # ✅ ELIMINATED: StateManager parameter - views now use simple patterns
+                result = view_function(self.server_bridge, self.page, self.navigate_to)
             else:
-                result = view_function(self.server_bridge, self.page, self.state_manager)
+                result = view_function(self.server_bridge, self.page, self.navigate_to)
             print(f"🔴 [CALL] View function returned: {type(result)}")
 
             # DEBUG: Log result structure
