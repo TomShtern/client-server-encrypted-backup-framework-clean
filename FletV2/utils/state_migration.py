@@ -6,7 +6,6 @@ Guide for replacing 1,036-line StateManager with simple Flet patterns.
 Prints replacement patterns for each file that uses StateManager.
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -104,8 +103,7 @@ def scan_fletv2_for_state_manager() -> dict[str, list]:
                 if str(relative_path) in exclude_patterns:
                     continue
 
-                migrations = analyze_file_for_state_manager(file_path)
-                if migrations:
+                if migrations := analyze_file_for_state_manager(file_path):
                     results[str(relative_path)] = migrations
 
     return results
@@ -126,24 +124,24 @@ def print_migration_summary(results: dict[str, list]) -> None:
         print(report)
         print("-" * 60)
 
-    print(f"\n📊 MIGRATION SUMMARY:")
+    print("\n📊 MIGRATION SUMMARY:")
     print(f"  Files to update: {total_files}")
     print(f"  Patterns to replace: {total_patterns}")
     print(f"  Estimated time savings: {total_patterns * 10} minutes")
     print(f"  Code complexity reduction: {total_patterns * 50}%")
 
-    print(f"\n🎯 REPLACEMENT STRATEGY:")
-    print(f"  1. Replace state_manager.get/set calls with get_simple/set_simple")
-    print(f"  2. Replace subscription patterns with direct control updates")
-    print(f"  3. Replace loading patterns with simple state tracking")
-    print(f"  4. Use update_control_safely(control) for UI updates")
-    print(f"  5. Import simple_state instead of state_manager")
+    print("\n🎯 REPLACEMENT STRATEGY:")
+    print("  1. Replace state_manager.get/set calls with get_simple/set_simple")
+    print("  2. Replace subscription patterns with direct control updates")
+    print("  3. Replace loading patterns with simple state tracking")
+    print("  4. Use update_control_safely(control) for UI updates")
+    print("  5. Import simple_state instead of state_manager")
 
-    print(f"\n✅ BENEFITS:")
-    print(f"  - 1,036 lines eliminated (95% reduction)")
-    print(f"  - 10x performance improvement")
-    print(f"  - Zero reactive complexity")
-    print(f"  - Framework harmony achieved")
+    print("\n✅ BENEFITS:")
+    print("  - 1,036 lines eliminated (95% reduction)")
+    print("  - 10x performance improvement")
+    print("  - Zero reactive complexity")
+    print("  - Framework harmony achieved")
 
 def main():
     """Main migration analysis."""

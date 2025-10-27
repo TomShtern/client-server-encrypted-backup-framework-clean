@@ -38,10 +38,10 @@ def create_gradient(gradient_type: str = "primary") -> ft.LinearGradient:
     gradients = {
         "primary": ft.LinearGradient(begin=ft.alignment.center_left, end=ft.alignment.center_right, colors=[ft.Colors.BLUE, ft.Colors.PURPLE]),
         "secondary": ft.LinearGradient(begin=ft.alignment.center_left, end=ft.alignment.center_right, colors=[ft.Colors.PURPLE, ft.Colors.PINK]),
-        "success": ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=[ft.Colors.EMERALD, ft.Colors.GREEN]),
-        "warning": ft.LinearGradient(begin=ft.alignment.center, end=ft.alignment.bottom_center, colors=[ft.Colors.AMBER, ft.Colors.ORANGE]),
-        "error": ft.LinearGradient(begin=ft.alignment.center_left, end=ft.alignment.center_right, colors=[ft.Colors.ROSE, ft.Colors.RED]),
-        "info": ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=[ft.Colors.SKY, ft.Colors.BLUE]),
+        "success": ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=[ft.Colors.GREEN, ft.Colors.LIGHT_GREEN]),
+        "warning": ft.LinearGradient(begin=ft.alignment.center, end=ft.alignment.bottom_center, colors=[ft.Colors.ORANGE, ft.Colors.AMBER]),
+        "error": ft.LinearGradient(begin=ft.alignment.center_left, end=ft.alignment.center_right, colors=[ft.Colors.RED, ft.Colors.PINK]),
+        "info": ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=[ft.Colors.CYAN, ft.Colors.BLUE]),
         "surface": ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right, colors=[ft.Colors.with_opacity(0.05, ft.Colors.GREY), ft.Colors.with_opacity(0.1, ft.Colors.GREY)])
     }
     return gradients.get(gradient_type, gradients["primary"])
@@ -100,9 +100,9 @@ def create_enhanced_card(content: ft.Control, gradient_background: str = "surfac
         padding=ft.padding.all(20),
         shadow=ft.BoxShadow(
             spread_radius=1,
-            blur_radius=8,
+            blur_radius=6 + elevation,
             color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
-            offset=ft.Offset(0, 2)
+            offset=ft.Offset(0, elevation)
         ),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT) if hover_effect else None
     )
@@ -115,7 +115,7 @@ def create_enhanced_card(content: ft.Control, gradient_background: str = "surfac
 
 def create_metric_card_enhanced(title: str, value: str, change: Optional[str] = None, trend: str = "up", icon: Optional[str] = None, color_type: str = "primary") -> ft.Container:
     """Create enhanced metric card with trend indicators and gradients."""
-    trend_color = ft.Colors.SUCCESS if trend == "up" else ft.Colors.ERROR
+    trend_color = ft.Colors.GREEN if trend == "up" else ft.Colors.RED
     trend_icon = ft.Icons.TRENDING_UP if trend == "up" else ft.Icons.TRENDING_DOWN
 
     content = ft.Column([
@@ -123,7 +123,7 @@ def create_metric_card_enhanced(title: str, value: str, change: Optional[str] = 
             ft.Text(title, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
             ft.Container(
                 content=ft.Row([
-                    ft.Icon(trend_icon, size=14, color=trend_color),
+                    ft.Icon(icon or trend_icon, size=14, color=trend_color),
                     ft.Text(change or "", size=12, color=trend_color)
                 ], spacing=4),
                 bgcolor=ft.Colors.with_opacity(0.1, create_gradient(color_type).colors[0]),
@@ -334,7 +334,7 @@ setup_enhanced_theme = setup_sophisticated_theme
 # Component creation aliases
 create_modern_card_container = create_modern_card
 create_trend_indicator = create_status_badge
-create_text_with_typography = lambda text, typography_type, **kwargs: ft.Text(text, **kwargs)
+create_text_with_typography = lambda text, **kwargs: ft.Text(text, **kwargs)
 
 # Legacy function names with deprecation warnings
 import warnings
@@ -347,12 +347,12 @@ def _deprecation_warning(func_name: str, replacement: Optional[str] = None) -> N
 
 def create_neumorphic_container(*args, **kwargs):
     _deprecation_warning("create_neumorphic_container", "create_modern_card")
-    return create_modern_card(args[0] if args else ft.Container(), elevation=4)
+    return create_modern_card(args[0] if args else ft.Container(), elevation=4, **kwargs)
 
 def create_glassmorphic_container(*args, **kwargs):
     _deprecation_warning("create_glassmorphic_container", "create_enhanced_card with gradient")
     content = args[0] if args else ft.Container()
-    return create_enhanced_card(content, gradient_background="surface")
+    return create_enhanced_card(content, gradient_background="surface", **kwargs)
 
 # Empty constants for compatibility
 MODERATE_NEUMORPHIC_SHADOWS = []

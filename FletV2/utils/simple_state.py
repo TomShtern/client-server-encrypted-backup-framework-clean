@@ -7,8 +7,12 @@ Follows Flet Simplicity Principle - use framework, don't fight it.
 """
 
 import logging
-import time
-from typing import Any, Dict, Callable
+from typing import Any, Dict, Callable, Optional
+
+try:
+    import flet as ft
+except ImportError:
+    ft = None
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +84,7 @@ def cleanup_simple() -> None:
     logger.info("Simple state patterns cleaned up")
 
 # Flet-native UI update helpers - the most important replacement
-def update_control_safely(control, update_func: Callable = None) -> None:
+def update_control_safely(control, update_func: Optional[Callable] = None) -> None:
     """
     Safely update a Flet control with error handling.
 
@@ -142,16 +146,18 @@ def show_simple_notification(page, message: str, notification_type: str = "info"
 
     Replaces: state_manager.add_notification(message, type, auto_dismiss)
     """
-    if hasattr(page, 'snack_bar') and page.snack_bar:
-        snack_bar = page.snack_bar
-        snack_bar.bgcolor = (
-            ft.Colors.SUCCESS if notification_type == "success" else
-            ft.Colors.ERROR if notification_type == "error" else
-            ft.Colors.PRIMARY
-        )
-        snack_bar.content = ft.Text(message)
-        snack_bar.open = True
-        snack_bar.update()
+    if ft is None or not hasattr(page, 'snack_bar') or not page.snack_bar:
+        return
+
+    snack_bar = page.snack_bar
+    snack_bar.bgcolor = (
+        ft.Colors.SUCCESS if notification_type == "success" else
+        ft.Colors.ERROR if notification_type == "error" else
+        ft.Colors.PRIMARY
+    )
+    snack_bar.content = ft.Text(message)
+    snack_bar.open = True
+    snack_bar.update()
 
 # Simple data validation - no complex server mediation needed for basic operations
 def validate_simple_data(data: dict, required_fields: list[str]) -> tuple[bool, str]:

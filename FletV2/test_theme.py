@@ -5,7 +5,7 @@ Validates that all consolidated functionality works correctly.
 """
 
 import flet as ft
-from theme_unified import (
+from theme import (
     # Theme setup
     setup_sophisticated_theme,
 

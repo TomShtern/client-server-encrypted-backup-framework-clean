@@ -17,22 +17,20 @@ if package_dir not in sys.path:
 from . import utils, views
 from .main import FletV2App
 from .theme import (
-    create_modern_button_style,
-    create_modern_card_container,
-    create_trend_indicator,
+    themed_button,
+    create_modern_card,
     get_design_tokens,
-    setup_modern_theme,
+    setup_sophisticated_theme,
     toggle_theme_mode,
 )
 
 # Define what should be imported with "from FletV2 import *"
 __all__ = [
     "FletV2App",
-    "create_modern_button_style",
-    "create_modern_card_container",
-    "create_trend_indicator",
+    "themed_button",
+    "create_modern_card",
     "get_design_tokens",
-    "setup_modern_theme",
+    "setup_sophisticated_theme",
     "toggle_theme_mode",
     "utils",
     "views"

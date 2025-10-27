@@ -23,7 +23,7 @@ class MemoryManager:
     """
 
     def __init__(self):
-        self._active_handlers: Dict[str, List[Callable]] = {}
+        self._active_handlers: Dict[str, List[Dict[str, Any]]] = {}
         self._control_references: Dict[str, weakref.ref] = {}
         self._cleanup_callbacks: List[Callable] = []
         self._disposed = False
