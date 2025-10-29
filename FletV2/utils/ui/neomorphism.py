@@ -6,6 +6,19 @@ Flet 0.28.3 Compatible
 import flet as ft
 
 
+def _resolve_theme_colors(page) -> tuple[str, str]:
+    """Return light/dark colors derived from the page theme with safe fallbacks."""
+    theme = getattr(page, "theme", None) if page else None
+    scheme = getattr(theme, "color_scheme", None) if theme else None
+
+    surface = getattr(scheme, "surface", None) if scheme else None
+    shadow = getattr(scheme, "shadow", None) if scheme else None
+
+    light_color = surface or ft.Colors.WHITE
+    dark_color = shadow or ft.Colors.BLACK
+    return light_color, dark_color
+
+
 class NeomorphicShadows:
     """Professional neomorphic shadow system with elevation levels"""
 
@@ -15,14 +28,7 @@ class NeomorphicShadows:
         Get neomorphic shadows for cards based on elevation level.
         Neomorphism uses dual shadows to create depth perception.
         """
-        if page and page.theme:
-            # Use theme colors for theme-aware shadows
-            light_color = page.theme.color_scheme.surface if hasattr(page.theme, 'color_scheme') else ft.Colors.WHITE
-            dark_color = page.theme.color_scheme.shadow if hasattr(page.theme, 'color_scheme') else ft.Colors.BLACK
-        else:
-            # Fallback to standard colors
-            light_color = ft.Colors.WHITE
-            dark_color = ft.Colors.BLACK
+        light_color, dark_color = _resolve_theme_colors(page)
 
         if elevation == "low":
             return [
@@ -75,12 +81,7 @@ class NeomorphicShadows:
     @staticmethod
     def get_hover_shadows(page=None) -> list[ft.BoxShadow]:
         """Enhanced shadows for hover state - more pronounced elevation"""
-        if page and page.theme and hasattr(page.theme, 'color_scheme'):
-            light_color = page.theme.color_scheme.surface
-            dark_color = page.theme.color_scheme.shadow
-        else:
-            light_color = ft.Colors.WHITE
-            dark_color = ft.Colors.BLACK
+        light_color, dark_color = _resolve_theme_colors(page)
 
         return [
             ft.BoxShadow(
@@ -100,10 +101,7 @@ class NeomorphicShadows:
     @staticmethod
     def get_pressed_shadows(page=None) -> list[ft.BoxShadow]:
         """Inset shadows for pressed state - appears pressed into surface"""
-        if page and page.theme and hasattr(page.theme, 'color_scheme'):
-            dark_color = page.theme.color_scheme.shadow
-        else:
-            dark_color = ft.Colors.BLACK
+        _, dark_color = _resolve_theme_colors(page)
 
         return [
             ft.BoxShadow(
@@ -117,12 +115,7 @@ class NeomorphicShadows:
     @staticmethod
     def get_button_shadows(page=None) -> list[ft.BoxShadow]:
         """Neomorphic button shadows"""
-        if page and page.theme and hasattr(page.theme, 'color_scheme'):
-            light_color = page.theme.color_scheme.surface
-            dark_color = page.theme.color_scheme.shadow
-        else:
-            light_color = ft.Colors.WHITE
-            dark_color = ft.Colors.BLACK
+        light_color, dark_color = _resolve_theme_colors(page)
 
         return [
             ft.BoxShadow(

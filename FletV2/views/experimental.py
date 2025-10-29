@@ -6,7 +6,8 @@ For experimental features, UI prototypes, and development testing.
 
 import os
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import flet as ft
 
@@ -22,7 +23,7 @@ import Shared.utils.utf8_solution as _  # noqa: F401
 
 # Import neumorphic shadows
 try:
-    from theme import PRONOUNCED_NEUMORPHIC_SHADOWS, MODERATE_NEUMORPHIC_SHADOWS
+    from theme import MODERATE_NEUMORPHIC_SHADOWS, PRONOUNCED_NEUMORPHIC_SHADOWS
 except ImportError:
     PRONOUNCED_NEUMORPHIC_SHADOWS = []
     MODERATE_NEUMORPHIC_SHADOWS = []

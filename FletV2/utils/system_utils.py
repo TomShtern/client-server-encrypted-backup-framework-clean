@@ -5,6 +5,7 @@ Shared functions for accessing system information.
 """
 
 import psutil
+
 from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)

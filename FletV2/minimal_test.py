@@ -5,6 +5,7 @@ Absolutely minimal test to verify Flet is working at all.
 
 import flet as ft
 
+
 def minimal_test(page: ft.Page):
     """Minimal test with just basic text."""
     print("Creating minimal test page...")

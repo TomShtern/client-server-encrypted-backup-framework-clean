@@ -10,6 +10,8 @@ This module provides standardized building blocks for:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import flet as ft
 
 
@@ -20,24 +22,206 @@ def create_search_bar(
     expand: bool = True,
     width: int | None = None,
     prefix_icon: str = ft.Icons.SEARCH,
+    suggestions: list[str] | None = None,
+    on_submit: Callable[[str], None] | None = None,
+    on_tap: Callable[[ft.ControlEvent], None] | None = None,
 ):
-    """Create a standardized search bar aligned with Flet 0.28.3 styling."""
+    """
+    Create a native Material Design 3 SearchBar with enhanced features.
 
-    field = ft.TextField(
-        label=placeholder,
-        prefix_icon=prefix_icon,
-        border=ft.InputBorder.OUTLINE,
-        border_radius=12,
-        filled=True,
-        fill_color=ft.Colors.SURFACE,
-        focused_border_color=ft.Colors.PRIMARY,
-        on_change=on_change,
+    Replaces the custom TextField-based search with Flet's native SearchBar
+    for better accessibility, Material Design 3 compliance, and native functionality.
+
+    Args:
+        on_change: Function to call when search query changes
+        placeholder: Placeholder text for the search bar
+        expand: Whether the search bar should expand to fill available space
+        width: Fixed width for the search bar (ignored if expand=True)
+        prefix_icon: Icon to display before the search text
+        suggestions: List of search suggestions for auto-completion
+        on_submit: Function to call when user submits search (Enter/Click)
+        on_tap: Function to call when search bar is tapped
+
+    Returns:
+        ft.SearchBar: Native search bar with Material Design 3 styling
+
+    Example:
+        def handle_search(query: str):
+            print(f"Searching: {query}")
+
+        search_bar = create_search_bar(
+            on_change=handle_search,
+            placeholder="Search files...",
+            suggestions=["report.pdf", "data.xlsx", "presentation.pptx"],
+            on_submit=lambda q: print(f"Submit: {q}")
+        )
+    """
+
+    # Create search suggestions if provided
+    suggestion_tiles = []
+    if suggestions:
+        for suggestion in suggestions:
+            suggestion_tiles.append(
+                ft.SearchBarTile(
+                    value=suggestion,
+                    text=ft.Text(suggestion),
+                    on_select=lambda _, s=suggestion: (
+                        setattr(search_bar, 'value', s),
+                        on_change(s) if on_change else None,
+                        search_bar.update()
+                    )
+                )
+            )
+
+    # Create the native SearchBar with Material Design 3 styling
+    search_bar = ft.SearchBar(
+        bar_hint_text=placeholder,
+        bar_leading=ft.Icon(
+            prefix_icon,
+            color=ft.Colors.PRIMARY,
+            size=20,
+        ),
+        view_elevation=4,
+        view_surface_tint_color=ft.Colors.SURFACE,
+        view_header_height=56,
+        bar_overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+        bar_surface_tint_color=ft.Colors.SURFACE,
+        bar_padding=ft.padding.symmetric(horizontal=16),
+        on_tap=on_tap,
+        on_submit=lambda e: on_submit(e.control.value) if on_submit else None,
+        on_change=lambda e: on_change(e.control.value) if on_change else None,
+        controls=suggestion_tiles,
         expand=expand if width is None else False,
         width=width,
-        content_padding=ft.padding.symmetric(horizontal=16, vertical=12),
-        text_style=ft.TextStyle(size=14),
     )
-    return field
+
+    # Enhanced styling with Material Design 3 shadow and border radius
+    search_bar.bar_bgcolor = ft.Colors.SURFACE
+    search_bar.bar_shape = ft.RoundedRectangleBorder(radius=16)
+    search_bar.bar_border_side = ft.BorderSide(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE))
+
+    return search_bar
+
+
+def create_filter_chip(
+    text: str,
+    selected: bool = False,
+    on_select: Callable[[str, bool], None] | None = None,
+    *,
+    icon: str | None = None,
+    bg_color: str | None = None,
+    text_color: str | None = None,
+    padding: ft.Padding | None = None,
+) -> ft.FilterChip:
+    """
+    Create a native Material Design 3 FilterChip with enhanced features.
+
+    Replaces custom filter implementations with Flet's native FilterChip
+    for better accessibility, Material Design 3 compliance, and native functionality.
+
+    Args:
+        text: Text label for the filter chip
+        selected: Whether the chip is currently selected
+        on_select: Function called when chip selection changes (receives text and selected state)
+        icon: Optional icon to display before the text
+        bg_color: Optional background color override
+        text_color: Optional text color override
+        padding: Optional custom padding
+
+    Returns:
+        ft.FilterChip: Native filter chip with Material Design 3 styling
+
+    Example:
+        def handle_filter(filter_name: str, is_selected: bool):
+            print(f"Filter {filter_name} selected: {is_selected}")
+
+        chip = create_filter_chip(
+            text="Active",
+            on_select=handle_filter,
+            icon=ft.Icons.CHECK_CIRCLE
+        )
+    """
+
+    # Set default padding if not provided
+    if padding is None:
+        padding = ft.padding.symmetric(horizontal=12, vertical=6)
+
+    # Create the native FilterChip with Material Design 3 styling
+    chip = ft.FilterChip(
+        label=text,
+        selected=selected,
+        on_select=lambda e: on_select(text, e.control.selected) if on_select else None,
+        label_style=ft.TextStyle(
+            size=12,
+            color=text_color or ft.Colors.ON_SURFACE,
+            weight=ft.FontWeight.W_500,
+        ),
+        padding=padding,
+        bg_color=bg_color,
+        icon=icon,
+        elevation=1,
+        shadow_color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+    )
+
+    return chip
+
+
+def create_status_chip(
+    icon: str,
+    text_control: ft.Control,
+    bg_color: str,
+    text_color: str,
+) -> ft.Container:
+    """
+    Create a native Material Design 3 status chip for displaying metrics.
+
+    Replaces custom _pill helper with proper Material Design 3 styling
+    using native Container component with enhanced accessibility and styling.
+
+    Args:
+        icon: Icon name to display
+        text_control: Text control showing the value
+        bg_color: Background color for the chip
+        text_color: Text color for the chip
+
+    Returns:
+        ft.Container: Styled status chip with Material Design 3 compliance
+
+    Example:
+        uptime_text = ft.Text("24h 15m", size=12)
+        chip = create_status_chip(
+            icon=ft.Icons.HOURGLASS_BOTTOM,
+            text_control=uptime_text,
+            bg_color=ft.Colors.PRIMARY,
+            text_color=ft.Colors.ON_PRIMARY
+        )
+    """
+
+    return ft.Container(
+        content=ft.Row(
+            [
+                ft.Icon(
+                    icon,
+                    size=14,
+                    color=text_color,
+                ),
+                text_control,
+            ],
+            spacing=6,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+        bgcolor=ft.Colors.with_opacity(0.12, bg_color),
+        border=ft.border.all(1, ft.Colors.with_opacity(0.24, bg_color)),
+        border_radius=16,  # Material Design 3 recommends 16px for chips
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=2,
+            color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+            offset=ft.Offset(0, 1),
+        ),
+        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+    )
 
 
 def create_filter_dropdown(

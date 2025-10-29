@@ -47,8 +47,6 @@ except ImportError:  # pragma: no cover - fallback logging
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
-from FletV2.utils.ui_components import AppCard, create_status_pill
-from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -56,6 +54,8 @@ from FletV2.utils.ui_builders import (
     create_search_bar,
     create_view_header,
 )
+from FletV2.utils.ui_components import AppCard, create_status_pill
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 

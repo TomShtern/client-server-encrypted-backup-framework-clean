@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import inspect
 import logging
 import os
 import sys
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 import flet as ft
 
@@ -23,16 +23,15 @@ for _path in (_flet_v2_root, _repo_root):
         sys.path.insert(0, _path)
 
 import Shared.utils.utf8_solution as _  # noqa: F401
-
 from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
 from FletV2.utils.loading_states import (
     create_empty_state,
     create_error_display,
     create_loading_indicator,
 )
-from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import create_action_button, create_view_header
 from FletV2.utils.ui_components import AppCard
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = logging.getLogger(__name__)
 

@@ -5,10 +5,9 @@ This keeps the UI responsive and surfaces an explicit diagnostic panel so the
 user knows the primary dashboard module encountered a problem.
 """
 from __future__ import annotations
-import os
-import sys
+
 from contextlib import suppress
-from typing import Any
+
 import flet as ft
 
 # Ensure Shared UTF-8 side effects (mirrors pattern elsewhere) - safe no-op if missing

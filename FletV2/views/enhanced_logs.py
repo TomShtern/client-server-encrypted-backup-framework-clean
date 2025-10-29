@@ -10,22 +10,14 @@ import logging
 import os
 import re
 import sys
+from collections.abc import Callable, Coroutine, Iterable
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Any, Callable, Coroutine, Iterable
+from typing import Any
 
 import flet as ft
 
-# Ensure repository roots are on sys.path for runtime resolution
-_views_dir = os.path.dirname(os.path.abspath(__file__))
-_flet_v2_root = os.path.dirname(_views_dir)
-_repo_root = os.path.dirname(_flet_v2_root)
-for _path in (_flet_v2_root, _repo_root):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
 import Shared.utils.utf8_solution as _  # noqa: F401
-
 from FletV2.components.log_card import LogCard
 from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
 from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
@@ -34,7 +26,7 @@ from FletV2.utils.loading_states import (
     create_error_display,
     create_loading_indicator,
 )
-from FletV2.utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.state_manager import StateManager
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -42,7 +34,15 @@ from FletV2.utils.ui_builders import (
     create_view_header,
 )
 from FletV2.utils.ui_components import AppCard
-from FletV2.utils.state_manager import StateManager
+from FletV2.utils.user_feedback import show_error_message, show_success_message
+
+# Ensure repository roots are on sys.path for runtime resolution
+_views_dir = os.path.dirname(os.path.abspath(__file__))
+_flet_v2_root = os.path.dirname(_views_dir)
+_repo_root = os.path.dirname(_flet_v2_root)
+for _path in (_flet_v2_root, _repo_root):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def _create_level_filter() -> ft.Control:
     return create_filter_dropdown(
         "Level",
         [("All", "All")],
-        lambda _: None,
+        lambda __: None,
         value="All",
         width=200,
     )
@@ -289,8 +289,8 @@ def _create_filter_controls(
 def _create_export_actions(handle_export: Callable[[str], None]) -> list[ft.Control]:
     """Create export action buttons."""
     return [
-        create_action_button("Export CSV", lambda _: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
-        create_action_button("Export JSON", lambda _: handle_export("json"), icon=ft.Icons.CODE, primary=False),
+        create_action_button("Export CSV", lambda __: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
+        create_action_button("Export JSON", lambda __: handle_export("json"), icon=ft.Icons.CODE, primary=False),
     ]
 
 

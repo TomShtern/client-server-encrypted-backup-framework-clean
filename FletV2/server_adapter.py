@@ -13,13 +13,6 @@ import logging
 import os
 import sqlite3
 import sys
-
-# Add project root to path for Shared imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# ALWAYS import this in any Python file that deals with subprocess or console I/O
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -32,7 +25,7 @@ if project_root not in sys.path:
 # Import your existing server infrastructure
 try:
     from api_server.real_backup_executor import RealBackupExecutor
-    from python_server.server.client_manager import Client, ClientManager
+    from python_server.server.client_manager import ClientManager
     from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
     from python_server.server.database import DatabaseManager
     _REAL_SERVER_AVAILABLE = True
@@ -655,7 +648,7 @@ class FletV2ServerAdapter:
 
                 # Build UPDATE query dynamically
                 set_clause = ", ".join([f"{k} = ?" for k in data])
-                values = list(data.values()) + [row_id]
+                values = [*list(data.values()), row_id]
 
                 conn.execute(f"""
                     UPDATE {table_name}

@@ -15,15 +15,22 @@ This demonstrates the clean architecture:
 import asyncio
 import builtins
 import contextlib
+import inspect
 import logging
 import os
 import sys
 import time  # For optional startup profiling
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
 # Third-party imports
 import flet as ft
+
+from FletV2.components.breadcrumb import BreadcrumbFactory, BreadcrumbNavigation
+from FletV2.components.global_search import create_global_search_bar
+
+# Import global shortcuts system for desktop navigation
+from FletV2.utils.global_shortcuts import GlobalShortcutManager, create_standard_application_shortcuts
 
 
 def _bootstrap_paths() -> tuple[str, str, str, str]:
@@ -66,55 +73,8 @@ except ImportError as e:
     os.environ.setdefault("PYTHONUTF8", "1")
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
-if not hasattr(ft, "FilterChip"):
-    class FilterChip(ft.Container):  # sourcery skip: remove-unnecessary-cast, remove-unnecessary-try-except
-        def __init__(
-            self,
-            label: str = "",
-            selected: bool = False,
-            on_selected: Callable[[ft.ControlEvent], None] | None = None,
-            **kwargs: Any,
-        ) -> None:
-            self.label = label
-            self.selected = selected
-            self.on_selected = on_selected
-            self._button = ft.ElevatedButton(
-                text=label,
-                on_click=self._handle_click,
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=16)),
-            )
-            super().__init__(
-                content=self._button,
-                padding=ft.padding.symmetric(horizontal=6, vertical=2),
-                **kwargs,
-            )
-            self._refresh_style()
-
-        def _handle_click(self, e: ft.ControlEvent) -> None:
-            with contextlib.suppress(Exception):
-                if callable(self.on_selected):
-                    ev = type("Evt", (), {"control": self})()
-                    self.on_selected(ev)
-
-        def _refresh_style(self) -> None:
-            with contextlib.suppress(Exception):
-                if self.selected:
-                    self._button.bgcolor = ft.Colors.PRIMARY
-                    self._button.color = ft.Colors.ON_PRIMARY
-                else:
-                    self._button.bgcolor = None
-                    self._button.color = None
-                self._button.update()
-
-        def update(self, *args: Any, **kwargs: Any) -> None:
-            self._refresh_style()
-            try:
-                super().update(*args, **kwargs)
-            except Exception:
-                with contextlib.suppress(Exception):
-                    self._button.update()
-
-    ft.FilterChip = cast(Any, FilterChip)  # type: ignore[attr-defined]
+# Flet 0.28.3 has native FilterChip support - no polyfill needed
+# Legacy FilterChip polyfill moved to archive/legacy_filter_chip_polyfill.py on 2025-10-28
 
 # (Path setup handled above)
 
@@ -143,7 +103,10 @@ except ImportError:
 # Initialize logging and environment BEFORE any logger usage
 logger = setup_terminal_debugging(logger_name="FletV2.main")
 _VERBOSE_DIAGNOSTICS = os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
-_VERBOSE_NAV_LOGS = _VERBOSE_DIAGNOSTICS or os.getenv("FLET_V2_VERBOSE_NAV", "").strip().lower() in {"1", "true", "yes"}
+_VERBOSE_NAV_LOGS = (
+    _VERBOSE_DIAGNOSTICS or
+    os.getenv("FLET_V2_VERBOSE_NAV", "").strip().lower() in {"1", "true", "yes"}
+)
 os.environ.setdefault("PYTHONUTF8", "1")
 
 _ORIGINAL_PRINT = builtins.print
@@ -206,15 +169,15 @@ _install_global_exception_handlers()
 # Local imports - application modules
 try:
     # Prefer package-relative import
-    from .theme import setup_modern_theme, toggle_theme_mode  # type: ignore[import-not-found]
+    from .theme import setup_sophisticated_theme  # type: ignore[import-not-found]
 except ImportError as _theme_rel_err:  # pragma: no cover - fallback path
     try:
         # Fallback to absolute import when running as a script inside FletV2 directory
-        from theme import setup_modern_theme, toggle_theme_mode  # type: ignore[import-not-found]
+        from theme import setup_sophisticated_theme  # type: ignore[import-not-found]
     except ImportError as _theme_abs_err:
         print(f"Warning: Could not import theme module: {_theme_rel_err}; {_theme_abs_err}")
         # Create minimal fallbacks so the app can still start
-        def setup_modern_theme(page):  # type: ignore[no-redef]
+        def setup_sophisticated_theme(page):  # type: ignore[no-redef]
             return None
 
         def toggle_theme_mode(page):  # type: ignore[no-redef]
@@ -350,6 +313,11 @@ class FletV2App(ft.Row):
         # Ensure initial view is loaded exactly once to avoid duplicate dashboard instances
         self._initial_view_loaded: bool = False
 
+        # Desktop navigation components
+        self.global_shortcut_manager: GlobalShortcutManager | None = None
+        self.breadcrumb_navigation: BreadcrumbNavigation | None = None
+        self.global_search = None
+
         # Startup profiling helpers (opt-in via FLET_STARTUP_PROFILER=1)
         def _profile_enabled() -> bool:
             return os.environ.get('FLET_STARTUP_PROFILER') == '1'
@@ -404,12 +372,11 @@ class FletV2App(ft.Row):
         logger.info(f"Final server bridge configuration: {bridge_type}")
         logger.info(f"Real server available: {real_server_available}")
 
-        # ✅ PHASE 1.1 COMPLETED: StateManager eliminated (1,036 lines → 0 lines)
-        # Replaced complex reactive system with simple Flet-native patterns
-        # Framework harmony achieved - no circular import issues
+        # Initialize enhanced state manager for reactive updates and inter-view coordination
+        self._initialize_state_manager()
         if _VERBOSE_DIAGNOSTICS:
-            logger.debug("State manager eliminated - using simple Flet patterns")
-        self._profile_mark('state_manager:eliminated')
+            logger.debug("State manager initialized for reactive updates")
+        self._profile_mark('state_manager:initialized')
 
         # Comment 12: Track current view dispose function for proper StateManager cleanup
         self._current_view_dispose: Callable[[], None] | None = None
@@ -525,6 +492,9 @@ class FletV2App(ft.Row):
     def _initialize_state_manager(self) -> None:
         """Initialize the state manager for reactive UI updates."""
         print("🔴 [CRITICAL] _initialize_state_manager method ENTERED")
+        if self.state_manager is not None:
+            print("🔴 [CRITICAL] State manager already initialized - skipping reinitialization")
+            return
         try:
             print("🔴 [CRITICAL] About to import create_state_manager")
             try:
@@ -540,7 +510,7 @@ class FletV2App(ft.Row):
             print(f"🔴 [CRITICAL] create_state_manager type: {type(create_state_manager)}")
             print(f"🔴 [CRITICAL] create_state_manager callable: {callable(create_state_manager)}")
             print("🔴 [CRITICAL] About to call create_state_manager()")
-            self.state_manager = create_state_manager(self.server_bridge)
+            self.state_manager = create_state_manager(self.page, self.server_bridge)
             print("🔴 [CRITICAL] create_state_manager() returned successfully")
             logger.info("✅ State manager initialized successfully")
         except ImportError as e:
@@ -591,7 +561,9 @@ class FletV2App(ft.Row):
             "dashboard": ("views.dashboard", "create_dashboard_view", "dashboard"),
             "clients": ("views.clients", "create_clients_view", "clients"),
             "files": ("views.files", "create_files_view", "files"),
-            "database": ("views.database_pro", "create_database_view", "database"),  # Professional view with full CRUD operations
+            "database": (
+                "views.database_pro", "create_database_view", "database"
+            ),  # Professional view with full CRUD operations
             "analytics": ("views.analytics", "create_analytics_view", "analytics"),
             "logs": ("views.enhanced_logs", "create_logs_view", "logs"),
             "settings": ("views.settings", "create_settings_view", "settings"),
@@ -669,6 +641,8 @@ class FletV2App(ft.Row):
                 if 0 <= selected_index < len(view_names):
                     view_name = view_names[selected_index]
                     self.navigate_to(view_name)
+                    # Update breadcrumbs for desktop navigation
+                    self._update_breadcrumbs(view_name)
             except Exception as nav_error:
                 logger.error(f"Navigation error: {nav_error}")
 
@@ -774,6 +748,79 @@ class FletV2App(ft.Row):
         except Exception as connect_error:
             logger.error(f"Page connect error: {connect_error}")
 
+    def _update_breadcrumbs(self, view_name: str) -> None:
+        """Update breadcrumbs based on current view"""
+        if not self.breadcrumb_navigation:
+            return
+
+        try:
+            # Create breadcrumb items for different views
+            if view_name == "database":
+                from FletV2.components.breadcrumb import BreadcrumbItem
+                items = BreadcrumbFactory.create_database_breadcrumb()
+            elif view_name == "files":
+                from FletV2.components.breadcrumb import BreadcrumbItem
+                items = BreadcrumbFactory.create_file_breadcrumb([])
+            elif view_name == "logs":
+                from FletV2.components.breadcrumb import BreadcrumbItem
+                items = BreadcrumbFactory.create_log_breadcrumb()
+            elif view_name == "settings":
+                from FletV2.components.breadcrumb import BreadcrumbItem
+                items = BreadcrumbFactory.create_settings_breadcrumb()
+            else:
+                # Default breadcrumb for other views
+                from FletV2.components.breadcrumb import BreadcrumbItem
+                items = [
+                    BreadcrumbItem(
+                        label=view_name.title(),
+                        icon=ft.Icons.DASHBOARD if view_name == "dashboard" else ft.Icons.INFO,
+                        is_current=True
+                    )
+                ]
+
+            self.breadcrumb_navigation.set_items(items)
+
+        except Exception as e:
+            logger.error(f"Failed to update breadcrumbs: {e}")
+
+    def _setup_desktop_navigation(self) -> None:
+        """Setup desktop navigation features - global shortcuts, breadcrumbs, search"""
+        try:
+            logger.info("Setting up desktop navigation features")
+
+            # Initialize global shortcut manager
+            self.global_shortcut_manager = GlobalShortcutManager(self.page)
+
+            # Create view navigator function for shortcuts
+            def view_navigator(view_name: str) -> None:
+                """Navigate to a specific view"""
+                if view_name in ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]:
+                    self.navigate_to(view_name)
+
+            # Setup standard application shortcuts
+            create_standard_application_shortcuts(
+                self.global_shortcut_manager,
+                view_navigator=view_navigator
+            )
+
+            # Initialize breadcrumb navigation
+            self.breadcrumb_navigation = BreadcrumbNavigation(
+                on_navigation=lambda destination: logger.info(f"Breadcrumb navigation to: {destination}")
+            )
+
+            # Initialize global search
+            self.global_search = create_global_search_bar()
+
+            # Add desktop navigation components to page overlay
+            if self.global_search:
+                self.page.overlay.append(self.global_search)
+
+            logger.info("✅ Desktop navigation features initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to setup desktop navigation: {e}")
+            print(f"❌ Desktop navigation setup failed: {e}")
+
     async def initialize(self) -> None:
         """Initialize the application."""
         print("🔴 [CRITICAL DEBUG] initialize() method ENTERED")
@@ -788,10 +835,10 @@ class FletV2App(ft.Row):
                 return
             print("🔴 [DEBUG] _initialized check passed")
 
-            print("🔴 [DEBUG] About to call setup_modern_theme()")
-            # Apply theme
-            setup_modern_theme(self.page)
-            print("🔴 [DEBUG] setup_modern_theme() completed")
+            print("🔴 [DEBUG] About to call setup_sophisticated_theme()")
+            # Apply theme with Windows 11 integration
+            setup_sophisticated_theme(self.page)
+            print("🔴 [DEBUG] setup_sophisticated_theme() completed")
             logger.debug("Theme setup complete")
 
             print("🔴 [DEBUG] About to add app to page")
@@ -802,7 +849,9 @@ class FletV2App(ft.Row):
             print("🔴 [DEBUG] Setting page properties")
             # Set page properties
             self.page.title = "FletV2 - Encrypted Backup Framework"
+            self.page.auto_update = True  # Enable automatic UI updates for better performance
             print("🔴 [DEBUG] page.title set")
+            print("🔴 [DEBUG] page.auto_update enabled")
 
             # Window properties only work in FLET_APP mode, not WEB_BROWSER
             try:
@@ -822,6 +871,11 @@ class FletV2App(ft.Row):
             # Update the page
             self.page.update()
             print("🔴 [DEBUG] page.update() completed")
+
+            # Initialize desktop navigation features
+            self._setup_desktop_navigation()
+            print("🔴 [DEBUG] Desktop navigation setup completed")
+
             self._initialized = True
             print("🔴 [DEBUG] _initialized flag set to True")
 
@@ -902,11 +956,20 @@ class FletV2App(ft.Row):
             # Call the view function directly with required arguments
             # Dashboard needs navigate_callback for hero card clicks
             print(f"🔴 [CALL] About to call view function for '{view_name}'")
-            if view_name == "dashboard":
-                # ✅ ELIMINATED: StateManager parameter - views now use simple patterns
-                result = view_function(self.server_bridge, self.page, self.navigate_to)
-            else:
-                result = view_function(self.server_bridge, self.page, self.navigate_to)
+            signature = inspect.signature(view_function)
+            call_kwargs: dict[str, Any] = {}
+            if "server_bridge" in signature.parameters:
+                call_kwargs["server_bridge"] = self.server_bridge
+            if "page" in signature.parameters:
+                call_kwargs["page"] = self.page
+            if "_state_manager" in signature.parameters:
+                call_kwargs["_state_manager"] = self.state_manager
+            elif "state_manager" in signature.parameters:
+                call_kwargs["state_manager"] = self.state_manager
+            if "navigate_callback" in signature.parameters:
+                call_kwargs["navigate_callback"] = self.navigate_to
+
+            result = view_function(**call_kwargs)
             print(f"🔴 [CALL] View function returned: {type(result)}")
 
             # DEBUG: Log result structure
@@ -917,7 +980,7 @@ class FletV2App(ft.Row):
             # Handle different return types: tuple (content, dispose, setup) or just content
             if isinstance(result, tuple) and len(result) >= 2:
                 content = result[0]
-                dispose_func = result[1] if len(result) > 1 else lambda: None  # noqa: E731
+                dispose_func = result[1] if len(result) > 1 else lambda: None
                 setup_func = result[2] if len(result) > 2 else None
                 # Store setup function to be called AFTER content is added to page
                 self._current_view_setup = setup_func
@@ -996,29 +1059,29 @@ class FletV2App(ft.Row):
         # Store reference for diagnostics that need to inspect attachment state later
         self._animated_switcher = animated_switcher
         try:
-            print(f"🔵 [UPDATE_CONTENT] About to set content.key")
+            print("🔵 [UPDATE_CONTENT] About to set content.key")
             # Unique and stable key for AnimatedSwitcher
             content.key = f"{view_name}_view_{int(time.time() * 1000)}"
-            print(f"🔵 [UPDATE_CONTENT] Key set successfully")
+            print("🔵 [UPDATE_CONTENT] Key set successfully")
 
             # Single, atomic content update
             if isinstance(animated_switcher, ft.AnimatedSwitcher):
-                print(f"🔵 [UPDATE_CONTENT] AnimatedSwitcher detected, updating content")
+                print("🔵 [UPDATE_CONTENT] AnimatedSwitcher detected, updating content")
                 animated_switcher.content = content
-                print(f"🔵 [UPDATE_CONTENT] Content assigned, setting transition")
+                print("🔵 [UPDATE_CONTENT] Content assigned, setting transition")
                 animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
-                print(f"🔵 [UPDATE_CONTENT] About to call animated_switcher.update()")
+                print("🔵 [UPDATE_CONTENT] About to call animated_switcher.update()")
                 animated_switcher.update()
-                print(f"🔵 [UPDATE_CONTENT] animated_switcher.update() completed")
+                print("🔵 [UPDATE_CONTENT] animated_switcher.update() completed")
 
             # Post-update visibility and subscription management
-            print(f"🔵 [UPDATE_CONTENT] About to call _post_content_update")
+            print("🔵 [UPDATE_CONTENT] About to call _post_content_update")
             self._post_content_update(content, view_name)
-            print(f"🔵 [UPDATE_CONTENT] _post_content_update completed")
+            print("🔵 [UPDATE_CONTENT] _post_content_update completed")
 
             print(f"🟣 [UPDATE_CONTENT] About to call logger.info for '{view_name}'")
             logger.info(f"Successfully updated content area with {view_name}")
-            print(f"🟣 [UPDATE_CONTENT] logger.info completed, about to return True")
+            print("🟣 [UPDATE_CONTENT] logger.info completed, about to return True")
             return True
         except Exception as e:
             print(f"🔴 [UPDATE_CONTENT] EXCEPTION CAUGHT: {e}")
@@ -1171,7 +1234,7 @@ class FletV2App(ft.Row):
                 await asyncio.sleep(0.35)  # Allow rendering & setup
                 if self._last_view_error and self._last_view_error.startswith(name):
                     errors.append(self._last_view_error)
-            except Exception as nav_err:  # noqa: PERF203 - explicit logging
+            except Exception as nav_err:
                 err_msg = f"{name}: {nav_err}"
                 errors.append(err_msg)
                 logger.error(f"[SMOKE] Error navigating to {name}: {nav_err}")
@@ -1185,8 +1248,9 @@ class FletV2App(ft.Row):
 
 
 if __name__ == "__main__":
-    import flet as ft
     import sys
+
+    import flet as ft
 
     def main(page: ft.Page) -> None:
         """Main entry point for GUI-only mode (no server integration)."""

@@ -10,9 +10,9 @@ Priority: CRITICAL - Prevents production crashes and memory leaks
 import asyncio
 import logging
 import threading
-from typing import Dict, List, Optional, Any, Callable
+from collections.abc import Callable
 from datetime import datetime
-import weakref
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +23,16 @@ class TaskManager:
     """
 
     def __init__(self):
-        self._tasks: Dict[str, asyncio.Task] = {}
-        self._background_tasks: List[asyncio.Task] = []
-        self._cleanup_callbacks: List[Callable] = []
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._background_tasks: list[asyncio.Task] = []
+        self._cleanup_callbacks: list[Callable] = []
         self._lock = threading.Lock()
         self._disposed = False
 
     def create_task(self,
                    name: str,
                    coro,
-                   timeout: Optional[float] = None,
+                   timeout: float | None = None,
                    cleanup_on_dispose: bool = True) -> asyncio.Task:
         """
         Create and track a named async task with optional timeout.
@@ -76,7 +76,7 @@ class TaskManager:
             logger.info(f"Created tracked task: {name}")
             return task
 
-    def create_background_task(self, coro, name: Optional[str] = None) -> asyncio.Task:
+    def create_background_task(self, coro, name: str | None = None) -> asyncio.Task:
         """
         Create background task that's cleaned up on dispose.
         Used for fire-and-forget operations.
@@ -106,14 +106,14 @@ class TaskManager:
                 timeout=timeout
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Operation timed out after {timeout}s: {func.__name__}")
             raise TimeoutError(f"Operation {func.__name__} timed out after {timeout}s")
         except Exception as e:
             logger.error(f"Error in timeout wrapper for {func.__name__}: {e}")
             raise
 
-    def get_task_status(self, name: str) -> Optional[str]:
+    def get_task_status(self, name: str) -> str | None:
         """Get status of tracked task."""
         with self._lock:
             task = self._tasks.get(name)
@@ -216,7 +216,7 @@ class TaskManager:
         async def wrapped():
             try:
                 return await asyncio.wait_for(coro, timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Task timeout: {name} after {timeout}s")
                 raise
 
@@ -239,7 +239,7 @@ class TaskManager:
             # Task already removed
             pass
 
-    def get_debug_info(self) -> Dict[str, Any]:
+    def get_debug_info(self) -> dict[str, Any]:
         """Get debugging information about task manager state."""
         with self._lock:
             active_named_tasks = len([t for t in self._tasks.values() if not t.done()])

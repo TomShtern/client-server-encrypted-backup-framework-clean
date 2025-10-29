@@ -23,7 +23,6 @@ for _path in (_flet_v2_root, _repo_root):
         sys.path.insert(0, _path)
 
 # Third-party imports
-import aiofiles
 import flet as ft
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
@@ -48,8 +47,6 @@ except ImportError:  # pragma: no cover - fallback logging
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.state_manager import StateManager
-from FletV2.utils.ui_components import AppCard, create_status_pill
-from FletV2.utils.user_feedback import show_error_message, show_success_message
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -57,6 +54,8 @@ from FletV2.utils.ui_builders import (
     create_search_bar,
     create_view_header,
 )
+from FletV2.utils.ui_components import AppCard, create_status_pill
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 
@@ -71,7 +70,7 @@ SERVER_NOT_CONNECTED_MSG = "Server not connected. Please start the backup server
 # Note: Helper builders moved to FletV2.utils.ui_builders module
 
 
-def create_files_view(  # noqa: PLR0915
+def create_files_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
     _state_manager: StateManager | None = None

@@ -8,26 +8,112 @@ Principles: Work WITH Flet 0.28.3, not against it.
 Achievement: 797 → ~200 lines (75% reduction) with superior visual quality.
 """
 
+import warnings
+from typing import Literal
+
 import flet as ft
-from typing import Optional, Literal
+
+# Import Windows 11 integration utilities
+try:
+    from FletV2.utils.display_scaling import DisplayScaler, setup_display_scaling
+    from FletV2.utils.windows_integration import WindowsThemeProvider, setup_windows_11_integration
+    WINDOWS_INTEGRATION_AVAILABLE = True
+except ImportError:
+    WINDOWS_INTEGRATION_AVAILABLE = False
+    print("Warning: Windows integration utilities not available")
 
 # ========================================================================================
 # SETUP ENHANCED THEME
 # ========================================================================================
 
 def setup_sophisticated_theme(page: ft.Page, theme_mode: str = "system") -> None:
-    """Setup enhanced theme with superior visual quality beyond vanilla Material Design 3."""
-    page.theme = ft.Theme(
-        color_scheme_seed=ft.Colors.BLUE,
-        use_material3=True,
-        text_theme=ft.TextTheme(
-            headline_large=ft.TextThemeStyle(size=32, weight=ft.FontWeight.BOLD),
-            body_large=ft.TextThemeStyle(size=16, weight=ft.FontWeight.NORMAL),
+    """Setup enhanced theme with superior visual quality beyond vanilla Material Design 3.
+
+    Now includes Windows 11 integration and display scaling optimization.
+    """
+    # Setup Windows 11 integration first (if available)
+    windows_theme_provider = None
+    display_scaler = None
+
+    if WINDOWS_INTEGRATION_AVAILABLE:
+        try:
+            # Setup Windows 11 theme detection and integration
+            windows_theme_provider = setup_windows_11_integration(page)
+
+            # Setup display scaling for 4K monitors
+            display_scaler = setup_display_scaling(page)
+
+            if windows_theme_provider:
+                print("✅ Windows 11 theme integration enabled")
+            if display_scaler:
+                print("✅ Display scaling optimization enabled")
+
+        except Exception as e:
+            print(f"⚠️ Windows integration setup failed: {e}")
+
+    # Setup base Flet theme
+    if windows_theme_provider:
+        # Windows integration will handle the theme
+        pass
+    else:
+        # Fallback to standard theme setup
+        page.theme = ft.Theme(
+            color_scheme_seed=ft.Colors.BLUE,
+            use_material3=True,
+            text_theme=ft.TextTheme(
+                headline_large=ft.TextStyle(size=32, weight=ft.FontWeight.W_700),
+                body_large=ft.TextStyle(size=16, weight=ft.FontWeight.W_400),
+            ),
         )
-    )
-    page.dark_theme = ft.Theme(color_scheme_seed=ft.Colors.BLUE, use_material3=True)
-    page.theme_mode = ft.ThemeMode.SYSTEM if theme_mode == "system" else getattr(ft.ThemeMode, theme_mode.upper())
+        page.dark_theme = ft.Theme(
+            color_scheme_seed=ft.Colors.BLUE,
+            use_material3=True,
+            text_theme=ft.TextTheme(
+                headline_large=ft.TextStyle(size=32, weight=ft.FontWeight.W_700),
+                body_large=ft.TextStyle(size=16, weight=ft.FontWeight.W_400),
+            ),
+        )
+        page.theme_mode = ft.ThemeMode.SYSTEM if theme_mode == "system" else getattr(ft.ThemeMode, theme_mode.upper())
+
     page.update()
+
+    # Store Windows integration references on the page for later use without relying on page.data
+    if windows_theme_provider is not None:
+        setattr(page, "_windows_theme_provider", windows_theme_provider)
+    if display_scaler is not None:
+        setattr(page, "_display_scaler", display_scaler)
+
+    # Optional compatibility: persist within page.data only when it is a dict
+    page_data = getattr(page, "data", None)
+    if isinstance(page_data, dict):
+        if windows_theme_provider is not None:
+            page_data["windows_theme_provider"] = windows_theme_provider
+        if display_scaler is not None:
+            page_data["display_scaler"] = display_scaler
+
+
+def get_windows_theme_provider(page: ft.Page) -> WindowsThemeProvider | None:
+    """Get the Windows theme provider from page data"""
+    provider = getattr(page, "_windows_theme_provider", None)
+    if provider is not None:
+        return provider
+
+    page_data = getattr(page, "data", None)
+    if isinstance(page_data, dict):
+        return page_data.get('windows_theme_provider')
+    return None
+
+
+def get_display_scaler(page: ft.Page) -> DisplayScaler | None:
+    """Get the display scaler from page data"""
+    scaler = getattr(page, "_display_scaler", None)
+    if scaler is not None:
+        return scaler
+
+    page_data = getattr(page, "data", None)
+    if isinstance(page_data, dict):
+        return page_data.get('display_scaler')
+    return None
 
 # ========================================================================================
 # ENHANCED GRADIENT SYSTEM (Superior to vanilla Material Design 3)
@@ -50,7 +136,7 @@ def create_gradient(gradient_type: str = "primary") -> ft.LinearGradient:
 # ENHANCED UI COMPONENTS (Gradients + Animations)
 # ========================================================================================
 
-def create_gradient_button(text: str, on_click, gradient_type: str = "primary", icon: Optional[str] = None, variant: str = "filled") -> ft.ElevatedButton:
+def create_gradient_button(text: str, on_click, gradient_type: str = "primary", icon: str | None = None, variant: str = "filled") -> ft.ElevatedButton:
     """Create enhanced button with gradients and multi-state animations."""
     gradient = create_gradient(gradient_type)
 
@@ -113,7 +199,7 @@ def create_enhanced_card(content: ft.Control, gradient_background: str = "surfac
 
     return enhanced_content
 
-def create_metric_card_enhanced(title: str, value: str, change: Optional[str] = None, trend: str = "up", icon: Optional[str] = None, color_type: str = "primary") -> ft.Container:
+def create_metric_card_enhanced(title: str, value: str, change: str | None = None, trend: str = "up", icon: str | None = None, color_type: str = "primary") -> ft.Container:
     """Create enhanced metric card with trend indicators and gradients."""
     trend_color = ft.Colors.GREEN if trend == "up" else ft.Colors.RED
     trend_icon = ft.Icons.TRENDING_UP if trend == "up" else ft.Icons.TRENDING_DOWN
@@ -156,7 +242,7 @@ def create_modern_card(content: ft.Control, elevation: int = 2, hover_effect: bo
         animate=ft.Animation(150) if hover_effect else None
     )
 
-def themed_button(text: str, on_click=None, variant: str = "filled", icon: Optional[str] = None, disabled: bool = False):
+def themed_button(text: str, on_click=None, variant: str = "filled", icon: str | None = None, disabled: bool = False):
     """Themed button using native Flet button types."""
     common = {"text": text, "icon": icon, "on_click": on_click, "disabled": disabled}
 
@@ -167,7 +253,7 @@ def themed_button(text: str, on_click=None, variant: str = "filled", icon: Optio
     else:
         return ft.TextButton(**common, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)))
 
-def create_metric_card(title: str, value: str, change: Optional[str] = None, icon: Optional[str] = None, color_type: str = "primary") -> ft.Container:
+def create_metric_card(title: str, value: str, change: str | None = None, icon: str | None = None, color_type: str = "primary") -> ft.Container:
     """Metric card using semantic colors."""
     color_map = {
         "primary": ft.Colors.PRIMARY, "secondary": ft.Colors.SECONDARY,
@@ -222,7 +308,7 @@ def create_loading_indicator(text: str = "Loading...") -> ft.Container:
         padding=ft.padding.all(20)
     )
 
-def create_skeleton_loader(height: int = 20, width: Optional[int] = None, radius: int = 8) -> ft.Container:
+def create_skeleton_loader(height: int = 20, width: int | None = None, radius: int = 8) -> ft.Container:
     """Skeleton loader for loading states."""
     return ft.Container(
         height=height,
@@ -287,7 +373,7 @@ def toggle_theme_mode(page: ft.Page) -> None:
     page.theme_mode = modes[(current + 1) % 3]
     page.update()
 
-def create_section_divider(title: Optional[str] = None) -> ft.Container:
+def create_section_divider(title: str | None = None) -> ft.Container:
     """Create section divider with optional title."""
     if title:
         return ft.Container(
@@ -334,12 +420,13 @@ setup_enhanced_theme = setup_sophisticated_theme
 # Component creation aliases
 create_modern_card_container = create_modern_card
 create_trend_indicator = create_status_badge
-create_text_with_typography = lambda text, **kwargs: ft.Text(text, **kwargs)
+def create_text_with_typography(text, **kwargs):
+    return ft.Text(text, **kwargs)
 
 # Legacy function names with deprecation warnings
-import warnings
 
-def _deprecation_warning(func_name: str, replacement: Optional[str] = None) -> None:
+
+def _deprecation_warning(func_name: str, replacement: str | None = None) -> None:
     msg = f"{func_name} is deprecated"
     if replacement:
         msg += f". Use {replacement} instead"
@@ -364,37 +451,32 @@ INSET_NEUMORPHIC_SHADOWS = []
 # ========================================================================================
 
 __all__ = [
-    # Theme setup
-    "setup_sophisticated_theme",
-    "setup_modern_theme",
-    "setup_enhanced_theme",
-
+    "PRONOUNCED_NEUMORPHIC_SHADOWS",
+    "create_enhanced_card",
     # Enhanced components
     "create_gradient",
     "create_gradient_button",
-    "create_enhanced_card",
+    "create_loading_indicator",
+    "create_metric_card",
     "create_metric_card_enhanced",
-
     # Native components
     "create_modern_card",
-    "themed_button",
-    "create_metric_card",
-    "create_status_badge",
-    "create_loading_indicator",
-    "create_skeleton_loader",
-
-    # Neumorphic components
-    "create_neumorphic_metric_card",
-    "PRONOUNCED_NEUMORPHIC_SHADOWS",
-
-    # Utilities
-    "toggle_theme_mode",
-    "create_section_divider",
-    "get_design_tokens",
-    "get_brand_color",
-
     # Compatibility aliases
     "create_modern_card_container",
-    "create_trend_indicator",
+    # Neumorphic components
+    "create_neumorphic_metric_card",
+    "create_section_divider",
+    "create_skeleton_loader",
+    "create_status_badge",
     "create_text_with_typography",
+    "create_trend_indicator",
+    "get_brand_color",
+    "get_design_tokens",
+    "setup_enhanced_theme",
+    "setup_modern_theme",
+    # Theme setup
+    "setup_sophisticated_theme",
+    "themed_button",
+    # Utilities
+    "toggle_theme_mode",
 ]

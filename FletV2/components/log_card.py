@@ -3,11 +3,13 @@ Reusable LogCard component for Flet applications
 Flet 0.28.3 Compatible
 """
 
-import flet as ft
-from typing import Callable, Any, Optional
+from collections.abc import Callable
+from typing import Any
 
-from FletV2.utils.ui.neomorphism import NeomorphicShadows
+import flet as ft
+
 from FletV2.utils.logging.color_system import LogColorSystem
+from FletV2.utils.ui.neomorphism import NeomorphicShadows
 
 
 class LogCard(ft.Container):
@@ -29,8 +31,8 @@ class LogCard(ft.Container):
         index: int = 0,
         is_compact: bool = False,
         search_query: str = "",
-        on_click: Optional[Callable[[Any], None]] = None,
-        page: Optional[ft.Page] = None,  # Add page reference for theme awareness
+        on_click: Callable[[Any], None] | None = None,
+        page: ft.Page | None = None,  # Add page reference for theme awareness
         *args,
         **kwargs
     ):

@@ -20,6 +20,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Third-party imports
+import flet as ft
+
+# Import our path fix module to ensure proper imports
+try:
+    import fletv2_import_fix
+    print("Successfully imported fletv2_import_fix")
+except ImportError:
+    # If the fix module is not available, manually add the paths
+    fletv2_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+    utils_dir = os.path.join(fletv2_dir, 'utils')
+    if fletv2_dir not in sys.path:
+        sys.path.insert(0, fletv2_dir)
+    if utils_dir not in sys.path:
+        sys.path.insert(0, utils_dir)
+
 # CRITICAL: Set up Python path IMMEDIATELY for all imports
 current_dir = Path(__file__).parent
 project_root = Path(__file__).parent.parent
@@ -45,24 +61,6 @@ os.environ['NO_GUI'] = '1'
 os.environ['HEADLESS'] = '1'
 os.environ['DISABLE_SIGNAL_HANDLERS'] = 'true'
 os.environ['NO_SIGNAL_HANDLERS'] = '1'
-
-# Essential UTF-8 support for subprocess operations
-
-# Import our path fix module to ensure proper imports
-try:
-    import fletv2_import_fix
-    print("Successfully imported fletv2_import_fix")
-except ImportError:
-    # If the fix module is not available, manually add the paths
-    fletv2_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-    utils_dir = os.path.join(fletv2_dir, 'utils')
-    if fletv2_dir not in sys.path:
-        sys.path.insert(0, fletv2_dir)
-    if utils_dir not in sys.path:
-        sys.path.insert(0, utils_dir)
-
-# Third-party imports
-import flet as ft
 
 # Import the production BackupServer
 try:
@@ -300,7 +298,7 @@ class IntegratedServerManager:
                     else:
                         # Best-effort fallback: set a module-level attribute main can read
                         try:
-                            setattr(main_module, "INJECTED_BACKUP_SERVER", self.backup_server)
+                            main_module.INJECTED_BACKUP_SERVER = self.backup_server
                         except Exception:
                             logger.debug("Could not set INJECTED_BACKUP_SERVER on main module", exc_info=True)
 

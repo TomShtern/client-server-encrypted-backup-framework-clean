@@ -18,6 +18,12 @@ import os
 import sys
 from pathlib import Path
 
+# Import UTF-8 solution if available
+try:
+    import Shared.utils.utf8_solution as _
+except ImportError:
+    pass
+
 # Set up environment for proper imports
 current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
@@ -27,12 +33,6 @@ sys.path.insert(0, str(parent_dir))
 # Essential UTF-8 support
 os.environ['PYTHONUTF8'] = '1'
 os.environ['PYTHONIOENCODING'] = 'utf-8'
-
-# Import UTF-8 solution if available
-try:
-    import Shared.utils.utf8_solution as _
-except ImportError:
-    pass
 
 # Import the BackupServer
 try:

@@ -7,9 +7,9 @@ Core Principle: Use Flet's built-in components with proper theming.
 Let Flet do the heavy lifting. We compose, not reinvent.
 """
 
+import contextlib
 from collections.abc import Callable
 from typing import Any
-import contextlib
 
 import flet as ft
 from theme import get_design_tokens

@@ -6,36 +6,25 @@ Validates that all consolidated functionality works correctly.
 
 import flet as ft
 from theme import (
-    # Theme setup
-    setup_sophisticated_theme,
-
+    create_enhanced_card,
     # Enhanced components
     create_gradient,
     create_gradient_button,
-    create_enhanced_card,
+    create_loading_indicator,
+    create_metric_card,
     create_metric_card_enhanced,
-
     # Native components
     create_modern_card,
-    themed_button,
-    create_metric_card,
-    create_status_badge,
-    create_loading_indicator,
-    create_skeleton_loader,
-
-    # Neumorphic components
     create_neumorphic_metric_card,
-    PRONOUNCED_NEUMORPHIC_SHADOWS,
-
+    create_section_divider,
+    create_skeleton_loader,
+    create_status_badge,
+    get_design_tokens,
+    # Backward compatibility aliases
+    setup_sophisticated_theme,
+    themed_button,
     # Utilities
     toggle_theme_mode,
-    create_section_divider,
-    get_design_tokens,
-    get_brand_color,
-
-    # Backward compatibility aliases
-    setup_modern_theme,
-    create_modern_card_container,
 )
 
 

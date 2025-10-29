@@ -17,8 +17,8 @@ Features:
 """
 
 import os
-import sys
 import socket
+import sys
 
 # Add repository root to path for imports
 _flet_v2_root = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +46,7 @@ print("\n[0/4] Initializing log capture system...")
 try:
     from Shared.logging.flet_log_capture import get_flet_log_capture
     _log_capture = get_flet_log_capture()
-    print(f"[OK] Log capture initialized - ready to capture framework and app logs")
+    print("[OK] Log capture initialized - ready to capture framework and app logs")
 except Exception as e:
     print(f"[WARNING] Failed to initialize log capture: {e}")
     print("Logs view may not display Flet framework logs correctly.")
@@ -114,7 +114,7 @@ def gui_with_server_main(page: ft.Page):
     page.update()  # Apply window configuration immediately
 
     print("🟢 [START] gui_with_server_main function ENTERED")
-    print(f"🟢 [WINDOW] Desktop window configured: 1200x800, resizable, centered")
+    print("🟢 [WINDOW] Desktop window configured: 1200x800, resizable, centered")
     print(f"🟢 [START] Page object: {page}")
     print(f"🟢 [START] Server instance available: {server_instance is not None}")
 
@@ -148,9 +148,9 @@ def gui_with_server_main(page: ft.Page):
             print("[INIT] Starting async initialization...")
             print(f"[DEBUG] App object: {app}")
             print(f"[DEBUG] App.initialize callable? {callable(getattr(app, 'initialize', None))}")
-            print(f"[DEBUG] About to await app.initialize()...")
+            print("[DEBUG] About to await app.initialize()...")
             await app.initialize()
-            print(f"[DEBUG] app.initialize() returned successfully")
+            print("[DEBUG] app.initialize() returned successfully")
             print(f"\n{'=' * 70}")
             print(f"{'[READY] FletV2 GUI is Running':^70}")
             if server_instance:

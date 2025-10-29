@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import flet as ft
+
 from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)

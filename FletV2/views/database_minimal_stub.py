@@ -1,7 +1,8 @@
 """Ultra-minimal database view stub for testing browser crash issue."""
 
-import flet as ft
 from typing import Any
+
+import flet as ft
 
 
 def create_database_view(server_bridge: Any, page: ft.Page, state_manager: Any = None) -> tuple:

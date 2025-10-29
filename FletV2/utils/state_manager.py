@@ -25,6 +25,7 @@ from typing import Any
 
 print("🟢 [DEBUG] About to import flet")
 import flet as ft
+
 print("🟢 [DEBUG] Flet imported successfully")
 
 # --- PATH SETUP (allow direct execution / editor open) ---

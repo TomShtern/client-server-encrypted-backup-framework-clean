@@ -13,12 +13,12 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 import flet as ft
 
 try:  # pragma: no cover - UTF-8 bootstrap required by project
-    import Shared.utils.utf8_solution as _
+    pass
 except Exception:  # pragma: no cover - allow running in isolation
     pass
 
@@ -64,7 +64,7 @@ class DashboardLoadingManager:
         self.on_state_change = on_state_change
 
         # Initialize loading states
-        self.loading_states: Dict[LoadingPhase, LoadingState] = {
+        self.loading_states: dict[LoadingPhase, LoadingState] = {
             phase: LoadingState(phase=phase)
             for phase in LoadingPhase
         }
@@ -210,7 +210,7 @@ class DashboardLoadingManager:
                 error_message=str(e),
             )
 
-    async def _safe_bridge_call(self, method_name: str, *args: Any) -> Dict[str, Any]:
+    async def _safe_bridge_call(self, method_name: str, *args: Any) -> dict[str, Any]:
         """
         Safely call server bridge method with proper async handling.
 

@@ -11,12 +11,12 @@ This module provides reusable functions for:
 
 import csv
 import json
+from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Any, Callable, Optional
+from typing import Any
 
 
-def export_to_csv(data: List[Dict[str, Any]], filepath: str, fieldnames: Optional[List[str]] = None):
+def export_to_csv(data: list[dict[str, Any]], filepath: str, fieldnames: list[str] | None = None):
     """
     Export data to CSV file.
 
@@ -41,7 +41,7 @@ def export_to_csv(data: List[Dict[str, Any]], filepath: str, fieldnames: Optiona
         writer.writerows(data)
 
 
-def export_to_json(data: List[Dict[str, Any]], filepath: str, indent: int = 2):
+def export_to_json(data: list[dict[str, Any]], filepath: str, indent: int = 2):
     """
     Export data to JSON file.
 
@@ -57,7 +57,7 @@ def export_to_json(data: List[Dict[str, Any]], filepath: str, indent: int = 2):
         json.dump(data, f, indent=indent, default=str, ensure_ascii=False)
 
 
-def export_to_txt(data: List[Dict[str, Any]], filepath: str, format_func: Optional[Callable] = None):
+def export_to_txt(data: list[dict[str, Any]], filepath: str, format_func: Callable | None = None):
     """
     Export data to TXT file with optional custom formatting.
 
@@ -94,10 +94,10 @@ def generate_export_filename(prefix: str, extension: str) -> str:
 
 
 async def export_with_progress(
-    data: List[Dict[str, Any]],
+    data: list[dict[str, Any]],
     filepath: str,
     export_func: Callable,
-    progress_callback: Optional[Callable] = None
+    progress_callback: Callable | None = None
 ):
     """
     Export data with progress updates.

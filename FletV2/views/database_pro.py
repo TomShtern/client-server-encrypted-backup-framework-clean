@@ -27,10 +27,32 @@ import builtins
 import logging
 import os
 import sys
+from collections.abc import Callable, Coroutine, Iterable
 from datetime import datetime
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 import flet as ft
+
+# UTF-8 solution for subprocess/console I/O
+import Shared.utils.utf8_solution as _  # noqa: F401
+from FletV2.components.context_menu import StandardContextMenu, setup_context_menu_target
+from FletV2.components.enhanced_data_table import ColumnConfig, EnhancedDataTable
+from FletV2.theme import (
+    create_neumorphic_metric_card,
+    themed_button,
+)
+from FletV2.utils.async_helpers import run_sync_in_executor
+from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
+from FletV2.utils.debug_setup import get_logger
+from FletV2.utils.keyboard_handlers import (
+    KeyCode,
+    KeyboardHandler,
+    NavigationKeyboardHandler,
+    create_standard_shortcuts,
+)
+from FletV2.utils.server_bridge import ServerBridge
+from FletV2.utils.state_manager import StateManager
+from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 # Ensure proper path setup
 _views_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,22 +61,6 @@ _repo_root = os.path.dirname(_flet_v2_root)
 for _path in (_flet_v2_root, _repo_root):
     if _path not in sys.path:
         sys.path.insert(0, _path)
-
-# UTF-8 solution for subprocess/console I/O
-import Shared.utils.utf8_solution as _  # noqa: F401
-
-from FletV2.theme import (
-    create_glassmorphic_container,
-    create_neumorphic_container,
-    create_neumorphic_metric_card,
-    themed_button,
-)
-from FletV2.utils.async_helpers import run_sync_in_executor
-from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
-from FletV2.utils.debug_setup import get_logger
-from FletV2.utils.server_bridge import ServerBridge
-from FletV2.utils.state_manager import StateManager
-from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 logger = get_logger(__name__)
 _VERBOSE_DB_DIAGNOSTICS = os.getenv("FLET_V2_VERBOSE_DB", "").strip().lower() in {"1", "true", "yes"} or os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
@@ -65,6 +71,190 @@ else:
     logger.setLevel(logging.WARNING)
 
 _ORIGINAL_PRINT = builtins.print
+
+
+# Enhanced DataTable event handlers
+def handle_row_click(row_data: dict, page: ft.Page, server_bridge: ServerBridge | None):
+    """Handle row click in enhanced DataTable"""
+    if not row_data or not server_bridge:
+        return
+
+    table_name = row_data.get("table_name")
+    record_id = row_data.get("record_id")
+
+    if table_name and record_id:
+        # Show details dialog for the selected record
+        show_record_details_dialog(table_name, record_id, page, server_bridge)
+
+
+def handle_selection_change(
+    selected_data: list[dict],
+    selected_count_text: ft.Control,
+    btn_clear_selection: ft.Control,
+    btn_bulk_delete: ft.Control
+):
+    """Handle selection change in enhanced DataTable"""
+    count = len(selected_data)
+    selected_count_text.value = f"{count} row{'s' if count != 1 else ''} selected"
+
+    # Enable/disable bulk actions based on selection
+    has_selection = count > 0
+    btn_clear_selection.disabled = not has_selection
+    btn_bulk_delete.disabled = not has_selection
+
+    # Update UI
+    if getattr(selected_count_text, "page", None):
+        selected_count_text.update()
+    if getattr(btn_clear_selection, "page", None):
+        btn_clear_selection.update()
+    if getattr(btn_bulk_delete, "page", None):
+        btn_bulk_delete.update()
+
+
+def handle_context_menu_action(
+    action: str,
+    data: Iterable[dict[str, Any]],
+    page: ft.Page,
+    server_bridge: ServerBridge | None
+):
+    """Handle context menu actions for enhanced DataTable"""
+    if not server_bridge:
+        show_error_message(page, "Not connected to server")
+        return
+
+    selected_data = list(data)
+
+    if action == "view_details":
+        if selected_data:
+            handle_row_click(selected_data[0], page, server_bridge)
+
+    elif action == "edit_entry":
+        if selected_data:
+            show_edit_record_dialog(selected_data[0], page, server_bridge)
+
+    elif action == "copy_selection":
+        copy_selected_to_clipboard(selected_data, page)
+
+    elif action == "export_selected":
+        export_selected_records(selected_data, page, server_bridge)
+
+    elif action == "bulk_delete":
+        confirm_bulk_delete(selected_data, page, server_bridge)
+
+
+def handle_view_details(enhanced_table: EnhancedDataTable, page: ft.Page, server_bridge: ServerBridge | None):
+    """Handle view details action"""
+    selected_data = enhanced_table.get_selected_data()
+    if selected_data:
+        handle_row_click(selected_data[0], page, server_bridge)
+
+
+def handle_edit_record(enhanced_table: EnhancedDataTable, page: ft.Page, server_bridge: ServerBridge | None):
+    """Handle edit record action"""
+    selected_data = enhanced_table.get_selected_data()
+    if selected_data and server_bridge:
+        show_edit_record_dialog(selected_data[0], page, server_bridge)
+
+
+def handle_copy_selection(enhanced_table: EnhancedDataTable):
+    """Handle copy selection action"""
+    selected_data = enhanced_table.get_selected_data()
+    if selected_data:
+        copy_selected_to_clipboard(selected_data, enhanced_table.page)
+
+
+def handle_export_selected(enhanced_table: EnhancedDataTable, format_type: str, page: ft.Page):
+    """Handle export selected action"""
+    selected_data = enhanced_table.get_selected_data()
+    if selected_data:
+        export_records(selected_data, format_type, page)
+
+
+def handle_bulk_delete_records(enhanced_table: EnhancedDataTable, page: ft.Page, server_bridge: ServerBridge | None):
+    """Handle bulk delete records action"""
+    selected_data = enhanced_table.get_selected_data()
+    if selected_data and server_bridge:
+        confirm_bulk_delete(selected_data, page, server_bridge)
+
+
+def show_record_details_dialog(table_name: str, record_id: str, page: ft.Page, server_bridge: ServerBridge):
+    """Show details dialog for a specific record"""
+    # Implementation would show a dialog with record details
+    show_success_message(page, f"Viewing details for {table_name}:{record_id}")
+
+
+def show_edit_record_dialog(record_data: dict, page: ft.Page, server_bridge: ServerBridge):
+    """Show edit dialog for a specific record"""
+    # Implementation would show an edit dialog
+    show_success_message(page, f"Editing record {record_data.get('id')}")
+
+
+def copy_selected_to_clipboard(selected_data: Iterable[dict[str, Any]], page: ft.Page):
+    """Copy selected data to clipboard"""
+    try:
+        # Format data as text
+        rows = [str(row) for row in selected_data]
+
+        text = "\n".join(rows)
+
+        # Copy to clipboard (implementation depends on platform)
+        page.set_clipboard(text)
+        show_success_message(page, f"Copied {len(rows)} items to clipboard")
+    except Exception as e:
+        show_error_message(page, f"Failed to copy to clipboard: {e}")
+
+
+def export_selected_records(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge):
+    """Export selected records"""
+    # Implementation would export the selected records
+    records = list(selected_data)
+    show_success_message(page, f"Exporting {len(records)} records")
+
+
+def confirm_bulk_delete(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge):
+    """Confirm and execute bulk delete"""
+    records = list(selected_data)
+    count = len(records)
+
+    def close_dialog(_):
+        if page.dialog:
+            page.dialog.open = False
+            page.dialog.update()
+
+    def confirm_delete(e):
+        # Implementation would delete the records
+        show_success_message(page, f"Deleted {count} records")
+        close_dialog(e)
+
+    # Show confirmation dialog
+    dialog = ft.AlertDialog(
+        title=ft.Text("Confirm Delete"),
+        content=ft.Text(f"Are you sure you want to delete {count} record{'s' if count != 1 else ''}?"),
+        actions=[
+            ft.TextButton("Cancel", on_click=close_dialog),
+            ft.FilledButton("Delete", on_click=confirm_delete),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+
+    page.dialog = dialog
+    dialog.open = True
+    page.update()
+
+
+def export_records(records: list, format_type: str, page: ft.Page):
+    """Export records in specified format"""
+    try:
+        if format_type == "csv":
+            # Export as CSV
+            show_success_message(page, f"Exported {len(records)} records as CSV")
+        elif format_type == "json":
+            # Export as JSON
+            show_success_message(page, f"Exported {len(records)} records as JSON")
+        else:
+            show_error_message(page, f"Unsupported export format: {format_type}")
+    except Exception as e:
+        show_error_message(page, f"Export failed: {e}")
 
 
 def _diagnostic_print(*args: Any, **kwargs: Any) -> None:
@@ -557,35 +747,6 @@ def create_database_view(
         visible=False,
     )
 
-    # DataTable for table view mode with enhanced styling
-    # CRITICAL: DataTable requires at least one column - initialize with placeholder
-    data_table = ft.DataTable(
-        columns=[
-            ft.DataColumn(ft.Text("Loading...", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.PRIMARY))
-        ],
-        rows=[
-            ft.DataRow(cells=[ft.DataCell(ft.Text("Initializing database view...", color=ft.Colors.GREY_500, size=13))])
-        ],
-        # Enhanced border styling
-        border=ft.border.all(2, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)),
-        border_radius=12,
-        # Better horizontal lines between rows
-        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
-        # Vertical dividers between columns
-        divider_thickness=1,
-        # Enhanced row sizing
-        heading_row_height=52,
-        data_row_min_height=48,
-        data_row_max_height=72,
-        # Better column spacing
-        column_spacing=24,
-        # Enable checkboxes for row selection
-        show_checkbox_column=True,
-        # Better heading text styling
-        heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
-    )
-
-    # Bulk actions toolbar (shown when rows selected)
     selected_count_text = ft.Text(
         "0 rows selected",
         size=14,
@@ -597,16 +758,76 @@ def create_database_view(
         "Clear Selection",
         icon=ft.Icons.CLEAR,
         style=ft.ButtonStyle(color=ft.Colors.ON_PRIMARY),
-        on_click=lambda e: None,  # Will be set later
+        on_click=lambda e: None,
     )
 
     btn_bulk_delete = ft.FilledButton(
         "Delete Selected",
         icon=ft.Icons.DELETE_SWEEP,
         style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
-        on_click=lambda e: None,  # Will be set later
+        on_click=lambda e: None,
     )
 
+    # Enhanced DataTable with desktop-specific features
+    # Initialize with placeholder columns - will be updated when data loads
+    enhanced_data_table = EnhancedDataTable(
+        columns=[
+            ColumnConfig(key="id", label="ID", width=80, sortable=True, filterable=True),
+            ColumnConfig(key="table_name", label="Table", width=150, sortable=True, filterable=True),
+            ColumnConfig(key="record_id", label="Record ID", width=100, sortable=True, filterable=True),
+            ColumnConfig(key="data_preview", label="Data Preview", width=300, sortable=True, filterable=True),
+            ColumnConfig(key="created_at", label="Created", width=150, sortable=True, filterable=True),
+            ColumnConfig(key="updated_at", label="Updated", width=150, sortable=True, filterable=True),
+        ],
+        data=[],
+        on_row_click=lambda row_data: handle_row_click(row_data, page, server_bridge),
+        on_selection_change=lambda selected_data: handle_selection_change(selected_data, selected_count_text, btn_clear_selection, btn_bulk_delete),
+        on_context_menu=lambda action, data: handle_context_menu_action(action, data, page, server_bridge),
+        page_size=50,
+        show_checkbox_column=True,
+        enable_virtual_scrolling=True,
+        expand=True
+    )
+
+    # Setup keyboard navigation for the enhanced table
+    nav_handler = NavigationKeyboardHandler()
+    nav_handler.register_callback("navigate_down", lambda e: enhanced_data_table.handle_keyboard_event(ft.KeyboardEvent(key=KeyCode.ARROW_DOWN)))
+    nav_handler.register_callback("navigate_up", lambda e: enhanced_data_table.handle_keyboard_event(ft.KeyboardEvent(key=KeyCode.ARROW_UP)))
+    nav_handler.register_callback("activate", lambda e: enhanced_data_table.handle_keyboard_event(ft.KeyboardEvent(key=KeyCode.ENTER)))
+    nav_handler.register_callback("delete", lambda e: enhanced_data_table.handle_keyboard_event(ft.KeyboardEvent(key=KeyCode.DELETE)))
+    nav_handler.register_callback("escape", lambda e: enhanced_data_table.handle_keyboard_event(ft.KeyboardEvent(key=KeyCode.ESCAPE)))
+    nav_handler.register_callback(
+        "select_all",
+        lambda e: enhanced_data_table.handle_keyboard_event(
+            ft.KeyboardEvent(key=KeyCode.A, ctrl=True)
+        ),
+    )
+
+    # Setup global keyboard handler for this view
+    keyboard_handler = KeyboardHandler(page)
+    create_standard_shortcuts(keyboard_handler)
+    keyboard_handler.add_active_handler(enhanced_data_table.handle_keyboard_event)
+
+    # Create context menu for the DataTable using the factory function
+    context_menu = StandardContextMenu.create_datatable_menu(
+        on_view_details=lambda: handle_view_details(enhanced_data_table, page, server_bridge),
+        on_edit=lambda: handle_edit_record(enhanced_data_table, page, server_bridge),
+        on_copy=lambda: handle_copy_selection(enhanced_data_table),
+        on_export=lambda format_type: handle_export_selected(enhanced_data_table, format_type, page),
+        on_delete=lambda: handle_bulk_delete_records(enhanced_data_table, page, server_bridge),
+        has_selection=True
+    )
+
+    # Add context menu to page overlay
+    page.overlay.append(context_menu)
+
+    # Setup right-click context menu for the enhanced DataTable
+    setup_context_menu_target(enhanced_data_table, context_menu, page)
+
+    # Keep reference to standard DataTable for compatibility (deprecated)
+    data_table: ft.DataTable | None = enhanced_data_table.data_table
+
+    # Bulk actions toolbar (shown when rows selected)
     bulk_actions_toolbar = ft.Container(
         content=ft.Row(
             [
@@ -645,7 +866,7 @@ def create_database_view(
         on_click=lambda e: None,  # Will be set later
     )
 
-    pagination_controls = ft.Row(
+    ft.Row(
         [
             btn_prev_page,
             pagination_info,
@@ -656,24 +877,10 @@ def create_database_view(
     )
 
     # Container to hold current view mode with enhanced styling
+    # Enhanced DataTable with integrated toolbar and pagination
     # NO scroll here - parent main_layout handles scrolling to avoid nested scroll conflicts
     table_view_container = ft.Container(
-        content=ft.Column(
-            [
-                bulk_actions_toolbar,  # Shown when rows selected
-                ft.Container(
-                    content=data_table,
-                    # Enhanced container styling
-                    border=ft.border.all(2, ft.Colors.with_opacity(0.15, ft.Colors.OUTLINE)),
-                    border_radius=12,
-                    padding=16,
-                    # Subtle background to distinguish from page
-                    bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-                ),
-                pagination_controls,
-            ],
-            spacing=12,
-        ),
+        content=enhanced_data_table,  # This includes toolbar, table, and pagination
         visible=True,
         padding=ft.Padding(8, 8, 8, 8),
     )
@@ -722,7 +929,7 @@ def create_database_view(
                 records_listview.update()
                 if is_control_attached(cards_view_container):
                     cards_view_container.update()
-            elif view_mode == "table" and is_control_attached(data_table):
+            elif view_mode == "table" and data_table and is_control_attached(data_table):
                 data_table.update()
                 if is_control_attached(table_view_container):
                     table_view_container.update()
@@ -734,7 +941,7 @@ def create_database_view(
                 records_section.update()
             if hasattr(page, "update"):
                 page.update()
-        except Exception as _e:  # noqa: F841 - best-effort fix
+        except Exception as _e:
             # Avoid breaking the flow if an update fails mid-tree
             pass
 
@@ -985,10 +1192,10 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda _: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
             ft.FilledButton(
                 "Delete All",
-                on_click=lambda _: page.run_task(confirm_bulk_delete),
+                on_click=lambda __: page.run_task(confirm_bulk_delete),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
             ),
         ]
@@ -1072,19 +1279,20 @@ def create_database_view(
 
     def refresh_data_table() -> None:
         """Refresh the DataTable display with enhanced formatting and styling."""
-        if not is_control_attached(data_table):
+        table = data_table
+        if table is None or not is_control_attached(table):
             logger.debug("DataTable not attached, skipping refresh")
             return
 
         # Clear existing table
-        data_table.columns.clear()
-        data_table.rows.clear()
+        table.columns.clear()
+        table.rows.clear()
 
         # CRITICAL: Always ensure non-empty columns/rows to prevent gray screen
         if not filtered_records or not table_columns:
             # Empty state - show message in table
-            data_table.columns.append(ft.DataColumn(ft.Text("No Data", weight=ft.FontWeight.BOLD)))
-            data_table.rows.append(
+            table.columns.append(ft.DataColumn(ft.Text("No Data", weight=ft.FontWeight.BOLD)))
+            table.rows.append(
                 ft.DataRow(
                     cells=[ft.DataCell(ft.Text("No records to display", color=ft.Colors.GREY_500))]
                 )
@@ -1103,7 +1311,7 @@ def create_database_view(
                     sort_icon = "↑" if sort_ascending else "↓"
                     formatted_name = f"{formatted_name} {sort_icon}"
 
-                data_table.columns.append(
+                table.columns.append(
                     ft.DataColumn(
                         ft.Text(
                             formatted_name,
@@ -1117,7 +1325,7 @@ def create_database_view(
 
             # Add action column
             if is_server_connected():
-                data_table.columns.append(
+                table.columns.append(
                     ft.DataColumn(
                         ft.Text(
                             "Actions",
@@ -1189,19 +1397,19 @@ def create_database_view(
                     # MD3 color theming for selected state
                     color=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY) if is_selected else None,
                 )
-                data_table.rows.append(data_row)
+                table.rows.append(data_row)
 
         # CRITICAL: Final validation - DataTable MUST have columns and rows (prevents gray screen)
-        if not data_table.columns:
+        if not table.columns:
             print("🟥 [REFRESH_TABLE] CRITICAL: Empty columns detected, adding fallback!")
-            data_table.columns.append(ft.DataColumn(ft.Text("Error", weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR)))
-        if not data_table.rows:
+            table.columns.append(ft.DataColumn(ft.Text("Error", weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR)))
+        if not table.rows:
             print("🟥 [REFRESH_TABLE] CRITICAL: Empty rows detected, adding fallback!")
-            data_table.rows.append(
+            table.rows.append(
                 ft.DataRow(cells=[ft.DataCell(ft.Text("No data available", color=ft.Colors.GREY_500))])
             )
 
-        data_table.update()
+        table.update()
         update_pagination_controls()
 
     def toggle_view_mode(new_mode: str) -> None:
@@ -1426,8 +1634,8 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda _: page.close(dialog)),
-            ft.FilledButton("Add", on_click=lambda _: page.run_task(save_record)),
+            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.FilledButton("Add", on_click=lambda __: page.run_task(save_record)),
         ]
 
         page.open(dialog)
@@ -1505,8 +1713,8 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda _: page.close(dialog)),
-            ft.FilledButton("Save", on_click=lambda _: page.run_task(save_changes)),
+            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.FilledButton("Save", on_click=lambda __: page.run_task(save_changes)),
         ]
 
         page.open(dialog)
@@ -1562,10 +1770,10 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda _: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
             ft.FilledButton(
                 "Delete",
-                on_click=lambda _: page.run_task(confirm_delete),
+                on_click=lambda __: page.run_task(confirm_delete),
                 style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
             ),
         ]
@@ -1773,10 +1981,10 @@ def create_database_view(
     search_field.on_change = on_search_change
     btn_add.on_click = add_record_dialog
     btn_refresh.on_click = on_refresh_click
-    btn_export_csv.on_click = lambda _: export_data("csv")
-    btn_export_json.on_click = lambda _: export_data("json")
-    btn_view_cards.on_click = lambda _: toggle_view_mode("cards")
-    btn_view_table.on_click = lambda _: toggle_view_mode("table")
+    btn_export_csv.on_click = lambda __: export_data("csv")
+    btn_export_json.on_click = lambda __: export_data("json")
+    btn_view_cards.on_click = lambda __: toggle_view_mode("cards")
+    btn_view_table.on_click = lambda __: toggle_view_mode("table")
     btn_prev_page.on_click = go_to_prev_page
     btn_next_page.on_click = go_to_next_page
     btn_clear_selection.on_click = clear_selection

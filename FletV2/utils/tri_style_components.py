@@ -11,8 +11,10 @@ Design Hierarchy:
 This system creates visual depth and sophistication while maintaining excellent UX.
 """
 
+import inspect
+from typing import Any
+
 import flet as ft
-from typing import Any, Optional, List, Dict, Union
 
 # ==================== COLOR SYSTEM FOR TRI-STYLE HARMONY ====================
 
@@ -57,7 +59,7 @@ class ShadowSystem:
     """Sophisticated shadow hierarchy for visual depth."""
 
     @staticmethod
-    def neuro_inset_shadow(intensity: float = 1.0) -> List[ft.BoxShadow]:
+    def neuro_inset_shadow(intensity: float = 1.0) -> list[ft.BoxShadow]:
         """Create inset neumorphic shadow effect."""
         return [
             # Inset shadow (top-left light)
@@ -77,7 +79,7 @@ class ShadowSystem:
         ]
 
     @staticmethod
-    def neuro_raised_shadow(intensity: float = 1.0) -> List[ft.BoxShadow]:
+    def neuro_raised_shadow(intensity: float = 1.0) -> list[ft.BoxShadow]:
         """Create raised neumorphic shadow effect."""
         return [
             # Raised shadow (soft, light)
@@ -110,12 +112,12 @@ class ShadowSystem:
 
 def create_neuro_container(
     content: ft.Control,
-    width: Optional[float] = None,
-    height: Optional[float] = None,
+    width: float | None = None,
+    height: float | None = None,
     is_inset: bool = False,
     is_dark_theme: bool = False,
     border_radius: float = 20,
-    padding: Union[float, ft.padding.Padding] = 24
+    padding: float | ft.padding.Padding = 24
 ) -> ft.Container:
     """
     Create neumorphic container with soft shadows and subtle depth.
@@ -140,11 +142,11 @@ def create_neuro_container(
 
 def create_neuro_button(
     text: str,
-    on_click: Optional[Any] = None,
-    icon: Optional[str] = None,
+    on_click: Any | None = None,
+    icon: str | None = None,
     is_dark_theme: bool = False,
     color: str = TriStyleColors.MD3_PRIMARY,
-    width: Optional[float] = None
+    width: float | None = None
 ) -> ft.Container:
     """
     Create neumorphic button with tactile pressed effect.
@@ -168,10 +170,12 @@ def create_neuro_button(
         e.control.update()
 
         # Call original handler
-        if on_click:
-            if hasattr(on_click, '__call__'):
+        if callable(on_click):
+            if inspect.iscoroutinefunction(on_click):
+                await on_click(e)
+            else:
                 result = on_click(e)
-                if hasattr(result, '__await__'):
+                if inspect.isawaitable(result):
                     await result
 
         # Restore scale
@@ -194,8 +198,8 @@ def create_neuro_button(
 def create_neuro_metric_panel(
     title: str,
     value: str,
-    subtitle: Optional[str] = None,
-    icon: Optional[str] = None,
+    subtitle: str | None = None,
+    icon: str | None = None,
     color: str = TriStyleColors.MD3_PRIMARY,
     is_dark_theme: bool = False
 ) -> ft.Container:
@@ -250,14 +254,14 @@ def create_neuro_metric_panel(
 
 def create_glass_card(
     content: ft.Control,
-    width: Optional[float] = None,
-    height: Optional[float] = None,
+    width: float | None = None,
+    height: float | None = None,
     accent_color: str = TriStyleColors.GLASS_ACCENT_BLUE,
     backdrop_opacity: float = 0.1,
     border_opacity: float = 0.2,
     glow_intensity: float = 1.0,
     border_radius: float = 24,
-    padding: Union[float, ft.padding.Padding] = 24,
+    padding: float | ft.padding.Padding = 24,
     is_dark_theme: bool = False
 ) -> ft.Container:
     """
@@ -285,7 +289,7 @@ def create_glass_card(
 def create_glass_hero_card(
     title: str,
     value: str,
-    trend: Optional[str] = None,
+    trend: str | None = None,
     icon: str = ft.Icons.DASHBOARD,
     accent_color: str = TriStyleColors.GLASS_ACCENT_BLUE,
     is_dark_theme: bool = False
@@ -378,11 +382,11 @@ def create_glass_hero_card(
 
 def create_glass_overlay_panel(
     content: ft.Control,
-    title: Optional[str] = None,
+    title: str | None = None,
     accent_color: str = TriStyleColors.GLASS_ACCENT_PURPLE,
     is_dark_theme: bool = False,
-    width: Optional[float] = None,
-    height: Optional[float] = None
+    width: float | None = None,
+    height: float | None = None
 ) -> ft.Container:
     """
     Create glassmorphic overlay panel for floating content.
@@ -428,8 +432,8 @@ def create_glass_overlay_panel(
 
 def create_md3_action_button(
     text: str,
-    on_click: Optional[Any] = None,
-    icon: Optional[str] = None,
+    on_click: Any | None = None,
+    icon: str | None = None,
     variant: str = "filled",  # filled, tonal, outlined, text
     color: str = TriStyleColors.MD3_PRIMARY,
     disabled: bool = False
@@ -474,8 +478,8 @@ def create_md3_action_button(
 
 def create_md3_icon_button(
     icon: str,
-    on_click: Optional[Any] = None,
-    tooltip: Optional[str] = None,
+    on_click: Any | None = None,
+    tooltip: str | None = None,
     variant: str = "standard",  # standard, filled, tonal, outlined
     color: str = TriStyleColors.MD3_PRIMARY,
     size: float = 24
@@ -525,8 +529,8 @@ def create_md3_icon_button(
 
 def create_md3_fab(
     icon: str,
-    on_click: Optional[Any] = None,
-    label: Optional[str] = None,
+    on_click: Any | None = None,
+    label: str | None = None,
     variant: str = "primary",  # primary, secondary, surface, tertiary
     size: str = "normal"  # small, normal, large
 ) -> ft.FloatingActionButton:
@@ -549,7 +553,7 @@ def create_md3_fab(
     }
 
     bg_color = color_map.get(variant, TriStyleColors.MD3_PRIMARY)
-    width, height, icon_size = size_map.get(size, size_map["normal"])
+    width, height, _icon_size = size_map.get(size, size_map["normal"])
 
     return ft.FloatingActionButton(
         icon=icon,
@@ -570,8 +574,8 @@ def create_tri_style_dashboard_section(
     style_type: str = "neuro",  # neuro, glass, md3
     accent_color: str = TriStyleColors.MD3_PRIMARY,
     is_dark_theme: bool = False,
-    width: Optional[float] = None,
-    height: Optional[float] = None
+    width: float | None = None,
+    height: float | None = None
 ) -> ft.Container:
     """
     Create dashboard section using appropriate tri-style component.
@@ -727,17 +731,17 @@ def demo_tri_style_components(page: ft.Page) -> ft.Column:
 
 # Export key functions for easy importing
 __all__ = [
-    'TriStyleColors',
     'ShadowSystem',
-    'create_neuro_container',
-    'create_neuro_button',
-    'create_neuro_metric_panel',
+    'TriStyleColors',
     'create_glass_card',
     'create_glass_hero_card',
     'create_glass_overlay_panel',
     'create_md3_action_button',
-    'create_md3_icon_button',
     'create_md3_fab',
+    'create_md3_icon_button',
+    'create_neuro_button',
+    'create_neuro_container',
+    'create_neuro_metric_panel',
     'create_tri_style_dashboard_section',
     'demo_tri_style_components'
 ]

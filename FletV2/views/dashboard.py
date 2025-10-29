@@ -6,30 +6,24 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
+import time
 from collections import Counter
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime
-import time
-from typing import Any, Callable, Coroutine
-import os
+from typing import Any
 
 import flet as ft
 
 try:  # pragma: no cover - UTF-8 bootstrap required by project
-    import Shared.utils.utf8_solution as _
+    pass
 except Exception:  # pragma: no cover - allow running in isolation
     pass
 
 try:
+    from ..theme import create_skeleton_loader
     from ..utils.async_helpers import run_sync_in_executor
-    from ..utils.ui_builders import create_action_button, create_info_row, create_view_header
-    from ..utils.ui_components import AppCard, create_pulsing_status_indicator
-    from ..utils.loading_states import (
-        create_empty_state,
-        create_error_display,
-        create_loading_indicator,
-    )
-    from ..utils.user_feedback import show_error_message, show_success_message
     from ..utils.data_export import export_to_csv, generate_export_filename
     from ..utils.formatters import (
         as_float,
@@ -38,17 +32,15 @@ try:
         format_uptime,
         normalize_text,
     )
-    from ..theme import create_skeleton_loader
-except Exception:  # pragma: no cover - fallback when executing directly
-    from FletV2.utils.async_helpers import run_sync_in_executor
-    from FletV2.utils.ui_builders import create_action_button, create_info_row, create_view_header
-    from FletV2.utils.ui_components import AppCard, create_pulsing_status_indicator
-    from FletV2.utils.loading_states import (
-        create_empty_state,
+    from ..utils.loading_states import (
         create_error_display,
-        create_loading_indicator,
     )
-    from FletV2.utils.user_feedback import show_error_message, show_success_message
+    from ..utils.ui_builders import create_action_button, create_view_header
+    from ..utils.ui_components import AppCard, create_pulsing_status_indicator
+    from ..utils.user_feedback import show_error_message, show_success_message
+except Exception:  # pragma: no cover - fallback when executing directly
+    from FletV2.theme import create_skeleton_loader
+    from FletV2.utils.async_helpers import run_sync_in_executor
     from FletV2.utils.data_export import export_to_csv, generate_export_filename  # type: ignore
     from FletV2.utils.formatters import (
         as_float,
@@ -57,7 +49,16 @@ except Exception:  # pragma: no cover - fallback when executing directly
         format_uptime,
         normalize_text,
     )
-    from FletV2.theme import create_skeleton_loader
+    from FletV2.utils.loading_states import (
+        create_error_display,
+    )
+    from FletV2.utils.ui_builders import (
+        create_action_button,
+        create_status_chip,
+        create_view_header,
+    )
+    from FletV2.utils.ui_components import AppCard, create_pulsing_status_indicator
+    from FletV2.utils.user_feedback import show_error_message, show_success_message
 
 
 # ============================================================================
@@ -248,7 +249,7 @@ async def _fetch_snapshot(server_bridge: Any | None) -> DashboardSnapshot:
 
     # Gracefully handle GUI-only mode (no real server/bridge). In this case, don't
     # spam errors; return neutral, empty snapshot so the UI renders clean placeholders.
-    if not server_bridge or (hasattr(server_bridge, "real_server") and not getattr(server_bridge, "real_server")):
+    if not server_bridge or (hasattr(server_bridge, "real_server") and not server_bridge.real_server):
         snapshot.server_status = "offline"
         snapshot.errors = None
         snapshot.recent_activity = []
@@ -472,19 +473,7 @@ def create_dashboard_view(
     version_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
     port_value_text = ft.Text("—", size=12, color=ft.Colors.ON_SURFACE)
 
-    # --- Helper: simple chip/pill for header stats (FilterChip not reliable in 0.28.3)
-    def _pill(icon: str, text_ctrl: ft.Control, bg: str, fg: str) -> ft.Control:
-        return ft.Container(
-            content=ft.Row(
-                [ft.Icon(icon, size=14, color=fg), text_ctrl],
-                spacing=6,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
-            bgcolor=ft.Colors.with_opacity(0.10, bg),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.18, bg)),
-            border_radius=12,
-        )
+    # --- Modernized status chips using native Material Design 3 components
 
     # --- New 2025-style compact status header (glass + pills)
     header_status_left = ft.Column(
@@ -492,9 +481,9 @@ def create_dashboard_view(
             status_chip_holder,
             ft.Row(
                 [
-                    _pill(ft.Icons.HOURGLASS_BOTTOM, uptime_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
-                    _pill(ft.Icons.HUB, connections_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
-                    _pill(ft.Icons.STORAGE, db_value_text, ft.Colors.PRIMARY_CONTAINER, ft.Colors.ON_PRIMARY_CONTAINER),
+                    create_status_chip(ft.Icons.HOURGLASS_BOTTOM, uptime_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
+                    create_status_chip(ft.Icons.HUB, connections_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
+                    create_status_chip(ft.Icons.STORAGE, db_value_text, ft.Colors.PRIMARY_CONTAINER, ft.Colors.ON_PRIMARY_CONTAINER),
                 ],
                 spacing=8,
                 wrap=True,
@@ -529,8 +518,8 @@ def create_dashboard_view(
             ),
             ft.Row(
                 [
-                    _pill(ft.Icons.BUILD_OUTLINED, version_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
-                    _pill(ft.Icons.SETTINGS_ETHERNET, port_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
+                    create_status_chip(ft.Icons.BUILD_OUTLINED, version_value_text, ft.Colors.PRIMARY, ft.Colors.ON_PRIMARY),
+                    create_status_chip(ft.Icons.SETTINGS_ETHERNET, port_value_text, ft.Colors.SECONDARY, ft.Colors.ON_SECONDARY),
                 ],
                 spacing=8,
                 wrap=True,
@@ -671,7 +660,7 @@ def create_dashboard_view(
         # standalone mode. Show a neutral banner instead of critical/offline.
         if not server_bridge or (
             hasattr(server_bridge, "real_server")
-            and not getattr(server_bridge, "real_server")
+            and not server_bridge.real_server
         ):
             return "neutral", "GUI: Standalone mode"
 
@@ -679,7 +668,7 @@ def create_dashboard_view(
         direct_bridge_present = False
         if hasattr(server_bridge, "real_server"):
             try:
-                direct_bridge_present = bool(getattr(server_bridge, "real_server"))
+                direct_bridge_present = bool(server_bridge.real_server)
             except Exception:
                 direct_bridge_present = False
 
@@ -1041,12 +1030,12 @@ def create_dashboard_view(
         )
         page.dialog = dialog
         dialog.open = True
-        page.update()
+        # Note: page.update() not needed due to page.auto_update = True
 
     def _close_dialog() -> None:
         if page.dialog:
             page.dialog.open = False
-            page.update()
+            # Note: page.update() not needed due to page.auto_update = True
 
     def _build_activity_tile(entry: dict[str, Any]) -> ft.Control:
         """Build enhanced activity tile with strong color coding and hover effects."""
@@ -1185,7 +1174,7 @@ def create_dashboard_view(
             while not stop_event.is_set():
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=45)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if disposed or stop_event.is_set():
                         continue
                     if DEBUG:
@@ -1431,7 +1420,7 @@ def create_dashboard_view(
                 display_subtitle = subtitle
             elif key == "uptime":
                 display_value = format_uptime(display_uptime_seconds)
-                chip_level, chip_label = _derive_status(snapshot)
+                _chip_level, chip_label = _derive_status(snapshot)
                 display_subtitle = chip_label
             else:
                 display_value = "0"
