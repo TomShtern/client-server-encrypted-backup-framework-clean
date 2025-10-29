@@ -391,7 +391,15 @@ def get_design_tokens() -> dict:
     """Return simplified design tokens using Flet's built-in values."""
     return {
         "spacing": {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "2xl": 48},
-        "radii": {"none": 0, "sm": 4, "md": 8, "lg": 12, "xl": 16, "2xl": 24},
+        "radii": {
+            "none": 0,
+            "sm": 4,
+            "md": 8,
+            "lg": 12,
+            "xl": 16,
+            "2xl": 24,
+            "chip": 16,
+        },
         "type": {
             "body": {"size": 14, "weight": ft.FontWeight.W_400},
             "heading": {"size": 20, "weight": ft.FontWeight.W_600},

@@ -9,6 +9,7 @@ Clean file management with server integration and graceful fallbacks.
 
 # Standard library imports
 import asyncio
+import concurrent.futures
 import contextlib
 import os
 import sys
@@ -232,6 +233,27 @@ def create_files_view(
         files_table.update()
         update_stats_display()
 
+    async def _await_page_task(result: Any) -> None:
+        if result is None:
+            return
+
+        if asyncio.iscoroutine(result):
+            await result
+            return
+
+        if isinstance(result, (asyncio.Task, asyncio.Future)):
+            await result
+            return
+
+        if isinstance(result, concurrent.futures.Future):
+            loop = asyncio.get_running_loop()
+            await asyncio.wrap_future(result, loop=loop)
+            return
+
+        awaitable = getattr(result, "__await__", None)
+        if callable(awaitable):
+            await result
+
     def update_stats_display() -> None:
         """Update the stats display with current file data."""
         total_files = len(files_data)
@@ -286,13 +308,13 @@ def create_files_view(
 
         async def handle_picker_result(event: ft.FilePickerResultEvent) -> None:
             if hasattr(page, "run_task"):
-                await page.run_task(save_file, event)
+                await _await_page_task(page.run_task(save_file, event))
             else:
                 await save_file(event)
 
         file_picker = ft.FilePicker(on_result=handle_picker_result)
         page.overlay.append(file_picker)
-        file_picker.update()  # Ensure FilePicker is properly attached before use
+        page.update()
         file_picker.save_file(
             dialog_title="Save File",
             file_name=file.get('name', 'file.txt')
@@ -342,7 +364,7 @@ def create_files_view(
             return
 
         if hasattr(page, "run_task"):
-            page.run_task(_verify_file_async, file)
+            asyncio.create_task(_await_page_task(page.run_task(_verify_file_async, file)))
         else:
             asyncio.get_event_loop().create_task(_verify_file_async(file))
 
@@ -419,10 +441,13 @@ def create_files_view(
         page.open(delete_dialog)
 
     # Search and filter handlers
-    def on_search_change(e: ft.ControlEvent) -> None:
+    def on_search_change(e: ft.ControlEvent | str) -> None:
         """Handle search input."""
         nonlocal search_query
-        search_query = e.control.value
+        if isinstance(e, str):
+            search_query = e
+        else:
+            search_query = getattr(getattr(e, "control", None), "value", "")
         update_table()
 
     def on_status_filter_change(e: ft.ControlEvent) -> None:

@@ -111,9 +111,10 @@ def create_filter_controls(
     # Create debounced search function after defining the handler
     debounced_search = debounce(debounce_time)(_internal_search_handler)
 
-    def _handle_search_change(e: ft.ControlEvent):
+    def _handle_search_change(e: ft.ControlEvent | str):
         """Handle search input changes with debouncing."""
-        asyncio.create_task(debounced_search(e.control.value))  # noqa: RUF006
+        value = e if isinstance(e, str) else getattr(getattr(e, "control", None), "value", "")
+        asyncio.create_task(debounced_search(value))  # noqa: RUF006
 
     def _handle_filter_change(e: ft.ControlEvent, filter_key: str):
         """Handle filter dropdown changes."""

@@ -1,0 +1,7 @@
+timestamp,category,message
+2025-10-29 18:06:51,file,Live Monitoring: Get-Content logs\backup-server_20251029_180651.log -Wait -Tail 50
+2025-10-29 18:06:51,info,============================================================
+2025-10-29 18:06:51,file,Log File: logs\backup-server_20251029_180651.log
+2025-10-29 18:06:51,file,File Level: DEBUG
+2025-10-29 18:06:51,info,Console Level: INFO
+2025-10-29 18:06:51,file,=== BACKUP-SERVER LOGGING INITIALIZED ===

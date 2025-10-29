@@ -254,7 +254,7 @@ def _create_filter_controls(
     level_filter: ft.Control,
     include_switch: ft.Switch,
     last_refresh_text: ft.Control,
-    search_on_change: Callable[[ft.ControlEvent], None],
+    search_on_change: Callable[[ft.ControlEvent | str], None],
     on_refresh: Callable[[ft.ControlEvent], None],
 ) -> ft.ResponsiveRow:
     """Create the filter controls layout."""
@@ -568,8 +568,9 @@ class _LogsViewController:
     # Event bridges
     # ------------------------------------------------------------------
 
-    def _on_search_change(self, event: ft.ControlEvent) -> None:
-        self._schedule_task(lambda: self.debounced_search(event.control.value or ""))
+    def _on_search_change(self, event: ft.ControlEvent | str) -> None:
+        value = event if isinstance(event, str) else getattr(getattr(event, "control", None), "value", "")
+        self._schedule_task(lambda: self.debounced_search(value or ""))
 
     def _on_level_change(self, event: ft.ControlEvent) -> None:
         self._schedule_task(lambda: self.handle_level_change(event.control.value))

@@ -5,7 +5,8 @@ Standardized dialog patterns and user feedback to eliminate the 15+ repeated Ale
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import flet as ft
 
@@ -185,13 +186,14 @@ class DialogManager:
         title: str,
         content: str,
         input_label: str,
-        on_submit: Callable[[str], None],
+        on_submit: Callable[[str], Awaitable[Any] | Any] | None,
         on_cancel: Callable | None = None,
         submit_text: str = "Submit",
         cancel_text: str = "Cancel",
         initial_value: str = "",
         input_type: str = "text",
-        multiline: bool = False
+        multiline: bool = False,
+        validate: Callable[[str], str | None] | None = None,
     ) -> ft.AlertDialog:
         """
         Create standardized input dialog with text field.
@@ -213,12 +215,35 @@ class DialogManager:
             dialog.open = False
             dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
 
+        async def _invoke_submit(value: str):
+            import inspect
+
+            try:
+                if on_submit:
+                    result = on_submit(value)
+                    if inspect.isawaitable(result):
+                        await result
+            finally:
+                close_dialog()
+
         def handle_submit(_):
             try:
-                value = input_field.value or ""
+                raw_value = input_field.value or ""
+                value = raw_value if multiline else raw_value.strip()
+
+                if validate:
+                    validation_message = validate(value)
+                    if validation_message:
+                        show_error_message(page, validation_message)
+                        return
+
                 if on_submit:
-                    on_submit(value)
-                close_dialog()
+                    if hasattr(page, "run_task"):
+                        page.run_task(_invoke_submit, value)
+                    else:
+                        asyncio.get_event_loop().create_task(_invoke_submit(value))
+                else:
+                    close_dialog()
             except Exception as ex:
                 logger.error(f"Dialog submit action failed: {ex}")
                 close_dialog()
@@ -275,6 +300,100 @@ class DialogManager:
 
         return dialog
 
+    @staticmethod
+    def create_multi_field_dialog(
+        page: ft.Page,
+        title: str,
+        fields: list[tuple[str, str, str]],
+        on_submit: Callable[[dict[str, str]], Awaitable[Any] | Any],
+        message: str | None = None,
+        on_cancel: Callable | None = None,
+        submit_text: str = "Save",
+        cancel_text: str = "Cancel",
+        initial_values: dict[str, str] | None = None,
+    ) -> ft.AlertDialog:
+        """Create a dialog with multiple input fields (legacy dialog_builder support)."""
+
+        initial_values = initial_values or {}
+        field_controls: dict[str, ft.TextField] = {}
+
+        def close_dialog():
+            dialog.open = False
+            dialog.update()
+
+        async def _invoke_submit(values: dict[str, str]):
+            import inspect
+
+            try:
+                result = on_submit(values)
+                if inspect.isawaitable(result):
+                    result = await result
+            except Exception as ex:  # pragma: no cover - defensive
+                logger.error(f"Multi-field submit action failed: {ex}")
+                result = False
+
+            if result:
+                close_dialog()
+
+        def handle_submit(_):
+            data: dict[str, str] = {}
+
+            for label, key, _ in fields:
+                field = field_controls[key]
+                value = field.value or ""
+                data[key] = value.strip()
+                if not data[key]:
+                    show_error_message(page, f"{label} is required")
+                    return
+
+            if hasattr(page, "run_task"):
+                page.run_task(_invoke_submit, data)
+            else:
+                asyncio.get_event_loop().create_task(_invoke_submit(data))
+
+        def handle_cancel(_):
+            try:
+                if on_cancel:
+                    on_cancel()
+            finally:
+                close_dialog()
+
+        controls_list: list[ft.Control] = []
+        if message:
+            controls_list.append(ft.Text(message, size=14))
+        for label, key, hint in fields:
+            text_field = ft.TextField(
+                label=label,
+                hint_text=hint,
+                value=initial_values.get(key, ""),
+                on_submit=handle_submit,
+            )
+            field_controls[key] = text_field
+            controls_list.append(text_field)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(title, weight=ft.FontWeight.BOLD),
+            content=ft.Column(controls_list, tight=True, scroll=ft.ScrollMode.AUTO),
+            actions=[
+                ft.TextButton(cancel_text, on_click=handle_cancel),
+                ft.FilledButton(submit_text, on_click=handle_submit),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        page.overlay.append(dialog)
+        dialog.open = True
+        dialog.update()
+
+        # Focus the first input for convenience
+        for control in controls_list:
+            if isinstance(control, ft.TextField):
+                control.focus()
+                break
+
+        return dialog
+
 
 def show_confirmation(
     page: ft.Page,
@@ -326,8 +445,15 @@ def show_input(
     title: str,
     message: str,
     input_label: str,
-    on_submit: Callable[[str], None],
-    initial_value: str = ""
+    on_submit: Callable[[str], Awaitable[Any] | Any],
+    initial_value: str = "",
+    *,
+    validator: Callable[[str], str | None] | None = None,
+    submit_text: str = "Submit",
+    cancel_text: str = "Cancel",
+    on_cancel: Callable | None = None,
+    input_type: str = "text",
+    multiline: bool = False,
 ) -> ft.AlertDialog:
     """
     Quick input dialog factory function.
@@ -346,7 +472,44 @@ def show_input(
         )
     """
     return DialogManager.create_input_dialog(
-        page, title, message, input_label, on_submit, initial_value=initial_value
+        page,
+        title,
+        message,
+        input_label,
+        on_submit,
+        on_cancel=on_cancel,
+        submit_text=submit_text,
+        cancel_text=cancel_text,
+        initial_value=initial_value,
+        input_type=input_type,
+        multiline=multiline,
+        validate=validator,
+    )
+
+
+def show_multi_input(
+    page: ft.Page,
+    title: str,
+    fields: list[tuple[str, str, str]],
+    on_submit: Callable[[dict[str, str]], Awaitable[Any] | Any],
+    *,
+    message: str | None = None,
+    initial_values: dict[str, str] | None = None,
+    submit_text: str = "Save",
+    cancel_text: str = "Cancel",
+    on_cancel: Callable | None = None,
+) -> ft.AlertDialog:
+    """Show a dialog that collects multiple text inputs."""
+    return DialogManager.create_multi_field_dialog(
+        page,
+        title,
+        fields,
+        on_submit,
+        message=message,
+        on_cancel=on_cancel,
+        submit_text=submit_text,
+        cancel_text=cancel_text,
+        initial_values=initial_values,
     )
 
 

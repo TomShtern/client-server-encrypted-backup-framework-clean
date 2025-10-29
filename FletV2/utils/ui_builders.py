@@ -450,3 +450,76 @@ def create_metric_card(
     )
     card.is_semantic_container = True  # Accessibility
     return card
+
+
+# ============================================================================
+# Legacy badge helpers migrated from ui_helpers.py (kept for future reuse)
+# ============================================================================
+
+_STATUS_COLOR_MAP = {
+    "verified": ft.Colors.GREEN_600,
+    "complete": ft.Colors.GREEN_600,
+    "pending": ft.Colors.ORANGE_600,
+    "received": ft.Colors.BLUE_600,
+    "unverified": ft.Colors.RED_600,
+    "stored": ft.Colors.PURPLE_600,
+    "archived": ft.Colors.BROWN_600,
+    "empty": ft.Colors.GREY_500,
+}
+
+
+def get_status_color(status: str) -> str:
+    """Resolve semantic status into a Material color."""
+
+    key = status.lower() if isinstance(status, str) else f"{status}".lower()
+    return _STATUS_COLOR_MAP.get(key, ft.Colors.GREY_400)
+
+
+def create_status_badge(text: str, status: str) -> ft.Control:
+    """Create a compact pill badge for statuses."""
+
+    color = get_status_color(status)
+    return ft.Container(
+        content=ft.Text(text, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        border_radius=12,
+        bgcolor=color,
+        border=ft.border.all(1, color),
+    )
+
+
+_LEVEL_COLOR_FG = {
+    "INFO": ft.Colors.BLUE,
+    "SUCCESS": ft.Colors.GREEN,
+    "WARNING": ft.Colors.ORANGE,
+    "ERROR": ft.Colors.RED,
+    "DEBUG": ft.Colors.GREY,
+}
+
+
+def get_level_colors(level: str) -> tuple[str, str]:
+    """Return foreground/background colors for log levels."""
+
+    fg = _LEVEL_COLOR_FG.get(level.upper(), ft.Colors.ON_SURFACE)
+    bg = ft.Colors.with_opacity(0.08, fg)
+    return fg, bg
+
+
+def create_log_level_badge(level: str) -> ft.Control:
+    """Create a badge control for log levels with consistent styling."""
+
+    fg, bg = get_level_colors(level)
+    return ft.Container(
+        content=ft.Text(level, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        bgcolor=fg,
+        border_radius=12,
+        border=ft.border.all(1, fg),
+        alignment=ft.alignment.center,
+    )
+
+
+def get_striped_row_color(index: int) -> str | None:
+    """Return alternating row color for striped tables."""
+
+    return ft.Colors.GREEN_50 if index % 2 == 0 else None

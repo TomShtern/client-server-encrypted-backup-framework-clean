@@ -1034,8 +1034,17 @@ class FletV2App(ft.Row):
                 pass
             try:
                 logger.warning("Attempting fallback stub dashboard due to failure")
-                from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
-                stub_content = create_dashboard_stub(self.page)
+                stub_content = None
+                try:
+                    from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
+                    stub_content = create_dashboard_stub(self.page)
+                except ModuleNotFoundError:
+                    logger.debug("Dashboard stub module not found; using inline fallback UI")
+                    stub_content = self._create_inline_dashboard_stub()
+
+                if stub_content is None:
+                    raise RuntimeError("Dashboard stub unavailable")
+
                 content = stub_content
                 dispose_func = lambda: None  # noqa: E731
                 logger.info("Loaded dashboard stub successfully")
@@ -1245,6 +1254,36 @@ class FletV2App(ft.Row):
         else:
             logger.info("[SMOKE] All views loaded without detected errors")
         self._nav_smoke_test_running = False
+
+    def _create_inline_dashboard_stub(self) -> ft.Control:
+        """Provide a minimal dashboard fallback when the external stub module is archived."""
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.DASHBOARD, color=ft.Colors.PRIMARY, size=28),
+                            ft.Text("Dashboard Stub Active", size=22, weight=ft.FontWeight.BOLD),
+                        ],
+                        spacing=10,
+                    ),
+                    ft.Text(
+                        "The dashboard failed to load. Review logs for details.",
+                        size=13,
+                        color=ft.Colors.ON_SURFACE,
+                    ),
+                    ft.Text(
+                        "Once the issue is resolved, restart or navigate back to reload the dashboard.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                spacing=12,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+            padding=20,
+            expand=True,
+        )
 
 
 if __name__ == "__main__":

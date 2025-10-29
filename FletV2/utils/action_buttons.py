@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 import flet as ft
-from utils.ui_components import create_modern_progress_indicator
+from utils.ui_components import create_progress_indicator
 
 from FletV2.utils.debug_setup import get_logger
 
@@ -34,9 +34,9 @@ def create_enhanced_action_buttons(state: SettingsStateProto) -> ft.Column:
     """Create enhanced action buttons with responsive layout, modern styling and progress indicators."""
 
     # Progress indicators
-    save_progress = create_modern_progress_indicator("settings_save", state.state_manager)
-    export_progress = create_modern_progress_indicator("settings_export", state.state_manager)
-    import_progress = create_modern_progress_indicator("settings_import", state.state_manager)
+    save_progress = create_progress_indicator("settings_save", state.state_manager)
+    export_progress = create_progress_indicator("settings_export", state.state_manager)
+    import_progress = create_progress_indicator("settings_import", state.state_manager)
 
     async def save_settings_handler(e: ft.ControlEvent) -> None:
         success = await state.save_settings_async()

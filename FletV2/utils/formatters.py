@@ -16,7 +16,12 @@ New module: ~100 lines of consolidated, reusable functions
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterable
+
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_text(value: Any, max_length: int = 50, placeholder: str = "N/A") -> str:
@@ -74,7 +79,23 @@ def format_timestamp(value: Any, format_str: str = "%Y-%m-%d %H:%M:%S", placehol
         if isinstance(value, datetime):
             parsed = value
         else:
-            parsed = datetime.fromisoformat(str(value))
+            text_value = str(value).strip()
+            # Allow trailing "Z" (Zulu) suffix and other common timestamp variants
+            if text_value.endswith("Z"):
+                text_value = text_value[:-1] + "+00:00"
+
+            try:
+                parsed = datetime.fromisoformat(text_value)
+            except ValueError:
+                # Fallback to a couple of common human readable formats (ui_helpers legacy)
+                for candidate in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+                    try:
+                        parsed = datetime.strptime(text_value, candidate)
+                        break
+                    except ValueError:
+                        parsed = None
+                if parsed is None:
+                    raise
         return parsed.strftime(format_str)
     except Exception:
         return str(value)
@@ -119,7 +140,7 @@ def format_uptime(seconds: float | int, short: bool = False) -> str:
     return " ".join(parts) or "<1m"
 
 
-def format_file_size(bytes_value: int | float) -> str:
+def format_file_size(bytes_value: Any) -> str:
     """
     Format file size to human-readable string with appropriate units.
 
@@ -136,13 +157,18 @@ def format_file_size(bytes_value: int | float) -> str:
         format_file_size(1048576) → "1.0 MB"
         format_file_size(0) → "0 B"
     """
-    if bytes_value < 0:
+    try:
+        numeric_value = float(bytes_value)
+    except (TypeError, ValueError):
+        return str(bytes_value)
+
+    if numeric_value < 0:
         return "—"
-    if bytes_value == 0:
+    if numeric_value == 0:
         return "0 B"
 
     units = ["B", "KB", "MB", "GB", "TB"]
-    size = float(bytes_value)
+    size = float(numeric_value)
     unit_index = 0
 
     while size >= 1024 and unit_index < len(units) - 1:
@@ -316,3 +342,101 @@ def as_int(value: Any, default: int | None = None) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def compute_file_signature(file_dict: dict[str, Any]) -> tuple[Any, Any, Any, Any]:
+    """Return a lightweight immutable signature for a file row for future diffing.
+
+    Extracted from utils.ui_helpers (legacy). Keeping it here ensures a single
+    canonical place for row identity helpers.
+    """
+
+    if not isinstance(file_dict, dict):
+        return tuple()
+
+    return (
+        file_dict.get("id"),
+        file_dict.get("size"),
+        file_dict.get("status"),
+        file_dict.get("modified"),
+    )
+
+
+def annotate_size_strings(
+    rows: Iterable[dict[str, Any]],
+    size_key: str = "size",
+    target_key: str = "size_formatted",
+) -> list[dict[str, Any]]:
+    """Attach human readable sizes for each row (from server_mediated_operations)."""
+
+    annotated: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            value = row.get(size_key, 0)
+            row[target_key] = format_file_size(value)
+            annotated.append(row)
+    return annotated
+
+
+def parse_timestamp_columns(
+    rows: Iterable[dict[str, Any]],
+    key: str = "timestamp",
+) -> list[dict[str, Any]]:
+    """Parse ISO timestamp strings into ``datetime`` objects in-place.
+
+    Mirrors the timestamp_processor utility from server_mediated_operations.
+    """
+
+    parsed_rows: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict) and key in row and isinstance(row[key], str):
+            try:
+                row[key] = datetime.fromisoformat(row[key])
+            except ValueError:
+                logger.debug("Failed to parse timestamp %s", row[key])
+        parsed_rows.append(row)
+    return parsed_rows
+
+
+def append_percentage(
+    rows: Iterable[dict[str, Any]],
+    key: str = "value",
+    target_key: str = "value_percentage",
+) -> list[dict[str, Any]]:
+    """Append percentage string fields for numeric values."""
+
+    processed: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict) and key in row:
+            try:
+                numeric = float(row[key])
+                row[target_key] = f"{numeric:.1f}%"
+            except (TypeError, ValueError):
+                row[target_key] = "—"
+        processed.append(row)
+    return processed
+
+
+def annotate_status_display(
+    rows: Iterable[dict[str, Any]],
+    status_key: str = "status",
+    target_key: str = "status_display",
+) -> list[dict[str, Any]]:
+    """Attach normalized status metadata (text + color) to each row."""
+
+    palette = {
+        "running": {"text": "Running", "color": "green"},
+        "stopped": {"text": "Stopped", "color": "red"},
+        "pending": {"text": "Pending", "color": "orange"},
+        "error": {"text": "Error", "color": "red"},
+        "completed": {"text": "Completed", "color": "green"},
+        "failed": {"text": "Failed", "color": "red"},
+    }
+
+    annotated: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            status_value = str(row.get(status_key, "")).lower()
+            row[target_key] = palette.get(status_value, {"text": status_value.title() or "Unknown", "color": "neutral"})
+            annotated.append(row)
+    return annotated

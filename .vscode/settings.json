@@ -58,5 +58,17 @@
 
   "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
   "editor.guides.bracketPairs": "active",
-  "sonarlint.pathToCompileCommands": "${workspaceFolder}\\vcpkg\\buildtrees\\pkgconf\\x64-windows-dbg\\compile_commands.json"
+  "sonarlint.pathToCompileCommands": "${workspaceFolder}\\vcpkg\\buildtrees\\pkgconf\\x64-windows-dbg\\compile_commands.json",
+  "editor.fontSize": 17,
+  "editor.minimap.sectionHeaderFontSize": 10,
+  "debug.console.fontSize": 17,
+  "scm.inputFontSize": 16,
+  "terminal.integrated.fontLigatures.enabled": true,
+  "terminal.integrated.fontSize": 17,
+  "chat.editor.fontSize": 18,
+  "chat.fontSize": 16,
+  "markdown.preview.fontSize": 16,
+  "tailwindCSS.rootFontSize": 17,
+  "editor.mouseWheelZoom": true,
+  "terminal.integrated.mouseWheelZoom": true
 }
