@@ -13,3 +13,8 @@ ignore:
   - "**/dist/**"
   - "**/node_modules/**"
   - "final_emoji_test.py"
+  - "**/archive/**"
+  - "FletV2/archive/**"
+  - "**/_legacy/**"
+  - "archive/**"
+  - "_legacy/**"

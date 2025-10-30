@@ -799,33 +799,11 @@ def create_database_view(
 
     # Native Flet DataTable - Material Design 3 with built-in features
     # This replaces the 674-line EnhancedDataTable with Flet's native component
+    # Columns will be dynamically created based on actual data structure
     data_table = ft.DataTable(
         columns=[
             ft.DataColumn(
-                label=ft.Text("ID", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                numeric=True,
-                on_sort=lambda _: _sort_table_data("id")
-            ),
-            ft.DataColumn(
-                label=ft.Text("Table", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                on_sort=lambda _: _sort_table_data("table_name")
-            ),
-            ft.DataColumn(
-                label=ft.Text("Record ID", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                numeric=True,
-                on_sort=lambda _: _sort_table_data("record_id")
-            ),
-            ft.DataColumn(
-                label=ft.Text("Data Preview", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                on_sort=lambda _: _sort_table_data("data_preview")
-            ),
-            ft.DataColumn(
-                label=ft.Text("Created", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                on_sort=lambda _: _sort_table_data("created_at")
-            ),
-            ft.DataColumn(
-                label=ft.Text("Updated", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                on_sort=lambda _: _sort_table_data("updated_at")
+                label=ft.Text("Loading...", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
             ),
         ],
         rows=[],
@@ -846,7 +824,7 @@ def create_database_view(
         "sort_column": None,
         "sort_ascending": True,
         "selected_rows": set(),
-        "current_data": []
+        "search_query": ""
     }
 
     def _refresh_table_display():
@@ -855,6 +833,9 @@ def create_database_view(
             data_table.rows = []
             data_table.update()
             return
+
+        print(f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records")
+        print(f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}")
 
         # Apply sorting
         sorted_data = all_records.copy()
@@ -877,42 +858,71 @@ def create_database_view(
                 if any(search_term in str(value).lower() for value in row.values())
             ]
 
-        # Update DataTable rows
+        # Dynamic DataTable creation based on actual data structure
+        if not sorted_data:
+            data_table.rows = []
+            data_table.update()
+            return
+
+        # Get actual column names from the first record
+        actual_columns = list(sorted_data[0].keys())
+        print(f"🟧 [REFRESH_TABLE] Actual columns found: {actual_columns}")
+
+        # Update DataTable columns dynamically
+        data_table.columns = []
+        for col in actual_columns[:10]:  # Limit to first 10 columns for display
+            data_table.columns.append(
+                ft.DataColumn(
+                    label=ft.Text(col.replace("_", " ").title(), weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                    on_sort=lambda _, col_name=col: _sort_by_column_name(col_name)
+                )
+            )
+
+        # Update DataTable rows with actual data
         data_table.rows = []
-        for record in sorted_data[:1000]:  # Limit to 1000 rows for performance
+        for i, record in enumerate(sorted_data[:1000]):  # Limit to 1000 rows for performance
+            cells = []
+            for col in actual_columns[:10]:  # Match columns limit
+                value = record.get(col, "")
+                # Format the value for display
+                if value is None:
+                    display_value = "—"
+                elif isinstance(value, (bytes, bytearray)):
+                    # Handle binary data
+                    hex_str = value.hex()
+                    display_value = f"{hex_str[:16]}..." if len(hex_str) > 16 else hex_str
+                elif isinstance(value, datetime):
+                    display_value = value.strftime("%Y-%m-%d %H:%M")
+                else:
+                    str_value = str(value)
+                    # Truncate long strings
+                    if len(str_value) > 50:
+                        display_value = str_value[:50] + "..."
+                    else:
+                        display_value = str_value
+
+                cells.append(ft.DataCell(ft.Text(display_value, size=12)))
+
             data_row = ft.DataRow(
                 selected=False,
-                on_select_changed=lambda e, idx=len(data_table.rows): _handle_row_selection(idx, e.control.selected),
-                cells=[
-                    ft.DataCell(ft.Text(str(record.get("id", "")))),
-                    ft.DataCell(ft.Text(str(record.get("table_name", "")))),
-                    ft.DataCell(ft.Text(str(record.get("record_id", "")))),
-                    ft.DataCell(ft.Text(str(record.get("data_preview", ""))[:50] + "..." if len(str(record.get("data_preview", ""))) > 50 else str(record.get("data_preview", "")))),
-                    ft.DataCell(ft.Text(str(record.get("created_at", "")))),
-                    ft.DataCell(ft.Text(str(record.get("updated_at", "")))),
-                ]
+                on_select_changed=lambda e, idx=i, rec=record: _handle_row_selection(e, idx, rec),
+                cells=cells
             )
             data_table.rows.append(data_row)
 
+        print(f"🟧 [REFRESH_TABLE] Created {len(data_table.rows)} rows with {len(data_table.columns)} columns")
         data_table.update()
 
-    def _sort_table_data(column_key: str):
-        """Handle column sorting for native DataTable"""
-        if table_state["sort_column"] == column_key:
+    def _sort_by_column_name(column_name: str):
+        """Handle sorting by actual column name"""
+        if table_state["sort_column"] == column_name:
             table_state["sort_ascending"] = not table_state["sort_ascending"]
         else:
-            table_state["sort_column"] = column_key
+            table_state["sort_column"] = column_name
             table_state["sort_ascending"] = True
-
-        # Update sort indicators
-        for i, col in enumerate(data_table.columns):
-            if i == list(table_state.get("table_columns", ["id", "table_name", "record_id", "data_preview", "created_at", "updated_at"])).index(column_key):
-                data_table.sort_column_index = i
-                data_table.sort_ascending = table_state["sort_ascending"]
-                break
-
         _refresh_table_display()
-  
+
+      
     def _handle_row_selection(e: ft.ControlEvent, row_idx: int, row_data: dict):
         """Handle row selection for native DataTable"""
         if e.control.selected:
@@ -921,7 +931,7 @@ def create_database_view(
             table_state["selected_rows"].discard(row_idx)
 
         # Update selection display
-        selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
+        selected_data = [all_records[i] for i in table_state["selected_rows"] if i < len(all_records)]
         handle_selection_change(selected_data, selected_count_text, btn_clear_selection, btn_bulk_delete)
 
     # Setup keyboard navigation for the native table using Flet's native approach
@@ -944,7 +954,7 @@ def create_database_view(
 
     def _delete_selected_rows():
         """Delete selected rows"""
-        if table_state["selected_rows"] and table_state["current_data"]:
+        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
             selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
             confirm_bulk_delete(selected_data, page, server_bridge)
 
@@ -963,59 +973,59 @@ def create_database_view(
 
     # Add DataTable-specific shortcuts
     shortcuts_manager.register_shortcut(
-        id="table_activate",
+        shortcut_id="table_activate",
         key="Enter",
         action=lambda e: _activate_selected_row(),
         description="Activate selected row",
         category=ShortcutCategory.NAVIGATION,
         context="database_table"
-    ))
+    )
 
     shortcuts_manager.register_shortcut(
-        id="table_delete",
+        shortcut_id="table_delete",
         key="Delete",
         action=lambda e: _delete_selected_rows(),
         description="Delete selected rows",
         category=ShortcutCategory.ACTIONS,
         context="database_table"
-    ))
+    )
 
     shortcuts_manager.register_shortcut(
-        id="table_escape",
+        shortcut_id="table_escape",
         key="Escape",
         action=lambda e: _clear_selection(),
         description="Clear selection",
         category=ShortcutCategory.NAVIGATION,
         context="database_table"
-    ))
+    )
 
     shortcuts_manager.register_shortcut(
-        id="table_select_all",
+        shortcut_id="table_select_all",
         key="a",
         ctrl=True,
         action=lambda e: _select_all_rows(),
         description="Select all rows",
         category=ShortcutCategory.EDITING,
         context="database_table"
-    ))
+    )
 
     shortcuts_manager.register_shortcut(
-        id="table_nav_down",
+        shortcut_id="table_nav_down",
         key="ArrowDown",
         action=lambda e: _navigate_table("down"),
         description="Navigate down",
         category=ShortcutCategory.NAVIGATION,
         context="database_table"
-    ))
+    )
 
     shortcuts_manager.register_shortcut(
-        id="table_nav_up",
+        shortcut_id="table_nav_up",
         key="ArrowUp",
         action=lambda e: _navigate_table("up"),
         description="Navigate up",
         category=ShortcutCategory.NAVIGATION,
         context="database_table"
-    ))
+    )
 
     # Activate the context when DataTable is focused
     shortcuts_manager.set_context("database_table")
@@ -1040,7 +1050,7 @@ def create_database_view(
 
     def _handle_context_edit():
         """Handle edit from context menu"""
-        if table_state["selected_rows"] and table_state["current_data"]:
+        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
             first_selected_idx = min(table_state["selected_rows"])
             if first_selected_idx < len(table_state["current_data"]):
                 row_data = table_state["current_data"][first_selected_idx]
@@ -1060,7 +1070,7 @@ def create_database_view(
 
     def _handle_context_delete():
         """Handle delete from context menu"""
-        if table_state["selected_rows"] and table_state["current_data"]:
+        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
             selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
             confirm_bulk_delete(selected_data, page, server_bridge)
 
@@ -1070,8 +1080,20 @@ def create_database_view(
     # Setup right-click context menu for the DataTable
     setup_context_menu_target(data_table, context_menu, page)
 
-    # Store reference for easy access in event handlers
-    enhanced_data_table = None  # Removed - using native DataTable
+    # Create table container with just the data table for now
+    table_content = ft.Column(
+        controls=[
+            # Data table (toolbar will be added separately)
+            ft.Container(
+                content=data_table,
+                padding=ft.Padding(8, 8, 8, 8),
+                bgcolor=ft.Colors.SURFACE,
+                border_radius=8,
+            ),
+        ],
+        spacing=10,
+        expand=True,
+    )
 
     # Bulk actions toolbar (shown when rows selected)
     bulk_actions_toolbar = ft.Container(
@@ -1126,7 +1148,7 @@ def create_database_view(
     # Enhanced DataTable with integrated toolbar and pagination
     # NO scroll here - parent main_layout handles scrolling to avoid nested scroll conflicts
     table_view_container = ft.Container(
-        content=enhanced_data_table,  # This includes toolbar, table, and pagination
+        content=table_content,  # This includes toolbar, table, and pagination
         visible=True,
         padding=ft.Padding(8, 8, 8, 8),
     )
@@ -1532,28 +1554,13 @@ def create_database_view(
             logger.debug("DataTable not attached, skipping refresh")
             return
 
-        # Call the native DataTable refresh function
+        # Call the improved native DataTable refresh function
         try:
-            if '_refresh_table_display' in locals():
-                _refresh_table_display()
-                print("🟨 [REFRESH_DATA_TABLE] Native DataTable refreshed via search filter")
+            _refresh_table_display()
+            print("🟨 [REFRESH_DATA_TABLE] Native DataTable refreshed")
         except Exception as e:
             print(f"🟨 [REFRESH_DATA_TABLE] Error refreshing DataTable: {e}")
-            # Fallback: basic refresh if the function doesn't exist
-            if data_table and filtered_records:
-                data_table.rows.clear()
-                for idx, row_data in enumerate(filtered_records):
-                    cells = [
-                        ft.DataCell(ft.Text(str(row_data.get("id", "")), size=13)),
-                        ft.DataCell(ft.Text(str(row_data.get("table_name", "")), size=13)),
-                        ft.DataCell(ft.Text(str(row_data.get("record_id", "")), size=13)),
-                        ft.DataCell(ft.Text(str(row_data.get("data_preview", ""))[:100] + "..." if len(str(row_data.get("data_preview", ""))) > 100 else str(row_data.get("data_preview", "")), size=13)),
-                        ft.DataCell(ft.Text(str(row_data.get("created_at", "")), size=13)),
-                        ft.DataCell(ft.Text(str(row_data.get("updated_at", "")), size=13)),
-                    ]
-                    data_row = ft.DataRow(cells=cells, data=row_data)
-                    data_table.rows.append(data_row)
-                data_table.update()
+            logger.exception(f"Error refreshing DataTable: {e}")
 
         # Note: Native DataTable handles empty states and column/row creation automatically
         # The _refresh_table_display() function handles all DataTable updates
@@ -1620,13 +1627,16 @@ def create_database_view(
 
         print(f"🟨 [SEARCH_FILTER] filtered_records: {len(filtered_records)}, view_mode: {view_mode}")
 
+        # Update table_state for search
+        table_state["search_query"] = search_query
+
         # Refresh the active view
         if view_mode == "cards":
             print("🟨 [SEARCH_FILTER] Calling refresh_records_display()")
             refresh_records_display()
         else:
             print("🟨 [SEARCH_FILTER] Calling refresh_data_table()")
-            refresh_data_table()
+            _refresh_table_display()
 
         # Update status
         if search_query.strip():

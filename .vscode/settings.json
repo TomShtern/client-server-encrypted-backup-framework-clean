@@ -18,6 +18,11 @@
   "python.linting.flake8Enabled": false,
   "python.linting.isortEnabled": false,
   "python.formatting.blackEnabled": false,
+  "python.analysis.ignore": [
+    "**/archive/**",
+    "FletV2/archive/**",
+    "**/_legacy/**"
+  ],
 
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.envFile": "${workspaceFolder}/FletV2/.env",
@@ -40,11 +45,21 @@
     "**/node_modules": true,
     "logs": true,
     "**/*.md": true,
-    "**/*.txt": true
+    "**/*.txt": true,
+    "archive": true,
+    "**/archive/**": true,
+    "_legacy": true,
+    "**/_legacy/**": true
   },
 
   "problems.exclude": {
-    "**/scripts/cmake/vcpkg_buildpath_length_warning.cmake": true
+    "**/scripts/cmake/vcpkg_buildpath_length_warning.cmake": true,
+    "**/archive/**": true,
+    "archive/**": true,
+    "FletV2/archive/**": true,
+    "FletV2/**/archive/**": true,
+    "**/_legacy/**": true,
+    "_legacy/**": true
   },
   "github.copilot.nextEditSuggestions.enabled": true,
   "python-envs.pythonProjects": [

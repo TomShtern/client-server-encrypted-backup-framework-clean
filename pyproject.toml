@@ -18,7 +18,20 @@ exclude = [
     "flet_venv",
     "flet_venv_broken",
     ".config-backup",
-    "**/.config-backup/**"
+    "**/.config-backup/**",
+    "archive",
+    "**/archive/**",
+    "FletV2/archive",
+    "FletV2/**/archive/**",
+    "FletV2/archive/launchers",
+    "FletV2/archive/phase0",
+    "FletV2/archive/state_manager_unused",
+    "FletV2/archive/tests_deprecated",
+    "FletV2/archive/utils-phase1",
+    "FletV2/archive/utils_unused",
+    "FletV2/archive/enhanced_data_table_unused",
+    "_legacy",
+    "**/_legacy/**"
 ]
 
 [tool.mypy]
