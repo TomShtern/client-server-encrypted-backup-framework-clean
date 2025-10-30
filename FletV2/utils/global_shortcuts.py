@@ -1,8 +1,8 @@
 """
-Global Keyboard Shortcuts System for Desktop Applications
+Global Keyboard Shortcuts System for Desktop Applications - Flet Native Edition
 
-This module provides a comprehensive global keyboard shortcuts system for desktop
-applications, including view navigation, common actions, and context-aware shortcuts.
+This module provides a comprehensive global keyboard shortcuts system using Flet 0.28.3's
+NATIVE keyboard event handling (page.on_keyboard_event).
 
 Compatible with Flet 0.28.3 and desktop Windows 11 applications.
 """
@@ -13,14 +13,6 @@ from enum import Enum
 from typing import Any
 
 import flet as ft
-
-from .keyboard_handlers import (
-    KeyCode,
-    KeyboardHandler,
-    ModifierKey,
-    key_display_name,
-    normalize_key,
-)
 
 
 class ShortcutCategory(Enum):
@@ -36,94 +28,89 @@ class ShortcutCategory(Enum):
 class GlobalShortcut:
     """Global shortcut configuration"""
     id: str
-    key: str
-    modifiers: set[ModifierKey]
-    action: Callable[[ft.KeyboardEvent], Any] | None
-    description: str
-    category: ShortcutCategory
-    context: str | None = None  # Optional context for context-aware shortcuts
+    key: str  # Flet key name (e.g., "s", "f5", "delete")
+    ctrl: bool = False
+    shift: bool = False
+    alt: bool = False
+    meta: bool = False  # Windows key
+    action: Callable[[ft.KeyboardEvent], Any] | None = None
+    description: str = ""
+    category: ShortcutCategory = ShortcutCategory.ACTIONS
+    context: str | None = None
     enabled: bool = True
-    display_key: str | None = None
 
 
 class GlobalShortcutManager:
     """
-    Centralized global shortcut management system for desktop applications
+    Centralized global shortcut management using Flet's NATIVE keyboard events.
+
+    Uses page.on_keyboard_event for zero-overhead keyboard handling.
 
     Features:
     - Global application shortcuts (Ctrl+N, Ctrl+S, etc.)
     - View navigation shortcuts (Ctrl+1-7)
     - Context-aware shortcuts
-    - Shortcut conflict detection and resolution
     - Help system integration
+    - NATIVE Flet keyboard event handling (no custom wrapper needed!)
     """
 
     def __init__(self, page: ft.Page):
         self.page = page
-        self.keyboard_handler = KeyboardHandler(page)
         self.shortcuts: dict[str, GlobalShortcut] = {}
-        self.context_handlers: dict[str, list[Callable]] = {}
         self.current_context = "global"
 
-        # Register global keyboard event handler
-        self._setup_global_handler()
+        # Register NATIVE Flet keyboard event handler
+        self.page.on_keyboard_event = self._handle_keyboard_event
 
     def register_shortcut(
         self,
         shortcut_id: str,
         key: str,
-        modifiers: set[ModifierKey] | None = None,
+        ctrl: bool = False,
+        shift: bool = False,
+        alt: bool = False,
+        meta: bool = False,
         action: Callable[[ft.KeyboardEvent], Any] | None = None,
         description: str = "",
         category: ShortcutCategory = ShortcutCategory.ACTIONS,
         context: str | None = None,
         enabled: bool = True
-    ):
+    ) -> str:
         """
-        Register a global shortcut
+        Register a global shortcut using Flet native key names.
 
         Args:
             shortcut_id: Unique identifier for the shortcut
-            key: String key identifier (see KeyCode constants or keyboard event values)
-            modifiers: Set of modifier keys required
+            key: Flet key name (e.g., "s", "f5", "delete", "arrow down")
+            ctrl: Whether Ctrl modifier is required
+            shift: Whether Shift modifier is required
+            alt: Whether Alt modifier is required
+            meta: Whether Windows/Meta key is required
             action: Function to call when shortcut is activated
             description: Human-readable description
             category: Category of the shortcut
             context: Optional context for context-aware shortcuts
             enabled: Whether the shortcut is initially enabled
+
+        Returns:
+            The shortcut_id for reference
         """
-
-        if modifiers is None:
-            modifiers = set()
-
-        normalized_key = normalize_key(key)
-        if not normalized_key:
-            raise ValueError("Shortcut key must be a non-empty string")
-
-        # Create shortcut configuration
         shortcut = GlobalShortcut(
             id=shortcut_id,
-            key=normalized_key,
-            modifiers=modifiers,
+            key=key.lower(),  # Normalize to lowercase
+            ctrl=ctrl,
+            shift=shift,
+            alt=alt,
+            meta=meta,
             action=action,
             description=description,
             category=category,
             context=context,
-            enabled=enabled,
-            display_key=key_display_name(key)
-        )
-
-        # Store the shortcut
-        self.shortcuts[shortcut_id] = shortcut
-
-        # Register with keyboard handler
-        return self.keyboard_handler.register_shortcut(
-            key=normalized_key,
-            modifiers=modifiers,
-            description=description,
-            action=lambda e: self._handle_shortcut_activation(shortcut_id, e),
             enabled=enabled
         )
+
+        self.shortcuts[shortcut_id] = shortcut
+        return shortcut_id
 
     def unregister_shortcut(self, shortcut_id: str) -> bool:
         """Unregister a global shortcut"""
@@ -141,18 +128,57 @@ class GlobalShortcutManager:
         if shortcut_id in self.shortcuts:
             self.shortcuts[shortcut_id].enabled = enabled
 
-    def register_context_handler(self, context: str, handler: Callable):
-        """Register a handler for a specific context"""
-        if context not in self.context_handlers:
-            self.context_handlers[context] = []
-        self.context_handlers[context].append(handler)
+    def _handle_keyboard_event(self, e: ft.KeyboardEvent):
+        """
+        Handle keyboard events using Flet's NATIVE event system.
+
+        Flet provides:
+        - e.key: normalized key name
+        - e.ctrl: Ctrl modifier state (built-in!)
+        - e.shift: Shift modifier state (built-in!)
+        - e.alt: Alt modifier state (built-in!)
+        - e.meta: Meta/Windows key state (built-in!)
+        """
+        if not e.key:
+            return
+
+        key_lower = e.key.lower()
+
+        # Find matching shortcuts
+        for shortcut in self.shortcuts.values():
+            if not shortcut.enabled:
+                continue
+
+            # Check context requirements
+            if shortcut.context and shortcut.context != self.current_context:
+                continue
+
+            # Check if modifiers match (Flet provides these built-in!)
+            if (shortcut.ctrl != e.ctrl or
+                shortcut.shift != e.shift or
+                shortcut.alt != e.alt or
+                shortcut.meta != e.meta):
+                continue
+
+            # Check if key matches
+            if shortcut.key != key_lower:
+                continue
+
+            # Execute the shortcut action
+            try:
+                if shortcut.action:
+                    shortcut.action(e)
+            except Exception as ex:
+                print(f"Error executing shortcut '{shortcut.id}': {ex}")
+
+            # Shortcut matched, stop processing
+            return
 
     def get_shortcuts_help(self, category: ShortcutCategory | None = None) -> list[dict[str, str]]:
         """Get formatted help for shortcuts, optionally filtered by category"""
-
         help_list = []
 
-        for _shortcut_id, shortcut in self.shortcuts.items():
+        for shortcut in self.shortcuts.values():
             # Filter by category if specified
             if category and shortcut.category != category:
                 continue
@@ -164,18 +190,17 @@ class GlobalShortcutManager:
             if shortcut.enabled and shortcut.description:
                 # Format the shortcut key combination
                 key_parts: list[str] = []
-                for modifier in sorted(shortcut.modifiers, key=lambda m: m.value):
-                    if modifier == ModifierKey.CTRL:
-                        key_parts.append("Ctrl")
-                    elif modifier == ModifierKey.SHIFT:
-                        key_parts.append("Shift")
-                    elif modifier == ModifierKey.ALT:
-                        key_parts.append("Alt")
-                    elif modifier == ModifierKey.META:
-                        key_parts.append("Win")
+                if shortcut.ctrl:
+                    key_parts.append("Ctrl")
+                if shortcut.shift:
+                    key_parts.append("Shift")
+                if shortcut.alt:
+                    key_parts.append("Alt")
+                if shortcut.meta:
+                    key_parts.append("Win")
 
-                # Add the key name
-                key_parts.append(self._format_key_name(shortcut.key, shortcut.display_key))
+                # Add the key name (capitalized for display)
+                key_parts.append(shortcut.key.upper() if len(shortcut.key) == 1 else shortcut.key.title())
 
                 help_list.append({
                     "shortcut": "+".join(key_parts),
@@ -186,45 +211,8 @@ class GlobalShortcutManager:
 
         return sorted(help_list, key=lambda x: (x["category"], x["shortcut"]))
 
-    def _setup_global_handler(self):
-        """Setup the global keyboard event handler"""
-        # The keyboard handler is already set up to handle events
-        pass
-
-    def _handle_shortcut_activation(self, shortcut_id: str, e: ft.KeyboardEvent):
-        """Handle activation of a shortcut"""
-
-        if shortcut_id not in self.shortcuts:
-            return
-
-        shortcut = self.shortcuts[shortcut_id]
-
-        if not shortcut.enabled:
-            return
-
-        # Check context requirements
-        if shortcut.context and shortcut.context != self.current_context:
-            return
-
-        try:
-            # Execute the action
-            if shortcut.action:
-                shortcut.action(e)
-
-        except Exception as ex:
-            print(f"Error executing shortcut '{shortcut_id}': {ex}")
-
-    def _format_key_name(self, key: str, display_key: str | None = None) -> str:
-        """Format a key name for display"""
-
-        if display_key:
-            return display_key
-
-        return key_display_name(key)
-
     def create_shortcuts_dialog(self) -> ft.AlertDialog:
         """Create a dialog showing all available shortcuts"""
-
         # Get shortcuts organized by category
         nav_shortcuts = self.get_shortcuts_help(ShortcutCategory.NAVIGATION)
         edit_shortcuts = self.get_shortcuts_help(ShortcutCategory.EDITING)
@@ -330,7 +318,7 @@ def create_standard_application_shortcuts(
     view_navigator: Callable[[str], None] | None = None
 ) -> dict[str, str]:
     """
-    Create standard application shortcuts
+    Create standard application shortcuts using Flet native keyboard events.
 
     Args:
         shortcut_manager: GlobalShortcutManager instance
@@ -339,33 +327,33 @@ def create_standard_application_shortcuts(
     Returns:
         Dictionary mapping shortcut names to their IDs
     """
+    shortcut_ids: dict[str, str] = {}
 
-    shortcut_ids: dict[str, str] = {
-        # Application shortcuts
-        "quit": shortcut_manager.register_shortcut(
-            shortcut_id="app_quit",
-            key=KeyCode.Q,
-            modifiers={ModifierKey.CTRL},
-            action=lambda e: print("Quit application"),
-            description="Quit application",
-            category=ShortcutCategory.ACTIONS
-        ),
-        # Help shortcuts
-        "help": shortcut_manager.register_shortcut(
-            shortcut_id="help_shortcuts",
-            key=KeyCode.F1,
-            action=lambda e: shortcut_manager.show_shortcuts_dialog(),
-            description="Show keyboard shortcuts",
-            category=ShortcutCategory.HELP
-        ),
-    }
+    # Application shortcuts
+    shortcut_ids["quit"] = shortcut_manager.register_shortcut(
+        shortcut_id="app_quit",
+        key="q",
+        ctrl=True,
+        action=lambda e: print("Quit application"),
+        description="Quit application",
+        category=ShortcutCategory.ACTIONS
+    )
+
+    # Help shortcuts
+    shortcut_ids["help"] = shortcut_manager.register_shortcut(
+        shortcut_id="help_shortcuts",
+        key="f1",
+        action=lambda e: shortcut_manager.show_shortcuts_dialog(),
+        description="Show keyboard shortcuts",
+        category=ShortcutCategory.HELP
+    )
 
     # View shortcuts (if navigator provided)
     if view_navigator:
         shortcut_ids["dashboard"] = shortcut_manager.register_shortcut(
             shortcut_id="view_dashboard",
-            key=KeyCode.D,
-            modifiers={ModifierKey.CTRL},
+            key="d",
+            ctrl=True,
             action=lambda e: view_navigator("dashboard"),
             description="Go to Dashboard",
             category=ShortcutCategory.NAVIGATION
@@ -373,8 +361,8 @@ def create_standard_application_shortcuts(
 
         shortcut_ids["database"] = shortcut_manager.register_shortcut(
             shortcut_id="view_database",
-            key=KeyCode.L,
-            modifiers={ModifierKey.CTRL},
+            key="l",
+            ctrl=True,
             action=lambda e: view_navigator("database"),
             description="Go to Database",
             category=ShortcutCategory.NAVIGATION
@@ -382,8 +370,9 @@ def create_standard_application_shortcuts(
 
         shortcut_ids["clients"] = shortcut_manager.register_shortcut(
             shortcut_id="view_clients",
-            key=KeyCode.C,
-            modifiers={ModifierKey.CTRL, ModifierKey.SHIFT},
+            key="c",
+            ctrl=True,
+            shift=True,
             action=lambda e: view_navigator("clients"),
             description="Go to Clients",
             category=ShortcutCategory.NAVIGATION
@@ -391,8 +380,9 @@ def create_standard_application_shortcuts(
 
         shortcut_ids["files"] = shortcut_manager.register_shortcut(
             shortcut_id="view_files",
-            key=KeyCode.F,
-            modifiers={ModifierKey.CTRL, ModifierKey.SHIFT},
+            key="f",
+            ctrl=True,
+            shift=True,
             action=lambda e: view_navigator("files"),
             description="Go to Files",
             category=ShortcutCategory.NAVIGATION
@@ -400,8 +390,9 @@ def create_standard_application_shortcuts(
 
         shortcut_ids["logs"] = shortcut_manager.register_shortcut(
             shortcut_id="view_logs",
-            key=KeyCode.L,
-            modifiers={ModifierKey.CTRL, ModifierKey.SHIFT},
+            key="l",
+            ctrl=True,
+            shift=True,
             action=lambda e: view_navigator("logs"),
             description="Go to Logs",
             category=ShortcutCategory.NAVIGATION
@@ -409,29 +400,29 @@ def create_standard_application_shortcuts(
 
         shortcut_ids["settings"] = shortcut_manager.register_shortcut(
             shortcut_id="view_settings",
-            key=KeyCode.COMMA,
-            modifiers={ModifierKey.CTRL},
+            key="comma",
+            ctrl=True,
             action=lambda e: view_navigator("settings"),
             description="Go to Settings",
             category=ShortcutCategory.NAVIGATION
         )
 
-        # Numeric view navigation
+        # Numeric view navigation (Ctrl+1 through Ctrl+7)
         view_mapping = {
-            KeyCode.DIGIT_1: "dashboard",
-            KeyCode.DIGIT_2: "clients",
-            KeyCode.DIGIT_3: "files",
-            KeyCode.DIGIT_4: "database",
-            KeyCode.DIGIT_5: "logs",
-            KeyCode.DIGIT_6: "analytics",
-            KeyCode.DIGIT_7: "settings"
+            "1": "dashboard",
+            "2": "clients",
+            "3": "files",
+            "4": "database",
+            "5": "logs",
+            "6": "analytics",
+            "7": "settings"
         }
 
         for key, view_name in view_mapping.items():
             shortcut_ids[f"view_{view_name}_numeric"] = shortcut_manager.register_shortcut(
                 shortcut_id=f"view_{view_name}_numeric",
                 key=key,
-                modifiers={ModifierKey.CTRL},
+                ctrl=True,
                 action=lambda e, v=view_name: view_navigator(v),
                 description=f"Go to {view_name.title()}",
                 category=ShortcutCategory.NAVIGATION
@@ -440,7 +431,7 @@ def create_standard_application_shortcuts(
     # Refresh shortcut
     shortcut_ids["refresh"] = shortcut_manager.register_shortcut(
         shortcut_id="view_refresh",
-        key=KeyCode.F5,
+        key="f5",
         action=lambda e: print("Refresh current view"),
         description="Refresh current view",
         category=ShortcutCategory.VIEW
@@ -449,8 +440,8 @@ def create_standard_application_shortcuts(
     # Global search
     shortcut_ids["search"] = shortcut_manager.register_shortcut(
         shortcut_id="global_search",
-        key=KeyCode.F,
-        modifiers={ModifierKey.CTRL},
+        key="f",
+        ctrl=True,
         action=lambda e: print("Activate global search"),
         description="Global search",
         category=ShortcutCategory.VIEW
@@ -465,7 +456,7 @@ def create_view_specific_shortcuts(
     view_actions: dict[str, Callable]
 ) -> dict[str, str]:
     """
-    Create shortcuts specific to a particular view
+    Create shortcuts specific to a particular view using Flet native events.
 
     Args:
         shortcut_manager: GlobalShortcutManager instance
@@ -475,15 +466,14 @@ def create_view_specific_shortcuts(
     Returns:
         Dictionary mapping shortcut names to their IDs
     """
-
     shortcut_ids = {}
 
     # Common view-specific shortcuts
     if "new" in view_actions:
         shortcut_ids["new"] = shortcut_manager.register_shortcut(
             shortcut_id=f"{view_context}_new",
-            key=KeyCode.N,
-            modifiers={ModifierKey.CTRL},
+            key="n",
+            ctrl=True,
             action=view_actions["new"],
             description="Create new item",
             category=ShortcutCategory.ACTIONS,
@@ -493,8 +483,8 @@ def create_view_specific_shortcuts(
     if "edit" in view_actions:
         shortcut_ids["edit"] = shortcut_manager.register_shortcut(
             shortcut_id=f"{view_context}_edit",
-            key=KeyCode.E,
-            modifiers={ModifierKey.CTRL},
+            key="e",
+            ctrl=True,
             action=view_actions["edit"],
             description="Edit selected item",
             category=ShortcutCategory.EDITING,
@@ -504,7 +494,7 @@ def create_view_specific_shortcuts(
     if "delete" in view_actions:
         shortcut_ids["delete"] = shortcut_manager.register_shortcut(
             shortcut_id=f"{view_context}_delete",
-            key=KeyCode.DELETE,
+            key="delete",
             action=view_actions["delete"],
             description="Delete selected item",
             category=ShortcutCategory.EDITING,
@@ -514,8 +504,9 @@ def create_view_specific_shortcuts(
     if "export" in view_actions:
         shortcut_ids["export"] = shortcut_manager.register_shortcut(
             shortcut_id=f"{view_context}_export",
-            key=KeyCode.E,
-            modifiers={ModifierKey.CTRL, ModifierKey.SHIFT},
+            key="e",
+            ctrl=True,
+            shift=True,
             action=view_actions["export"],
             description="Export data",
             category=ShortcutCategory.ACTIONS,

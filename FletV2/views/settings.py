@@ -24,14 +24,14 @@ try:
     from ..utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
     from ..utils.debug_setup import get_logger
     from ..utils.server_bridge import ServerBridge
-    from ..utils.state_manager import StateManager
+    from ..utils.simple_state import SimpleState
     from ..utils.ui_builders import create_action_button, create_view_header
 except Exception:  # pragma: no cover
     from FletV2.config import SETTINGS_FILE  # type: ignore
     from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call  # type: ignore
     from FletV2.utils.debug_setup import get_logger  # type: ignore
     from FletV2.utils.server_bridge import ServerBridge  # type: ignore
-    from FletV2.utils.state_manager import StateManager  # type: ignore
+    from FletV2.utils.simple_state import SimpleState  # type: ignore
     from FletV2.utils.ui_builders import create_action_button, create_view_header  # type: ignore
 
 
@@ -190,7 +190,7 @@ def _row(label: str, control: ft.Control, desc: str | None = None) -> ft.Contain
 # ==============================================================================
 
 class _SettingsView:
-    def __init__(self, page: ft.Page, server_bridge: ServerBridge | None, state_manager: StateManager | None) -> None:
+    def __init__(self, page: ft.Page, server_bridge: ServerBridge | None, state_manager: SimpleState | None) -> None:
         self.page = page
         self.server_bridge = server_bridge
         self.state_manager = state_manager
@@ -795,7 +795,7 @@ class _SettingsView:
 def create_settings_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    state_manager: StateManager | None = None,
+    state_manager: SimpleState | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     view = _SettingsView(page, server_bridge, state_manager)
     root = view.build()

@@ -2,3 +2,44 @@
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+
+# Log files (runtime only)
+*.log
+appmap.log
+logs/*.log
+
+# Database runtime files
+*.db
+*.db-shm
+*.db-wal
+*.db.backup_*
+
+# Archived content (manually delete from archive when ready)
+archive/logs_old/
+archive/tests_deprecated/
+archive/docs_old/
+archive/launchers/
+archive/utils_unused/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+flet_venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

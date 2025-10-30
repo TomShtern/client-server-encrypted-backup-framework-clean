@@ -26,7 +26,7 @@ from FletV2.utils.loading_states import (
     create_error_display,
     create_loading_indicator,
 )
-from FletV2.utils.state_manager import StateManager
+from FletV2.utils.simple_state import SimpleState
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -669,7 +669,7 @@ class _LogsViewController:
 def create_logs_view(
     server_bridge: Any | None,
     page: ft.Page,
-    _state_manager: StateManager | None = None,
+    _state_manager: SimpleState | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     controller = _LogsViewController(server_bridge, page)
     return controller.build()

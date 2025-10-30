@@ -490,32 +490,17 @@ class FletV2App(ft.Row):
         # Post-update adjustments handled in _post_content_update
 
     def _initialize_state_manager(self) -> None:
-        """Initialize the state manager for reactive UI updates."""
-        print("🔴 [CRITICAL] _initialize_state_manager method ENTERED")
+        """Initialize simplified state management using Flet-native patterns."""
         if self.state_manager is not None:
-            print("🔴 [CRITICAL] State manager already initialized - skipping reinitialization")
-            return
-        try:
-            print("🔴 [CRITICAL] About to import create_state_manager")
-            try:
-                # Try package-relative import first
-                from FletV2.utils.state_manager import create_state_manager
-                print("🔴 [CRITICAL] Imported from FletV2.utils.state_manager")
-            except ImportError:
-                # Fallback to direct import
-                from utils.state_manager import create_state_manager
-                print("🔴 [CRITICAL] Imported from utils.state_manager")
+            return  # Already initialized
 
-            print("🔴 [CRITICAL] Import successful, checking create_state_manager function...")
-            print(f"🔴 [CRITICAL] create_state_manager type: {type(create_state_manager)}")
-            print(f"🔴 [CRITICAL] create_state_manager callable: {callable(create_state_manager)}")
-            print("🔴 [CRITICAL] About to call create_state_manager()")
-            self.state_manager = create_state_manager(self.page, self.server_bridge)
-            print("🔴 [CRITICAL] create_state_manager() returned successfully")
-            logger.info("✅ State manager initialized successfully")
+        try:
+            # Use Flet-native simple state management (replaces 1,036-line StateManager)
+            from FletV2.utils.simple_state import create_simple_state
+            self.state_manager = create_simple_state(self.page, self.server_bridge)
+            logger.info("✅ Simple state manager initialized (Flet-native approach)")
         except ImportError as e:
-            print(f"🔴 [CRITICAL] ImportError: {e}")
-            logger.warning(f"Could not import state manager: {e}")
+            logger.warning(f"Could not import simple state manager: {e}")
             self.state_manager = None
         except Exception as e:
             print(f"🔴 [CRITICAL] Exception during state manager init: {e}")

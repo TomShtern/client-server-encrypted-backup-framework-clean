@@ -7,7 +7,7 @@ Initialization file for utils package.
 from .database_manager import FletDatabaseManager, create_database_manager
 from .debug_setup import get_logger, setup_terminal_debugging
 from .server_bridge import ServerBridge, create_server_bridge
-from .state_manager import create_state_manager
+from .simple_state import create_simple_state
 from .user_feedback import (
     show_confirmation,
     show_error_message,
@@ -25,7 +25,7 @@ __all__ = [
     "ServerBridge",
     "create_database_manager",
     "create_server_bridge",
-    "create_state_manager",
+    "create_simple_state",
     "get_logger",
     "setup_terminal_debugging",
     "show_confirmation",

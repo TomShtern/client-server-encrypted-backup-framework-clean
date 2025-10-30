@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - fallback logging
 
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
-from FletV2.utils.state_manager import StateManager
+from FletV2.utils.simple_state import SimpleState
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -69,7 +69,7 @@ class _ClientsViewController:
         self,
         server_bridge: ServerBridge | None,
         page: ft.Page,
-        state_manager: StateManager | None,
+        state_manager: SimpleState | None,
     ) -> None:
         self.server_bridge = server_bridge
         self.page = page
@@ -699,7 +699,7 @@ class _ClientsViewController:
 def create_clients_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: StateManager | None
+    _state_manager: SimpleState | None
 ) -> Any:
     """Assemble the clients view using the controller abstraction."""
     logger.info("Creating simplified clients view")

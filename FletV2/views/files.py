@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - fallback logging
 
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
-from FletV2.utils.state_manager import StateManager
+from FletV2.utils.simple_state import SimpleState
 from FletV2.utils.ui_builders import (
     create_action_button,
     create_filter_dropdown,
@@ -74,7 +74,7 @@ SERVER_NOT_CONNECTED_MSG = "Server not connected. Please start the backup server
 def create_files_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: StateManager | None = None
+    _state_manager: SimpleState | None = None
 ) -> Any:
     """Simple files view using Flet's built-in components."""
     logger.info("Creating simplified files view")

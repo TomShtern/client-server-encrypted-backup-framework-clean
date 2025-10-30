@@ -1,277 +1,264 @@
-
-# Client-Server Encrypted Backup Framework - Agent Instructions
-
-IMPORTANT: For extremely important AI guidance, rules, and data please consult the `#file:AI-Context` folder. Additional important documentation and design reference materials are in the `#file:important_docs` folder. Use `AI-Context` first for critical decisions.
+# Client-Server Encrypted Backup Framework - Development Guide
 
 ## Project Overview
 
-This is a comprehensive encrypted file backup system that implements a robust client-server architecture with strong security measures. The project features:
+The Client-Server Encrypted Backup Framework (CyberBackup 3.0) is a comprehensive encrypted file backup system with dual-GUI architecture and robust security. The project features:
 
 - **Security Layer**: RSA-1024 for key exchange and AES-256-CBC for file encryption
-- **Backend**: Python server with SQLite database for storage and management
-- **Frontend**: Modern Flet-based GUI with Material Design 3, Neumorphism, and Glassmorphism styling
+- **Backend**: Python BackupServer with SQLite database and network listener (port 1256)
+- **Desktop GUI**: FletV2 native application with Material Design 3 for administrators
+- **Web GUI**: JavaScript interface via API Server (port 9090) for end-user backups
 - **Protocol**: Custom binary protocol with CRC32 verification for data integrity
-- **Architecture**: Client-server model with cross-platform compatibility
+- **Architecture**: Dual-GUI system with integrated server and shared database
 
-## Project Structure & Components
+## Architecture
 
-### Core Architecture
-- **python_server/**: Python-based server implementation with SQLite database
-- **FletV2/**: Modern desktop GUI built with Flet framework
-- **Shared/**: Common utilities, logging, and configuration modules
-- **Client/**: C++ client application (binary protocol implementation)
+### Two-GUI Architecture
 
-### FletV2 GUI Architecture
-- **main.py**: Application entry point with sophisticated state management
-- **views/**: Modular view components (dashboard, clients, files, database, analytics, etc.)
-- **theme.py**: Advanced tri-style design system (Material 3, Neumorphism, Glassmorphism)
-- **utils/**: Server bridge, state management, and utility functions
-- **config.py**: Configuration and constants for the GUI application
+**1. FletV2 Desktop GUI** (Server Administration)
+- Native desktop application for administrators
+- Direct Python method calls via ServerBridge (no network overhead)
+- Real-time monitoring, client/file management, analytics
+- Integrated BackupServer with network listener on port 1256
+- Material Design 3 with Neumorphism and Glassmorphism styling
 
-### Server Architecture
-- **server.py**: Main backup server with client management and encryption
-- **database.py**: SQLite integration with client/file tracking
-- **protocol.py**: Custom binary protocol implementation
-- **network_server.py**: Network communication layer
+**2. JavaScript Web GUI** (End-User Backups)
+- Browser-based interface for backup operations
+- API Server (port 9090) launches C++ client subprocess
+- File upload, progress tracking, backup history
+- Connects to BackupServer via C++ client binary protocol
 
-## Key Features & Capabilities
+Both systems share the same SQLite database (`defensive.db`) with file-level locking for safe concurrent access.
 
-### Security Features
-- RSA-1024 key exchange for secure session establishment
-- AES-256-CBC encryption for file data protection
-- CRC32 verification for data integrity
-- Secure key management with automatic generation and storage
+## Critical Architecture Notes
 
-### GUI Features
-- **Dashboard**: Real-time metrics with interactive cards and performance gauges
-- **Client Management**: View and manage registered backup clients
-- **File Management**: Browse, search, and manage backed up files
-- **Database Management**: Direct database access and record management
-- **Settings Management**: Comprehensive configuration with server integration
-- **Advanced Styling**: Material Design 3 with neumorphic and glassmorphic effects
-- **Responsive Design**: Adaptive layout for different screen sizes
+### Network Listener Requirement
 
-### Server Features
-- Multi-client support with concurrent connections
-- Automated session timeout and cleanup
-- Database integrity checks and maintenance
-- Comprehensive logging with dual output (console + file)
-- Performance monitoring and metrics collection
+⚠️ **CRITICAL**: The BackupServer network listener on port 1256 **must be started** for C++ client backups to work.
 
-## FletV2 GUI Architecture Details
+- **Correct**: `server_instance.start()` is called in `FletV2/start_with_server.py` (line 78)
+- **Verified**: Console output shows "Network server started - ready for client connections"
+- **Impact**: Without this, C++ clients cannot connect and all backups fail
 
-### ServerBridge Integration
-The ServerBridge acts as the primary interface between the GUI and the backend server. Key components include:
+This was a critical bug fixed in January 2025. The server instance was being created but the network listener thread was never launched.
 
-- **ServerBridge Class**: Delegates operations to the real backup server with data format conversion
-- **Data Conversion**: Converts between BackupServer and FletV2 data formats
-- **Error Handling**: Provides structured responses for server operations
-- **Async Support**: Implements both synchronous and asynchronous operations
+### Shared Database
 
-### State Management System
-The enhanced StateManager provides reactive state management with:
+Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) using file-level locking for safe concurrent access.
 
-- **State Synchronization**: Keeps UI components synchronized with server data
-- **Async Updates**: Supports server-mediated state updates
-- **Loading States**: Tracks operation loading states
-- **Progress Tracking**: Monitors operation progress
-- **Error States**: Manages and displays error states
-- **Event Broadcasting**: Sends events across different parts of the application
-- **Retry Mechanism**: Handles operation retries with exponential backoff
+## Project Structure
 
-### UI Components Framework
-The GUI uses a streamlined component system with:
+```
+├── FletV2/                     # Modern desktop GUI (Material Design 3)
+│   ├── main.py                # Application entry point
+│   ├── start_with_server.py   # Launcher with integrated BackupServer
+│   ├── views/                 # Feature views (dashboard, clients, files, etc.)
+│   ├── utils/                 # ServerBridge, state management, UI components
+│   └── theme.py               # Tri-style design system
+├── python_server/             # Core backup server
+│   └── server/
+│       ├── server.py          # BackupServer with network listener
+│       ├── database.py        # SQLite integration
+│       ├── protocol.py        # Binary protocol implementation
+│       └── network_server.py  # TCP network layer
+├── api_server/                # Flask bridge for C++ client web GUI
+│   └── cyberbackup_api_server.py
+├── Client/                    # C++ backup client
+│   ├── src/                   # Client source code
+│   └── include/               # Protocol definitions
+├── Shared/                    # Cross-cutting utilities
+│   ├── logging_config.py      # Structured logging
+│   └── utils/                 # UTF-8 bootstrap, retry logic, metrics
+├── scripts/                   # Build and deployment scripts
+│   └── one_click_build_and_run.py  # Complete system launcher
+├── _legacy/                   # Archived legacy code
+│   └── server_gui/            # TkInter GUI (deprecated Jan 2025)
+├── tests/                     # Test suite
+├── docs/                      # Documentation
+├── build/                     # Build artifacts
+├── client/                    # Client executable output
+├── third_party/               # External libraries
+├── build.bat                  # Main build script
+├── clean.bat                  # Cleanup script
+└── transfer.info              # Client configuration
+```
 
-- **Framework-Harmonious Components**: Uses Flet's built-in components rather than complex custom implementations
-- **Themed Components**: Consistent styling using the advanced theme system
-- **Smart Data Display**: DataTables and data visualization components
-- **Responsive Layouts**: Uses Flet's ResponsiveRow for adaptive layouts
-- **Status Indicators**: Various status pill and indicator types for different states
-- **Action Buttons**: Consistent styling for primary and secondary actions
+## Technology Stack
 
-### View Architecture
-Each view follows a consistent pattern:
+### Backend (Python)
+- **Framework**: Custom Python server with threading
+- **Crypto**: PyCryptodome (AES-256-CBC, RSA-1024)
+- **Database**: SQLite with custom connection pooling
+- **Networking**: Custom binary protocol with Boost.Asio for C++ client
+- **Logging**: Custom structured logging with dual output (console + file)
 
-- **Create Function**: Returns the view container, dispose function, and setup function
-- **Server Integration**: Uses server_bridge for data operations
-- **State Management**: Integrates with StateManager for reactive updates
-- **Resource Cleanup**: Includes proper disposal of resources and subscriptions
+### Frontend (FletV2)
+- **Framework**: Flet 0.28.3
+- **Design**: Material Design 3 with custom theming
+- **Architecture**: ServerBridge pattern for direct method calls to backend
+- **Components**: Custom UI components with reactive state management
 
-### Theme and Styling System
-The advanced theme system implements a tri-style design:
-
-- **Material Design 3**: Core design language with semantic colors
-- **Neumorphism**: Soft shadows and depth effects (40-45% intensity)
-- **Glassmorphism**: Translucent elements with blur effects (20-30% intensity)
-- **Pre-computed Constants**: Performance-optimized shadow and styling constants
-- **Animation Support**: GPU-accelerated animations for smooth interactions
-
-## Detailed View Components
-
-### Dashboard View
-The main dashboard view features:
-
-- **Metric Cards**: Interactive cards with real-time data and navigation support
-- **Performance Gauges**: Circular progress indicators with status displays
-- **Activity Stream**: Timeline-based activity display with status indicators
-- **Status Monitoring**: Dual status indicators for GUI and server connection
-- **Theme Controls**: Integrated theme switching with multiple options
-
-### Clients View
-The clients management view provides:
-
-- **Data Table**: Display of client information with sorting and filtering
-- **CRUD Operations**: Full Create, Read, Update, Delete functionality
-- **Status Indicators**: Visual status representation for connection states
-- **Search and Filter**: Client filtering by name, ID, and status
-- **Context Menus**: Action menus for each client record
-
-### Database View
-The database management view includes:
-
-- **Table Browser**: Dynamic table browsing with schema detection
-- **Record Management**: Full CRUD operations on database records
-- **Export Functionality**: JSON export of table data
-- **Status Indicators**: Visual representation of database status
-- **Search and Filter**: Record filtering and search capabilities
-
-### Settings View
-The settings management view provides:
-
-- **Tabbed Interface**: Organized settings into logical groups (Server, Interface, Monitoring, Logging, Security, Backup)
-- **Validation**: Client-side validation for settings values
-- **Import/Export**: Settings import/export functionality
-- **Reset Functionality**: Reset to default settings
-- **Server Integration**: Save/load settings from the server
-
-## Development Conventions
-
-### Code Style
-- Follow Python PEP 8 standards with Ruff linting
-- Use type hints for all function signatures
-- Maintain comprehensive docstrings for all modules and classes
-- Implement structured logging with context information
-
-### Architecture Patterns
-- **ServerBridge Pattern**: Interface between GUI and backend server
-- **State Management**: Reactive UI updates via dedicated state manager
-- **Modular Design**: Separate view components with consistent API patterns
-- **Async Integration**: Proper handling of synchronous and asynchronous operations
-- **Framework Harmony**: Use Flet's built-in components rather than complex custom implementations
-
-### Error Handling
-- Implement comprehensive exception handling with graceful degradation
-- Use structured logging for debugging and monitoring
-- Provide user-friendly error messages in GUI
-- Include automated crash reporting and diagnostics
+### C++ Client
+- **Language**: C++17
+- **Networking**: Boost.Asio
+- **Crypto**: Crypto++
+- **Build System**: CMake with vcpkg for dependencies
 
 ## Building and Running
 
 ### Prerequisites
-- Python 3.8+ with standard development tools
-- Visual Studio Build Tools for C++ client compilation
-- Git for version control
-- SQLite for database storage
+- Windows with MSVC Build Tools
+- Python 3.x
+- Boost.Asio library
+- vcpkg for C++ dependencies
 
-### Setup Commands
+### Launching the System
+
+**Option 1: One-Click Launch (Recommended)**
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
+python scripts/one_click_build_and_run.py
+```
+This will:
+1. Build the C++ client
+2. Launch FletV2 Desktop GUI with integrated BackupServer
+3. Launch API Server for C++ client web GUI
+4. Verify all components are running
 
-# Set up Flet virtual environment (if needed)
-python -m venv flet_venv
-flet_venv\Scripts\activate
-pip install -r requirements.txt
+**Option 2: Manual FletV2 Launch**
+```bash
+cd FletV2
+../flet_venv/Scripts/python start_with_server.py
+```
+Launches native desktop window with full server integration.
 
-# Build C++ client (Windows)
-.\build.bat
+**Option 3: Development Mode**
+```bash
+# Terminal 1: Start BackupServer + FletV2 GUI
+cd FletV2
+../flet_venv/Scripts/python start_with_server.py
 
-# Run the server
-python -m python_server.server.server
-
-# Run the GUI
-python -m FletV2.main
+# Terminal 2: Start API Server (for C++ client web GUI)
+python api_server/cyberbackup_api_server.py
 ```
 
-### Environment Variables
-- `FLET_GUI_ONLY_MODE`: Enable GUI-only mode without server connection
-- `CYBERBACKUP_DISABLE_INTEGRATED_GUI`: Disable embedded server GUI
-- `DASHBOARD_REFRESH_INTERVAL`: Set dashboard refresh interval in seconds
-- `FLET_V2_DEBUG`: Enable debug mode for additional logging
-- `FLET_V2_SHOW_MOCK_DATA`: Show mock data for testing purposes
+### Building the Client
+```batch
+.\build.bat
+```
 
-## Testing and Quality Assurance
+### Running the System
+1. Start the server:
+   ```batch
+   .\start_server.bat
+   ```
 
-### Test Strategy
-- Integration tests for server-client communication
-- Unit tests for encryption and protocol implementations
-- GUI component tests for UI interactions
-- End-to-end tests for backup workflow
+2. Configure client settings in `transfer.info`:
+   ```
+   127.0.0.1:1256
+   your_username
+   path\to\file\to\backup.txt
+   ```
 
-### Quality Tools
-- Ruff for linting and formatting
-- Pyright for type checking
-- MyPy for additional type verification
-- Comprehensive logging for debugging
+3. Run the client:
+   ```batch
+   .\start_client.bat
+   ```
 
-## Special Considerations for Agents
+## Development Patterns
 
-### Security Context
-- Always prioritize secure handling of encryption keys and credentials
-- Follow security best practices when modifying crypto implementations
-- Ensure all file operations maintain data integrity
-- Verify that any new features maintain the end-to-end encryption model
+### ServerBridge Pattern
 
-### GUI Development
-- Maintain consistency with the tri-style design system (Material 3, Neumorphism, Glassmorphism)
-- Use the provided theme utilities for styling components
-- Implement proper state management for reactive UI updates
-- Follow the established navigation and view switching patterns
-- Prefer Flet's built-in components over complex custom implementations
+The FletV2 GUI communicates with the BackupServer through a ServerBridge pattern:
 
-### Server Integration
-- Use the ServerBridge pattern for GUI-server communication
-- Implement proper error handling for network operations
-- Ensure thread safety in multi-client scenarios
-- Maintain the existing protocol compatibility
+```python
+# ServerBridge provides clean API surface for the FletV2 GUI
+# - Direct delegation pattern to real server
+# - Consistent structured returns: {'success': bool, 'data': Any, 'error': str}
+# - Data format conversion between BackupServer and FletV2 formats
+# - Error handling with structured responses
+```
 
-### Database Operations
-- Use the existing DatabaseManager for all database interactions
-- Follow the established schema patterns for client and file records
-- Implement proper transaction handling for data consistency
-- Include appropriate error handling for database operations
+### Direct Integration vs API Layer
 
-### Performance Considerations
-- Optimize for frequent UI updates with minimal redraw operations
-- Use targeted updates rather than full page refreshes
-- Implement efficient data processing for large file transfers
-- Consider memory usage when handling large datasets in GUI
-- Use GPU-accelerated animations for smooth interactions
+The FletV2 GUI connects directly to the BackupServer instance, bypassing the network layer:
+
+```python
+# No API call overhead - direct method calls on server object
+app = main.FletV2App(page, real_server=server_instance)
+```
+
+### Data Conversion
+
+The system handles data format conversion between the server and GUI:
+
+```python
+def convert_backupserver_client_to_fletv2(client_data: dict[str, Any]) -> dict[str, Any]:
+    """Convert BackupServer client format to FletV2 expected format."""
+    # Implementation handles field mapping and type conversion
+```
+
+## Key Files and Components
+
+### Core Server: `python_server/server/server.py`
+- BackupServer class with client management
+- Database integration with connection pooling
+- Network protocol handling
+- File storage and verification
+
+### GUI Application: `FletV2/main.py`
+- FletV2App class implementing the main interface
+- NavigationRail for view switching
+- ServerBridge integration
+- State management
+
+### Server Integration: `FletV2/start_with_server.py`
+- Server initialization and lifecycle management
+- Main thread execution with signal handling
+- Integration with Flet GUI
+
+### API Server: `api_server/cyberbackup_api_server.py`
+- Flask-based web API
+- C++ client subprocess management
+- Connection to BackupServer via network protocol
+
+### C++ Client: `Client/cpp/client.cpp`
+- Binary protocol implementation
+- File encryption and transmission
+- Connection to BackupServer
+
+## Testing
+
+Run the consolidated test suite:
+```python
+python tests\consolidated_tests.py
+```
+
+## Configuration
+
+Edit `transfer.info` to configure:
+- Server address and port
+- Username for authentication
+- File path to backup
+
+## Development Conventions
+
+1. **Error Handling**: Use structured responses with success/error fields
+2. **Logging**: Follow established patterns with appropriate log levels
+3. **Database**: Use connection pooling for thread safety
+4. **Threading**: Implement proper locks for shared resources
+5. **Testing**: Include retry logic for transient failures
+6. **Security**: Maintain encryption standards throughout transmission and storage
 
 ## Troubleshooting
 
 ### Common Issues
-- GUI freezing during server communication: Check for blocking operations
-- Client connection failures: Verify protocol compatibility and network settings
-- Database lock issues: Ensure proper transaction handling and connection cleanup
-- GUI styling inconsistencies: Follow established theme patterns
+
+1. **Network Listener Not Starting**: Ensure `server_instance.start()` is called in startup scripts
+2. **Database Locking**: Concurrent access is handled through file-level locking
+3. **UTF-8 Issues**: The system includes UTF-8 bootstrap for Windows compatibility
 
 ### Debugging
-- Enable detailed logging with `--verbose` or environment variables
-- Use the ServerBridge test methods to verify server functionality
-- Check the server.log and enhanced log files for error details
-- Use the built-in diagnostic tools in the GUI for system monitoring
 
-## Future Development
-
-### Planned Enhancements
-- Enhanced analytics and reporting features
-- Improved backup scheduling and automation
-- Advanced file versioning and recovery options
-- Additional GUI themes and customization options
-
-### Architecture Considerations
-- Scalability for larger client deployments
-- Additional encryption algorithms support
-- Cloud storage integration options
-- Advanced monitoring and alerting systems
+- Server logs are available in `server.log` and the enhanced logging system
+- FletV2 includes verbose diagnostic options via environment variables
+- Network protocol issues can be debugged through the binary protocol implementation
