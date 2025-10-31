@@ -1,0 +1,27 @@
+# Exclude archived files from VS Code analysis
+**/archive/
+**/archive/**/
+
+# Exclude build artifacts
+**/build/
+**/build/**
+
+# Exclude virtual environments
+**/flet_venv/
+**/venv/
+
+# Exclude compiled Python files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Exclude IDE files
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+
+# Exclude OS files
+**/.DS_Store
+**/Thumbs.db

@@ -85,5 +85,9 @@
   "markdown.preview.fontSize": 16,
   "tailwindCSS.rootFontSize": 17,
   "editor.mouseWheelZoom": true,
-  "terminal.integrated.mouseWheelZoom": true
+  "terminal.integrated.mouseWheelZoom": true,
+  "chat.agent.thinking.collapsedTools": false,
+  "chat.edits2.enabled": true,
+  "chat.extensionUnification.enabled": false,
+  "accessibility.openChatEditedFiles": true
 }

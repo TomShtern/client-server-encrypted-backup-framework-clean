@@ -740,7 +740,14 @@ def create_dashboard_view(
     def _schedule_task(coro_func: Callable[[], Coroutine[Any, Any, Any]]) -> asyncio.Task[Any] | None:
         if disposed:
             return None
-        return _register_task(page.run_task(coro_func))
+        try:
+            return _register_task(page.run_task(coro_func))
+        except RuntimeError as e:
+            # Executor already shut down during app closure - this is expected
+            DEBUG = os.environ.get("FLET_DASHBOARD_DEBUG") == "1"
+            if DEBUG:
+                print(f"[DASH] Task scheduling skipped during shutdown: {e}")
+            return None
 
     async def _set_loading_visible(visible: bool) -> None:
         """Toggle the dashboard loading indicator without risking attachment errors."""

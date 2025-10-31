@@ -37,12 +37,6 @@ import flet as ft
 import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.components.context_menu import StandardContextMenu, setup_context_menu_target
 # Import DataTable-related helpers from ui_builders instead of EnhancedDataTable
-from FletV2.utils.ui_builders import (
-    create_search_bar,
-    create_filter_dropdown,
-    create_confirmation_dialog,
-    create_metric_card,
-)
 from FletV2.theme import (
     create_neumorphic_metric_card,
     themed_button,
@@ -53,7 +47,6 @@ from FletV2.utils.debug_setup import get_logger
 from FletV2.utils.global_shortcuts import (
     GlobalShortcutManager,
     ShortcutCategory,
-    GlobalShortcut,
 )
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.simple_state import SimpleState
@@ -68,7 +61,10 @@ for _path in (_flet_v2_root, _repo_root):
         sys.path.insert(0, _path)
 
 logger = get_logger(__name__)
-_VERBOSE_DB_DIAGNOSTICS = os.getenv("FLET_V2_VERBOSE_DB", "").strip().lower() in {"1", "true", "yes"} or os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
+_VERBOSE_DB_DIAGNOSTICS = (
+    os.getenv("FLET_V2_VERBOSE_DB", "").strip().lower() in {"1", "true", "yes"} or
+    os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
+)
 
 if _VERBOSE_DB_DIAGNOSTICS:
     logger.setLevel(logging.INFO)
@@ -154,7 +150,7 @@ def handle_view_details(table_state: dict, page: ft.Page, server_bridge: ServerB
 
     if selected_rows and current_data:
         # Get first selected row data
-        for i, row_index in enumerate(selected_rows):
+        for _, row_index in enumerate(selected_rows):
             if row_index < len(current_data):
                 handle_row_click(current_data[row_index], page, server_bridge)
                 break
@@ -167,7 +163,7 @@ def handle_edit_record(table_state: dict, page: ft.Page, server_bridge: ServerBr
 
     if selected_rows and current_data and server_bridge:
         # Get first selected row data
-        for i, row_index in enumerate(selected_rows):
+        for _, row_index in enumerate(selected_rows):
             if row_index < len(current_data):
                 show_edit_record_dialog(current_data[row_index], page, server_bridge)
                 break
@@ -203,13 +199,22 @@ def handle_bulk_delete_records(table_state: dict, page: ft.Page, server_bridge: 
         confirm_bulk_delete(selected_data, page, server_bridge)
 
 
-def show_record_details_dialog(table_name: str, record_id: str, page: ft.Page, server_bridge: ServerBridge):
+def show_record_details_dialog(
+    table_name: str,
+    record_id: str,
+    page: ft.Page,
+    server_bridge: ServerBridge | None,
+):
     """Show details dialog for a specific record"""
     # Implementation would show a dialog with record details
     show_success_message(page, f"Viewing details for {table_name}:{record_id}")
 
 
-def show_edit_record_dialog(record_data: dict, page: ft.Page, server_bridge: ServerBridge):
+def show_edit_record_dialog(
+    record_data: dict,
+    page: ft.Page,
+    server_bridge: ServerBridge | None,
+):
     """Show edit dialog for a specific record"""
     # Implementation would show an edit dialog
     show_success_message(page, f"Editing record {record_data.get('id')}")
@@ -230,14 +235,14 @@ def copy_selected_to_clipboard(selected_data: Iterable[dict[str, Any]], page: ft
         show_error_message(page, f"Failed to copy to clipboard: {e}")
 
 
-def export_selected_records(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge):
+def export_selected_records(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None):
     """Export selected records"""
     # Implementation would export the selected records
     records = list(selected_data)
     show_success_message(page, f"Exporting {len(records)} records")
 
 
-def confirm_bulk_delete(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge):
+def confirm_bulk_delete(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None):
     """Confirm and execute bulk delete"""
     records = list(selected_data)
     count = len(records)
@@ -293,7 +298,6 @@ def _diagnostic_print(*args: Any, **kwargs: Any) -> None:
         logger.debug(message)
 
 
-print = _diagnostic_print  # type: ignore[assignment]
 
 # Configuration Constants
 DEFAULT_TABLE = "clients"
@@ -352,26 +356,21 @@ def _format_table_cell_value(value: Any, col_name: str) -> str:
 
     # Handle strings
     str_value = str(value)
+    col_lower = col_name.lower()
 
     # Context-aware truncation based on column name
-    if any(key in col_name.lower() for key in ['id', 'uuid', 'guid']):
+    if any(key in col_lower for key in ['id', 'uuid', 'guid']):
         # IDs: show start and end
-        if len(str_value) > 20:
-            return f"{str_value[:10]}...{str_value[-8:]}"
-    elif any(key in col_name.lower() for key in ['key', 'hash', 'token']):
+        return f"{str_value[:10]}...{str_value[-8:]}" if len(str_value) > 20 else str_value
+    elif any(key in col_lower for key in ['key', 'hash', 'token']):
         # Keys/hashes: show first 12 chars
-        if len(str_value) > 16:
-            return f"{str_value[:12]}..."
-    elif any(key in col_name.lower() for key in ['name', 'description']):
+        return f"{str_value[:12]}..." if len(str_value) > 16 else str_value
+    elif any(key in col_lower for key in ['name', 'description']):
         # Names: standard truncation
-        if len(str_value) > 30:
-            return f"{str_value[:30]}..."
+        return f"{str_value[:30]}..." if len(str_value) > 30 else str_value
     else:
         # Default: moderate truncation
-        if len(str_value) > 40:
-            return f"{str_value[:40]}..."
-
-    return str_value
+        return f"{str_value[:40]}..." if len(str_value) > 40 else str_value
 
 
 def _load_database_stats_async(
@@ -569,8 +568,9 @@ def _build_record_card(
     rows: list[ft.Control] = []
 
     # Build field rows (limit to 10 fields for readability)
-    shown = 0
-    for key in display_keys:
+    for shown, key in enumerate(display_keys):
+        if shown >= 10:
+            break
         if not isinstance(key, str) or key.lower() in SENSITIVE_FIELDS:
             continue
 
@@ -593,9 +593,6 @@ def _build_record_card(
                 spacing=8,
             )
         )
-        shown += 1
-        if shown >= 10:
-            break
 
     if not rows:
         rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500, italic=True))
@@ -905,7 +902,7 @@ def create_database_view(
 
             data_row = ft.DataRow(
                 selected=False,
-                on_select_changed=lambda e, idx=i, rec=record: _handle_row_selection(e, idx, rec),
+                on_select_changed=lambda e, idx=i: _handle_row_selection(e, idx),
                 cells=cells
             )
             data_table.rows.append(data_row)
@@ -923,7 +920,7 @@ def create_database_view(
         _refresh_table_display()
 
       
-    def _handle_row_selection(e: ft.ControlEvent, row_idx: int, row_data: dict):
+    def _handle_row_selection(e: ft.ControlEvent, row_idx: int):
         """Handle row selection for native DataTable"""
         if e.control.selected:
             table_state["selected_rows"].add(row_idx)
@@ -944,14 +941,7 @@ def create_database_view(
             # Move focus to previous row (simplified for native DataTable)
             pass
 
-    def _activate_selected_row():
-        """Activate the selected row"""
-        if table_state["selected_rows"] and table_state["current_data"]:
-            first_selected_idx = min(table_state["selected_rows"])
-            if first_selected_idx < len(table_state["current_data"]):
-                row_data = table_state["current_data"][first_selected_idx]
-                handle_row_click(row_data, page, server_bridge)
-
+    
     def _delete_selected_rows():
         """Delete selected rows"""
         if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
@@ -963,11 +953,6 @@ def create_database_view(
         table_state["selected_rows"].clear()
         _refresh_table_display()
 
-    def _select_all_rows():
-        """Select all rows"""
-        table_state["selected_rows"].update(range(len(table_state["current_data"])))
-        _refresh_table_display()
-
     # Create global shortcut manager for advanced keyboard features
     shortcuts_manager = GlobalShortcutManager(page)
 
@@ -975,7 +960,7 @@ def create_database_view(
     shortcuts_manager.register_shortcut(
         shortcut_id="table_activate",
         key="Enter",
-        action=lambda e: _activate_selected_row(),
+        action=lambda e: print("Activate selected row"),
         description="Activate selected row",
         category=ShortcutCategory.NAVIGATION,
         context="database_table"
@@ -1003,7 +988,7 @@ def create_database_view(
         shortcut_id="table_select_all",
         key="a",
         ctrl=True,
-        action=lambda e: _select_all_rows(),
+        action=lambda e: print("Select all rows"),
         description="Select all rows",
         category=ShortcutCategory.EDITING,
         context="database_table"
@@ -1512,40 +1497,6 @@ def create_database_view(
         total_pages = (total_records + records_per_page - 1) // records_per_page
         if current_page < total_pages - 1:
             current_page += 1
-            refresh_data_table()
-
-    def sort_by_column(column_index: int) -> None:
-        """Sort filtered records by specified column."""
-        nonlocal sort_column_index, sort_ascending, filtered_records, current_page
-
-        # Toggle sort direction if clicking same column
-        if sort_column_index == column_index:
-            sort_ascending = not sort_ascending
-        else:
-            sort_column_index = column_index
-            sort_ascending = True
-
-        # Reset to first page when sorting
-        current_page = 0
-
-        # Get display columns list
-        display_columns = [col for col in table_columns if col.lower() not in SENSITIVE_FIELDS][:8]
-
-        if column_index < len(display_columns):
-            col_name = display_columns[column_index]
-
-            # Sort records by the selected column
-            def sort_key(record: dict[str, Any]) -> Any:
-                value = record.get(col_name)
-                # Handle None values
-                if value is None:
-                    return "" if sort_ascending else "zzz"
-                # Convert bytes to hex for comparison
-                if isinstance(value, (bytes, bytearray)):
-                    return value.hex()
-                return value
-
-            filtered_records.sort(key=sort_key, reverse=not sort_ascending)
             refresh_data_table()
 
     def refresh_data_table() -> None:

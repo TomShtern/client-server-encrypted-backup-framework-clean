@@ -33,7 +33,10 @@ class FletDatabaseManager:
         """Connect to the database."""
         try:
             if os.path.exists(self.database_path):
-                self.connection = sqlite3.connect(self.database_path)
+                # CRITICAL: check_same_thread=False is REQUIRED for Flet apps
+                # Flet's WebSocket architecture means UI updates can happen across threads
+                # Without this, you'll get random "database is locked" errors
+                self.connection = sqlite3.connect(self.database_path, check_same_thread=False)
                 self.connection.row_factory = sqlite3.Row  # Enable column access by name
                 logger.info(f"Connected to database: {self.database_path}")
                 return True

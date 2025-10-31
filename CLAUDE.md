@@ -20,7 +20,7 @@ The Client-Server Encrypted Backup Framework (CyberBackup 3.0) is a comprehensiv
 - Direct Python method calls via ServerBridge (no network overhead)
 - Real-time monitoring, client/file management, analytics
 - Integrated BackupServer with network listener on port 1256
-- Material Design 3 with Neumorphism and Glassmorphism styling
+- Material Design 3 with enhanced Windows 11 integration
 
 **2. JavaScript Web GUI** (End-User Backups)
 - Browser-based interface for backup operations
@@ -53,8 +53,11 @@ Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) 
 │   ├── main.py                # Application entry point
 │   ├── start_with_server.py   # Launcher with integrated BackupServer
 │   ├── views/                 # Feature views (dashboard, clients, files, etc.)
-│   ├── utils/                 # ServerBridge, state management, UI components
-│   └── theme.py               # Tri-style design system
+│   ├── utils/                 # ServerBridge, UI components, utilities
+│   ├── components/            # Reusable UI components (search, breadcrumb, etc.)
+│   ├── theme.py               # Enhanced theme system with Windows 11 integration
+│   ├── docs/                  # Comprehensive technical documentation
+│   └── CLAUDE.md              # FletV2-specific development guide
 ├── python_server/             # Core backup server
 │   └── server/
 │       ├── server.py          # BackupServer with network listener
@@ -72,9 +75,8 @@ Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) 
 ├── scripts/                   # Build and deployment scripts
 │   └── one_click_build_and_run.py  # Complete system launcher
 ├── _legacy/                   # Archived legacy code
-│   └── server_gui/            # TkInter GUI (deprecated Jan 2025)
 ├── tests/                     # Test suite
-├── docs/                      # Documentation
+├── docs/                      # Project documentation
 ├── build/                     # Build artifacts
 ├── client/                    # Client executable output
 ├── third_party/               # External libraries
@@ -94,9 +96,10 @@ Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) 
 
 ### Frontend (FletV2)
 - **Framework**: Flet 0.28.3
-- **Design**: Material Design 3 with custom theming
+- **Design**: Material Design 3 with enhanced theming and Windows 11 integration
 - **Architecture**: ServerBridge pattern for direct method calls to backend
-- **Components**: Custom UI components with reactive state management
+- **Components**: Custom UI components with reactive patterns
+- **Utilities**: ~6000 lines across 19 utility modules (formatters, ui_components, async_helpers, etc.)
 
 ### C++ Client
 - **Language**: C++17
@@ -108,7 +111,7 @@ Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) 
 
 ### Prerequisites
 - Windows with MSVC Build Tools
-- Python 3.x
+- Python 3.9+ (3.13.5 recommended)
 - Boost.Asio library
 - vcpkg for C++ dependencies
 
@@ -146,23 +149,13 @@ python api_server/cyberbackup_api_server.py
 .\build.bat
 ```
 
-### Running the System
-1. Start the server:
-   ```batch
-   .\start_server.bat
-   ```
-
-2. Configure client settings in `transfer.info`:
-   ```
-   127.0.0.1:1256
-   your_username
-   path\to\file\to\backup.txt
-   ```
-
-3. Run the client:
-   ```batch
-   .\start_client.bat
-   ```
+### Client Configuration
+Configure client settings in `transfer.info`:
+```
+127.0.0.1:1256
+your_username
+path\to\file\to\backup.txt
+```
 
 ## Development Patterns
 
@@ -176,6 +169,7 @@ The FletV2 GUI communicates with the BackupServer through a ServerBridge pattern
 # - Consistent structured returns: {'success': bool, 'data': Any, 'error': str}
 # - Data format conversion between BackupServer and FletV2 formats
 # - Error handling with structured responses
+# - No mock data (returns empty data if server unavailable)
 ```
 
 ### Direct Integration vs API Layer
@@ -184,6 +178,7 @@ The FletV2 GUI connects directly to the BackupServer instance, bypassing the net
 
 ```python
 # No API call overhead - direct method calls on server object
+server_instance = BackupServer()
 app = main.FletV2App(page, real_server=server_instance)
 ```
 
@@ -206,15 +201,30 @@ def convert_backupserver_client_to_fletv2(client_data: dict[str, Any]) -> dict[s
 - File storage and verification
 
 ### GUI Application: `FletV2/main.py`
-- FletV2App class implementing the main interface
+- FletV2App class implementing the main interface (~1000 lines)
 - NavigationRail for view switching
 - ServerBridge integration
-- State management
+- Global shortcuts and keyboard navigation
 
 ### Server Integration: `FletV2/start_with_server.py`
 - Server initialization and lifecycle management
 - Main thread execution with signal handling
 - Integration with Flet GUI
+- Environment variable setup
+
+### Server Bridge: `FletV2/utils/server_bridge.py`
+- Clean delegation to BackupServer methods
+- Structured response format
+- Data normalization utilities
+- No mock data fallbacks (real server only)
+
+### Utilities: `FletV2/utils/`
+- `formatters.py`: Data formatting utilities (as_float, as_int, format_timestamp)
+- `ui_components.py`: Reusable UI components
+- `async_helpers.py`: Async/await patterns
+- `global_shortcuts.py`: Desktop keyboard shortcuts
+- `user_feedback.py`: Snackbar and dialog helpers
+- And 14 more specialized modules
 
 ### API Server: `api_server/cyberbackup_api_server.py`
 - Flask-based web API
@@ -226,11 +236,31 @@ def convert_backupserver_client_to_fletv2(client_data: dict[str, Any]) -> dict[s
 - File encryption and transmission
 - Connection to BackupServer
 
+## FletV2 Development
+
+For detailed FletV2 GUI development, see:
+- **`FletV2/CLAUDE.md`**: FletV2-specific patterns, anti-patterns, and critical rules
+- **`FletV2/docs/ARCHITECTURE.md`**: Comprehensive architecture documentation
+- **`FletV2/docs/GETTING_STARTED.md`**: Setup and quick start guide
+- **`FletV2/docs/DEVELOPMENT_WORKFLOWS.md`**: Testing, deployment, and workflow documentation
+
+### Quick FletV2 Reference
+- **Framework**: Flet 0.28.3 with Material Design 3
+- **Pattern**: View-based architecture with `create_*_view()` functions
+- **Theme**: Enhanced theme system with Windows 11 integration (theme.py)
+- **Principle**: Use Flet built-ins over custom solutions (Flet Simplicity Principle)
+
 ## Testing
 
 Run the consolidated test suite:
 ```python
 python tests\consolidated_tests.py
+```
+
+FletV2 specific tests:
+```bash
+cd FletV2
+pytest tests/
 ```
 
 ## Configuration
@@ -248,6 +278,7 @@ Edit `transfer.info` to configure:
 4. **Threading**: Implement proper locks for shared resources
 5. **Testing**: Include retry logic for transient failures
 6. **Security**: Maintain encryption standards throughout transmission and storage
+7. **Flet Development**: Follow Flet Simplicity Principle (use built-ins, avoid over-engineering)
 
 ## Troubleshooting
 
@@ -256,9 +287,53 @@ Edit `transfer.info` to configure:
 1. **Network Listener Not Starting**: Ensure `server_instance.start()` is called in startup scripts
 2. **Database Locking**: Concurrent access is handled through file-level locking
 3. **UTF-8 Issues**: The system includes UTF-8 bootstrap for Windows compatibility
+4. **Import Errors**: Always use `flet_venv` virtual environment located at workspace root
 
 ### Debugging
 
 - Server logs are available in `server.log` and the enhanced logging system
 - FletV2 includes verbose diagnostic options via environment variables
 - Network protocol issues can be debugged through the binary protocol implementation
+
+### Environment Variables
+
+For FletV2 integration:
+```bash
+# Windows PowerShell
+$env:CYBERBACKUP_DISABLE_INTEGRATED_GUI = "1"
+$env:CYBERBACKUP_DISABLE_GUI = "1"
+$env:FLET_V2_DEBUG = "true"
+```
+
+## Deployment
+
+### FletV2 Desktop Application
+```bash
+cd FletV2
+flet build windows              # Build Windows executable
+# Output: build/windows/FletV2.exe
+
+# Options:
+flet build windows --verbose --build-number 1.0 --company "CyberBackup"
+```
+
+### C++ Client
+```batch
+.\build.bat    # Builds C++ client with Boost.Asio and Crypto++
+# Output: client/backup_client.exe
+```
+
+### Full System Deployment
+1. Build C++ client: `build.bat`
+2. Build FletV2 GUI: `cd FletV2 && flet build windows`
+3. Package both executables with `defensive.db` and `transfer.info`
+4. Distribute as standalone Windows application
+
+## Recent Updates (January 2025)
+
+- **Database View**: Refactored to use ListView for optimal performance
+- **Formatters Module**: Added utility functions for safe type conversion
+- **Theme System**: Enhanced with Windows 11 integration and display scaling
+- **Consolidation**: Organized archive folders, cleaned up legacy code
+- **Documentation**: Comprehensive docs/ folder with ARCHITECTURE.md, GETTING_STARTED.md, DEVELOPMENT_WORKFLOWS.md
+- **Flet 0.28.3**: Updated to latest Flet version with Material Design 3
