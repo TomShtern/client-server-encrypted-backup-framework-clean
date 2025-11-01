@@ -29,13 +29,17 @@ import os
 import sys
 from collections.abc import Callable, Coroutine, Iterable
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from FletV2.main import AsyncManager
 
 import flet as ft
 
 # UTF-8 solution for subprocess/console I/O
 import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.components.context_menu import StandardContextMenu, setup_context_menu_target
+
 # Import DataTable-related helpers from ui_builders instead of EnhancedDataTable
 from FletV2.theme import (
     create_neumorphic_metric_card,
@@ -492,9 +496,15 @@ def _load_table_data_async(
     refresh_records_display_fn: Callable[[], None],
     update_status_fn: Callable[[str, str | None, bool], None],
     force_records_area_update_fn: Callable[[], None],
+    async_manager: AsyncManager | None = None,
 ) -> asyncio.Task:
     """Load data for currently selected table."""
     async def load_data():
+        # Check for cancellation before starting operation
+        if async_manager and async_manager.is_cancelled():
+            logger.debug("[LOAD_TABLE] Operation cancelled before database query")
+            return
+
         if not is_server_connected_fn():
             all_records.clear()
             table_columns.clear()
@@ -503,6 +513,12 @@ def _load_table_data_async(
 
         try:
             current_table = current_table_fn()
+
+            # Check for cancellation before expensive operation
+            if async_manager and async_manager.is_cancelled():
+                logger.debug("[LOAD_TABLE] Operation cancelled before expensive query")
+                return
+
             update_status_fn(f"Loading {current_table}...", ft.Colors.BLUE, True)
             bridge = get_active_bridge_fn()
             if bridge is None:
@@ -517,6 +533,11 @@ def _load_table_data_async(
             print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
             result = await run_sync_in_executor(get_table_data_op)
             print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
+
+            # Check for cancellation after expensive operation
+            if async_manager and async_manager.is_cancelled():
+                logger.debug("[LOAD_TABLE] Operation cancelled after database query")
+                return
 
             if result.get("success") and result.get("data"):
                 data = result["data"]
@@ -649,6 +670,7 @@ def create_database_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
     _state_manager: SimpleState | None = None,
+    async_manager: AsyncManager | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create professional database management view.
 
@@ -919,7 +941,7 @@ def create_database_view(
             table_state["sort_ascending"] = True
         _refresh_table_display()
 
-      
+
     def _handle_row_selection(e: ft.ControlEvent, row_idx: int):
         """Handle row selection for native DataTable"""
         if e.control.selected:
@@ -941,7 +963,7 @@ def create_database_view(
             # Move focus to previous row (simplified for native DataTable)
             pass
 
-    
+
     def _delete_selected_rows():
         """Delete selected rows"""
         if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
@@ -1636,6 +1658,7 @@ def create_database_view(
             refresh_records_display,
             update_status,
             _force_records_area_update,
+            async_manager,
         )
 
     # ========================================================================

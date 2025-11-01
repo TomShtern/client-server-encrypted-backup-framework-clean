@@ -170,8 +170,9 @@ class BreadcrumbNavigation(ft.Row):
 
                 self.controls.append(nav_button)
 
-        # Update the component
-        self.update()
+        # Update the component only when attached to a page
+        if getattr(self, "page", None):
+            self.update()
 
     def _get_display_items(self) -> list[BreadcrumbItem]:
         """Get the items to display, handling overflow with ellipsis"""

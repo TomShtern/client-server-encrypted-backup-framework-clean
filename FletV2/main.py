@@ -26,7 +26,11 @@ from typing import Any
 # Third-party imports
 import flet as ft
 
-from FletV2.components.breadcrumb import BreadcrumbFactory, BreadcrumbNavigation
+from FletV2.components.breadcrumb import (
+    BreadcrumbFactory,
+    BreadcrumbNavigation,
+    setup_breadcrumb_navigation,
+)
 from FletV2.components.global_search import create_global_search_bar
 
 # Import global shortcuts system for desktop navigation
@@ -280,6 +284,73 @@ if project_root not in sys.path:
 bridge_type = "Unknown"
 
 
+class AsyncManager:
+    """
+    Centralized async task lifecycle management for Flet applications.
+
+    Provides cooperative cancellation and proper cleanup for background tasks
+    to prevent UI freezing during navigation.
+    """
+
+    def __init__(self):
+        self._cancelled: bool = False
+        self._tasks: set[asyncio.Task] = set()
+        self._view_name: str | None = None
+
+    def set_view(self, view_name: str) -> None:
+        """Associate this manager with a specific view."""
+        self._view_name = view_name
+
+    def cancel_all(self) -> None:
+        """Cancel all registered tasks cooperatively."""
+        self._cancelled = True
+        logger.info(f"[ASYNC_MANAGER] Cancelling all tasks for view: {self._view_name}")
+
+        # Cancel all tasks
+        for task in list(self._tasks):
+            if not task.done():
+                task.cancel()
+
+        # Clear the task set
+        self._tasks.clear()
+
+    def is_cancelled(self) -> bool:
+        """Check if operations should be cancelled."""
+        return self._cancelled
+
+    def register_task(self, task: asyncio.Task) -> None:
+        """Register a task for cleanup."""
+        self._tasks.add(task)
+
+        # Auto-remove task when done
+        def cleanup(task_future: asyncio.Task) -> None:
+            self._tasks.discard(task)
+
+        task.add_done_callback(cleanup)
+
+    async def run_cancellable(self, coro, *args, **kwargs):
+        """Run a coroutine with cancellation support."""
+        if self._cancelled:
+            return None
+
+        task = asyncio.create_task(coro(*args, **kwargs))
+        self.register_task(task)
+
+        try:
+            return await task
+        except asyncio.CancelledError:
+            logger.debug(f"[ASYNC_MANAGER] Task cancelled for view: {self._view_name}")
+            return None
+
+    def safe_update(self, control: ft.Control) -> None:
+        """Safely update a control, preventing updates from cancelled tasks."""
+        if not self._cancelled and hasattr(control, 'page'):
+            try:
+                control.update()
+            except Exception as e:
+                logger.debug(f"[ASYNC_MANAGER] Failed to update control: {e}")
+
+
 class FletV2App(ft.Row):
     """
     Clean FletV2 desktop app using pure Flet patterns.
@@ -312,6 +383,9 @@ class FletV2App(ft.Row):
         self._last_view_error: str | None = None
         # Ensure initial view is loaded exactly once to avoid duplicate dashboard instances
         self._initial_view_loaded: bool = False
+
+        # Async task management
+        self.async_manager: AsyncManager = AsyncManager()
 
         # Desktop navigation components
         self.global_shortcut_manager: GlobalShortcutManager | None = None
@@ -384,6 +458,58 @@ class FletV2App(ft.Row):
         self._current_setup_task: asyncio.Task | None = None  # Track setup task for cancellation
 
         # Create optimized content area with modern Material Design 3 styling and fast transitions
+        self._animated_switcher = ft.AnimatedSwitcher(
+            content=ft.Card(  # Modern card-based loading state
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.ProgressRing(
+                                width=24,
+                                height=24,
+                                stroke_width=3,
+                                color=ft.Colors.PRIMARY,
+                            ),
+                            ft.Text(
+                                "Loading Application...",
+                                size=16,
+                                weight=ft.FontWeight.W_500,
+                                color=ft.Colors.ON_SURFACE
+                            ),
+                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
+                        ft.Chip(
+                            label=ft.Text("Encrypted Backup Framework", size=12),
+                            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                            color=ft.Colors.PRIMARY,
+                            height=32,
+                        ),
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
+                    padding=24,
+                    expand=True,
+                    alignment=ft.alignment.center
+                ),
+                elevation=2,
+                shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+            ),
+            transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
+            duration=160,  # Balanced for smoothness and speed
+            reverse_duration=100,
+            switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,  # Modern curves
+            switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
+            expand=True,
+        )
+
+        self._breadcrumb_strip = ft.Container(visible=False, expand=False)
+
+        content_column = ft.Column(
+            controls=[
+                self._breadcrumb_strip,
+                ft.Container(content=self._animated_switcher, expand=True),
+            ],
+            spacing=16,
+            expand=True,
+        )
+
         self.content_area = ft.Container(
             expand=True,
             padding=ft.Padding(24, 20, 24, 20),  # Material Design 3 spacing standards
@@ -398,46 +524,7 @@ class FletV2App(ft.Row):
             ),
             animate=ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC),  # Modern animation curve
             animate_opacity=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
-            content=ft.AnimatedSwitcher(
-                content=ft.Card(  # Modern card-based loading state
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Row([
-                                ft.ProgressRing(
-                                    width=24,
-                                    height=24,
-                                    stroke_width=3,
-                                    color=ft.Colors.PRIMARY,
-                                ),
-                                ft.Text(
-                                    "Loading Application...",
-                                    size=16,
-                                    weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.ON_SURFACE
-                                ),
-                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=12),
-                            ft.Chip(
-                                label=ft.Text("Encrypted Backup Framework", size=12),
-                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                                color=ft.Colors.PRIMARY,
-                                height=32,
-                            ),
-                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=16),
-                        padding=24,
-                        expand=True,
-                        alignment=ft.alignment.center
-                    ),
-                    elevation=2,
-                    shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                    surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
-                ),
-                transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
-                duration=160,  # Balanced for smoothness and speed
-                reverse_duration=100,
-                switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,  # Modern curves
-                switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
-                expand=True
-            )
+            content=content_column,
         )
 
         # Create navigation rail (using simple approach with collapsible functionality)
@@ -559,10 +646,9 @@ class FletV2App(ft.Row):
     def _set_animation_for_view(self, view_name: str) -> None:
         """Set animation for view transitions."""
         try:
-            animated_switcher = self.content_area.content
-            if isinstance(animated_switcher, ft.AnimatedSwitcher):
-                animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
-                animated_switcher.duration = 200
+            if isinstance(self._animated_switcher, ft.AnimatedSwitcher):
+                self._animated_switcher.transition = ft.AnimatedSwitcherTransition.FADE
+                self._animated_switcher.duration = 200
         except Exception as e:
             logger.debug(f"Failed to set animation for {view_name}: {e}")
 
@@ -764,6 +850,10 @@ class FletV2App(ft.Row):
                 ]
 
             self.breadcrumb_navigation.set_items(items)
+            if self._breadcrumb_strip:
+                self._breadcrumb_strip.visible = True
+                if getattr(self._breadcrumb_strip, "page", None):
+                    self._breadcrumb_strip.update()
 
         except Exception as e:
             logger.error(f"Failed to update breadcrumbs: {e}")
@@ -779,7 +869,11 @@ class FletV2App(ft.Row):
             # Create view navigator function for shortcuts
             def view_navigator(view_name: str) -> None:
                 """Navigate to a specific view"""
-                if view_name in ["dashboard", "clients", "files", "database", "analytics", "logs", "settings"]:
+                allowed_views = [
+                    "dashboard", "clients", "files", "database",
+                    "analytics", "logs", "settings"
+                ]
+                if view_name in allowed_views:
                     self.navigate_to(view_name)
 
             # Setup standard application shortcuts
@@ -793,12 +887,26 @@ class FletV2App(ft.Row):
                 on_navigation=lambda destination: logger.info(f"Breadcrumb navigation to: {destination}")
             )
 
+            breadcrumb_container = setup_breadcrumb_navigation(
+                self.page,
+                self.breadcrumb_navigation,
+                self.navigate_to,
+            )
+            self._breadcrumb_strip.content = breadcrumb_container
+            self._breadcrumb_strip.visible = True
+            if getattr(self._breadcrumb_strip, "page", None):
+                self._breadcrumb_strip.update()
+
             # Initialize global search
             self.global_search = create_global_search_bar()
 
             # Add desktop navigation components to page overlay
             if self.global_search:
                 self.page.overlay.append(self.global_search)
+
+            # Prime breadcrumb trail with the current or default view
+            current_view = self._current_view_name or "dashboard"
+            self._update_breadcrumbs(current_view)
 
             logger.info("✅ Desktop navigation features initialized successfully")
 
@@ -819,6 +927,36 @@ class FletV2App(ft.Row):
                 logger.debug("initialize() called more than once; ignoring subsequent call")
                 return
             print("🔴 [DEBUG] _initialized check passed")
+
+            loop = asyncio.get_running_loop()
+            if not getattr(self, "_loop_exception_handler_installed", False):
+                previous_handler = loop.get_exception_handler()
+
+                def _loop_handler(loop_obj: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+                    exc = context.get("exception")
+                    message = context.get("message", "")
+
+                    error_text = str(exc) if exc else message
+
+                    if "cannot schedule new futures after shutdown" in error_text:
+                        logger.debug("Suppressed executor shutdown noise during shutdown")
+                        return
+
+                    if isinstance(exc, asyncio.CancelledError):
+                        # Routine cancellation at shutdown - ignore silently
+                        return
+
+                    if isinstance(exc, RuntimeError) and "Event loop is closed" in error_text:
+                        logger.debug("Suppressed executor shutdown noise during shutdown")
+                        return
+
+                    if previous_handler is not None:
+                        previous_handler(loop_obj, context)
+                    else:
+                        loop_obj.default_exception_handler(context)
+
+                loop.set_exception_handler(_loop_handler)
+                self._loop_exception_handler_installed = True
 
             print("🔴 [DEBUG] About to call setup_sophisticated_theme()")
             # Apply theme with Windows 11 integration
@@ -894,24 +1032,34 @@ class FletV2App(ft.Row):
             raise
 
     def _dispose_current_view(self, new_view_name: str) -> None:
-        """Dispose of the current view before loading a new one."""
+        """Dispose of the current view before loading a new one using AsyncManager."""
         if new_view_name != self._current_view_name:
-            # Cancel any running setup task first
-            if self._current_setup_task and not self._current_setup_task.done():
-                print(f"🟥 [DISPOSE] Cancelling setup task for '{self._current_view_name}'")
-                logger.info(f"Cancelling setup task for view: {self._current_view_name}")
-                self._current_setup_task.cancel()
-                self._current_setup_task = None
+            logger.info(f"[DISPOSE] Disposing view '{self._current_view_name}' → '{new_view_name}'")
 
-            # Then call view's dispose function
+            # 1. Cancel async tasks FIRST using AsyncManager
+            self.async_manager.cancel_all()
+
+            # 2. Cancel the individual setup task if it exists
+            setup_task = self._current_setup_task
+            if setup_task and not setup_task.done():
+                print(f"🟥 [DISPOSE] Cancelling setup task for '{self._current_view_name}'")
+                logger.info(f"[DISPOSE] Cancelling setup task for view: {self._current_view_name}")
+                setup_task.cancel()
+            self._current_setup_task = None
+
+            # 3. Call view's dispose function synchronously
             if self._current_view_dispose:
                 try:
                     self._current_view_dispose()
-                    logger.debug(f"Disposed of previous view: {self._current_view_name}")
+                    logger.debug(f"[DISPOSE] Successfully disposed view: {self._current_view_name}")
                 except Exception as e:
-                    logger.warning(f"Failed to dispose previous view {self._current_view_name}: {e}")
-                self._current_view_dispose = None
-                self._current_view_name = None
+                    logger.warning(
+                    f"[DISPOSE] Failed to dispose previous view "
+                    f"{self._current_view_name}: {e}"
+                )
+                finally:
+                    self._current_view_dispose = None
+                    self._current_view_name = None
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
@@ -920,6 +1068,10 @@ class FletV2App(ft.Row):
 
         # Comment 12: Dispose of current view before loading new one
         self._dispose_current_view(view_name)
+
+        # IMPORTANT: Reset and associate AsyncManager with new view
+        self.async_manager = AsyncManager()  # Fresh manager for each view
+        self.async_manager.set_view(view_name)
 
         # Get view configuration
         module_name, function_name, actual_view_name = self._get_view_config(view_name)
@@ -953,14 +1105,29 @@ class FletV2App(ft.Row):
                 call_kwargs["state_manager"] = self.state_manager
             if "navigate_callback" in signature.parameters:
                 call_kwargs["navigate_callback"] = self.navigate_to
+            if "async_manager" in signature.parameters:
+                call_kwargs["async_manager"] = self.async_manager
 
             result = view_function(**call_kwargs)
             print(f"🔴 [CALL] View function returned: {type(result)}")
 
             # DEBUG: Log result structure
-            logger.info(f"🔍 [{view_name.upper()}] Result type: {type(result)}, is tuple: {isinstance(result, tuple)}, len: {len(result) if isinstance(result, tuple) else 'N/A'}")
+            is_tuple = isinstance(result, tuple)
+            length = len(result) if is_tuple else 'N/A'
+            logger.info(
+                f"🔍 [{view_name.upper()}] Result type: {type(result)}, "
+                f"is tuple: {is_tuple}, len: {length}"
+            )
             if isinstance(result, tuple) and len(result) >= 2:
-                logger.info(f"🔍 [{view_name.upper()}] result[0] type: {type(result[0])}, result[1] callable: {callable(result[1])}, result[2] exists: {len(result) > 2}, result[2] callable: {callable(result[2]) if len(result) > 2 else 'N/A'}")
+                result2_callable = (
+                    callable(result[2]) if len(result) > 2 else 'N/A'
+                )
+                logger.info(
+                    f"🔍 [{view_name.upper()}] result[0] type: {type(result[0])}, "
+                    f"result[1] callable: {callable(result[1])}, "
+                    f"result[2] exists: {len(result) > 2}, "
+                    f"result[2] callable: {result2_callable}"
+                )
 
             # Handle different return types: tuple (content, dispose, setup) or just content
             if isinstance(result, tuple) and len(result) >= 2:
@@ -969,7 +1136,11 @@ class FletV2App(ft.Row):
                 setup_func = result[2] if len(result) > 2 else None
                 # Store setup function to be called AFTER content is added to page
                 self._current_view_setup = setup_func
-                logger.info(f"🔍 [{view_name.upper()}] Stored setup_func: {setup_func}, callable: {callable(setup_func) if setup_func else False}")
+                setup_callable = callable(setup_func) if setup_func else False
+                logger.info(
+                    f"🔍 [{view_name.upper()}] Stored setup_func: {setup_func}, "
+                    f"callable: {setup_callable}"
+                )
             else:
                 content = result
                 dispose_func = lambda: None  # noqa: E731
@@ -1044,7 +1215,7 @@ class FletV2App(ft.Row):
         self._set_animation_for_view(actual_view_name)
 
         # Update content area using AnimatedSwitcher for smooth transitions
-        animated_switcher = self.content_area.content
+        animated_switcher = self._animated_switcher
         return self._update_content_area(animated_switcher, content, view_name)
 
     def _update_content_area(self, animated_switcher, content, view_name: str) -> bool:
@@ -1092,7 +1263,17 @@ class FletV2App(ft.Row):
             return
 
         # Call setup function asynchronously (AFTER content is rendered)
-        logger.info(f"[POST_UPDATE] Checking setup for {view_name}, has attr: {hasattr(self, '_current_view_setup')}, value: {getattr(self, '_current_view_setup', 'NO_ATTR')}, callable: {callable(getattr(self, '_current_view_setup', None)) if hasattr(self, '_current_view_setup') else False}")
+        has_setup = hasattr(self, '_current_view_setup')
+        setup_value = getattr(self, '_current_view_setup', 'NO_ATTR')
+        setup_callable = (
+            callable(getattr(self, '_current_view_setup', None))
+            if has_setup else False
+        )
+        logger.info(
+            f"[POST_UPDATE] Checking setup for {view_name}, "
+            f"has attr: {has_setup}, value: {setup_value}, "
+            f"callable: {setup_callable}"
+        )
         setup_check = (
             hasattr(self, '_current_view_setup') and
             self._current_view_setup and
@@ -1103,19 +1284,31 @@ class FletV2App(ft.Row):
             setup_func = self._current_view_setup
             self._current_view_setup = None  # Clear immediately to prevent double-calling
 
+            task_holder: dict[str, asyncio.Task | None] = {"task": None}
+
             async def delayed_setup():
                 """Delay setup until controls are fully attached to page tree."""
                 try:
                     # Wait for AnimatedSwitcher transition to complete (160ms) + safety margin
                     await asyncio.sleep(0.25)  # Let Flet complete rendering and transition
+
+                    # Check cancellation after sleep - prevents race conditions
+                    if self.async_manager.is_cancelled():
+                        logger.debug(f"[SETUP_TASK] Setup cancelled after sleep for '{view_name}'")
+                        return
+
                     logger.info(f"Calling delayed setup function for {view_name}")
+
                     # Guard against None/non-callable and handle both sync and async functions
                     if setup_func and callable(setup_func):
                         try:
+                            # Run setup function with cancellation support
                             if asyncio.iscoroutinefunction(setup_func):
-                                await setup_func()
+                                await self.async_manager.run_cancellable(setup_func)
                             else:
-                                setup_func()
+                                # For sync functions, check cancellation before calling
+                                if not self.async_manager.is_cancelled():
+                                    setup_func()
                         except asyncio.CancelledError:
                             print(f"🟦 [SETUP_TASK] Setup cancelled for '{view_name}'")
                             logger.info(f"Setup cancelled for {view_name}")
@@ -1131,14 +1324,19 @@ class FletV2App(ft.Row):
                     logger.warning(f"Setup function failed for {view_name}: {setup_err}")
                 finally:
                     # Clear task reference when done (successfully or cancelled)
-                    if self._current_setup_task:
+                    if (
+                        task_holder["task"] is not None
+                        and self._current_setup_task is task_holder["task"]
+                    ):
                         print(f"🟦 [SETUP_TASK] Clearing setup task reference for '{view_name}'")
                         self._current_setup_task = None
 
             # Run setup asynchronously using page.run_task() and track for cancellation
             try:
-                self._current_setup_task = self.page.run_task(delayed_setup)
-                print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {self._current_setup_task}")
+                task = self.page.run_task(delayed_setup)
+                task_holder["task"] = task
+                self._current_setup_task = task
+                print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {task}")
             except Exception as e:
                 logger.warning(f"Failed to schedule setup task for {view_name}: {e}")
 

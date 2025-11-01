@@ -13,9 +13,12 @@ import sys
 from collections.abc import Callable, Coroutine, Iterable
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import flet as ft
+
+if TYPE_CHECKING:
+    from FletV2.main import AsyncManager
 
 import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.components.log_card import LogCard
@@ -407,9 +410,10 @@ def _create_event_handlers(
 
 
 class _LogsViewController:
-    def __init__(self, server_bridge: Any | None, page: ft.Page) -> None:
+    def __init__(self, server_bridge: Any | None, page: ft.Page, async_manager: AsyncManager | None = None) -> None:
         self.server_bridge = server_bridge
         self.page = page
+        self.async_manager = async_manager
         self.state = {
             "server_logs": [],
             "app_logs": [],
@@ -589,15 +593,30 @@ class _LogsViewController:
         if self.disposed:
             return
 
+        # Check for cancellation before starting operation
+        if self.async_manager and self.async_manager.is_cancelled():
+            logger.debug("[LOGS] Refresh cancelled before operation")
+            return
+
         self.error_container.visible = False
         self.loading_overlay.visible = True
         self._safe_update(self.error_container)
         self._safe_update(self.loading_overlay)
 
         try:
+            # Check for cancellation before expensive operations
+            if self.async_manager and self.async_manager.is_cancelled():
+                logger.debug("[LOGS] Refresh cancelled before expensive operations")
+                return
+
             server_task = fetch_server_logs_async(self.server_bridge, self.page)
             app_task = fetch_app_logs_async(self.page)
             server_logs, app_logs = await asyncio.gather(server_task, app_task)
+
+            # Check for cancellation after expensive operations
+            if self.async_manager and self.async_manager.is_cancelled():
+                logger.debug("[LOGS] Refresh cancelled after expensive operations")
+                return
 
             self.state["server_logs"] = server_logs
             self.state["app_logs"] = app_logs
@@ -645,6 +664,11 @@ class _LogsViewController:
         if self.disposed:
             return
         self.disposed = True
+
+        # Use AsyncManager to cancel tasks if available
+        if self.async_manager:
+            self.async_manager.cancel_all()
+
         with contextlib.suppress(AttributeError):
             self.level_filter.on_change = None
         with contextlib.suppress(AttributeError):
@@ -670,6 +694,7 @@ def create_logs_view(
     server_bridge: Any | None,
     page: ft.Page,
     _state_manager: SimpleState | None = None,
+    async_manager: AsyncManager | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    controller = _LogsViewController(server_bridge, page)
+    controller = _LogsViewController(server_bridge, page, async_manager)
     return controller.build()

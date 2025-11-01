@@ -81,12 +81,18 @@ class GlobalSearch(ft.Container):
         """Initialize the UI components"""
 
         # Search input field
+        clear_button = ft.IconButton(
+            icon=ft.Icons.CLEAR,
+            tooltip="Clear search",
+            on_click=self._clear_search,
+            icon_size=20,
+        )
+
         self.search_input = ft.TextField(
             label="Global Search...",
             hint_text="Search across all data types (Ctrl+F)",
             prefix_icon=ft.Icons.SEARCH,
-            suffix_icon=ft.Icons.CLEAR,
-            on_suffix_icon_click=self._clear_search,
+            suffix=clear_button,
             on_change=self._on_search_change,
             on_submit=self._on_search_submit,
             autofocus=True,

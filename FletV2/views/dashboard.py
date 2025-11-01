@@ -653,6 +653,7 @@ def create_dashboard_view(
 
     # Store content_column in a closure for _apply_snapshot to access
     def get_content_column():
+        """Return the main content column for external access."""
         return content_column
 
     def _derive_status(snapshot: DashboardSnapshot) -> tuple[str, str]:
@@ -1380,7 +1381,7 @@ def create_dashboard_view(
         nonlocal disposed, auto_refresh_task
         disposed = True
         stop_event.set()
-        for task in list(background_tasks):
+        for task in tuple(background_tasks):
             if not task.done():
                 task.cancel()
         background_tasks.clear()

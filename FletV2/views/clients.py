@@ -328,7 +328,8 @@ class _ClientsViewController:
         for client in filtered_clients:
             self.clients_table.rows.append(self._build_client_row(client))
 
-        self.clients_table.update()
+        if getattr(self.clients_table, "page", None):
+            self.clients_table.update()
 
     def filter_clients(self) -> list[dict[str, Any]]:
         filtered = self.clients_data.copy()

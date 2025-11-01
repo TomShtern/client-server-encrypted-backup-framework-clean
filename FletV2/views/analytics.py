@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 import math
@@ -14,6 +15,13 @@ from dataclasses import dataclass
 from typing import Any
 
 import flet as ft
+
+# Constants for analytics messages
+NO_DATA_TITLE = "No data"
+NO_CHART_DATA_MSG = "No chart data available"
+NO_FILE_TYPES_MSG = "No file types to display"
+NO_TREND_DATA_MSG = "No trend data available"
+NO_BACKUP_ACTIVITY_MSG = "No backup activity in this period"
 
 # Ensure repository roots are on sys.path for runtime resolution
 _views_dir = os.path.dirname(os.path.abspath(__file__))
@@ -165,7 +173,7 @@ def _metric_card(title: str, value: str, subtitle: str, icon: str, color: str) -
 def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str) -> ft.Control:
     """Create beautiful bar chart with gradients and animations."""
     if not data:
-        return create_empty_state("No data", "No chart data available")
+        return create_empty_state(NO_DATA_TITLE, NO_CHART_DATA_MSG)
 
     # Limit to 7 items for clean visualization
     data = data[:7]
@@ -282,7 +290,7 @@ def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title:
 def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str, title: str) -> ft.Control:
     """Create colorful pie chart with interactive legend."""
     if not data:
-        return create_empty_state("No data", "No chart data available")
+        return create_empty_state(NO_DATA_TITLE, NO_CHART_DATA_MSG)
 
     # Enhanced color palette for pie sections
     colors = [
@@ -292,7 +300,7 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
 
     total = sum(float(item.get(value_key, 0)) for item in data)
     if total == 0:
-        return create_empty_state("No data", "No file types to display")
+        return create_empty_state(NO_DATA_TITLE, NO_FILE_TYPES_MSG)
 
     sections = []
     for idx, item in enumerate(data[:8]):  # Limit to 8 slices for clarity
@@ -390,7 +398,7 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
 def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str) -> ft.Control:
     """Create smooth line chart with gradient fills and animations."""
     if not data:
-        return create_empty_state("No data", "No trend data available")
+        return create_empty_state(NO_DATA_TITLE, NO_TREND_DATA_MSG)
 
     data_points = [
         ft.LineChartDataPoint(idx, float(item.get(y_key, 0)))
@@ -401,7 +409,7 @@ def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title
 
     # Check if all values are zero
     if max_y < 0.001:
-        return create_empty_state("No data", "No backup activity in this period")
+        return create_empty_state(NO_DATA_TITLE, NO_BACKUP_ACTIVITY_MSG)
 
     max_y = max_y * 1.2
 
@@ -790,7 +798,7 @@ def create_analytics_view(
         except asyncio.CancelledError:
             # Expected during shutdown - exit cleanly
             logger.debug("Auto-refresh task cancelled")
-            pass
+            raise
         except Exception as exc:
             logger.debug("Auto-refresh loop stopped: %s", exc)
 
@@ -814,10 +822,8 @@ def create_analytics_view(
 
         # Cancel auto-refresh task if running
         if auto_refresh_task and not auto_refresh_task.done():
-            try:
+            with contextlib.suppress(Exception):
                 auto_refresh_task.cancel()
-            except Exception:
-                pass  # Ignore cancellation errors
 
         auto_refresh_task = None
         logger.debug("Analytics view disposed cleanly")
