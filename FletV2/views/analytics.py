@@ -499,6 +499,7 @@ def create_analytics_view(
     page: ft.Page,
     _state_manager: Any | None = None,
     navigate_callback: Callable[[str], None] | None = None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create spectacular analytics view with real-time charts and insights."""
     _ = (_state_manager, navigate_callback)  # Unused but required by interface
@@ -723,14 +724,17 @@ def create_analytics_view(
             logger.exception("Export failed")
             show_error_message(page, f"Export failed: {exc}")
 
+    header_actions: list[ft.Control] = [
+        create_action_button("Export", on_export, icon=ft.Icons.DOWNLOAD, primary=False),
+        create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH),
+    ]
+    # Note: Global search is in the app-level header (main.py), not view-level
+
     header = create_view_header(
         "Analytics",
         icon=ft.Icons.INSIGHTS,
         description="Understand backup performance and capacity usage.",
-        actions=[
-            create_action_button("Export", on_export, icon=ft.Icons.DOWNLOAD, primary=False),
-            create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH),
-        ],
+        actions=header_actions,
     )
 
     secondary_sections = ft.ResponsiveRow(

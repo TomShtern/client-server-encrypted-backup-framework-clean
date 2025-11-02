@@ -8,7 +8,9 @@ Compatible with Flet 0.28.3 and Material Design 3.
 """
 
 import asyncio
+import contextlib
 import inspect
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -60,6 +62,13 @@ class GlobalSearch(ft.Container):
         show_history: bool = True,
         **kwargs
     ):
+        # Inline positioning – component will be embedded in headers
+        kwargs.setdefault('alignment', ft.alignment.top_right)
+        kwargs.setdefault('padding', 0)
+        kwargs.setdefault('bgcolor', None)
+        kwargs.setdefault('shadow', None)
+        kwargs.setdefault('expand', False)
+
         super().__init__(**kwargs)
 
         self.search_providers = search_providers or {}
@@ -72,7 +81,8 @@ class GlobalSearch(ft.Container):
         self.search_history: list[str] = []
         self.current_results: list[SearchResult] = []
         self.selected_index = 0
-        self.is_visible = False
+        self.is_expanded = False
+        self._panel_width = 360
 
         # UI Components
         self._init_ui()
@@ -89,23 +99,29 @@ class GlobalSearch(ft.Container):
         )
 
         self.search_input = ft.TextField(
-            label="Global Search...",
-            hint_text="Search across all data types (Ctrl+F)",
+            label=None,
+            hint_text="Search the platform (Ctrl+F)",
             prefix_icon=ft.Icons.SEARCH,
             suffix=clear_button,
             on_change=self._on_search_change,
             on_submit=self._on_search_submit,
-            autofocus=True,
+            autofocus=False,
             border_radius=12,
             height=48,
-            text_size=14
+            text_size=14,
+            width=self._panel_width - 40,
+            bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.SURFACE),
+            focused_bgcolor=ft.Colors.SURFACE,
+            filled=True,
+            dense=True,
         )
+        self.search_input.animate_opacity = ft.Animation(120, ft.AnimationCurve.EASE_OUT)
 
         # Search suggestions
         self.suggestions_list = ft.ListView(
             spacing=2,
             padding=ft.padding.symmetric(vertical=4),
-            height=200,
+            height=120,
             visible=False
         )
 
@@ -113,10 +129,10 @@ class GlobalSearch(ft.Container):
         self.results_container = ft.Container(
             content=ft.Column([], spacing=4, scroll=ft.ScrollMode.AUTO),
             visible=False,
-            height=400,
+            height=220,
             bgcolor=ft.Colors.SURFACE,
             border_radius=12,
-            border=ft.border.all(1, ft.Colors.OUTLINE),
+            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             padding=8,
             clip_behavior=ft.ClipBehavior.HARD_EDGE
         )
@@ -132,7 +148,7 @@ class GlobalSearch(ft.Container):
                 ft.dropdown.Option("settings", "Settings"),
             ],
             value="all",
-            width=150,
+            width=144,
             text_size=12,
             on_change=self._on_category_change
         )
@@ -141,7 +157,7 @@ class GlobalSearch(ft.Container):
         self.search_toolbar = ft.Row(
             [
                 self.search_input,
-                ft.Container(width=8),
+                ft.Container(width=6),
                 self.category_filter,
                 ft.IconButton(
                     icon=ft.Icons.KEYBOARD,
@@ -149,38 +165,206 @@ class GlobalSearch(ft.Container):
                     on_click=self._show_shortcuts_help
                 )
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            spacing=8
+            alignment=ft.MainAxisAlignment.START,
+            spacing=8,
         )
 
-        # Main layout
-        self.content = ft.Column(
+        # Trigger button with chevron indicator
+        self._chevron_icon = ft.Icon(
+            ft.Icons.KEYBOARD_ARROW_DOWN,
+            size=16,
+            color=ft.Colors.PRIMARY,
+        )
+        self._chevron_icon.rotate = ft.Rotate(0, alignment=ft.alignment.center)
+        self._chevron_icon.animate_rotation = ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC)
+
+        trigger_content = ft.Row(
+            [
+                ft.Icon(ft.Icons.SEARCH, size=18, color=ft.Colors.PRIMARY),
+                ft.Text(
+                    "Search",
+                    size=13,
+                    weight=ft.FontWeight.W_600,
+                    color=ft.Colors.PRIMARY,
+                ),
+                self._chevron_icon,
+            ],
+            spacing=6,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            tight=True,
+        )
+
+        self._trigger_container = ft.Container(
+            content=trigger_content,
+            padding=ft.padding.symmetric(horizontal=14, vertical=9),
+            border_radius=18,
+            bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.14, ft.Colors.PRIMARY)),
+            ink=True,
+            on_click=lambda e: self.toggle(),
+            tooltip="Search (Ctrl+F)",
+        )
+
+        # Dropdown panel with animation
+        panel_content = ft.Column(
             [
                 self.search_toolbar,
                 self.suggestions_list,
                 self.results_container,
             ],
             spacing=8,
-            scroll=ft.ScrollMode.AUTO
+            tight=True,
+            scroll=ft.ScrollMode.AUTO,
         )
 
+        self.dropdown_panel = ft.Container(
+            content=panel_content,
+            width=self._panel_width,
+            padding=ft.padding.all(12),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.98, ft.Colors.SURFACE),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=24,
+                color=ft.Colors.with_opacity(0.32, ft.Colors.BLACK),
+                offset=ft.Offset(0, 6),
+            ),
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            opacity=0,
+            visible=False,
+            disabled=True,
+        )
+        self.dropdown_panel.scale = ft.Scale(0.95, alignment=ft.alignment.top_center)
+        self.dropdown_panel.animate_opacity = ft.Animation(160, ft.AnimationCurve.EASE_OUT)
+        self.dropdown_panel.animate_scale = ft.Animation(200, ft.AnimationCurve.EASE_OUT_CUBIC)
+
+        # Main layout - stack to allow floating dropdown without shifting layout
+        # In Flet 0.28.3, controls in Stack use top/left/right/bottom properties directly
+        self.dropdown_panel.right = 0
+        self.dropdown_panel.top = 48
+
+        stack = ft.Stack(
+            [
+                self._trigger_container,
+                self.dropdown_panel,
+            ],
+            clip_behavior=ft.ClipBehavior.NONE,
+            expand=False,
+        )
+
+        stack.width = self._panel_width
+        stack.height = 44
+        self.width = self._panel_width
+        self.height = 44
+        self.content = stack
+
+    @property
+    def is_open(self) -> bool:
+        """Return whether the dropdown is currently expanded."""
+        return self.is_expanded
+
     def focus_search(self):
-        """Focus the search input"""
-        self.search_input.focus()
-        self.search_input.select_all()
-        self.is_visible = True
+        """Ensure the search is expanded and focused."""
+        self.expand()
+        self._schedule_focus()
 
     def hide_search(self):
-        """Hide the search component"""
-        self._clear_search(None)
-        self.is_visible = False
+        """Hide the search component and clear state."""
+        self.collapse(clear=True)
 
     def show_search(self, initial_query: str = ""):
         """Show the search component with optional initial query"""
-        self.focus_search()
+        self.expand(initial_query=initial_query)
+        self._schedule_focus()
+
+    def expand(self, initial_query: str = "") -> None:
+        """Animate open the dropdown panel."""
+        if self.is_expanded and not initial_query:
+            return
+
+        self.is_expanded = True
         if initial_query:
             self.search_input.value = initial_query
             self._perform_search(initial_query)
+
+        self.dropdown_panel.disabled = False
+        self.dropdown_panel.visible = True
+        self.dropdown_panel.opacity = 1
+        self.dropdown_panel.scale = ft.Scale(1, alignment=ft.alignment.top_center)
+        self._update_trigger_state(expanded=True)
+        self._safe_update(self.dropdown_panel)
+        self._safe_update(self._trigger_container)
+        self._safe_update(self._chevron_icon)
+
+    def collapse(self, clear: bool = False) -> None:
+        """Animate close the dropdown panel."""
+        if not self.is_expanded and not clear:
+            return
+
+        self.is_expanded = False
+        if clear:
+            self._clear_search(None)
+
+        self.dropdown_panel.opacity = 0
+        self.dropdown_panel.scale = ft.Scale(0.95, alignment=ft.alignment.top_center)
+        self.dropdown_panel.disabled = True
+        self._update_trigger_state(expanded=False)
+        self._safe_update(self.dropdown_panel)
+        self._safe_update(self._trigger_container)
+        self._safe_update(self._chevron_icon)
+
+    def toggle(self) -> None:
+        """Toggle dropdown visibility."""
+        if self.is_expanded:
+            self.collapse(clear=False)
+        else:
+            self.expand()
+            self._schedule_focus()
+
+    def _update_trigger_state(self, expanded: bool) -> None:
+        """Update trigger styling based on expansion state."""
+
+        if expanded:
+            self._trigger_container.bgcolor = ft.Colors.PRIMARY_CONTAINER
+            self._trigger_container.border = ft.border.all(1, ft.Colors.with_opacity(0.22, ft.Colors.PRIMARY))
+            rotation = math.pi
+        else:
+            self._trigger_container.bgcolor = ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY)
+            self._trigger_container.border = ft.border.all(1, ft.Colors.with_opacity(0.14, ft.Colors.PRIMARY))
+            rotation = 0
+
+        self._chevron_icon.rotate = ft.Rotate(rotation, alignment=ft.alignment.center)
+
+    def _schedule_focus(self) -> None:
+        """Focus search input after animation tick."""
+        if not getattr(self, "page", None):
+            return
+
+        async def _focus_later():
+            try:
+                await asyncio.sleep(0.05)
+            except asyncio.CancelledError:
+                raise
+            self.search_input.focus()
+            self.search_input.select_all()
+
+        with contextlib.suppress(AttributeError, RuntimeError):
+            self.page.run_task(_focus_later)
+            return
+
+        # Fallback synchronous focus if run_task unavailable
+        self.search_input.focus()
+        self.search_input.select_all()
+
+    @staticmethod
+    def _safe_update(control: ft.Control) -> None:
+        if control is None:
+            return
+        if getattr(control, "page", None):
+            try:
+                control.update()
+            except Exception:
+                pass
 
     def _on_search_change(self, e: ft.ControlEvent):
         """Handle search input change"""
@@ -212,7 +396,7 @@ class GlobalSearch(ft.Container):
         self.current_results = []
         self._hide_results()
         self._hide_suggestions()
-        self.search_input.update()
+        self._safe_update(self.search_input)
 
     def _perform_search(self, query: str):
         """Perform the actual search"""
@@ -334,7 +518,7 @@ class GlobalSearch(ft.Container):
         self._hide_suggestions()
 
         # Update UI
-        self.results_container.update()
+        self._safe_update(self.results_container)
 
     def _create_result_item(self, result: SearchResult, index: int) -> ft.Container:
         """Create a search result item"""
@@ -378,6 +562,7 @@ class GlobalSearch(ft.Container):
                 result.action()
             except Exception as ex:
                 print(f"Error executing result action: {ex}")
+        self.collapse(clear=False)
 
     def _on_result_hover(self, e: ft.ControlEvent, index: int):
         """Handle result item hover"""
@@ -405,7 +590,7 @@ class GlobalSearch(ft.Container):
         self.results_container.content = no_results
         self.results_container.visible = True
         self._hide_suggestions()
-        self.results_container.update()
+        self._safe_update(self.results_container)
 
     def _show_error(self, error_message: str):
         """Show error message"""
@@ -429,7 +614,7 @@ class GlobalSearch(ft.Container):
         self.results_container.content = error_content
         self.results_container.visible = True
         self._hide_suggestions()
-        self.results_container.update()
+        self._safe_update(self.results_container)
 
     def _show_suggestions(self, query: str):
         """Show search suggestions"""
@@ -461,7 +646,7 @@ class GlobalSearch(ft.Container):
         else:
             self._hide_suggestions()
 
-        self.suggestions_list.update()
+        self._safe_update(self.suggestions_list)
 
     def _show_history(self):
         """Show search history"""
@@ -479,17 +664,17 @@ class GlobalSearch(ft.Container):
 
         self.suggestions_list.controls = history_items
         self.suggestions_list.visible = True
-        self.suggestions_list.update()
+        self._safe_update(self.suggestions_list)
 
     def _hide_suggestions(self):
         """Hide suggestions"""
         self.suggestions_list.visible = False
-        self.suggestions_list.update()
+        self._safe_update(self.suggestions_list)
 
     def _hide_results(self):
         """Hide search results"""
         self.results_container.visible = False
-        self.results_container.update()
+        self._safe_update(self.results_container)
 
     def _apply_suggestion(self, suggestion: str):
         """Apply a search suggestion"""

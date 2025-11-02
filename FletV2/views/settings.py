@@ -190,10 +190,17 @@ def _row(label: str, control: ft.Control, desc: str | None = None) -> ft.Contain
 # ==============================================================================
 
 class _SettingsView:
-    def __init__(self, page: ft.Page, server_bridge: ServerBridge | None, state_manager: SimpleState | None) -> None:
+    def __init__(
+        self,
+        page: ft.Page,
+        server_bridge: ServerBridge | None,
+        state_manager: SimpleState | None,
+        global_search: ft.Control | None,
+    ) -> None:
         self.page = page
         self.server_bridge = server_bridge
         self.state_manager = state_manager
+        self.global_search = global_search
         self.data = copy.deepcopy(DEFAULT_SETTINGS)
         self.controls: dict[tuple[str, str], ft.Control] = {}
         self.parsers: dict[tuple[str, str], Parser] = {}
@@ -218,16 +225,19 @@ class _SettingsView:
         self._ensure_overlay(self._export_picker)
         self._ensure_overlay(self._import_picker)
 
+        # Note: Global search is in the app-level header (main.py), not view-level
+        header_actions: list[ft.Control] = [
+            create_action_button("Export", self._on_export_clicked, icon=ft.Icons.UPLOAD, primary=False),
+            create_action_button("Import", self._on_import_clicked, icon=ft.Icons.DOWNLOAD, primary=False),
+            create_action_button("Reset", self._on_reset_clicked, icon=ft.Icons.RESTORE, primary=False),
+            create_action_button("Save", self._on_save_clicked, icon=ft.Icons.SAVE),
+        ]
+
         header = create_view_header(
             "Settings",
             icon=ft.Icons.SETTINGS,
             description="Configure networking, interface, monitoring, logging, security, and backup policies.",
-            actions=[
-                create_action_button("Export", self._on_export_clicked, icon=ft.Icons.UPLOAD, primary=False),
-                create_action_button("Import", self._on_import_clicked, icon=ft.Icons.DOWNLOAD, primary=False),
-                create_action_button("Reset", self._on_reset_clicked, icon=ft.Icons.RESTORE, primary=False),
-                create_action_button("Save", self._on_save_clicked, icon=ft.Icons.SAVE),
-            ],
+            actions=header_actions,
         )
 
         status_bar = self._build_status_bar()
@@ -796,7 +806,8 @@ def create_settings_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
     state_manager: SimpleState | None = None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    view = _SettingsView(page, server_bridge, state_manager)
+    view = _SettingsView(page, server_bridge, state_manager, global_search)
     root = view.build()
     return root, view.dispose, view.setup

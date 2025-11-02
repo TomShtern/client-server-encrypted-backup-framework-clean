@@ -32,9 +32,9 @@ os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'  # Disable server's embed
 os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'  # Use standalone FletV2 GUI instead
 os.environ['PYTHONNOUSERSITE'] = '1'  # Prevent package conflicts from user site-packages
 
-# Enable debugging
-os.environ['FLET_DASHBOARD_DEBUG'] = '1'
-os.environ['FLET_DASHBOARD_CONTENT_DEBUG'] = '1'
+# Debugging flags (disabled for production use - causes severe performance degradation)
+# os.environ['FLET_DASHBOARD_DEBUG'] = '1'  # Uncomment only for dashboard diagnostics
+# os.environ['FLET_DASHBOARD_CONTENT_DEBUG'] = '1'  # Uncomment only for content debugging
 
 print("=" * 70)
 print(">> Starting Flet GUI with Real BackupServer Integration")

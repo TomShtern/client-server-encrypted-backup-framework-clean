@@ -315,7 +315,9 @@ class GlobalShortcutManager:
 
 def create_standard_application_shortcuts(
     shortcut_manager: GlobalShortcutManager,
-    view_navigator: Callable[[str], None] | None = None
+    view_navigator: Callable[[str], None] | None = None,
+    open_search_callback: Callable[[ft.KeyboardEvent | None], Any] | None = None,
+    close_search_callback: Callable[[ft.KeyboardEvent | None], Any] | None = None,
 ) -> dict[str, str]:
     """
     Create standard application shortcuts using Flet native keyboard events.
@@ -323,6 +325,8 @@ def create_standard_application_shortcuts(
     Args:
         shortcut_manager: GlobalShortcutManager instance
         view_navigator: Function to navigate to different views (receives view name)
+        open_search_callback: Function to invoke for global search shortcuts
+        close_search_callback: Function to invoke when closing global search (Esc)
 
     Returns:
         Dictionary mapping shortcut names to their IDs
@@ -438,14 +442,42 @@ def create_standard_application_shortcuts(
     )
 
     # Global search
-    shortcut_ids["search"] = shortcut_manager.register_shortcut(
-        shortcut_id="global_search",
-        key="f",
-        ctrl=True,
-        action=lambda e: print("Activate global search"),
-        description="Global search",
-        category=ShortcutCategory.VIEW
-    )
+    if open_search_callback:
+        shortcut_ids["search"] = shortcut_manager.register_shortcut(
+            shortcut_id="global_search",
+            key="f",
+            ctrl=True,
+            action=lambda e: open_search_callback(e),
+            description="Open global search",
+            category=ShortcutCategory.VIEW
+        )
+
+        shortcut_ids["search_alt"] = shortcut_manager.register_shortcut(
+            shortcut_id="global_search_alt",
+            key="k",
+            ctrl=True,
+            action=lambda e: open_search_callback(e),
+            description="Open global search",
+            category=ShortcutCategory.VIEW
+        )
+    else:
+        shortcut_ids["search"] = shortcut_manager.register_shortcut(
+            shortcut_id="global_search",
+            key="f",
+            ctrl=True,
+            action=lambda e: print("Activate global search"),
+            description="Global search",
+            category=ShortcutCategory.VIEW
+        )
+
+    if close_search_callback:
+        shortcut_ids["search_escape"] = shortcut_manager.register_shortcut(
+            shortcut_id="global_search_escape",
+            key="escape",
+            action=lambda e: close_search_callback(e),
+            description="Close global search",
+            category=ShortcutCategory.VIEW
+        )
 
     return shortcut_ids
 

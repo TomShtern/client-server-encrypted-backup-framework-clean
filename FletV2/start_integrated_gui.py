@@ -72,58 +72,44 @@ except ImportError as e:
     BACKUP_SERVER_AVAILABLE = False
     BackupServer = None
 
-# Import FletV2 components
+# Import FletV2 components (absolute imports after path setup)
 try:
-    from .main import FletV2App  # type: ignore[import-not-found]
-    from .main import main as flet_main  # type: ignore[import-not-found]
-except ImportError:
-    try:
-        from main import FletV2App
-        from main import main as flet_main
-    except ImportError as e:
-        print(f"Error: Could not import main module: {e}")
-        sys.exit(1)
+    from FletV2.main import FletV2App, main as flet_main
+except ImportError as e:
+    print(f"Error: Could not import main module: {e}")
+    print("Ensure FletV2 directory is in Python path")
+    sys.exit(1)
 
 # Import utils modules with proper error handling
 server_bridge_imported = False
 debug_setup_imported = False
 
 try:
-    from .utils.server_bridge import create_server_bridge  # type: ignore[import-not-found]
+    from FletV2.utils.server_bridge import create_server_bridge
     server_bridge_imported = True
     print("Successfully imported server_bridge")
-except ImportError:
-    try:
-        from utils.server_bridge import create_server_bridge
-        server_bridge_imported = True
-        print("Successfully imported server_bridge")
-    except ImportError as e:
-        print(f"Warning: Could not import server_bridge: {e}")
+except ImportError as e:
+    print(f"Warning: Could not import server_bridge: {e}")
 
-        # Silent fallback - path should be configured by now
-        def _create_server_bridge_fallback(real_server=None):
-            class MockBridge:
-                def is_connected(self):
-                    return False
+    # Silent fallback - path should be configured by now
+    def _create_server_bridge_fallback(real_server=None):
+        class MockBridge:
+            def is_connected(self):
+                return False
 
-            return MockBridge()
+        return MockBridge()
 
-        create_server_bridge = _create_server_bridge_fallback
+    create_server_bridge = _create_server_bridge_fallback
 
 try:
-    from .utils.debug_setup import setup_terminal_debugging  # type: ignore[import-not-found]
+    from FletV2.utils.debug_setup import setup_terminal_debugging
     debug_setup_imported = True
     print("Successfully imported debug_setup")
-except ImportError:
-    try:
-        from utils.debug_setup import setup_terminal_debugging
-        debug_setup_imported = True
-        print("Successfully imported debug_setup")
-    except ImportError as e:
-        print(f"Warning: Could not import debug_setup: {e}")
+except ImportError as e:
+    print(f"Warning: Could not import debug_setup: {e}")
 
-        # Silent fallback - path should be configured by now
-        import logging
+    # Silent fallback - path should be configured by now
+    import logging
 
         def _setup_terminal_debugging_fallback(logger_name=None):
             logger = logging.getLogger(logger_name or __name__)

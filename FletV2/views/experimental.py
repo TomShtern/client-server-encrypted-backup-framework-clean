@@ -11,19 +11,11 @@ from typing import Any
 
 import flet as ft
 
-# Path setup
-_views_dir = os.path.dirname(os.path.abspath(__file__))
-_flet_v2_root = os.path.dirname(_views_dir)
-_repo_root = os.path.dirname(_flet_v2_root)
-for _path in (_flet_v2_root, _repo_root):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
 import Shared.utils.utf8_solution as _  # noqa: F401
 
 # Import neumorphic shadows
 try:
-    from theme import MODERATE_NEUMORPHIC_SHADOWS, PRONOUNCED_NEUMORPHIC_SHADOWS
+    from FletV2.theme import MODERATE_NEUMORPHIC_SHADOWS, PRONOUNCED_NEUMORPHIC_SHADOWS
 except ImportError:
     PRONOUNCED_NEUMORPHIC_SHADOWS = []
     MODERATE_NEUMORPHIC_SHADOWS = []
@@ -32,7 +24,8 @@ except ImportError:
 def create_experimental_view(
     server_bridge: Any | None,
     page: ft.Page,
-    state_manager: Any | None
+    state_manager: Any | None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], None]]:
     """Create experimental view for testing and development."""
 
@@ -115,12 +108,23 @@ def create_experimental_view(
     )
 
     # Main content
-    content = ft.Column([
-        # Header with lab icon
-        ft.Row([
+    header_title = ft.Row(
+        [
             ft.Icon(ft.Icons.SCIENCE, size=40, color=ft.Colors.DEEP_PURPLE_500),
             ft.Text("Experimental Lab", size=32, weight=ft.FontWeight.BOLD),
-        ], spacing=12),
+        ],
+        spacing=12,
+    )
+
+    # Note: Global search is in the app-level header (main.py), not view-level
+    header_bar = ft.Row(
+        [ft.Container(content=header_title, expand=True)],
+        spacing=16,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    content = ft.Column([
+        header_bar,
 
         ft.Text(
             "This is a safe space for testing new features, UI experiments, and development workflows.",

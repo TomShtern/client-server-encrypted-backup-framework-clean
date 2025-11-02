@@ -31,7 +31,7 @@ from FletV2.components.breadcrumb import (
     BreadcrumbNavigation,
     setup_breadcrumb_navigation,
 )
-from FletV2.components.global_search import create_global_search_bar
+from FletV2.components.global_search_minimal import create_minimal_search
 
 # Import global shortcuts system for desktop navigation
 from FletV2.utils.global_shortcuts import GlobalShortcutManager, create_standard_application_shortcuts
@@ -84,7 +84,7 @@ except ImportError as e:
 
 # Local imports - utilities first
 try:
-    from .utils.debug_setup import setup_terminal_debugging
+    from FletV2.utils.debug_setup import setup_terminal_debugging
 except ImportError:
     # Silent fallback for import issues - create minimal debug setup with matching signature
     import logging
@@ -499,11 +499,23 @@ class FletV2App(ft.Row):
             expand=True,
         )
 
-        self._breadcrumb_strip = ft.Container(visible=False, expand=False)
+        self._breadcrumb_strip = ft.Container(visible=False, expand=True)
+        self._global_search_container = ft.Container(visible=False, expand=False)
+
+        # Header row with breadcrumb (left) and global search (right)
+        self._header_row = ft.Row(
+            controls=[
+                self._breadcrumb_strip,
+                self._global_search_container,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            expand=False,
+        )
 
         content_column = ft.Column(
             controls=[
-                self._breadcrumb_strip,
+                self._header_row,
                 ft.Container(content=self._animated_switcher, expand=True),
             ],
             spacing=16,
@@ -866,6 +878,10 @@ class FletV2App(ft.Row):
             # Initialize global shortcut manager
             self.global_shortcut_manager = GlobalShortcutManager(self.page)
 
+            # Create minimal search field (simple, guaranteed to work)
+            self.global_search = create_minimal_search()
+            logger.info(f"✅ Global search created: {self.global_search}")
+
             # Create view navigator function for shortcuts
             def view_navigator(view_name: str) -> None:
                 """Navigate to a specific view"""
@@ -876,10 +892,20 @@ class FletV2App(ft.Row):
                 if view_name in allowed_views:
                     self.navigate_to(view_name)
 
+            def open_global_search(_: ft.KeyboardEvent | None = None) -> None:
+                if self.global_search:
+                    self.global_search.focus()
+
+            def close_global_search(_: ft.KeyboardEvent | None = None) -> None:
+                if self.global_search:
+                    self.global_search.blur()
+
             # Setup standard application shortcuts
             create_standard_application_shortcuts(
                 self.global_shortcut_manager,
-                view_navigator=view_navigator
+                view_navigator=view_navigator,
+                open_search_callback=open_global_search,
+                close_search_callback=close_global_search,
             )
 
             # Initialize breadcrumb navigation
@@ -897,12 +923,24 @@ class FletV2App(ft.Row):
             if getattr(self._breadcrumb_strip, "page", None):
                 self._breadcrumb_strip.update()
 
-            # Initialize global search
-            self.global_search = create_global_search_bar()
-
-            # Add desktop navigation components to page overlay
+            # Add global search to the header
             if self.global_search:
-                self.page.overlay.append(self.global_search)
+                logger.info(f"🔍 Adding search field to header: {type(self.global_search)}")
+                self._global_search_container.content = self.global_search
+                self._global_search_container.visible = True
+                logger.info(f"🔍 Search container visible={self._global_search_container.visible}")
+
+                # Force update of both container and parent row
+                if getattr(self._global_search_container, "page", None):
+                    self._global_search_container.update()
+                    logger.info("🔍 Search container updated")
+                if getattr(self._header_row, "page", None):
+                    self._header_row.update()
+                    logger.info("🔍 Header row updated")
+
+                # Final page update to ensure rendering
+                self.page.update()
+                logger.info("🔍 Page force updated after adding search")
 
             # Prime breadcrumb trail with the current or default view
             current_view = self._current_view_name or "dashboard"
@@ -1073,6 +1111,10 @@ class FletV2App(ft.Row):
         self.async_manager = AsyncManager()  # Fresh manager for each view
         self.async_manager.set_view(view_name)
 
+        # Ensure global search is collapsed before switching views (if it supports collapse)
+        if self.global_search and hasattr(self.global_search, 'collapse'):
+            self.global_search.collapse(clear=False)
+
         # Get view configuration
         module_name, function_name, actual_view_name = self._get_view_config(view_name)
         logger.debug(f"View config - module: {module_name}, function: {function_name}")
@@ -1107,6 +1149,8 @@ class FletV2App(ft.Row):
                 call_kwargs["navigate_callback"] = self.navigate_to
             if "async_manager" in signature.parameters:
                 call_kwargs["async_manager"] = self.async_manager
+            if "global_search" in signature.parameters:
+                call_kwargs["global_search"] = self.global_search
 
             result = view_function(**call_kwargs)
             print(f"🔴 [CALL] View function returned: {type(result)}")

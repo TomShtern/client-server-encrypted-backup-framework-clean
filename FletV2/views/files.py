@@ -15,14 +15,6 @@ import os
 import sys
 from typing import Any
 
-# Ensure repository and package roots are on sys.path for runtime resolution
-_views_dir = os.path.dirname(os.path.abspath(__file__))
-_flet_v2_root = os.path.dirname(_views_dir)
-_repo_root = os.path.dirname(_flet_v2_root)
-for _path in (_flet_v2_root, _repo_root):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
 # Third-party imports
 import flet as ft
 
@@ -74,7 +66,8 @@ SERVER_NOT_CONNECTED_MSG = "Server not connected. Please start the backup server
 def create_files_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: SimpleState | None = None
+    _state_manager: SimpleState | None = None,
+    global_search: ft.Control | None = None,
 ) -> Any:
     """Simple files view using Flet's built-in components."""
     logger.info("Creating simplified files view")
@@ -564,10 +557,12 @@ def create_files_view(
     table_section = AppCard(files_table, title="Files")
     table_section.expand = True
 
+    # Note: Global search is in the app-level header (main.py), not view-level
     header = create_view_header(
         "Files management",
         icon=ft.Icons.FOLDER,
         description="Review backed up files and manage integrity checks.",
+        actions=None,
     )
 
     main_content = ft.Column(

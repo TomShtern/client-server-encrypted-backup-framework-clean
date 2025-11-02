@@ -65,10 +65,7 @@ for _path in (_flet_v2_root, _repo_root):
         sys.path.insert(0, _path)
 
 logger = get_logger(__name__)
-_VERBOSE_DB_DIAGNOSTICS = (
-    os.getenv("FLET_V2_VERBOSE_DB", "").strip().lower() in {"1", "true", "yes"} or
-    os.getenv("FLET_V2_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
-)
+_VERBOSE_DB_DIAGNOSTICS = True  # Re-enabled by default to investigate actual lag source
 
 if _VERBOSE_DB_DIAGNOSTICS:
     logger.setLevel(logging.INFO)
@@ -530,9 +527,11 @@ def _load_table_data_async(
             def get_table_data_op():
                 return bridge.get_table_data(current_table)
 
-            print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
             result = await run_sync_in_executor(get_table_data_op)
-            print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
 
             # Check for cancellation after expensive operation
             if async_manager and async_manager.is_cancelled():
@@ -545,31 +544,37 @@ def _load_table_data_async(
                 table_columns.extend(data.get("columns", []))
                 all_records.clear()
                 all_records.extend(data.get("rows", []))
-                print(f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns")
+                if _VERBOSE_DB_DIAGNOSTICS:
+                    print(f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns")
                 logger.info(f"Loaded {len(all_records)} records from {current_table}")
             else:
                 error = result.get("error", MSG_UNKNOWN_ERROR)
-                print(f"🟧 [LOAD_TABLE] FAILED: {error}")
+                if _VERBOSE_DB_DIAGNOSTICS:
+                    print(f"🟧 [LOAD_TABLE] FAILED: {error}")
                 logger.warning(f"Failed to load table data: {error}")
                 all_records.clear()
                 table_columns.clear()
 
         except Exception as e:
-            print(f"🟧 [LOAD_TABLE] EXCEPTION: {e}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [LOAD_TABLE] EXCEPTION: {e}")
             logger.exception(f"Error loading table data: {e}")
             all_records.clear()
             table_columns.clear()
 
         finally:
-            print("🟧 [LOAD_TABLE] Finally block - applying search filter")
-            print(f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [LOAD_TABLE] Finally block - applying search filter")
+                print(f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}")
             apply_search_filter_fn()
-            print(f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}")
             update_status_fn("Ready", ft.Colors.GREY_400, False)
             force_records_area_update_fn()
 
             # Note: DataTable will be refreshed automatically when _refresh_table_display() is called later
-            print("🟧 [LOAD_TABLE] Data loaded, DataTable refresh will occur during display")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [LOAD_TABLE] Data loaded, DataTable refresh will occur during display")
 
     return asyncio.create_task(load_data())
 
@@ -671,6 +676,7 @@ def create_database_view(
     page: ft.Page,
     _state_manager: SimpleState | None = None,
     async_manager: AsyncManager | None = None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create professional database management view.
 
@@ -683,9 +689,10 @@ def create_database_view(
         Tuple of (main_container, dispose_func, setup_func)
     """
     logger.info("Initializing professional database view")
-    print("🟧 [DATABASE_PRO] create_database_view CALLED")
-    print(f"🟧 [DATABASE_PRO] server_bridge: {server_bridge is not None}")
-    print(f"🟧 [DATABASE_PRO] page: {page is not None}")
+    if _VERBOSE_DB_DIAGNOSTICS:
+        print("🟧 [DATABASE_PRO] create_database_view CALLED")
+        print(f"🟧 [DATABASE_PRO] server_bridge: {server_bridge is not None}")
+        print(f"🟧 [DATABASE_PRO] page: {page is not None}")
 
     # ========================================================================
     # STATE VARIABLES
@@ -853,8 +860,9 @@ def create_database_view(
             data_table.update()
             return
 
-        print(f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records")
-        print(f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records")
+            print(f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}")
 
         # Apply sorting
         sorted_data = all_records.copy()
@@ -866,7 +874,8 @@ def create_database_view(
                     reverse=reverse
                 )
             except Exception as e:
-                print(f"🟧 [REFRESH] Sorting error: {e}")
+                if _VERBOSE_DB_DIAGNOSTICS:
+                    print(f"🟧 [REFRESH] Sorting error: {e}")
                 sorted_data = all_records  # Fallback to unsorted data
 
         # Apply search filter
@@ -885,7 +894,8 @@ def create_database_view(
 
         # Get actual column names from the first record
         actual_columns = list(sorted_data[0].keys())
-        print(f"🟧 [REFRESH_TABLE] Actual columns found: {actual_columns}")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟧 [REFRESH_TABLE] Actual columns found: {actual_columns}")
 
         # Update DataTable columns dynamically
         data_table.columns = []
@@ -929,7 +939,8 @@ def create_database_view(
             )
             data_table.rows.append(data_row)
 
-        print(f"🟧 [REFRESH_TABLE] Created {len(data_table.rows)} rows with {len(data_table.columns)} columns")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟧 [REFRESH_TABLE] Created {len(data_table.rows)} rows with {len(data_table.columns)} columns")
         data_table.update()
 
     def _sort_by_column_name(column_name: str):
@@ -1198,7 +1209,8 @@ def create_database_view(
     def _force_records_area_update() -> None:
         """Aggressively update nested controls to ensure rendering (DB_FIX)."""
         try:
-            print("🟪 [DB_FIX] Forcing nested updates for records area")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟪 [DB_FIX] Forcing nested updates for records area")
             # Update only the active view's controls (content swapping handles visibility)
             if view_mode == "cards" and is_control_attached(records_listview):
                 records_listview.update()
@@ -1530,9 +1542,11 @@ def create_database_view(
         # Call the improved native DataTable refresh function
         try:
             _refresh_table_display()
-            print("🟨 [REFRESH_DATA_TABLE] Native DataTable refreshed")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟨 [REFRESH_DATA_TABLE] Native DataTable refreshed")
         except Exception as e:
-            print(f"🟨 [REFRESH_DATA_TABLE] Error refreshing DataTable: {e}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟨 [REFRESH_DATA_TABLE] Error refreshing DataTable: {e}")
             logger.exception(f"Error refreshing DataTable: {e}")
 
         # Note: Native DataTable handles empty states and column/row creation automatically
@@ -1583,7 +1597,8 @@ def create_database_view(
         """Apply search filter to records."""
         nonlocal filtered_records, current_page
 
-        print(f"🟨 [SEARCH_FILTER] ENTERED - all_records: {len(all_records)}, search_query: '{search_query}'")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟨 [SEARCH_FILTER] ENTERED - all_records: {len(all_records)}, search_query: '{search_query}'")
 
         # Reset to first page when filtering
         current_page = 0
@@ -1598,17 +1613,20 @@ def create_database_view(
                 if any(query_lower in stringify_value(v).lower() for v in record.values())
             ]
 
-        print(f"🟨 [SEARCH_FILTER] filtered_records: {len(filtered_records)}, view_mode: {view_mode}")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟨 [SEARCH_FILTER] filtered_records: {len(filtered_records)}, view_mode: {view_mode}")
 
         # Update table_state for search
         table_state["search_query"] = search_query
 
         # Refresh the active view
         if view_mode == "cards":
-            print("🟨 [SEARCH_FILTER] Calling refresh_records_display()")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟨 [SEARCH_FILTER] Calling refresh_records_display()")
             refresh_records_display()
         else:
-            print("🟨 [SEARCH_FILTER] Calling refresh_data_table()")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟨 [SEARCH_FILTER] Calling refresh_data_table()")
             _refresh_table_display()
 
         # Update status
@@ -1619,7 +1637,8 @@ def create_database_view(
             msg = f"Loaded {len(filtered_records)} records"
             color = ft.Colors.GREEN if filtered_records else ft.Colors.GREY
 
-        print(f"🟨 [SEARCH_FILTER] Updating status: '{msg}'")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print(f"🟨 [SEARCH_FILTER] Updating status: '{msg}'")
         update_status(msg, color, False)
 
     # ========================================================================
@@ -2061,6 +2080,25 @@ def create_database_view(
         alignment=ft.MainAxisAlignment.START,
     )
 
+    header_title = ft.Column(
+        [
+            ft.Text("Database Management", size=32, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                "Inspect tables, edit records, and manage database state.",
+                size=14,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+        ],
+        spacing=4,
+    )
+
+    # Note: Global search is in the app-level header (main.py), not view-level
+    header_bar = ft.Row(
+        [ft.Container(content=header_title, expand=True)],
+        spacing=16,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
     # Records section - SIMPLIFIED (no neumorphic wrapper for debugging)
     records_section = ft.Container(
         content=ft.Column(
@@ -2087,7 +2125,7 @@ def create_database_view(
     # Main layout - using ListView for automatic scrolling
     main_layout = ft.ListView(
         controls=[
-            ft.Text("Database Management", size=32, weight=ft.FontWeight.BOLD),
+            header_bar,
             stats_row,
             controls_bar,
             actions_bar,
@@ -2128,49 +2166,59 @@ def create_database_view(
         """Setup function - load initial data after attachment."""
         nonlocal _setup_cancelled
 
-        print("🟧 [DATABASE_PRO] setup() ENTERED")
-        print(f"🟧 [DATABASE_PRO] _setup_cancelled = {_setup_cancelled}")
+        if _VERBOSE_DB_DIAGNOSTICS:
+            print("🟧 [DATABASE_PRO] setup() ENTERED")
+            print(f"🟧 [DATABASE_PRO] _setup_cancelled = {_setup_cancelled}")
         logger.info("Starting database view setup")
 
         try:
             # Check cancellation before proceeding
             if _setup_cancelled:
-                print("🟧 [DATABASE_PRO] Setup cancelled before start, exiting")
+                if _VERBOSE_DB_DIAGNOSTICS:
+                    print("🟧 [DATABASE_PRO] Setup cancelled before start, exiting")
                 logger.info("Setup cancelled before start")
                 return
 
-            print(f"🟧 [DATABASE_PRO] About to sleep for {SETUP_DELAY}s")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [DATABASE_PRO] About to sleep for {SETUP_DELAY}s")
             # CRITICAL: Wait for control attachment to page
             logger.debug(f"Waiting {SETUP_DELAY}s for control attachment...")
             await asyncio.sleep(SETUP_DELAY)
 
-            print("🟧 [DATABASE_PRO] Sleep completed, checking cancellation again")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] Sleep completed, checking cancellation again")
             if _setup_cancelled:
-                print("🟧 [DATABASE_PRO] Setup cancelled after delay, exiting")
+                if _VERBOSE_DB_DIAGNOSTICS:
+                    print("🟧 [DATABASE_PRO] Setup cancelled after delay, exiting")
                 logger.info("Setup cancelled after delay")
                 return
 
             # Load data from server FIRST (before UI updates)
-            print("🟧 [DATABASE_PRO] About to load database stats")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] About to load database stats")
             logger.debug("Loading database stats...")
             await load_database_stats()
 
-            print("🟧 [DATABASE_PRO] About to load table names")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] About to load table names")
             logger.debug("Loading table names...")
             await load_table_names()
 
-            print("🟧 [DATABASE_PRO] About to load table data")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] About to load table data")
             logger.debug("Loading table data...")
             await load_table_data()
 
             # THEN update UI with loaded data
-            print("🟧 [DATABASE_PRO] Data loaded, now updating UI")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] Data loaded, now updating UI")
             logger.debug("Updating UI with loaded data...")
             update_table_dropdown_ui()
             update_db_stats_ui()
 
             # Force final refresh to ensure display is updated
-            print(f"🟧 [DATABASE_PRO] Forcing final refresh (view_mode={view_mode})")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [DATABASE_PRO] Forcing final refresh (view_mode={view_mode})")
             if view_mode == "cards":
                 views_switcher.content = cards_view_container
                 refresh_records_display()
@@ -2180,17 +2228,20 @@ def create_database_view(
             if is_control_attached(views_switcher):
                 views_switcher.update()
 
-            print("🟧 [DATABASE_PRO] All data loaded and UI updated successfully!")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] All data loaded and UI updated successfully!")
             logger.info("Database view setup completed successfully")
             _force_records_area_update()
 
         except asyncio.CancelledError:
-            print("🟧 [DATABASE_PRO] Setup was CANCELLED (CancelledError)")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print("🟧 [DATABASE_PRO] Setup was CANCELLED (CancelledError)")
             logger.info("Setup cancelled via CancelledError")
             raise
 
         except Exception as e:
-            print(f"🟧 [DATABASE_PRO] Setup FAILED with exception: {e}")
+            if _VERBOSE_DB_DIAGNOSTICS:
+                print(f"🟧 [DATABASE_PRO] Setup FAILED with exception: {e}")
             logger.exception(f"Setup failed: {e}")
 
     def dispose() -> None:
@@ -2216,8 +2267,9 @@ def create_database_view(
     # ========================================================================
 
     logger.info("Database view creation completed")
-    print("🟧 [DATABASE_PRO] About to return tuple")
-    print(f"🟧 [DATABASE_PRO] main_container type: {type(main_container)}")
-    print(f"🟧 [DATABASE_PRO] dispose callable: {callable(dispose)}")
-    print(f"🟧 [DATABASE_PRO] setup callable: {callable(setup)}")
+    if _VERBOSE_DB_DIAGNOSTICS:
+        print("🟧 [DATABASE_PRO] About to return tuple")
+        print(f"🟧 [DATABASE_PRO] main_container type: {type(main_container)}")
+        print(f"🟧 [DATABASE_PRO] dispose callable: {callable(dispose)}")
+        print(f"🟧 [DATABASE_PRO] setup callable: {callable(setup)}")
     return (main_container, dispose, setup)

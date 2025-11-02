@@ -17,14 +17,6 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Awaitable
 
-# Ensure repository and package roots are on sys.path for runtime resolution
-_views_dir = os.path.dirname(os.path.abspath(__file__))
-_flet_v2_root = os.path.dirname(_views_dir)
-_repo_root = os.path.dirname(_flet_v2_root)
-for _path in (_flet_v2_root, _repo_root):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
 import flet as ft
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
@@ -70,11 +62,13 @@ class _ClientsViewController:
         server_bridge: ServerBridge | None,
         page: ft.Page,
         state_manager: SimpleState | None,
+        global_search: ft.Control | None,
     ) -> None:
         self.server_bridge = server_bridge
         self.page = page
         self.state_manager = state_manager
         self.state_subscription_callback: Callable[[Any, Any], None] | None = None
+        self.global_search = global_search
 
         self.search_query = ""
         self.status_filter = "all"
@@ -124,6 +118,7 @@ class _ClientsViewController:
         table_section = AppCard(self.clients_table, title="Clients")
         table_section.expand = True
 
+        # Note: Global search is in the app-level header (main.py), not view-level
         header_actions = [
             create_action_button("Add client", lambda _: self.add_client(), icon=ft.Icons.PERSON_ADD),
             self.refresh_button,
@@ -700,12 +695,13 @@ class _ClientsViewController:
 def create_clients_view(
     server_bridge: ServerBridge | None,
     page: ft.Page,
-    _state_manager: SimpleState | None
+    _state_manager: SimpleState | None,
+    global_search: ft.Control | None = None,
 ) -> Any:
     """Assemble the clients view using the controller abstraction."""
     logger.info("Creating simplified clients view")
 
-    controller = _ClientsViewController(server_bridge, page, _state_manager)
+    controller = _ClientsViewController(server_bridge, page, _state_manager, global_search)
 
     if _state_manager is not None:
 

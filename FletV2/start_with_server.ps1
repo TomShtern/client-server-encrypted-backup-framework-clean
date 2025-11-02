@@ -20,8 +20,8 @@
 $env:PYTHONNOUSERSITE = "1"
 $env:CYBERBACKUP_DISABLE_INTEGRATED_GUI = "1"
 $env:CYBERBACKUP_DISABLE_GUI = "1"
-$env:FLET_DASHBOARD_DEBUG = "1"
-$env:FLET_DASHBOARD_CONTENT_DEBUG = "1"
+# $env:FLET_DASHBOARD_DEBUG = "1"  # Disabled: Causes performance issues with excessive debug logging
+# $env:FLET_DASHBOARD_CONTENT_DEBUG = "1"  # Disabled: Causes performance issues
 
 # Resolve paths
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path

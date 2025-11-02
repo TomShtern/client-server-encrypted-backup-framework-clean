@@ -425,6 +425,7 @@ def create_dashboard_view(
     page: ft.Page,
     _state_manager: Any | None,
     navigate_callback: Callable[[str], None] | None = None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     """Create the dashboard view with Material 3 + subtle neumorphism."""
 
@@ -558,7 +559,7 @@ def create_dashboard_view(
     refresh_button = create_action_button("Refresh", None, icon=ft.Icons.REFRESH)
     export_button = create_action_button("Export activity", None, icon=ft.Icons.DOWNLOAD, primary=False)
 
-    header_actions = [
+    header_actions: list[ft.Control] = [
         ft.Row(
             [loading_indicator_slot, refresh_button],
             spacing=8,
@@ -566,6 +567,9 @@ def create_dashboard_view(
         ),
         export_button,
     ]
+
+    # Note: Global search is already in the app-level header (main.py)
+    # No need to add it here as it would create a duplicate
 
     header = ft.Column(
         [

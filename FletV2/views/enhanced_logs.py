@@ -410,10 +410,17 @@ def _create_event_handlers(
 
 
 class _LogsViewController:
-    def __init__(self, server_bridge: Any | None, page: ft.Page, async_manager: AsyncManager | None = None) -> None:
+    def __init__(
+        self,
+        server_bridge: Any | None,
+        page: ft.Page,
+        async_manager: AsyncManager | None = None,
+        global_search: ft.Control | None = None,
+    ) -> None:
         self.server_bridge = server_bridge
         self.page = page
         self.async_manager = async_manager
+        self.global_search = global_search
         self.state = {
             "server_logs": [],
             "app_logs": [],
@@ -477,11 +484,14 @@ class _LogsViewController:
         self.logs_section = AppCard(self.log_list_container, title="Log entries")
         self.logs_section.expand = True
 
+        # Note: Global search is in the app-level header (main.py), not view-level
+        header_actions: list[ft.Control] = [create_action_button("Refresh", self._on_refresh, icon=ft.Icons.REFRESH)]
+
         self.header = create_view_header(
             "Logs",
             icon=ft.Icons.RECEIPT_LONG,
             description="Inspect server and GUI diagnostics.",
-            actions=[create_action_button("Refresh", self._on_refresh, icon=ft.Icons.REFRESH)],
+            actions=header_actions,
         )
 
         content_column = _create_main_content(
@@ -695,6 +705,7 @@ def create_logs_view(
     page: ft.Page,
     _state_manager: SimpleState | None = None,
     async_manager: AsyncManager | None = None,
+    global_search: ft.Control | None = None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
-    controller = _LogsViewController(server_bridge, page, async_manager)
+    controller = _LogsViewController(server_bridge, page, async_manager, global_search)
     return controller.build()

@@ -9,8 +9,8 @@ $env:PYTHONNOUSERSITE = "1"
 # Other environment variables
 $env:CYBERBACKUP_DISABLE_INTEGRATED_GUI = "1"
 $env:CYBERBACKUP_DISABLE_GUI = "1"
-$env:FLET_DASHBOARD_DEBUG = "1"
-$env:FLET_DASHBOARD_CONTENT_DEBUG = "1"
+# $env:FLET_DASHBOARD_DEBUG = "1"  # Disabled: Causes severe performance issues
+# $env:FLET_DASHBOARD_CONTENT_DEBUG = "1"  # Disabled: Causes performance issues
 
 Write-Host "Environment configured. Launching FletV2..." -ForegroundColor Green
 

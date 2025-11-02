@@ -4,7 +4,6 @@ Utils Package Init
 Initialization file for utils package.
 """
 # Import commonly used utility modules
-from .database_manager import FletDatabaseManager, create_database_manager
 from .debug_setup import get_logger, setup_terminal_debugging
 from .server_bridge import ServerBridge, create_server_bridge
 from .simple_state import create_simple_state
@@ -21,9 +20,7 @@ from .user_feedback import (
 
 # Define what should be imported with "from utils import *"
 __all__ = [
-    "FletDatabaseManager",
     "ServerBridge",
-    "create_database_manager",
     "create_server_bridge",
     "create_simple_state",
     "get_logger",
