@@ -339,8 +339,15 @@ class AsyncManager:
         try:
             return await task
         except asyncio.CancelledError:
+            # Log cancellation for diagnostics, ensure internal cleanup, then re-raise
             logger.debug(f"[ASYNC_MANAGER] Task cancelled for view: {self._view_name}")
-            return None
+            # Best-effort remove the task from our registry (done callback may already have removed it)
+            try:
+                self._tasks.discard(task)
+            except Exception:
+                # Suppress any errors during cleanup but still re-raise cancellation
+                logger.debug("Failed to discard cancelled task from registry")
+            raise
 
     def safe_update(self, control: ft.Control) -> None:
         """Safely update a control, preventing updates from cancelled tasks."""
@@ -878,7 +885,7 @@ class FletV2App(ft.Row):
             # Initialize global shortcut manager
             self.global_shortcut_manager = GlobalShortcutManager(self.page)
 
-            # Create minimal search field (simple, guaranteed to work)
+            # Create minimal search field (simple TextField - guaranteed to work)
             self.global_search = create_minimal_search()
             logger.info(f"✅ Global search created: {self.global_search}")
 
@@ -1071,33 +1078,38 @@ class FletV2App(ft.Row):
 
     def _dispose_current_view(self, new_view_name: str) -> None:
         """Dispose of the current view before loading a new one using AsyncManager."""
-        if new_view_name != self._current_view_name:
-            logger.info(f"[DISPOSE] Disposing view '{self._current_view_name}' → '{new_view_name}'")
+        # Guard clause: nothing to dispose if the target view is already active
+        if new_view_name == self._current_view_name:
+            if _VERBOSE_NAV_LOGS:
+                logger.debug("No disposal needed; target view is already active: %s", new_view_name)
+            return
 
-            # 1. Cancel async tasks FIRST using AsyncManager
-            self.async_manager.cancel_all()
+        logger.info(f"[DISPOSE] Disposing view '{self._current_view_name}' → '{new_view_name}'")
 
-            # 2. Cancel the individual setup task if it exists
-            setup_task = self._current_setup_task
-            if setup_task and not setup_task.done():
-                print(f"🟥 [DISPOSE] Cancelling setup task for '{self._current_view_name}'")
-                logger.info(f"[DISPOSE] Cancelling setup task for view: {self._current_view_name}")
-                setup_task.cancel()
-            self._current_setup_task = None
+        # 1. Cancel async tasks FIRST using AsyncManager
+        self.async_manager.cancel_all()
 
-            # 3. Call view's dispose function synchronously
-            if self._current_view_dispose:
-                try:
-                    self._current_view_dispose()
-                    logger.debug(f"[DISPOSE] Successfully disposed view: {self._current_view_name}")
-                except Exception as e:
-                    logger.warning(
+        # 2. Cancel the individual setup task if it exists
+        setup_task = self._current_setup_task
+        if setup_task and not setup_task.done():
+            print(f"🟥 [DISPOSE] Cancelling setup task for '{self._current_view_name}'")
+            logger.info(f"[DISPOSE] Cancelling setup task for view: {self._current_view_name}")
+            setup_task.cancel()
+        self._current_setup_task = None
+
+        # 3. Call view's dispose function synchronously
+        if self._current_view_dispose:
+            try:
+                self._current_view_dispose()
+                logger.debug(f"[DISPOSE] Successfully disposed view: {self._current_view_name}")
+            except Exception as e:
+                logger.warning(
                     f"[DISPOSE] Failed to dispose previous view "
                     f"{self._current_view_name}: {e}"
                 )
-                finally:
-                    self._current_view_dispose = None
-                    self._current_view_name = None
+            finally:
+                self._current_view_dispose = None
+                self._current_view_name = None
 
     def _perform_view_loading(self, view_name: str) -> bool:
         """Perform the core view loading logic."""
