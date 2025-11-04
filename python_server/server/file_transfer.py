@@ -123,11 +123,11 @@ class FileTransferManager:
             self._process_file_transfer_packet(payload, client, sock)  # type: ignore
         except (ProtocolError, FileError, ClientError) as e:
             logger.error(f"File transfer error for client '{client.name}': {e}")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
         except Exception as e:
             logger.critical(f"Unexpected error during file transfer for client '{client.name}': {e}",
                           exc_info=True)
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
     def _process_file_transfer_packet(self, payload, client, sock):
         # Parse and validate the file transfer metadata

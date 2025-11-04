@@ -2,7 +2,7 @@
 """
 FletV2 Server Adapter - Direct Object Integration
 
-This adapter wraps your existing server infrastructure (DatabaseManager, ClientManager, etc.)
+This adapter wraps your existing server infrastructure (DatabaseManager, etc.)
 and provides the exact method signatures that FletV2's ServerBridge expects.
 
 No API calls - pure Python object method calls for maximum performance and reliability.
@@ -25,7 +25,6 @@ if project_root not in sys.path:
 # Import your existing server infrastructure
 try:
     from api_server.real_backup_executor import RealBackupExecutor
-    from python_server.server.client_manager import ClientManager
     from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
     from python_server.server.database import DatabaseManager
     _REAL_SERVER_AVAILABLE = True
@@ -40,15 +39,11 @@ except ImportError as e:
         def init_database(self): pass
         def get_database_health(self): return {"status": "fallback"}
 
-    class _FallbackClientManager:
-        def __init__(self, db_manager=None, *args, **kwargs): pass
-
     class _FallbackBackupExecutor:
         def __init__(self, *args, **kwargs): pass
 
     # Assign fallback classes to expected names
     DatabaseManager = _FallbackDatabaseManager  # type: ignore
-    ClientManager = _FallbackClientManager  # type: ignore
     RealBackupExecutor = _FallbackBackupExecutor  # type: ignore
     DATABASE_NAME = "fallback.db"
     FILE_STORAGE_DIR = "fallback_storage"
@@ -61,7 +56,7 @@ class FletV2ServerAdapter:
     Server adapter that wraps your existing server infrastructure for FletV2 integration.
 
     Provides all methods that FletV2's ServerBridge expects while delegating to your
-    existing DatabaseManager, ClientManager, and other server components.
+    existing DatabaseManager and other server components.
     """
 
     def __init__(self, db_path: str | None = None, storage_path: str | None = None):
@@ -81,7 +76,6 @@ class FletV2ServerAdapter:
         try:
             self.db_manager = DatabaseManager(use_pool=True)
             self.db_manager.init_database()
-            self.client_manager = ClientManager(self.db_manager)  # type: ignore
             self.backup_executor = RealBackupExecutor()
             self._connected = True
             logger.info("FletV2ServerAdapter initialized with real server components")
@@ -89,7 +83,6 @@ class FletV2ServerAdapter:
             logger.error(f"Failed to initialize server components: {e}")
             self._connected = False
             self.db_manager = None
-            self.client_manager = None
             self.backup_executor = None
 
         # Ensure storage directory exists

@@ -40,6 +40,9 @@ from Crypto.Random import get_random_bytes
 # Import observability components
 from Shared.observability import get_metrics_collector
 
+# Import error handling utilities
+from Shared.utils.error_handling import handle_request_errors_detailed, handle_specific_request_errors
+
 # Import configuration constants
 from .config import (
     AES_KEY_SIZE_BYTES,
@@ -152,40 +155,35 @@ class RequestHandler:
         if len(payload) != name_field_protocol_len:
             raise ProtocolError(f"Registration Request (1025): Invalid payload size. Expected {name_field_protocol_len} bytes, got {len(payload)}.")
 
-        try:
-            # Parse client name from payload, enforcing max actual length and character set
-            client_name = self._parse_string_from_payload(payload, name_field_protocol_len, MAX_CLIENT_NAME_LENGTH, "Client Name")
+        # Parse client name from payload, enforcing max actual length and character set
+        client_name = self._parse_string_from_payload(payload, name_field_protocol_len, MAX_CLIENT_NAME_LENGTH, "Client Name")
 
-            with self.server.clients_lock:
-                if client_name in self.server.clients_by_name:
-                    logger.warning(f"Registration attempt failed: Username '{client_name}' is already registered.")
-                    self.server.network_server.send_response(sock, RESP_REG_FAIL)
-                    return
+        with self.server.clients_lock:
+            if client_name in self.server.clients_by_name:
+                logger.warning(f"Registration attempt failed: Username '{client_name}' is already registered.")
+                self.server.network_server.send_response(sock, RESP_REG_FAIL)
+                return
 
-                # Generate a new unique client ID (UUID version 4)
-                new_client_id_bytes = uuid.uuid4().bytes
-                # Use the server's factory method to create a new client
-                new_client = self.server.create_client(new_client_id_bytes, client_name)
+            # Generate a new unique client ID (UUID version 4)
+            new_client_id_bytes = uuid.uuid4().bytes
+            # Use the server's factory method to create a new client
+            new_client = self.server.create_client(new_client_id_bytes, client_name)
 
-                # Add the new client to in-memory tracking structures
-                self.server.clients[new_client_id_bytes] = new_client
-                self.server.clients_by_name[client_name] = new_client_id_bytes
+            # Add the new client to in-memory tracking structures
+            self.server.clients[new_client_id_bytes] = new_client
+            self.server.clients_by_name[client_name] = new_client_id_bytes
 
-                self.server.db_manager.save_client_to_db(new_client.id, new_client.name, new_client.public_key_bytes, new_client.get_aes_key())
+            self.server.db_manager.save_client_to_db(new_client.id, new_client.name, new_client.public_key_bytes, new_client.get_aes_key())
 
-            logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
+        logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
 
-            # Record metrics for client registration
-            get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
+        # Record metrics for client registration
+        get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
 
-            # GUI updates removed - FletV2 GUI gets client registration data through ServerBridge
+        # GUI updates removed - FletV2 GUI gets client registration data through ServerBridge
 
-            # Send Registration Success (1600) response with the new client ID as payload
-            self.server.network_server.send_response(sock, RESP_REG_OK, new_client_id_bytes)
-
-        except ProtocolError as e:
-            logger.error(f"Registration protocol error: {e}")
-            self.server.network_server.send_response(sock, RESP_REG_FAIL)
+        # Send Registration Success (1600) response with the new client ID as payload
+        self.server.network_server.send_response(sock, RESP_REG_OK, new_client_id_bytes)
 
     def _handle_send_public_key(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -248,55 +246,51 @@ class RequestHandler:
         Client object is already resolved by ID from request header.
         Payload: char name[255]; (null-terminated, padded)
         """
+        # Apply specific error handling with consistent response codes
+        return self._handle_reconnect_with_error_handling(sock, client, payload)
+
+    def _handle_reconnect_with_error_handling(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         name_field_protocol_len = 255
         if len(payload) != name_field_protocol_len:
             raise ProtocolError(f"Reconnect Request (1027): Invalid payload size. Expected {name_field_protocol_len} bytes, got {len(payload)}.")
 
-        try:
-            name_from_payload = self._parse_string_from_payload(payload, name_field_protocol_len, MAX_CLIENT_NAME_LENGTH, "Client Name")
+        name_from_payload = self._parse_string_from_payload(payload, name_field_protocol_len, MAX_CLIENT_NAME_LENGTH, "Client Name")
 
-            # Validate that name in payload matches the known name for this client ID
-            if client.name != name_from_payload:
-                logger.warning(f"Reconnect: Name mismatch for Client ID {client.id.hex()}. Client's known name: '{client.name}', Name in payload: '{name_from_payload}'. Sending Reconnect Failed response.")
-                # Response Payload (1606): client_id[16] (client's ID from header, as per spec)
-                self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
-                return
-
-            # Client must have a public key on record from a previous session to encrypt a new AES key
-            if not client.public_key_obj:
-                logger.warning(f"Reconnect Failed: Client '{client.name}' (ID: {client.id.hex()}) attempting to reconnect, but has no public key on record. Cannot send a new AES key.")
-                self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
-                return
-
-            # Generate a new AES session key for this reconnected session
-            new_aes_key = get_random_bytes(AES_KEY_SIZE_BYTES)
-            client.set_aes_key(new_aes_key)
-
-            # Encrypt the new AES key with the client's stored public RSA key
-            cipher_rsa = PKCS1_OAEP.new(client.public_key_obj, hashAlgo=SHA256)
-            aes_key = client.get_aes_key()
-            if aes_key is None:
-                raise ServerError("Internal Server Error: Client's AES key is not available for encryption.")
-            encrypted_aes_key = cipher_rsa.encrypt(aes_key)
-
-            # Update client's record in the database (updates LastSeen and current session AESKey)
-            self.server.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
-
-            # Construct and send Response 1605 (Reconnect Success + AES Key)
-            # Payload: client_id[16] (client's ID), encrypted_aes_key[]
-            response_payload = client.id + encrypted_aes_key
-            self.server.network_server.send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
-            logger.info(f"Client '{client.name}' reconnected successfully. A new AES session key has been sent (encrypted).")
-
-            # Record metrics for client reconnection
-            get_metrics_collector().record_counter("client.reconnections.total", tags={'client_id': client.id.hex()})
-
-        except ProtocolError as e:
-            logger.error(f"Reconnect protocol error for client '{client.name}': {e}")
+        # Validate that name in payload matches the known name for this client ID
+        if client.name != name_from_payload:
+            logger.warning(f"Reconnect: Name mismatch for Client ID {client.id.hex()}. Client's known name: '{client.name}', Name in payload: '{name_from_payload}'. Sending Reconnect Failed response.")
+            # Response Payload (1606): client_id[16] (client's ID from header, as per spec)
             self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
-        except Exception as e_reconnect:
-            logger.critical(f"Unexpected critical error during reconnect process for client '{client.name}': {e_reconnect}", exc_info=True)
+            return
+
+        # Client must have a public key on record from a previous session to encrypt a new AES key
+        if not client.public_key_obj:
+            logger.warning(f"Reconnect Failed: Client '{client.name}' (ID: {client.id.hex()}) attempting to reconnect, but has no public key on record. Cannot send a new AES key.")
             self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
+            return
+
+        # Generate a new AES session key for this reconnected session
+        new_aes_key = get_random_bytes(AES_KEY_SIZE_BYTES)
+        client.set_aes_key(new_aes_key)
+
+        # Encrypt the new AES key with the client's stored public RSA key
+        cipher_rsa = PKCS1_OAEP.new(client.public_key_obj, hashAlgo=SHA256)
+        aes_key = client.get_aes_key()
+        if aes_key is None:
+            raise ServerError("Internal Server Error: Client's AES key is not available for encryption.")
+        encrypted_aes_key = cipher_rsa.encrypt(aes_key)
+
+        # Update client's record in the database (updates LastSeen and current session AESKey)
+        self.server.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
+
+        # Construct and send Response 1605 (Reconnect Success + AES Key)
+        # Payload: client_id[16] (client's ID), encrypted_aes_key[]
+        response_payload = client.id + encrypted_aes_key
+        self.server.network_server.send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
+        logger.info(f"Client '{client.name}' reconnected successfully. A new AES session key has been sent (encrypted).")
+
+        # Record metrics for client reconnection
+        get_metrics_collector().record_counter("client.reconnections.total", tags={'client_id': client.id.hex()})
 
 
 

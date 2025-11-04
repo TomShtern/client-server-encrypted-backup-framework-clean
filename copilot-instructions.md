@@ -2,279 +2,135 @@
 
 ## Project Overview
 
-This is a comprehensive encrypted file backup system that implements a robust client-server architecture with strong security measures. The project features:
+You are assisting with CyberBackup 3.0, a secure file backup system with dual-GUI architecture. The system includes a Python backup server, FletV2 desktop GUI, web API server, and C++ client with robust encryption and verification.
 
-- **Security Layer**: RSA-1024 for key exchange and AES-256-CBC for file encryption
-- **Backend**: Python server with SQLite database for storage and management
-- **Frontend**: Modern Flet-based GUI with Material Design 3, Neumorphism, and Glassmorphism styling
-- **Protocol**: Custom binary protocol with CRC32 verification for data integrity
-- **Architecture**: Client-server model with cross-platform compatibility
+## Key Technical Context
 
-## Project Structure & Components
+### Architecture
+- **BackupServer**: Python server handling clients on port 1256 (TCP binary protocol)
+- **FletV2 GUI**: Desktop admin interface with Material Design 3 (integrated server)
+- **API Server**: Flask server for web interface on port 9090
+- **C++ Client**: Binary protocol implementation for file transfers
+- **Database**: Shared SQLite (`defensive.db`) with connection pooling
 
-### Core Architecture
-- **python_server/**: Python-based server implementation with SQLite database
-- **FletV2/**: Modern desktop GUI built with Flet framework
-- **Shared/**: Common utilities, logging, and configuration modules
-- **Client/**: C++ client application (binary protocol implementation)
+### Security Implementation
+- RSA-1024 key exchange with PKCS1_OAEP padding
+- AES-256-CBC file encryption with zero IV (per protocol spec)
+- CRC32 integrity verification
+- Binary protocol with structured message handling
 
-### FletV2 GUI Architecture
-- **main.py**: Application entry point with sophisticated state management
-- **views/**: Modular view components (dashboard, clients, files, database, analytics, etc.)
-- **theme.py**: Advanced tri-style design system (Material 3, Neumorphism, Glassmorphism)
-- **utils/**: Server bridge, state management, and utility functions
-- **config.py**: Configuration and constants for the GUI application
+## File Structure and Navigation
 
-### Server Architecture
-- **server.py**: Main backup server with client management and encryption
-- **database.py**: SQLite integration with client/file tracking
-- **protocol.py**: Custom binary protocol implementation
-- **network_server.py**: Network communication layer
+### Primary Components
+- `python_server/server/` - Core server implementation
+  - `server.py` - Main server class and startup
+  - `request_handlers.py` - Protocol message processing
+  - `file_transfer.py` - Multi-packet file transfer management
+  - `database.py` - SQLite operations with connection pooling
+- `FletV2/` - Desktop GUI with integrated server
+  - `start_with_server.py` - GUI launcher with embedded server
+- `api_server/` - Web API bridge
+  - `cyberbackup_api_server.py` - Flask API implementation
 
-## Key Features & Capabilities
+## Code Completion Patterns
 
-### Security Features
-- RSA-1024 key exchange for secure session establishment
-- AES-256-CBC encryption for file data protection
-- CRC32 verification for data integrity
-- Secure key management with automatic generation and storage
+### When Suggesting Server Code
+- Use the modular RequestHandler pattern for new protocol handlers
+- Follow existing exception handling with ProtocolError, ServerError, etc.
+- Maintain thread safety with client locks and atomic operations
+- Use the existing database manager for data persistence
+- Follow the retry decorator pattern for transient failures
 
-### GUI Features
-- **Dashboard**: Real-time metrics with interactive cards and performance gauges
-- **Client Management**: View and manage registered backup clients
-- **File Management**: Browse, search, and manage backed up files
-- **Database Management**: Direct database access and record management
-- **Settings Management**: Comprehensive configuration with server integration
-- **Advanced Styling**: Material Design 3 with neumorphic and glassmorphic effects
-- **Responsive Design**: Adaptive layout for different screen sizes
+### When Suggesting GUI Code
+- Use the ServerBridge pattern for FletV2 direct server calls
+- Follow Material Design 3 principles in Flet implementations
+- Use async patterns to prevent UI blocking
+- Maintain consistency between desktop and web interfaces
 
-### Server Features
-- Multi-client support with concurrent connections
-- Automated session timeout and cleanup
-- Database integrity checks and maintenance
-- Comprehensive logging with dual output (console + file)
-- Performance monitoring and metrics collection
+### When Suggesting Security Code
+- Preserve existing AES-256-CBC encryption patterns
+- Maintain RSA key exchange implementation with PKCS1_OAEP
+- Follow secure file handling with validation and sanitization
+- Keep the existing CRC32 verification approach
 
-## FletV2 GUI Architecture Details
+## Important Implementation Details
 
-### ServerBridge Integration
-The ServerBridge acts as the primary interface between the GUI and the backend server. Key components include:
+### Critical Behaviors
+- Network listener must be explicitly started (`server_instance.start()`) for C++ client connectivity
+- File transfers use multi-packet protocol with reassembly and duplicate detection
+- Database uses connection pooling for concurrent GUI access
+- Both GUIs share the same database with file-level locking
 
-- **ServerBridge Class**: Delegates operations to the real backup server with data format conversion
-- **Data Conversion**: Converts between BackupServer and FletV2 data formats
-- **Error Handling**: Provides structured responses for server operations
-- **Async Support**: Implements both synchronous and asynchronous operations
+### Configuration Files
+- `config.json` - System-wide settings
+- `transfer.info` - Client connection configuration
+- `requirements.txt` - Python dependencies
+- `port.info` - Server port configuration (fallback to 1256)
 
-### State Management System
-The enhanced StateManager provides reactive state management with:
+## Common Tasks and Patterns
 
-- **State Synchronization**: Keeps UI components synchronized with server data
-- **Async Updates**: Supports server-mediated state updates
-- **Loading States**: Tracks operation loading states
-- **Progress Tracking**: Monitors operation progress
-- **Error States**: Manages and displays error states
-- **Event Broadcasting**: Sends events across different parts of the application
-- **Retry Mechanism**: Handles operation retries with exponential backoff
+### Adding New Protocol Requests
+1. Define request/response codes in `protocol.py`
+2. Add handler method to `RequestHandler` class
+3. Register in the `handler_map` dictionary
+4. Follow existing error handling patterns
+5. Update client to handle new protocol messages
 
-### UI Components Framework
-The GUI uses a streamlined component system with:
-
-- **Framework-Harmonious Components**: Uses Flet's built-in components rather than complex custom implementations
-- **Themed Components**: Consistent styling using the advanced theme system
-- **Smart Data Display**: DataTables and data visualization components
-- **Responsive Layouts**: Uses Flet's ResponsiveRow for adaptive layouts
-- **Status Indicators**: Various status pill and indicator types for different states
-- **Action Buttons**: Consistent styling for primary and secondary actions
-
-### View Architecture
-Each view follows a consistent pattern:
-
-- **Create Function**: Returns the view container, dispose function, and setup function
-- **Server Integration**: Uses server_bridge for data operations
-- **State Management**: Integrates with StateManager for reactive updates
-- **Resource Cleanup**: Includes proper disposal of resources and subscriptions
-
-### Theme and Styling System
-The advanced theme system implements a tri-style design:
-
-- **Material Design 3**: Core design language with semantic colors
-- **Neumorphism**: Soft shadows and depth effects (40-45% intensity)
-- **Glassmorphism**: Translucent elements with blur effects (20-30% intensity)
-- **Pre-computed Constants**: Performance-optimized shadow and styling constants
-- **Animation Support**: GPU-accelerated animations for smooth interactions
-
-## Detailed View Components
-
-### Dashboard View
-The main dashboard view features:
-
-- **Metric Cards**: Interactive cards with real-time data and navigation support
-- **Performance Gauges**: Circular progress indicators with status displays
-- **Activity Stream**: Timeline-based activity display with status indicators
-- **Status Monitoring**: Dual status indicators for GUI and server connection
-- **Theme Controls**: Integrated theme switching with multiple options
-
-### Clients View
-The clients management view provides:
-
-- **Data Table**: Display of client information with sorting and filtering
-- **CRUD Operations**: Full Create, Read, Update, Delete functionality
-- **Status Indicators**: Visual status representation for connection states
-- **Search and Filter**: Client filtering by name, ID, and status
-- **Context Menus**: Action menus for each client record
-
-### Database View
-The database management view includes:
-
-- **Table Browser**: Dynamic table browsing with schema detection
-- **Record Management**: Full CRUD operations on database records
-- **Export Functionality**: JSON export of table data
-- **Status Indicators**: Visual representation of database status
-- **Search and Filter**: Record filtering and search capabilities
-
-### Settings View
-The settings management view provides:
-
-- **Tabbed Interface**: Organized settings into logical groups (Server, Interface, Monitoring, Logging, Security, Backup)
-- **Validation**: Client-side validation for settings values
-- **Import/Export**: Settings import/export functionality
-- **Reset Functionality**: Reset to default settings
-- **Server Integration**: Save/load settings from the server
-
-## Development Conventions
-
-### Code Style
-- Follow Python PEP 8 standards with Ruff linting
-- Use type hints for all function signatures
-- Maintain comprehensive docstrings for all modules and classes
-- Implement structured logging with context information
-
-### Architecture Patterns
-- **ServerBridge Pattern**: Interface between GUI and backend server
-- **State Management**: Reactive UI updates via dedicated state manager
-- **Modular Design**: Separate view components with consistent API patterns
-- **Async Integration**: Proper handling of synchronous and asynchronous operations
-- **Framework Harmony**: Use Flet's built-in components rather than complex custom implementations
-
-### Error Handling
-- Implement comprehensive exception handling with graceful degradation
-- Use structured logging for debugging and monitoring
-- Provide user-friendly error messages in GUI
-- Include automated crash reporting and diagnostics
-
-## Building and Running
-
-### Prerequisites
-- Python 3.8+ with standard development tools
-- Visual Studio Build Tools for C++ client compilation
-- Git for version control
-- SQLite for database storage
-
-### Setup Commands
-```bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Set up Flet virtual environment (if needed)
-python -m venv flet_venv
-flet_venv\Scripts\activate
-pip install -r requirements.txt
-
-# Build C++ client (Windows)
-.\build.bat
-
-# Run the server
-python -m python_server.server.server
-
-# Run the GUI
-python -m FletV2.main
-```
-
-### Environment Variables
-- `FLET_GUI_ONLY_MODE`: Enable GUI-only mode without server connection
-- `CYBERBACKUP_DISABLE_INTEGRATED_GUI`: Disable embedded server GUI
-- `DASHBOARD_REFRESH_INTERVAL`: Set dashboard refresh interval in seconds
-- `FLET_V2_DEBUG`: Enable debug mode for additional logging
-- `FLET_V2_SHOW_MOCK_DATA`: Show mock data for testing purposes
-
-## Testing and Quality Assurance
-
-### Test Strategy
-- Integration tests for server-client communication
-- Unit tests for encryption and protocol implementations
-- GUI component tests for UI interactions
-- End-to-end tests for backup workflow
-
-### Quality Tools
-- Ruff for linting and formatting
-- Pyright for type checking
-- MyPy for additional type verification
-- Comprehensive logging for debugging
-
-## Special Considerations for Copilot
-
-### Security Context
-- Always prioritize secure handling of encryption keys and credentials
-- Follow security best practices when modifying crypto implementations
-- Ensure all file operations maintain data integrity
-- Verify that any new features maintain the end-to-end encryption model
-
-### GUI Development
-- Maintain consistency with the tri-style design system (Material 3, Neumorphism, Glassmorphism)
-- Use the provided theme utilities for styling components
-- Implement proper state management for reactive UI updates
-- Follow the established navigation and view switching patterns
-- Prefer Flet's built-in components over complex custom implementations
-
-### Server Integration
-- Use the ServerBridge pattern for GUI-server communication
-- Implement proper error handling for network operations
-- Ensure thread safety in multi-client scenarios
-- Maintain the existing protocol compatibility
+### File Transfer Operations
+- Use multi-packet approach with proper reassembly logic
+- Implement duplicate packet detection
+- Validate filenames for security (path traversal prevention)
+- Perform CRC verification after decryption
+- Store files atomically with validation
 
 ### Database Operations
-- Use the existing DatabaseManager for all database interactions
-- Follow the established schema patterns for client and file records
-- Implement proper transaction handling for data consistency
-- Include appropriate error handling for database operations
+- Use DatabaseManager for all database interactions
+- Implement connection pooling patterns
+- Use retry mechanisms for transient failures
+- Follow transaction patterns for data consistency
 
-### Performance Considerations
-- Optimize for frequent UI updates with minimal redraw operations
-- Use targeted updates rather than full page refreshes
-- Implement efficient data processing for large file transfers
-- Consider memory usage when handling large datasets in GUI
-- Use GPU-accelerated animations for smooth interactions
+## Error Handling and Logging
 
-### Code Quality
-- Maintain the high code quality standards already established
-- Use proper type hints and comprehensive error handling
-- Follow the existing patterns for logging and diagnostics
-- Ensure all new code is well-documented with docstrings
+### Logging Levels
+- DEBUG: Detailed protocol and packet information
+- INFO: Connections, transfers, and system events
+- WARNING: Recoverable issues and validation problems
+- ERROR: Operation failures and system errors
+- CRITICAL: System startup failures and security issues
 
-## Troubleshooting
+### Common Error Scenarios
+- Database lock issues (use connection pooling)
+- Network timeout during key exchange
+- Invalid file format or encryption issues
+- Client authentication failures
+- Protocol version mismatch
 
-### Common Issues
-- GUI freezing during server communication: Check for blocking operations
-- Client connection failures: Verify protocol compatibility and network settings
-- Database lock issues: Ensure proper transaction handling and connection cleanup
-- GUI styling inconsistencies: Follow established theme patterns
+## Integration Points
 
-### Debugging
-- Enable detailed logging with `--verbose` or environment variables
-- Use the ServerBridge test methods to verify server functionality
-- Check the server.log and enhanced log files for error details
-- Use the built-in diagnostic tools in the GUI for system monitoring
+### Server-Client Protocol
+- Binary protocol with fixed-size fields and null-terminated strings
+- Client ID in request headers for authentication
+- AES key encrypted with RSA public key during session setup
+- Multi-packet file transfers with sequence numbers
 
-## Future Development
+### GUI-Server Communication
+- FletV2: Direct method calls via ServerBridge (no network overhead)
+- Web API: HTTP requests to Flask endpoints
+- Both update shared database for consistency
 
-### Planned Enhancements
-- Enhanced analytics and reporting features
-- Improved backup scheduling and automation
-- Advanced file versioning and recovery options
-- Additional GUI themes and customization options
+## Troubleshooting Tips
 
-### Architecture Considerations
-- Scalability for larger client deployments
-- Additional encryption algorithms support
-- Cloud storage integration options
-- Advanced monitoring and alerting systems
+### Connection Issues
+- Verify network server is started with `server.start()`
+- Check that ports 1256 and 9090 are available
+- Confirm client configuration in `transfer.info`
+
+### Database Issues
+- Use connection pooling to handle concurrent access
+- Check file permissions for database and file storage directories
+- Verify database schema matches the application expectations
+
+### Security Issues
+- Ensure proper AES key generation and distribution
+- Verify RSA key exchange and encryption/decryption
+- Validate file integrity with CRC32
