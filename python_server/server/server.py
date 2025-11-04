@@ -50,14 +50,12 @@ from .database import DatabaseManager
 # Import custom exceptions
 from .exceptions import ProtocolError, ServerError
 
-# GUI Integration
-from .gui_integration import GUIManager
-
 # Import network server module
 from .network_server import NetworkServer
 
 # Import protocol constants and configuration (refactored for modularity)
 from .protocol import *  # Protocol constants and utilities
+from .crc_utils import calculate_crc32  # Centralized CRC calculation
 
 # Import request handler module
 from .request_handlers import RequestHandler
@@ -272,7 +270,7 @@ class Client:
 
     def get_aes_key(self) -> bytes | None:
         """Returns the current session AES key (thread-safe)."""
-        # Thread-safe access: Called cross-thread from _save_client_to_db()
+        # Thread-safe access: Called cross-thread from database operations
         with self.lock:
             return self.aes_key
 
@@ -334,52 +332,6 @@ class BackupServer:
     The main server class that handles client connections, protocol messages,
     encryption, file storage, and database interactions.
     """
-    _CRC32_TABLE = ( # Standard POSIX cksum CRC32 table, used by _calculate_crc
-        0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
-        0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
-        0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
-        0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a, 0x745e66cd,
-        0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039, 0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5,
-        0xbe2b5b58, 0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033, 0xa4ad16ea, 0xa06c0b5d,
-        0xd4326d90, 0xd0f37027, 0xddb056fe, 0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
-        0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4, 0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d,
-        0x34867077, 0x30476dc0, 0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5, 0x2ac12072,
-        0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16, 0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca,
-        0x7897ab07, 0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c, 0x6211e6b5, 0x66d0fb02,
-        0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1, 0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
-        0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b, 0xbb60adfc, 0xb6238b25, 0xb2e29692,
-        0x8aad2b2f, 0x8e6c3698, 0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d, 0x94ea7b2a,
-        0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e, 0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2,
-        0xc6bcf05f, 0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34, 0xdc3abded, 0xd8fba05a,
-        0x690ce0ee, 0x6dcdfd59, 0x608edb80, 0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
-        0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a, 0x58c1663d, 0x558240e4, 0x51435d53,
-        0x251d3b9e, 0x21dc2629, 0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c, 0x3b5a6b9b,
-        0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff, 0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623,
-        0xf12f560e, 0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65, 0xeba91bbc, 0xef68060b,
-        0xd727bbb6, 0xd3e6a601, 0xdea580d8, 0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
-        0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2, 0xaafbe615, 0xa7b8c0cc, 0xa379dd7b,
-        0x9b3660c6, 0x9ff77d71, 0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74, 0x857130c3,
-        0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640, 0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c,
-        0x7b827d21, 0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a, 0x61043093, 0x65c52d24,
-        0x119b4be9, 0x155a565e, 0x18197087, 0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
-        0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d, 0x2056cd3a, 0x2d15ebe3, 0x29d4f654,
-        0xc5a92679, 0xc1683bce, 0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb, 0xdbee767c,
-        0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4,
-        0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c,
-        0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
-    )
-
-    def _calculate_crc(self, data: bytes, crc: int = 0) -> int:
-        for byte in data:
-            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ byte]
-        return crc
-
-    def _finalize_crc(self, crc: int, total_size: int) -> int:
-        length = total_size
-        while length > 0:
-            crc = (crc << 8) ^ self._CRC32_TABLE[(crc >> 24) ^ (length & 0xFF)]
-            length >>= 8
-        return ~crc & 0xFFFFFFFF
 
     def __init__(self):
         """Initializes the BackupServer instance."""
@@ -411,9 +363,6 @@ class BackupServer:
 
         # Initialize database manager
         self.db_manager: DatabaseManager = DatabaseManager()
-
-        # Initialize GUI manager
-        self.gui_manager = GUIManager(self)
         self._storage_dir = Path(FILE_STORAGE_DIR)
         with contextlib.suppress(OSError):
             self._storage_dir.mkdir(parents=True, exist_ok=True)
@@ -423,12 +372,7 @@ class BackupServer:
         self._log_export_rate_limits: dict[str, float] = {}
         # Allow disabling integrated GUI when standalone GUI process will be launched
         disable_flag = os.environ.get("CYBERBACKUP_DISABLE_INTEGRATED_GUI")
-        logger.info(f"[GUI] Embedded GUI disable flag value: {disable_flag!r}")
-        if not disable_flag:
-            logger.info("[GUI] Attempting embedded GUI initialization...")
-            self.gui_manager.initialize_gui()
-        else:
-            logger.info("[GUI] Integrated Server GUI disabled via CYBERBACKUP_DISABLE_INTEGRATED_GUI=1 (no embedded GUI)")
+        logger.info(f"[GUI] Legacy Tkinter GUI integration removed - FletV2 GUI is now used instead")
 
         # Perform pre-flight checks and initialize database
         self.db_manager.check_startup_permissions() # Perform pre-flight checks before extensive setup
@@ -479,37 +423,21 @@ class BackupServer:
             logger.error(f"Failed to resolve client {client_identifier}: {e}")
             return self._format_response(False, error=str(e))
 
-    def send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
-        """Delegates sending a response to the network server."""
-        self.network_server.send_response(sock, code, payload)
 
     def _update_gui_client_stats(self):
         """Updates GUI with current client statistics."""
         with self.clients_lock:
             connected_clients = len(self.clients)
-            # Get total clients from database if available
+            # Get total clients from database
             total_clients = connected_clients
-            if hasattr(self, 'db_manager') and self.db_manager:
-                with contextlib.suppress(Exception):
-                    total_from_db = len(self.db_manager.get_all_clients())
-                    total_clients = max(total_from_db, connected_clients)
+            with contextlib.suppress(Exception):
+                total_from_db = len(self.db_manager.get_all_clients())
+                total_clients = max(total_from_db, connected_clients)
 
             # Calculate active transfers while holding lock for consistency
             active_transfers = self._calculate_active_transfers()
 
-        self.gui_manager.update_client_stats({
-            'connected': connected_clients,
-            'total': total_clients,
-            'active_transfers': active_transfers
-        })
-
-    def _update_gui_success(self, message: str):
-        """Delegates logging a success message to the GUI."""
-        self.gui_manager.queue_update("log", message)
-
-    def _update_gui_transfer_stats(self, bytes_transferred: int = 0, last_activity: str = "") -> None:
-        """Delegates updating transfer statistics to the GUI."""
-        self.gui_manager.update_transfer_stats(bytes_transferred, last_activity)
+  
 
     def _parse_string_from_payload(self, payload_bytes: bytes, field_len: int, max_actual_len: int, field_name: str = "String") -> str:
         """
@@ -562,16 +490,6 @@ class BackupServer:
             logger.info(f"Successfully loaded {loaded_count} client(s) from database.")
 
 
-    def _save_client_to_db(self, client: Client):
-        """Saves or updates a client's information in the database."""
-        self.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
-
-
-    def _save_file_info_to_db(self, client_id: bytes, file_name: str, path_name: str, verified: bool, file_size: int, mod_date: str, crc: int | None = None):
-        """Saves or updates file information in the database."""
-        self.db_manager.save_file_info_to_db(client_id, file_name, path_name, verified, file_size, mod_date, crc)
-
-
     # Port configuration is now handled by NetworkServer
 
 
@@ -581,7 +499,7 @@ class BackupServer:
             in_progress = sum(len(client.partial_files) for client in self.clients.values())
 
         # Also account for global transfer manager state without double-counting
-        if transfer_manager := getattr(self.request_handler, "file_transfer_manager", None):
+        if transfer_manager := self.request_handler.file_transfer_manager:
             with contextlib.suppress(Exception):
                 with transfer_manager.transfer_lock:
                     in_progress = max(in_progress, len(transfer_manager.active_transfers))
@@ -660,28 +578,27 @@ class BackupServer:
 
             # --- Persist Metrics to Database ---
             # Record key metrics every maintenance cycle for historical tracking
-            if hasattr(self, 'db_manager') and self.db_manager:
-                try:
-                    logger.debug(f"Recording metrics to database (interval: {MAINTENANCE_INTERVAL}s)")
+            try:
+                logger.debug(f"Recording metrics to database (interval: {MAINTENANCE_INTERVAL}s)")
 
-                    # Record active clients count
-                    self.db_manager.record_metric("connections", num_active_clients)
-                    logger.debug(f"  ✓ Recorded connections metric: {num_active_clients}")
+                # Record active clients count
+                self.db_manager.record_metric("connections", num_active_clients)
+                logger.debug(f"  ✓ Recorded connections metric: {num_active_clients}")
 
-                    # Record total files backed up
-                    total_files = self.db_manager.get_total_files_count()
-                    self.db_manager.record_metric("files", total_files)
-                    logger.debug(f"  ✓ Recorded files metric: {total_files}")
+                # Record total files backed up
+                total_files = self.db_manager.get_total_files_count()
+                self.db_manager.record_metric("files", total_files)
+                logger.debug(f"  ✓ Recorded files metric: {total_files}")
 
-                    # Record bandwidth (total bytes transferred)
-                    total_bytes = self.db_manager.get_total_bytes_transferred()
-                    bandwidth_mb = total_bytes / (1024 * 1024)  # Convert to MB
-                    self.db_manager.record_metric("bandwidth", bandwidth_mb)
-                    logger.debug(f"  ✓ Recorded bandwidth metric: {bandwidth_mb:.2f} MB")
+                # Record bandwidth (total bytes transferred)
+                total_bytes = self.db_manager.get_total_bytes_transferred()
+                bandwidth_mb = total_bytes / (1024 * 1024)  # Convert to MB
+                self.db_manager.record_metric("bandwidth", bandwidth_mb)
+                logger.debug(f"  ✓ Recorded bandwidth metric: {bandwidth_mb:.2f} MB")
 
-                    logger.debug(f"Successfully persisted all metrics: {num_active_clients} connections, {total_files} files, {bandwidth_mb:.2f} MB bandwidth")
-                except Exception as metrics_err:
-                    logger.warning(f"Failed to persist metrics to database: {metrics_err}")
+                logger.debug(f"Successfully persisted all metrics: {num_active_clients} connections, {total_files} files, {bandwidth_mb:.2f} MB bandwidth")
+            except Exception as metrics_err:
+                logger.warning(f"Failed to persist metrics to database: {metrics_err}")
 
             # --- Clean Up Old Metrics (once per day) ---
             # Only run cleanup once per day (86400 seconds)
@@ -689,7 +606,7 @@ class BackupServer:
             if not hasattr(self, '_last_metrics_cleanup_time'):
                 self._last_metrics_cleanup_time = 0
 
-            if (current_time - self._last_metrics_cleanup_time) >= 86400 and hasattr(self, 'db_manager') and self.db_manager:  # 24 hours
+            if (current_time - self._last_metrics_cleanup_time) >= 86400:  # 24 hours
                 try:
                     rows_deleted = self.db_manager.cleanup_old_metrics(days_to_keep=7)
                     self._last_metrics_cleanup_time = current_time
@@ -698,57 +615,12 @@ class BackupServer:
                 except Exception as cleanup_err:
                     logger.warning(f"Failed to cleanup old metrics: {cleanup_err}")
 
-            # --- GUI Status Update ---
-            if self.gui_manager.is_gui_ready():
-                self._update_gui_with_status_data(
-                    inactive_clients_removed_count,
-                    stale_partial_files_cleaned_count,
-                    stale_temp_files_cleaned_count
-                )
+            # GUI status updates removed - FletV2 GUI uses ServerBridge for data access
 
         except Exception as e:
             logger.critical(f"Critical error in periodic maintenance job: {e}", exc_info=True)
-            if self.gui_manager.is_gui_ready():
-                self.gui_manager.queue_update("log", f"ERROR: Maintenance job failed: {e}")
 
-    def _update_gui_with_status_data(
-        self,
-        inactive_clients_removed_count: int,
-        stale_partial_files_cleaned_count: int,
-        stale_temp_files_cleaned_count: int
-    ) -> None:
-        """Extract method to prepare and send status data to GUI."""
-        # 1. Gather all status information into dictionaries
-        status_data = {
-            'running': self.running,
-            'address': self.network_server.host,
-            'port': self.port,
-            'uptime': time.time() - self.network_server.start_time if self.running else 0,
-            'error_message': self.network_server.last_error or ''
-        }
-
-        active_transfers = self._calculate_active_transfers()
-        client_stats_data = {
-            'connected': self.network_server.get_connection_stats()['active_connections'],
-            'total': self.db_manager.get_total_clients_count(),
-            'active_transfers': active_transfers
-        }
-
-        maintenance_stats_data = {
-            'files_cleaned': stale_temp_files_cleaned_count,
-            'partial_files_cleaned': stale_partial_files_cleaned_count,
-            'clients_cleaned': inactive_clients_removed_count,
-            'last_cleanup': (
-                datetime.fromtimestamp(self._last_maintenance_timestamp).isoformat()
-                if self._last_maintenance_timestamp else datetime.now().isoformat()
-            )
-        }
-
-        # 2. Put the gathered data into the GUI's queue
-        self.gui_manager.queue_update("status", status_data)
-        self.gui_manager.queue_update("client_stats", client_stats_data)
-        self.gui_manager.queue_update("maintenance_stats", maintenance_stats_data)
-
+    
     def _handle_startup_system_exit(self, e: SystemExit, start_time: float):
         """Extract method to handle SystemExit during startup."""
         duration_ms = (time.time() - start_time) * 1000
@@ -808,16 +680,7 @@ class BackupServer:
         metrics_collector.record_timer("server.startup.duration", duration_ms)
         metrics_collector.record_gauge("server.clients.loaded", len(self.clients))
 
-        # Update GUI with server status
-        self.gui_manager.update_server_status(True, "0.0.0.0", self.port)
-        self.gui_manager.update_client_stats({
-            'connected': 0,
-            'total': len(self.clients),
-            'active_transfers': self._calculate_active_transfers()
-        })
-
-        # Signal to the GUI that the initial data load is complete
-        self.gui_manager.signal_data_loaded()
+        # GUI status updates removed - FletV2 GUI gets status data through ServerBridge
 
 
     def stop(self):
@@ -844,7 +707,6 @@ class BackupServer:
             logger.info(f"Cleaned up {num_clients} client session(s) from memory")
 
         # Shutdown GUI and network components
-        self.gui_manager.shutdown()
         self.network_server.stop()
         self.running = False
         logger.info("Server has been stopped.")
@@ -884,6 +746,14 @@ class BackupServer:
         return True, ""
 
     # --- Client Operations ---
+#
+# CLIENT RETRIEVAL METHODS - USAGE GUIDE:
+# ========================================
+# get_clients() - Synchronous, blocks until DB query completes. Use for simple operations
+# get_clients_async() - Non-blocking async version. Use in UI/async contexts to prevent blocking
+# get_client_details(client_id) - Get single client by ID. More efficient than getting all clients
+#
+# All methods query the database as single source of truth. No in-memory caching to avoid sync issues.
 
     @retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
     def get_clients(self) -> dict[str, Any]:
@@ -974,7 +844,7 @@ class BackupServer:
 
             # Save to database with timing
             query_start = time.time()
-            self._save_client_to_db(client)
+            self.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
             query_duration_ms = (time.time() - query_start) * 1000
 
             # Record database write timing metric
@@ -1389,20 +1259,15 @@ class BackupServer:
             logger.error(f"Stored file missing for '{file_id}' (resolved path: {source_path})")
             return self._format_response(False, error="Stored file data not found on server")
 
-        crc_value = 0
-        total_bytes = 0
-        chunk_size = 128 * 1024  # 128 KB chunks for verification
-
         try:
+            # Read entire file and calculate CRC in one operation
             with open(source_path, 'rb') as file_handle:
-                while chunk := file_handle.read(chunk_size):
-                    crc_value = self._calculate_crc(chunk, crc_value)
-                    total_bytes += len(chunk)
+                file_data = file_handle.read()
+                total_bytes = len(file_data)
+                computed_crc = calculate_crc32(file_data)
         except Exception as read_error:
             logger.error(f"Failed to read file '{source_path}' during verification: {read_error}")
             return self._format_response(False, error=f"Failed to read file content: {read_error}")
-
-        computed_crc = self._finalize_crc(crc_value, total_bytes)
         expected_crc = file_info.get('crc')
 
         # Treat files without stored CRC as newly verified after computing it
@@ -1802,17 +1667,13 @@ class BackupServer:
             if not self.running:
                 return False
 
-            # Check database health if available
-            if hasattr(self, 'db_manager') and self.db_manager:
-                try:
-                    # Quick database health check
-                    health = self.db_manager.get_database_health()
-                    return health.get('integrity_check', False) if isinstance(health, dict) else False
-                except Exception:
-                    return False
-
-            # If no database manager, just check if server is running
-            return self.running
+            # Check database health
+            try:
+                # Quick database health check
+                health = self.db_manager.get_database_health()
+                return health.get('integrity_check', False) if isinstance(health, dict) else False
+            except Exception:
+                return False
 
         except Exception as e:
             logger.debug(f"is_connected check failed: {e}")
@@ -1825,11 +1686,11 @@ class BackupServer:
             status_data = {
                 'running': self.running,
                 'port': self.port,
-                'host': getattr(self.network_server, 'host', '0.0.0.0'),
+                'host': self.network_server.host,
                 'uptime_seconds': uptime,
                 'uptime_formatted': f"{int(uptime//3600)}h {int((uptime%3600)//60)}m {int(uptime%60)}s",
                 'version': SERVER_VERSION,
-                'last_error': getattr(self.network_server, 'last_error', '') or ''
+                'last_error': self.network_server.last_error or ''
             }
             return self._format_response(True, status_data)
         except Exception as e:
@@ -1847,7 +1708,7 @@ class BackupServer:
             basic_status = self.get_server_status()['data']
 
             # Get connection statistics
-            connection_stats = self.network_server.get_connection_stats() if hasattr(self.network_server, 'get_connection_stats') else {}
+            connection_stats = self.network_server.get_connection_stats()
 
             # Get client statistics
             with self.clients_lock:
@@ -1867,7 +1728,7 @@ class BackupServer:
                     'total_registered': total_clients
                 },
                 'database': {
-                    'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
+                    'total_files': self.db_manager.get_total_files_count()
                 }
             }
 
@@ -1887,8 +1748,8 @@ class BackupServer:
             health_data = {
                 'status': 'healthy' if self.running else 'stopped',
                 'database_accessible': True,  # Basic check
-                'network_server_running': hasattr(self.network_server, 'running') and getattr(self.network_server, 'running', False),
-                'gui_manager_ready': self.gui_manager.is_gui_ready() if hasattr(self.gui_manager, 'is_gui_ready') else False,
+                'network_server_running': self.network_server.running,
+                'fletv2_gui_active': True,  # FletV2 GUI is the current interface
                 'errors': []
             }
 
@@ -1901,12 +1762,10 @@ class BackupServer:
                 health_data['status'] = 'unhealthy'
 
             # Add connection pool metrics if database is accessible
-            if health_data['database_accessible'] and hasattr(self, 'db_manager') and self.db_manager:
+            if health_data['database_accessible']:
                 try:
-                    # Safely check if connection_pool exists and has the method
-                    if (hasattr(self.db_manager, 'connection_pool') and
-                        self.db_manager.connection_pool and
-                        hasattr(self.db_manager.connection_pool, 'get_pool_status')):
+                    # Check if connection_pool exists
+                    if self.db_manager.connection_pool:
 
                         pool_status = self.db_manager.connection_pool.get_pool_status()
                         health_data['connection_pool'] = {
@@ -1933,12 +1792,11 @@ class BackupServer:
                                 health_data['status'] = 'degraded'
 
                         # Check for emergency connection leaks
-                        if hasattr(self.db_manager.connection_pool, 'emergency_connections'):
-                            leak_count = len(self.db_manager.connection_pool.emergency_connections)
-                            if leak_count > 0:
-                                health_data['errors'].append(f"{leak_count} emergency connections leaked")
-                                if health_data['status'] == 'healthy':
-                                    health_data['status'] = 'degraded'
+                        leak_count = len(self.db_manager.connection_pool.emergency_connections)
+                        if leak_count > 0:
+                            health_data['errors'].append(f"{leak_count} emergency connections leaked")
+                            if health_data['status'] == 'healthy':
+                                health_data['status'] = 'degraded'
                     else:
                         # Connection pool not available or incomplete
                         health_data['connection_pool'] = {'status': 'unavailable'}
@@ -2053,15 +1911,15 @@ class BackupServer:
     def get_analytics_data(self) -> dict[str, Any]:
         """Get analytics information."""
         try:
-            total_files = self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
+            total_files = self.db_manager.get_total_files_count()
             # Prefer verified-only aggregates for real storage and average size
-            total_bytes = self.db_manager.get_total_storage_bytes(True) if hasattr(self.db_manager, 'get_total_storage_bytes') else 0
-            avg_bytes = self.db_manager.get_average_backup_size_bytes(True) if hasattr(self.db_manager, 'get_average_backup_size_bytes') else 0.0
+            total_bytes = self.db_manager.get_total_storage_bytes(True)
+            avg_bytes = self.db_manager.get_average_backup_size_bytes(True)
 
             # Fallbacks: if verified-only produce zero on small datasets, try all files via storage statistics
             if (not total_bytes) or (not avg_bytes):
                 try:
-                    storage_stats = self.db_manager.get_storage_statistics() if hasattr(self.db_manager, 'get_storage_statistics') else {}
+                    storage_stats = self.db_manager.get_storage_statistics()
                     fs = (storage_stats or {}).get('file_stats') or {}
                     si = (storage_stats or {}).get('storage_info') or {}
                     if not total_bytes:
@@ -2146,7 +2004,7 @@ class BackupServer:
                 'total_clients': self.db_manager.get_total_clients_count(),
                 'total_files': total_files,
                 'server_uptime_seconds': time.time() - self.network_server.start_time if self.running else 0,
-                'database_stats': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {},
+                'database_stats': self.db_manager.get_database_stats(),
                 # New canonical analytics fields for UI
                 'total_storage_bytes': total_bytes,
                 'avg_backup_size_bytes': avg_bytes,
@@ -2223,7 +2081,7 @@ class BackupServer:
                 'server_status': 'running' if self.running else 'stopped',
                 'total_clients': self.db_manager.get_total_clients_count(),
                 'connected_clients': len(self.clients),
-                'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0,
+                'total_files': self.db_manager.get_total_files_count(),
                 'server_version': SERVER_VERSION,
                 'uptime': time.time() - self.network_server.start_time if self.running else 0
             }
@@ -2252,9 +2110,9 @@ class BackupServer:
                     'currently_connected': len(self.clients)
                 },
                 'files': {
-                    'total_files': self.db_manager.get_total_files_count() if hasattr(self.db_manager, 'get_total_files_count') else 0
+                    'total_files': self.db_manager.get_total_files_count()
                 },
-                'database': self.db_manager.get_database_stats() if hasattr(self.db_manager, 'get_database_stats') else {}
+                'database': self.db_manager.get_database_stats()
             }
             return self._format_response(True, stats_data)
         except Exception as e:
@@ -2305,7 +2163,7 @@ class BackupServer:
         activities = []
 
         # Determine which log file to read
-        log_file = getattr(self, 'backup_log_file', None)
+        log_file = self.backup_log_file
         if not log_file or not os.path.exists(log_file):
             log_file = SERVER_LOG_FILENAME
 
@@ -2420,13 +2278,6 @@ class BackupServer:
                 )
 
             # Retrieve real historical data from database
-            if not hasattr(self, 'db_manager') or not self.db_manager:
-                logger.warning("Database manager not available for historical data")
-                return self._format_response(
-                    False,
-                    error="Database not available for metrics history"
-                )
-
             points = self.db_manager.get_metrics_history(metric, hours)
 
             # If no data available, return empty points with note
@@ -2485,7 +2336,7 @@ class BackupServer:
 
             # Get primary log file
             log_paths = [
-                getattr(self, 'backup_log_file', None),  # Instance variable
+                self.backup_log_file,  # Instance variable
                 backup_log_file,  # Module variable
                 SERVER_LOG_FILENAME  # Fallback
             ]
@@ -2500,7 +2351,7 @@ class BackupServer:
 
             # Also try to read from rotated log files in logs/ directory
             import glob
-            logs_dir = os.path.dirname(getattr(self, 'backup_log_file', 'logs'))
+            logs_dir = os.path.dirname(self.backup_log_file)
             if not logs_dir or not os.path.exists(logs_dir):
                 logs_dir = 'logs'  # Fallback to default logs directory
 
@@ -2556,7 +2407,7 @@ class BackupServer:
             rotated_files = []
 
             # Rotate enhanced log file
-            if hasattr(self, 'backup_log_file') and os.path.exists(self.backup_log_file):
+            if os.path.exists(self.backup_log_file):
                 archive_name = f"{self.backup_log_file}.{timestamp}"
                 try:
                     os.rename(self.backup_log_file, archive_name)
@@ -2642,7 +2493,7 @@ class BackupServer:
 
         try:
             # Determine log file to read
-            log_file = getattr(self, 'backup_log_file', None)
+            log_file = self.backup_log_file
             if not log_file or not os.path.exists(log_file):
                 log_file = SERVER_LOG_FILENAME
 
@@ -3030,31 +2881,24 @@ if __name__ == "__main__":
         server_instance = BackupServer()
         logger.info("BackupServer instance created successfully")
 
-        # The GUIManager was initialized in the BackupServer constructor.
-        # The GUI is running in a separate thread, started by the GUIManager.
+        # Legacy GUIManager removed - FletV2 GUI is now used instead
         # The main thread can now wait for a shutdown signal or simply keep alive.
-        # The GUI's mainloop will handle user interaction and application lifetime.
+        # FletV2 GUI handles user interaction through the ServerBridge pattern.
 
-        # Wait for the GUI to signal it's ready before we proceed (with timeout)
-        logger.info("Waiting for GUI to initialize...")
-        gui_ready = server_instance.gui_manager.gui_ready.wait(timeout=5.0)  # Reduced timeout
-        logger.info(f"GUI initialization result: {'ready' if gui_ready else 'timeout'}")
+        # Skip legacy GUI initialization - FletV2 GUI is launched separately
+        logger.info("Skipping legacy GUI initialization - FletV2 GUI is used instead")
+        gui_ready = False  # Legacy GUI not applicable
+        logger.info("Proceeding without legacy GUI integration")
 
-        # Start the server regardless of GUI status
+        # Start the server
         logger.info("Starting backup server on port 1256...")
         server_instance.start()
         logger.info("Backup server started successfully")
 
-        if gui_ready and hasattr(server_instance.gui_manager, 'is_gui_running') and server_instance.gui_manager.is_gui_running():
-            logger.info("GUI is ready. Main thread is now idle, application is driven by GUI and server threads.")
-            # Keep the main thread alive. The application will exit when the GUI is closed.
-            while server_instance.gui_manager.is_gui_running():
-                time.sleep(1)
-        else:
-            # Console-only mode
-            logger.info("Running in console-only mode. Press Ctrl+C to stop.")
-            while server_instance.running and not server_instance.shutdown_event.is_set():
-                time.sleep(1)
+        # Console-only mode - FletV2 GUI runs separately
+        logger.info("Server running in headless mode. FletV2 GUI launched separately via start_with_server.py")
+        while server_instance.running and not server_instance.shutdown_event.is_set():
+            time.sleep(1)
 
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt detected in main execution block. Initiating shutdown.")

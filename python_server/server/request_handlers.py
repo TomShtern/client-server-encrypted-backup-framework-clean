@@ -1,6 +1,28 @@
-# request_handlers.py
-# Request Handler Module for Backup Server
-# Contains all request processing logic extracted from server.py for better modularity
+"""
+REQUEST HANDLERS - PROTOCOL MESSAGE PROCESSING
+===============================================
+
+PURPOSE: Process all incoming client protocol requests and coordinate responses.
+USED BY: NetworkServer when handling client connections.
+ARCHITECTURE: One handler method per protocol request type.
+
+PROTOCOL HANDLERS:
+- REQ_REGISTER: Client registration with RSA key exchange
+- REQ_SEND_PUBLIC_KEY: Public key submission for new sessions
+- REQ_RECONNECT: Client reconnection with AES key recovery
+- REQ_SEND_FILE: Multi-packet file upload initiation
+- REQ_CRC_OK/REQ_CRC_FAILED/REQ_CRC_INVALID_RETRY: File transfer completion
+
+RESPONSES: All responses go through server.network_server.send_response() (no local _send_response).
+
+DEPENDENCIES:
+- server.client_manager.Client for client state management
+- server.file_transfer.FileTransferManager for file operations
+- server.network_server.send_response() for client communication
+- server.db_manager for data persistence
+
+SECURITY: All requests include authentication, validation, and proper error handling.
+"""
 
 import logging
 import os
@@ -114,12 +136,12 @@ class RequestHandler:
                 # This state (handler method exists, but `client` object is None for a non-registration request)
                 # indicates a logic flaw in the calling sequence (e.g., _handle_client_connection did not resolve client).
                 logger.critical(f"INTERNAL SERVER ERROR: Client object is None for a non-registration request (Code: {code}, Header ID: {client_id_from_header.hex()}). This should have been caught earlier.")
-                self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+                self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
         else:
             # If the request code is not found in our handler_map
             client_name_for_log = client.name if client else client_id_from_header.hex()
             logger.warning(f"Unknown or unsupported request code {code} received from client '{client_name_for_log}'.")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
     def _handle_registration(self, sock: socket.socket, payload: bytes) -> None:
         """
@@ -137,7 +159,7 @@ class RequestHandler:
             with self.server.clients_lock:
                 if client_name in self.server.clients_by_name:
                     logger.warning(f"Registration attempt failed: Username '{client_name}' is already registered.")
-                    self._send_response(sock, RESP_REG_FAIL)
+                    self.server.network_server.send_response(sock, RESP_REG_FAIL)
                     return
 
                 # Generate a new unique client ID (UUID version 4)
@@ -149,23 +171,21 @@ class RequestHandler:
                 self.server.clients[new_client_id_bytes] = new_client
                 self.server.clients_by_name[client_name] = new_client_id_bytes
 
-                self.server._save_client_to_db(new_client)
+                self.server.db_manager.save_client_to_db(new_client.id, new_client.name, new_client.public_key_bytes, new_client.get_aes_key())
 
             logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
 
             # Record metrics for client registration
             get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
 
-            # Update GUI with new client registration
-            self.server._update_gui_client_count()
-            self.server._update_gui_success(f"New client '{client_name}' registered successfully")
+            # GUI updates removed - FletV2 GUI gets client registration data through ServerBridge
 
             # Send Registration Success (1600) response with the new client ID as payload
-            self._send_response(sock, RESP_REG_OK, new_client_id_bytes)
+            self.server.network_server.send_response(sock, RESP_REG_OK, new_client_id_bytes)
 
         except ProtocolError as e:
             logger.error(f"Registration protocol error: {e}")
-            self._send_response(sock, RESP_REG_FAIL)
+            self.server.network_server.send_response(sock, RESP_REG_FAIL)
 
     def _handle_send_public_key(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -187,7 +207,7 @@ class RequestHandler:
             # Validate that the name in payload matches the name associated with the client ID from header
             if client.name != name_from_payload:
                 logger.warning(f"SendPublicKey: Name mismatch for Client ID {client.id.hex()}. Client's known name: '{client.name}', Name in payload: '{name_from_payload}'. This indicates a protocol violation or client-side inconsistency.")
-                self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+                self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
                 return
 
             client.set_public_key(public_key_bytes_from_payload)
@@ -207,20 +227,20 @@ class RequestHandler:
             encrypted_aes_key = cipher_rsa.encrypt(aes_key)
 
             # Update client's record in the database (PublicKey, LastSeen, and new session AESKey)
-            self.server._save_client_to_db(client)
+            self.server.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
 
             # Construct and send Response 1602 (Public Key ACK + AES Key)
             # Payload: client_id[16] (client's own ID), encrypted_aes_key[] (variable length from RSA encryption)
             response_payload = client.id + encrypted_aes_key
-            self._send_response(sock, RESP_PUBKEY_AES_SENT, response_payload)
+            self.server.network_server.send_response(sock, RESP_PUBKEY_AES_SENT, response_payload)
             logger.info(f"Public key successfully received and processed for client '{client.name}'. New AES session key has been sent (encrypted).")
 
         except (ProtocolError, ServerError, ValueError) as e:
             logger.error(f"Error processing SendPublicKey request for client '{client.name}': {e}")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
         except Exception as e_crypto:
             logger.critical(f"Unexpected critical error during RSA encryption for client '{client.name}': {e_crypto}", exc_info=True)
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
 
     def _handle_reconnect(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -239,13 +259,13 @@ class RequestHandler:
             if client.name != name_from_payload:
                 logger.warning(f"Reconnect: Name mismatch for Client ID {client.id.hex()}. Client's known name: '{client.name}', Name in payload: '{name_from_payload}'. Sending Reconnect Failed response.")
                 # Response Payload (1606): client_id[16] (client's ID from header, as per spec)
-                self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+                self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
                 return
 
             # Client must have a public key on record from a previous session to encrypt a new AES key
             if not client.public_key_obj:
                 logger.warning(f"Reconnect Failed: Client '{client.name}' (ID: {client.id.hex()}) attempting to reconnect, but has no public key on record. Cannot send a new AES key.")
-                self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+                self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
                 return
 
             # Generate a new AES session key for this reconnected session
@@ -260,12 +280,12 @@ class RequestHandler:
             encrypted_aes_key = cipher_rsa.encrypt(aes_key)
 
             # Update client's record in the database (updates LastSeen and current session AESKey)
-            self.server._save_client_to_db(client)
+            self.server.db_manager.save_client_to_db(client.id, client.name, client.public_key_bytes, client.get_aes_key())
 
             # Construct and send Response 1605 (Reconnect Success + AES Key)
             # Payload: client_id[16] (client's ID), encrypted_aes_key[]
             response_payload = client.id + encrypted_aes_key
-            self._send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
+            self.server.network_server.send_response(sock, RESP_RECONNECT_AES_SENT, response_payload)
             logger.info(f"Client '{client.name}' reconnected successfully. A new AES session key has been sent (encrypted).")
 
             # Record metrics for client reconnection
@@ -273,10 +293,10 @@ class RequestHandler:
 
         except ProtocolError as e:
             logger.error(f"Reconnect protocol error for client '{client.name}': {e}")
-            self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+            self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
         except Exception as e_reconnect:
             logger.critical(f"Unexpected critical error during reconnect process for client '{client.name}': {e_reconnect}", exc_info=True)
-            self._send_response(sock, RESP_RECONNECT_FAIL, client.id)
+            self.server.network_server.send_response(sock, RESP_RECONNECT_FAIL, client.id)
 
 
 
@@ -298,7 +318,7 @@ class RequestHandler:
             filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
         except ProtocolError as e_parse:
             logger.error(f"Client '{client.name}': CRC OK request error - {e_parse}")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
             return
 
         logger.info(f"Client '{client.name}' confirmed CRC OK for file '{filename_str}'. File transfer is now successfully completed and verified.")
@@ -311,7 +331,7 @@ class RequestHandler:
 
         # Send Response 1604 (General ACK)
         # Payload: client_id[16] (client's own ID)
-        self._send_response(sock, RESP_ACK, client.id)
+        self.server.network_server.send_response(sock, RESP_ACK, client.id)
 
         # Update the file's record in the database to mark it as verified
         self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, True, file_size, mod_date)
@@ -330,7 +350,7 @@ class RequestHandler:
             filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
         except ProtocolError as e_parse:
             logger.error(f"Client '{client.name}': CRC Invalid Retry request error - {e_parse}")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
             return
 
         logger.warning(f"Client '{client.name}' reported CRC invalid for file '{filename_str}'. Client will attempt to retry sending the entire file.")
@@ -343,10 +363,10 @@ class RequestHandler:
         # If the file exists on disk from the failed attempt, it will be overwritten when the new transfer attempt succeeds.
         # Ensure the database record reflects the file is not verified.
         final_save_path = os.path.join(FILE_STORAGE_DIR, filename_str)
-        self.server._save_file_info_to_db(client.id, filename_str, final_save_path, False)
+        self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, False, 0, "", None)
 
         # Send Response 1604 (General ACK)
-        self._send_response(sock, RESP_ACK, client.id)
+        self.server.network_server.send_response(sock, RESP_ACK, client.id)
 
     def _handle_crc_failed_abort(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -362,7 +382,7 @@ class RequestHandler:
             filename_str = self._parse_string_from_payload(payload, filename_field_protocol_len, MAX_ACTUAL_FILENAME_LENGTH, "Filename")
         except ProtocolError as e_parse:
             logger.error(f"Client '{client.name}': CRC Failed Abort request error - {e_parse}")
-            self._send_response(sock, RESP_GENERIC_SERVER_ERROR)
+            self.server.network_server.send_response(sock, RESP_GENERIC_SERVER_ERROR)
             return
 
         logger.error(f"Client '{client.name}' aborted transfer for file '{filename_str}' due to final CRC mismatch. Server will delete its copy of this file.")
@@ -380,10 +400,10 @@ class RequestHandler:
         # Update Database: The file is confirmed as not verified.
         # Depending on specific requirements, one might choose to delete the file record from the database entirely,
         # or simply ensure its 'Verified' status is False. The specification implies keeping a record, so update Verified status.
-        self.server._save_file_info_to_db(client.id, filename_str, final_save_path, False)
+        self.server.db_manager.save_file_info_to_db(client.id, filename_str, final_save_path, False, 0, "", None)
 
         # Send Response 1604 (General ACK)
-        self._send_response(sock, RESP_ACK, client.id)
+        self.server.network_server.send_response(sock, RESP_ACK, client.id)
 
     def _parse_string_from_payload(self, payload_bytes: bytes, field_len: int, max_actual_len: int, field_name: str = "String") -> str:
         """
@@ -401,59 +421,9 @@ class RequestHandler:
         Raises:
             ProtocolError: If the string is invalid or too long.
         """
-        # Delegate to server's existing implementation
-        if hasattr(self.server, '_parse_string_from_payload'):
-            return self.server._parse_string_from_payload(payload_bytes, field_len, max_actual_len, field_name)
-        else:
-            # Fallback implementation
-            if len(payload_bytes) < field_len:
-                raise ProtocolError(f"{field_name}: Field is shorter than expected ({len(payload_bytes)} < {field_len})")
+        return self.server._parse_string_from_payload(payload_bytes, field_len, max_actual_len, field_name)
 
-            string_field = payload_bytes[:field_len]
-            null_pos = string_field.find(b'\x00')
-
-            if null_pos == -1:
-                # No null terminator found
-                actual_string_bytes = string_field
-            else:
-                # Use string up to null terminator
-                actual_string_bytes = string_field[:null_pos]
-
-            if len(actual_string_bytes) > max_actual_len:
-                raise ProtocolError(f"{field_name}: String too long ({len(actual_string_bytes)} > {max_actual_len})")
-
-            try:
-                return actual_string_bytes.decode('utf-8', errors='strict')
-            except UnicodeDecodeError as e:
-                raise ProtocolError(f"{field_name}: Invalid UTF-8 encoding: {e}")
-
-    def _send_response(self, sock: socket.socket, code: int, payload: bytes = b'') -> None:
-        """
-        Sends a response to the client socket.
-
-        Args:
-            sock: The client socket to send the response to.
-            code: The response code.
-            payload: The response payload (bytes).
-
-        Raises:
-            TimeoutError: If a socket timeout occurs during send.
-        """
-        # Delegate to server's existing implementation
-        if hasattr(self.server, 'send_response'):
-            return self.server.send_response(sock, code, payload)
-        else:
-            # Fallback implementation using protocol module
-            from .protocol import create_response
-
-            try:
-                response_data = create_response(code, payload)
-                sock.sendall(response_data)
-                logger.debug(f"Sent response code {code} with {len(payload)} bytes payload")
-            except OSError as e:
-                logger.error(f"Failed to send response code {code}: {e}")
-                raise
-
+    
     def _is_valid_filename_for_storage(self, filename_str: str) -> bool:
         """
         Validates a filename string for storage on the server.

@@ -815,7 +815,7 @@ class DatabaseManager:
                 WHERE c.ID IS NULL
             """, fetchone=True)
 
-            return result[0] if result and result[0] is not None else 0
+            return result[0] if result else 0
 
         except Exception as e:
             logger.error(f"Failed to check for orphaned files: {e}")
@@ -1513,7 +1513,7 @@ class DatabaseManager:
             if result := self.execute(
                 "SELECT COUNT(*) FROM clients", fetchone=True
             ):
-                return result[0] if result[0] is not None else 0
+                return result[0]
             return 0
         except Exception as e:
             logger.error(f"Database error while getting total client count: {e}")
@@ -1533,7 +1533,7 @@ class DatabaseManager:
             if result := self.execute(
                 "SELECT COUNT(*) FROM files", fetchone=True
             ):
-                return result[0] if result[0] is not None else 0
+                return result[0]
             return 0
         except Exception as e:
             logger.error(f"Database error while getting total files count: {e}")
@@ -2089,9 +2089,9 @@ class DatabaseManager:
                 FROM clients
             """, fetchone=True):
                 stats['client_stats'] = {
-                    'total_clients': client_stats[0] if client_stats[0] is not None else 0,
-                    'clients_with_keys': client_stats[1] if client_stats[1] is not None else 0,
-                    'average_days_since_seen': round(client_stats[2] or 0, 1) if client_stats[2] is not None else 0.0
+                    'total_clients': client_stats[0],
+                    'clients_with_keys': client_stats[1],
+                    'average_days_since_seen': round(client_stats[2] or 0, 1)
                 }
 
             # File statistics
@@ -2106,8 +2106,8 @@ class DatabaseManager:
                 FROM files
                 WHERE FileSize IS NOT NULL
             """, fetchone=True):
-                total_files = file_stats[0] if file_stats[0] is not None else 0
-                verified_files = file_stats[1] if file_stats[1] is not None else 0
+                total_files = file_stats[0]
+                verified_files = file_stats[1]
                 avg_file_size = file_stats[2] if file_stats[2] is not None else 0
                 total_size = file_stats[3] if file_stats[3] is not None else 0
                 min_file_size = file_stats[4] if file_stats[4] is not None else 0

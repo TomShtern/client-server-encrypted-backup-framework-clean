@@ -1,6 +1,28 @@
-# network_server.py
-# Network Server Infrastructure Module
-# Extracted from monolithic server.py for better modularity
+"""
+NETWORK SERVER - TCP CONNECTION AND PROTOCOL HANDLING
+======================================================
+
+PURPOSE: Manages TCP client connections and dispatches protocol requests.
+USED BY: BackupServer as the main network entry point.
+
+RESPONSIBILITIES:
+- TCP connection acceptance and client limits
+- Protocol message routing to RequestHandler
+- Centralized response sending via send_response() method
+- Connection lifecycle management and cleanup
+- Network statistics and monitoring
+
+ARCHITECTURE:
+- Each client connection handled in separate thread
+- RequestHandler processes protocol messages
+- send_response() is the single source for all client responses
+- Thread-safe client tracking with connection limits
+
+CONFIGURATION:
+- MAX_CONCURRENT_CLIENTS limits simultaneous connections
+- Connection timeout and cleanup mechanisms
+- Thread pool management for scalability
+"""
 
 import logging
 import signal
@@ -366,7 +388,7 @@ class NetworkServer:
 
             # Attempt to clear any partial file state for this client upon disconnection
             try:
-                if active_client_obj and hasattr(active_client_obj, 'clear_all_partial_files'):
+                if active_client_obj:
                     cleared = active_client_obj.clear_all_partial_files()
                     if cleared:
                         logger.info(f"Cleared {cleared} partial transfer state entries for client '{active_client_obj.name}' on disconnect.")
