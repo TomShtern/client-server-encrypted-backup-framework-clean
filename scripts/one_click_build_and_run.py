@@ -1186,6 +1186,17 @@ def main():
         print("     (Open in browser to perform backups via C++ client)")
         print()
         print("[INFO] FletV2 Desktop GUI handles its own window - no browser needed")
+        print()
+
+        # Automatically open web browser for C++ client GUI
+        print(f"Opening C++ client web GUI in browser: {gui_url}")
+        time.sleep(1)  # Brief delay to ensure server is fully ready
+        try:
+            webbrowser.open(gui_url)
+            print("[OK] Web browser launched successfully")
+        except Exception as e:
+            print(f"[WARNING] Failed to open browser automatically: {e}")
+            print(f"Please manually open: {gui_url}")
     else:
         print("[WARNING] API Bridge Server failed to start")
         print("          C++ client backups will not be available")

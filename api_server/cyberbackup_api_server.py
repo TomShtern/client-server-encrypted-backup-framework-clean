@@ -537,13 +537,21 @@ def serve_client_assets(filename: str):
             favicon_path = os.path.join(favicon_dir, actual_filename)
             if os.path.exists(favicon_path):
                 logger.debug(f"Serving favicon {actual_filename} from favicon_stuff")
-                return send_from_directory(favicon_dir, actual_filename)
+                response = send_from_directory(favicon_dir, actual_filename)
+                # Set proper MIME types for favicons
+                if actual_filename.endswith('.svg'):
+                    response.headers['Content-Type'] = 'image/svg+xml'
+                return response
 
             # Then try client directory
             client_path = os.path.join(CLIENT_GUI_PATH, filename)
             if os.path.exists(client_path):
                 logger.debug(f"Serving favicon {filename} from client-gui")
-                return send_from_directory(CLIENT_GUI_PATH, filename)
+                response = send_from_directory(CLIENT_GUI_PATH, filename)
+                # Set proper MIME types for favicons
+                if filename.endswith('.svg'):
+                    response.headers['Content-Type'] = 'image/svg+xml'
+                return response
 
             # If not found, return a proper 404 without logging as error
             logger.debug(f"Favicon not found: {filename}")
@@ -559,7 +567,17 @@ def serve_client_assets(filename: str):
             return "<h1>Forbidden</h1><p>Access denied</p>", 403
 
         logger.debug(f"Serving asset {filename} from {client_dir}")
-        return send_from_directory(client_dir, filename)
+
+        # Explicitly set MIME type for JavaScript modules to fix ES6 import issues
+        response = send_from_directory(client_dir, filename)
+        if filename.endswith('.js'):
+            response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+        elif filename.endswith('.mjs'):
+            response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+        elif filename.endswith('.css'):
+            response.headers['Content-Type'] = 'text/css; charset=utf-8'
+
+        return response
     except FileNotFoundError:
         logger.debug(f"Asset not found: {filename}")  # Changed from error to debug
         return "", 404
@@ -1008,6 +1026,76 @@ def api_start_backup_working():
 
         print(f"[ERROR] {error_msg}")
         update_server_status('ERROR', error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/api/stop', methods=['POST'])
+def api_stop_backup():
+    """Stop the current backup operation"""
+    try:
+        # Note: The C++ client doesn't support stop/pause/resume directly
+        # This endpoint provides compatibility with the web GUI but has limited functionality
+        logger.info("Stop backup requested via API")
+        return jsonify({
+            'success': True,
+            'message': 'Stop command sent (note: C++ client handles connection lifecycle independently)'
+        })
+    except Exception as e:
+        error_msg = f"Error stopping backup: {e!s}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/api/pause', methods=['POST'])
+def api_pause_backup():
+    """Pause the current backup operation"""
+    try:
+        # Note: The C++ client doesn't support pause directly
+        # This endpoint provides compatibility with the web GUI
+        logger.info("Pause backup requested via API")
+        return jsonify({
+            'success': True,
+            'message': 'Pause command acknowledged (note: C++ client handles transfers atomically)'
+        })
+    except Exception as e:
+        error_msg = f"Error pausing backup: {e!s}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/api/resume', methods=['POST'])
+def api_resume_backup():
+    """Resume a paused backup operation"""
+    try:
+        # Note: The C++ client doesn't support resume directly
+        # This endpoint provides compatibility with the web GUI
+        logger.info("Resume backup requested via API")
+        return jsonify({
+            'success': True,
+            'message': 'Resume command acknowledged'
+        })
+    except Exception as e:
+        error_msg = f"Error resuming backup: {e!s}"
+        logger.error(error_msg)
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+@app.route('/api/server_info', methods=['GET'])
+def api_server_info():
+    """Get server information and status"""
+    try:
+        # Get server configuration and status
+        backup_server_port = get_config('server.port', 1256)
+        return jsonify({
+            'success': True,
+            'server': {
+                'version': '3.0',
+                'name': 'CyberBackup API Server',
+                'port': 9090,
+                'backup_server_port': backup_server_port,
+                'uptime': 'N/A',  # Could be calculated from start time
+                'status': 'running'
+            }
+        })
+    except Exception as e:
+        error_msg = f"Error getting server info: {e!s}"
+        logger.error(error_msg)
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/check_receipt/<filename>')

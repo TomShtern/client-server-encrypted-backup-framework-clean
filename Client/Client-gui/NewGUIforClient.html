@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberBackup Pro - v3.0 (API Driven)</title>
     
-    <!-- Sentry JavaScript SDK for error tracking -->
-    <script src="https://js.sentry.io/7.96.0/bundle.tracing.min.js" 
-            integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+" 
-            crossorigin="anonymous"></script>
+    <!-- Sentry JavaScript SDK for error tracking (async to prevent blocking) -->
+    <script src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
+            integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
+            crossorigin="anonymous"
+            async
+            onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"></script>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -129,11 +131,11 @@
                             <span class="sr-only">or drag and drop a file here</span>
                         </div>
                     </div>
-                    <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn" 
+                    <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn"
                             title="Show recent files" aria-label="Show recent files">
                         📂 Recent Files
                     </button>
-                </>
+                </div>
                 <div id="fileHelp" class="sr-only">Select a file for backup or drag and drop</div>
                 <div class="copy-container">
                     <div class="config-value copy-content" id="selectedFile">No file selected</div>
@@ -323,12 +325,13 @@
     </div>
     
     <!-- Socket.IO Client Library for Real-Time Communication -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" 
-            integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" 
-            crossorigin="anonymous"></script>
-    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"
+            integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO"
+            crossorigin="anonymous"
+            onerror="console.warn('Socket.IO failed to load - WebSocket features will be disabled')"></script>
+
     <!-- JavaScript Files (as modules for dependency management) -->
-    <script type="module" src="scripts/core/app.js"></script>
+    <script type="module" src="scripts/core/app.js" onerror="console.error('Failed to load app.js')"></script>
 
 </body>
 </html>

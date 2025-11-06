@@ -180,8 +180,23 @@ class App {
      */
     initializeWebSocket() {
         debugLog('Initializing WebSocket connection...', 'WEBSOCKET');
-        this.socket = io();
-        this.setupWebSocketEventHandlers();
+
+        // Check if Socket.IO is loaded
+        if (typeof io === 'undefined') {
+            console.warn('Socket.IO library not loaded - WebSocket features disabled');
+            debugLog('Socket.IO library not available - using polling fallback', 'WEBSOCKET');
+            this.startPollingFallback();
+            return;
+        }
+
+        try {
+            this.socket = io();
+            this.setupWebSocketEventHandlers();
+        } catch (error) {
+            console.error('Failed to initialize WebSocket:', error);
+            debugLog(`WebSocket initialization failed: ${error.message}`, 'WEBSOCKET');
+            this.startPollingFallback();
+        }
     }
 
     /**
@@ -2464,40 +2479,6 @@ class App {
         };
     }
 
-    verifyDOMElements() {
-        console.log('[DOM_VERIFICATION] Verifying critical DOM elements...');
-        const criticalElements = [
-            'primaryActionButton',
-            'pauseButton', 
-            'stopButton',
-            'serverInput',
-            'usernameInput',
-            'fileDropZone',
-            'saveConfigBtn',
-            'confirmModal'
-        ];
-        
-        const missingElements = [];
-        
-        for (const elementKey of criticalElements) {
-            const element = this.elements[elementKey];
-            if (!element) {
-                missingElements.push(elementKey);
-                console.error(`[DOM_VERIFICATION] Critical element missing: ${elementKey}`);
-            } else {
-                console.log(`[DOM_VERIFICATION] ✓ Found: ${elementKey}`);
-            }
-        }
-        
-        if (missingElements.length > 0) {
-            console.error('[DOM_VERIFICATION] CRITICAL: Missing DOM elements:', missingElements);
-            return false;
-        }
-        
-        console.log('[DOM_VERIFICATION] All critical elements found successfully');
-        return true;
-    }
-
     saveConfig() {
         const config = {
             serverAddress: this.elements.serverInput.value,
@@ -3095,6 +3076,16 @@ class DataStreamProgressRing {
             this.elements.progressRing.classList.toggle('active', isActive);
         }
     }
+}
+
+// Initialize the app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.app = new App();
+    });
+} else {
+    // DOM already loaded
+    window.app = new App();
 }
 
 export { App };

@@ -357,7 +357,7 @@ class BackupServer:
         self.network_server: NetworkServer = NetworkServer(
             port=self.port,
             request_handler=self.request_handler.process_request,
-            client_resolver=self.resolve_client,
+            client_resolver=self.get_client_by_id,
             shutdown_event=self.shutdown_event
         )
 
