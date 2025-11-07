@@ -15,16 +15,24 @@ export class RequestUtils {
      * @returns {Promise<Response>} Fetch response
      */
     static async fetchWithRetry(url, options = {}, config = {}) {
+        // Validate and clamp timeout to reasonable range (1s - 120s)
+        const timeoutValue = config.timeout !== undefined ? config.timeout : 30000;
+        const safeTimeout = Math.min(Math.max(timeoutValue, 1000), 120000);
+
+        // Validate retries (0-10)
+        const retriesValue = config.retries !== undefined ? config.retries : 3;
+        const safeRetries = Math.min(Math.max(retriesValue, 0), 10);
+
         const {
-            retries = 3,
-            timeout = 30000,
+            retries = safeRetries,
+            timeout = safeTimeout,
             backoffMultiplier = 1000,
             maxBackoff = 10000,
             retryCondition = null,
             onRetry = null,
             onTimeout = null,
             onSuccess = null
-        } = config;
+        } = { ...config, timeout: safeTimeout, retries: safeRetries };
 
         let lastError = null;
 
@@ -36,29 +44,63 @@ export class RequestUtils {
                     if (onTimeout) onTimeout(attempt + 1, retries);
                 }, timeout);
 
-                const response = await fetch(url, {
-                    ...options,
-                    signal: controller.signal
-                });
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
 
-                clearTimeout(timeoutId);
+                    if (response.ok) {
+                        if (onSuccess) onSuccess(response.clone(), attempt + 1);
+                        return response; // Original response for caller
+                    }
 
-                if (response.ok) {
-                    if (onSuccess) onSuccess(response, attempt + 1);
-                    return response;
+                    // Determine if we should retry based on status code
+                    const shouldRetry = this.shouldRetryStatus(response.status, attempt, retries);
+                    if (!shouldRetry) {
+                        return response; // Don't retry client errors (4xx)
+                    }
+
+                    // NEW: Handle 429 with Retry-After
+                    if (response.status === 429 && attempt < retries - 1) {
+                        const retryAfter = response.headers.get('Retry-After');
+                        const retryDelay = this.parseRetryAfter(retryAfter) * 1000 || maxBackoff;
+                        const cappedDelay = Math.min(retryDelay, maxBackoff * 2); // Cap at 2x maxBackoff
+
+                        debugLog(`429 Too Many Requests - waiting ${cappedDelay}ms (Retry-After: ${retryAfter})`, 'REQUEST_UTILS');
+                        await this.sleep(cappedDelay);
+
+                        if (onRetry) onRetry(attempt + 1, retries, response.status);
+                        continue; // Skip normal backoff
+                    }
+
+                    // Prepare for normal retry...
+                    if (onRetry) onRetry(attempt + 1, retries, response.status);
+                    lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+                } catch (fetchError) {
+                    // CRITICAL: Ensure cleanup on fetch error
+                    clearTimeout(timeoutId);
+                    
+                    if (fetchError.name === 'AbortError') {
+                        lastError = new Error(`Request timeout after ${timeout}ms`);
+                        if (onTimeout) onTimeout(attempt + 1, retries);
+                    } else {
+                        lastError = fetchError;
+                    }
+
+                    // Check if we should retry based on custom condition
+                    if (retryCondition && !retryCondition(fetchError, attempt + 1, retries)) {
+                        throw fetchError;
+                    }
+
+                    if (attempt < retries - 1) {
+                        if (onRetry) onRetry(attempt + 1, retries, null);
+                    }
                 }
-
-                // Determine if we should retry based on status code
-                const shouldRetry = this.shouldRetryStatus(response.status, attempt, retries);
-                if (!shouldRetry) {
-                    return response; // Don't retry client errors (4xx)
-                }
-
-                // Prepare for retry
-                if (onRetry) onRetry(attempt + 1, retries, response.status);
-                lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-
             } catch (error) {
+                // This catches non-fetch errors
                 if (error.name === 'AbortError') {
                     lastError = new Error(`Request timeout after ${timeout}ms`);
                     if (onTimeout) onTimeout(attempt + 1, retries);
@@ -251,10 +293,17 @@ export class RequestUtils {
             }
         }
 
+        // After processing all batches, before return:
+        const successCount = results.filter(r => r && r.ok).length;
+
+        if (successCount === 0 && requests.length > 0) {
+            throw new Error(`All batch requests failed (${errors.length}/${requests.length} errors)`);
+        }
+
         return {
             results,
             errors,
-            successCount: results.filter(r => r && r.ok).length,
+            successCount,
             totalCount: requests.length
         };
     }
@@ -268,19 +317,24 @@ export class RequestUtils {
         const {
             maxConcurrent = 3,
             maxQueueSize = 50,
-            defaultTimeout = 30000
+            defaultTimeout = 30000,
+            maxQueueMemoryMB = 100 // New: Memory limit in MB
         } = queueConfig;
 
         const queue = [];
         const active = new Set();
         let processed = 0;
+        let currentMemoryUsage = 0; // Track memory usage in bytes
+        const MAX_QUEUE_MEMORY = maxQueueMemoryMB * 1024 * 1024;
 
         const processQueue = async () => {
             if (active.size >= maxConcurrent || queue.length === 0) {
                 return;
             }
 
-            const { request, resolve, reject } = queue.shift();
+            const { request, resolve, reject, size } = queue.shift();
+            currentMemoryUsage -= size; // FREE MEMORY WHEN REQUEST STARTS
+
             const jobId = ++processed;
 
             active.add(jobId);
@@ -304,12 +358,26 @@ export class RequestUtils {
         return {
             add: (request) => {
                 return new Promise((resolve, reject) => {
+                    // Check queue size limit
                     if (queue.length >= maxQueueSize) {
                         reject(new Error('Request queue is full'));
                         return;
                     }
 
-                    queue.push({ request, resolve, reject });
+                    // NEW: Check memory limit
+                    const requestSize = JSON.stringify(request.options?.body || '').length;
+                    if (currentMemoryUsage + requestSize > MAX_QUEUE_MEMORY) {
+                        reject(new Error(`Request queue memory limit exceeded (${maxQueueMemoryMB}MB)`));
+                        return;
+                    }
+
+                    currentMemoryUsage += requestSize;
+                    queue.push({
+                        request,
+                        resolve,
+                        reject,
+                        size: requestSize // Track for cleanup
+                    });
                     setTimeout(processQueue, 0);
                 });
             },
@@ -318,10 +386,13 @@ export class RequestUtils {
                 active: active.size,
                 processed,
                 maxConcurrent,
-                maxQueueSize
+                maxQueueSize,
+                currentMemoryUsage: currentMemoryUsage,
+                maxQueueMemory: MAX_QUEUE_MEMORY
             }),
             clear: () => {
                 queue.length = 0;
+                currentMemoryUsage = 0; // Reset memory usage counter
                 // Note: Active requests continue to run
             }
         };
@@ -341,7 +412,15 @@ export class RequestUtils {
      * @returns {string} Unique ID
      */
     static generateRequestId() {
-        return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Use crypto API for strong randomness
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return `req_${Array.from(array, b => b.toString(16).padStart(2, '0')).join('')}`;
+        }
+
+        // Fallback for older browsers (less secure but better than Math.random)
+        return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     /**

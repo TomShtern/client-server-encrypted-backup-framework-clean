@@ -7,7 +7,7 @@
     "timeout": 30,
     "enable_logging": true,
     "log_level": "INFO",
-    "database_path": "defensive.db",
+    "database_path": "data/database/defensive.db",  # Managed by unified config
     "received_files_dir": "received_files",
     "keys_dir": "data/keys"
   },

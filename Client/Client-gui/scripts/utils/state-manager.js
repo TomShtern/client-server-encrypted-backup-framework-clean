@@ -10,7 +10,7 @@ export class StateManager {
     constructor(storageKey, defaultState = {}) {
         this.storageKey = storageKey;
         this.defaultState = defaultState;
-        this.state = this.load() || { ...defaultState };
+        this.state = Object.freeze(this.load() || { ...defaultState });
         this.listeners = new Map(); // Event listeners for state changes
     }
 
@@ -24,6 +24,19 @@ export class StateManager {
             if (!data) return null;
 
             const parsed = JSON.parse(data);
+
+            // Validate structure
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                console.error(`Invalid state structure for ${this.storageKey}`);
+                return null;
+            }
+
+            // Check for prototype pollution attempts
+            if ('__proto__' in parsed || 'constructor' in parsed || 'prototype' in parsed) {
+                console.error(`Prototype pollution attempt detected in ${this.storageKey}`);
+                return null;
+            }
+
             debugLog(`State loaded for ${this.storageKey}:`, parsed);
             return parsed;
         } catch (error) {
@@ -38,8 +51,17 @@ export class StateManager {
      */
     save() {
         try {
-            localStorage.setItem(this.storageKey, JSON.stringify(this.state));
-            debugLog(`State saved for ${this.storageKey}:`, this.state);
+            const serialized = JSON.stringify(this.state);
+            const sizeKB = new Blob([serialized]).size / 1024;
+
+            // Enforce 500KB limit per state manager
+            if (sizeKB > 500) {
+                console.error(`State too large for ${this.storageKey}: ${sizeKB.toFixed(1)}KB exceeds 500KB limit`);
+                return false;
+            }
+
+            localStorage.setItem(this.storageKey, serialized);
+            debugLog(`State saved for ${this.storageKey}: ${sizeKB.toFixed(1)}KB`);
             return true;
         } catch (error) {
             console.error(`Failed to save state for ${this.storageKey}:`, error);
@@ -53,8 +75,9 @@ export class StateManager {
      * @returns {boolean} Success status
      */
     update(updates) {
-        const oldState = { ...this.state };
-        this.state = { ...this.state, ...updates };
+        const oldState = this.state;
+        // Create new frozen object
+        this.state = Object.freeze({ ...this.state, ...updates });
 
         const success = this.save();
         if (success) {
@@ -132,7 +155,7 @@ export class StateManager {
      * @returns {Object} Current state
      */
     getState() {
-        return { ...this.state }; // Return copy to prevent mutation
+        return this.state; // Already frozen, safe to return directly
     }
 
     /**
@@ -166,6 +189,13 @@ export class StateManager {
      * @returns {Function} Unsubscribe function
      */
     subscribe(listener) {
+        const MAX_LISTENERS = 50;
+
+        if (this.listeners.size >= MAX_LISTENERS) {
+            console.warn(`Maximum listeners (${MAX_LISTENERS}) reached for ${this.storageKey}`);
+            return () => {}; // No-op unsubscribe
+        }
+
         const id = Symbol('listener');
         this.listeners.set(id, listener);
 
@@ -197,6 +227,7 @@ export class StateManager {
      */
     backup() {
         return JSON.stringify({
+            version: this.version || 1, // Add version field
             timestamp: Date.now(),
             storageKey: this.storageKey,
             state: this.state
@@ -211,12 +242,21 @@ export class StateManager {
     restore(backupJson) {
         try {
             const backup = JSON.parse(backupJson);
+
+            // NEW: Version validation
+            const currentVersion = this.version || 1;
+            if (backup.version !== currentVersion) {
+                throw new Error(
+                    `Version mismatch: backup is v${backup.version}, current is v${currentVersion}`
+                );
+            }
+
             if (backup.storageKey !== this.storageKey) {
                 throw new Error('Backup storage key mismatch');
             }
 
-            const oldState = { ...this.state };
-            this.state = { ...backup.state };
+            const oldState = this.state;
+            this.state = Object.freeze({ ...backup.state });
             const success = this.save();
             if (success) {
                 this.notifyListeners(oldState, this.state, null); // null indicates restore
@@ -265,18 +305,42 @@ export class PersistentStateManager extends StateManager {
      * @param {Object} updates - Key-value pairs to update
      * @returns {Promise<boolean>} Success status
      */
-    update(updates) {
+    async update(updates) {
         const oldState = { ...this.state };
         this.state = { ...this.state, ...updates };
 
+        let success;
         if (this.autoSave) {
-            this.debounceSave();
+            // Wait for debounced save to complete
+            success = await this.debounceSaveAsync();
         } else {
-            this.save();
+            success = this.save();
         }
 
-        this.notifyListeners(oldState, this.state, updates);
-        return Promise.resolve(true);
+        // Only notify listeners after successful save
+        if (success) {
+            this.notifyListeners(oldState, this.state, updates);
+        }
+
+        return success;
+    }
+
+    /**
+     * Debounced save with async completion
+     * @returns {Promise<boolean>} Save success status
+     */
+    debounceSaveAsync() {
+        return new Promise((resolve) => {
+            if (this.saveTimeout) {
+                clearTimeout(this.saveTimeout);
+            }
+
+            this.saveTimeout = setTimeout(() => {
+                const success = this.save();
+                this.updateLastSaved();
+                resolve(success);
+            }, this.debounceMs);
+        });
     }
 
     /**

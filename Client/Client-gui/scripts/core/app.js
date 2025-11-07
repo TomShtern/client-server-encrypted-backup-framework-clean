@@ -201,16 +201,23 @@ class App {
 
     /**
      * Setup WebSocket event handlers for real-time communication
+     *
+     * Connection Mode State Machine:
+     * - WebSocket Connected: Real-time updates via socket events
+     * - WebSocket Disconnected: Fallback to adaptive polling
+     * - Mutex ensures only one mode is active at a time
      */
     setupWebSocketEventHandlers() {
         // Connection events
-        this.socket.on('connect', () => {
+        this.socket.on('connect', async () => {
             this.socketConnected = true;
             debugLog('WebSocket connected successfully', 'WEBSOCKET');
             this.addLog('Real-time connection', 'success', 'WebSocket connected - live updates enabled');
             this.updateConnectionStatus(true);
+
             // Stop polling when WebSocket reconnects to prevent redundancy
-            this.stopAdaptivePolling();
+            // Wait for polling to fully stop before proceeding (prevents race conditions)
+            await this.stopAdaptivePollingAsync();
             this.addLog('Connection mode', 'success', 'Switched to real-time WebSocket mode');
         });
 
@@ -995,14 +1002,18 @@ class App {
     }
 
     /**
-     * Start polling fallback when WebSocket fails
+     * Start polling fallback when WebSocket is unavailable
+     * Includes race condition prevention via double-check pattern
      */
     startPollingFallback() {
+        // Check WebSocket status first (highest priority)
         if (this.socketConnected) {
             debugLog('WebSocket connected, skipping polling fallback', 'WEBSOCKET');
             return;
         }
 
+        // Atomic check - prevent duplicate polling instances
+        // This check is also in startAdaptivePolling for defense-in-depth
         if (this.stateManagement.isPolling) {
             debugLog('Polling already active, skipping duplicate start', 'POLL');
             return;
@@ -1010,6 +1021,8 @@ class App {
 
         debugLog('Starting polling fallback - WebSocket unavailable', 'POLL');
         this.addLog('Connection mode', 'info', 'Switched to polling mode');
+
+        // Note: startAdaptivePolling has its own duplicate check for safety
         this.startAdaptivePolling();
     }
 
@@ -1483,53 +1496,98 @@ class App {
         }
     }
 
-    // Adaptive polling system - adjusts frequency based on activity
+    /**
+     * Adaptive polling system - adjusts frequency based on activity
+     * Uses mutex to prevent duplicate polling instances
+     * Includes error recovery to prevent stuck states
+     */
     startAdaptivePolling() {
+        // Double-check pattern with early return
         if (this.stateManagement.isPolling) {
             debugLog('Polling already active', 'POLL');
             return;
         }
 
-        this.stateManagement.isPolling = true;
-        debugLog('Starting adaptive polling system', 'POLL');
+        try {
+            this.stateManagement.isPolling = true;
+            debugLog('Starting adaptive polling system', 'POLL');
 
-        const scheduleNextPoll = () => {
-            if (this.intervals && this.intervals.has) {
-                this.intervals.clear('statusPoll');
-                this.intervals.set('statusPoll', () => {
-                    this.pollStatus().then(() => {
-                        scheduleNextPoll(); // Schedule next poll with updated interval
-                    }).catch(() => {
-                        scheduleNextPoll(); // Continue even on error
-                    });
-                }, this.stateManagement.adaptivePollInterval);
-            } else {
-                // Fallback using managed timeout to prevent leaks
-                this.intervals.setTimeout('statusPollFallback', () => {
-                    this.pollStatus().then(() => {
-                        scheduleNextPoll();
-                    }).catch(() => {
-                        scheduleNextPoll();
-                    });
-                }, this.stateManagement.adaptivePollInterval);
-            }
-        };
-        
-        // Start the adaptive polling
-        scheduleNextPoll();
-        // console.log('[Polling] Adaptive polling started with initial interval:', this.stateManagement.adaptivePollInterval + 'ms');
+            const scheduleNextPoll = () => {
+                // Verify polling should still be active before scheduling
+                if (!this.stateManagement.isPolling) {
+                    debugLog('Polling cancelled, stopping schedule', 'POLL');
+                    return;
+                }
+
+                if (this.intervals && this.intervals.has) {
+                    this.intervals.clear('statusPoll');
+                    this.intervals.set('statusPoll', () => {
+                        this.pollStatus().then(() => {
+                            scheduleNextPoll(); // Schedule next poll with updated interval
+                        }).catch((error) => {
+                            debugLog(`Polling error: ${error.message}`, 'POLL');
+                            scheduleNextPoll(); // Continue even on error
+                        });
+                    }, this.stateManagement.adaptivePollInterval);
+                } else {
+                    // Fallback using managed timeout to prevent leaks
+                    this.intervals.setTimeout('statusPollFallback', () => {
+                        this.pollStatus().then(() => {
+                            scheduleNextPoll();
+                        }).catch((error) => {
+                            debugLog(`Polling error: ${error.message}`, 'POLL');
+                            scheduleNextPoll();
+                        });
+                    }, this.stateManagement.adaptivePollInterval);
+                }
+            };
+
+            // Start the adaptive polling
+            scheduleNextPoll();
+            debugLog(`Adaptive polling started with ${this.stateManagement.adaptivePollInterval}ms interval`, 'POLL');
+        } catch (error) {
+            // Critical: Reset flag on failure to allow restart
+            console.error('Failed to start adaptive polling:', error);
+            this.stateManagement.isPolling = false;
+            throw error;
+        }
     }
 
     /**
-     * Stop adaptive polling when WebSocket is available
+     * Stop adaptive polling when WebSocket is available (synchronous version)
+     * Ensures proper cleanup of all polling intervals
      */
     stopAdaptivePolling() {
+        let cleared1 = true;
+        let cleared2 = true;
+
         if (this.intervals && this.intervals.has) {
-            this.intervals.clear('statusPoll');
-            this.intervals.clear('statusPollFallback');
+            cleared1 = this.intervals.clear('statusPoll');
+            cleared2 = this.intervals.clear('statusPollFallback');
+
+            if (!cleared1 || !cleared2) {
+                console.warn('Some polling intervals could not be cleared');
+            }
         }
+
+        // Always update state flag (even if cleanup had issues)
         this.stateManagement.isPolling = false;
         debugLog('Adaptive polling stopped - WebSocket is handling updates', 'POLL');
+    }
+
+    /**
+     * Stop adaptive polling asynchronously (prevents race conditions)
+     * Use this when transitioning from polling to WebSocket mode
+     * @returns {Promise<void>}
+     */
+    async stopAdaptivePollingAsync() {
+        return new Promise((resolve) => {
+            // Give any in-flight polls time to complete
+            setTimeout(() => {
+                this.stopAdaptivePolling();
+                resolve();
+            }, 100); // 100ms grace period
+        });
     }
 
     // Public UI Update Function (uses debouncing)

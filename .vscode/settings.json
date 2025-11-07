@@ -44,6 +44,8 @@
     "**/*.pyc": true,
     "**/node_modules": true,
     "logs": true,
+    // Markdown files visible for documentation editing
+    // Note: CLAUDE.md is gitignored but visible in explorer
     "**/*.txt": true,
     "archive": true,
     "**/archive/**": true,
@@ -85,6 +87,7 @@
   "tailwindCSS.rootFontSize": 17,
   "editor.mouseWheelZoom": true,
   "terminal.integrated.mouseWheelZoom": true,
+  // AI assistant thinking display: readOnly prevents accidental edits while maintaining visibility
   "chat.agent.thinking.collapsedTools": "readOnly",
   "chat.edits2.enabled": true,
   "chat.extensionUnification.enabled": false,

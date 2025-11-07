@@ -249,7 +249,16 @@ logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
 # Set up paths and environment for server IF it gets initialized later
 fletv2_root = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(fletv2_root)
-main_db_path = os.path.join(project_root, "defensive.db")
+
+# Use unified database configuration
+try:
+    from config.database_config import get_database_path
+    main_db_path = get_database_path()
+    logger.info(f"Using unified database config: {main_db_path}")
+except ImportError as e:
+    # Fallback to legacy path if unified config not available
+    logger.warning(f"Could not import unified database config: {e}. Using legacy fallback.")
+    main_db_path = os.path.join(project_root, "defensive.db")
 
 # Add project_root to sys.path for python_server module
 if project_root not in sys.path:

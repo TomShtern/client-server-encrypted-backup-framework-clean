@@ -19,7 +19,9 @@ COMPATIBLE_VERSIONS = [3]  # List of explicitly compatible versions
 ALLOW_BACKWARD_COMPATIBILITY = True  # Allow clients with older compatible versions
 VERSION_TOLERANCE_ENABLED = True  # Enable flexible version checking
 PORT_CONFIG_FILE = "port.info"
-DATABASE_NAME = "defensive.db"
+# DATABASE_NAME is now managed by config.database_config
+# Import from unified config: from config.database_config import get_database_path
+DATABASE_NAME = None  # Use unified config instead
 FILE_STORAGE_DIR = "received_files"  # Directory to store received files
 
 # Enhanced Database Configuration
@@ -88,3 +90,19 @@ def read_port_config() -> int:
     except Exception as e:  # Catch-all for other potential I/O errors
         logger.error(f"Unexpected error reading port configuration file '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
         return DEFAULT_PORT
+
+def get_database_path():
+    """
+    Get database path from unified configuration.
+
+    Returns:
+        str: Database path from unified config
+    """
+    try:
+        # Try to import from unified config
+        from config.database_config import get_database_path as unified_get_path
+        return unified_get_path()
+    except ImportError as e:
+        # Fallback to legacy behavior if unified config is not available
+        logger.warning(f"Could not import unified database config: {e}. Using legacy fallback.")
+        return "defensive.db"
