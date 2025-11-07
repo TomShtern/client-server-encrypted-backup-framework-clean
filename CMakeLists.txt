@@ -90,4 +90,5 @@ else()
     target_compile_options(EncryptedBackupClient PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-add_subdirectory(cpp_api_server)
+# C++ API server disabled - using Python Flask API server instead
+# add_subdirectory(cpp_api_server)
