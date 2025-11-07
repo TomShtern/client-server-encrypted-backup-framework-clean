@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberBackup Pro - v3.0 (API Driven)</title>
-    
+
     <!-- Sentry JavaScript SDK for error tracking (async to prevent blocking) -->
     <script src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
             integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
             crossorigin="anonymous"
             async
             onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"></script>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,6 +22,8 @@
     <link rel="stylesheet" href="styles/components.css">
     <link rel="stylesheet" href="styles/layout.css">
     <link rel="stylesheet" href="styles/animations.css">
+    <!-- Modern visual refresh (overrides above styles) -->
+    <link rel="stylesheet" href="styles/modern.css">
     <!-- Favicons: loaded from repo folder 'favicon_stuff' -->
     <!-- Adjust paths if you later move the favicon files to a different location or static server root -->
     <link rel="shortcut icon" href="../../favicon_stuff/favicon.ico" type="image/x-icon">
@@ -43,40 +45,41 @@
         :root {
             --browser-chrome-color: #000000;
         }
-        
+
         /* Apply theme color to browser chrome where supported */
         html {
             background-color: var(--browser-chrome-color);
         }
-        
+
         /* Opera-specific viewport styling */
         @supports (-webkit-appearance: none) and (not (-webkit-text-stroke: initial)) {
             html {
                 background: linear-gradient(135deg, var(--bg-black) 0%, var(--bg-dark) 100%);
             }
         }
-        
+
         /* Integration with existing CyberBackup theme variables */
         [data-theme="cyberpunk"] {
             --browser-chrome-color: var(--bg-black, #000000);
         }
-        
+
         [data-theme="matrix"] {
             --browser-chrome-color: #001100;
         }
-        
+
         [data-theme="dark"] {
             --browser-chrome-color: #111111;
         }
     </style>
 </head>
 <body>
-    <div class="cyber-grid"></div>
-    <div class="particle-container" id="particleContainer"></div>
-    <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
-    <div aria-live="polite" aria-atomic="true" class="sr-only" id="announcements"></div>
-    
-    <div class="container">
+    <div id="app">
+        <div class="cyber-grid"></div>
+        <div class="particle-container" id="particleContainer"></div>
+        <output class="toast-container" id="toastContainer" aria-live="polite"></output>
+        <div aria-live="polite" aria-atomic="true" class="sr-only" id="announcements"></div>
+
+        <div class="container">
         <!-- Header -->
         <header class="header" role="banner">
             <div class="logo">
@@ -101,30 +104,30 @@
             <div class="panel-header">
                 <h2 class="panel-title">System Configuration</h2>
             </div>
-            
+
             <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
                 <div class="copy-container">
-                    <input type="text" class="config-input copy-content" id="serverInput" 
+                    <input type="text" class="config-input copy-content" id="serverInput"
                            placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp" tabindex="1">
                     <button type="button" class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
                 </div>
                 <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
             </div>
-            
+
             <div class="config-section">
                 <label class="config-label" for="usernameInput">Username</label>
                 <input type="text" class="config-input" id="usernameInput"
                        placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp" tabindex="2">
                 <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
             </div>
-            
+
             <div class="config-section">
                 <label class="config-label">Target File</label>
                 <div class="file-selection-container file-selection-container-positioned">
                     <div class="file-drop-zone" id="fileDropZone">
-                        <input type="file" class="file-input" id="fileInput" 
-                               aria-describedby="fileHelp" accept="*/*" tabindex="3" 
-                               title="Select a file to backup" 
+                        <input type="file" class="file-input" id="fileInput"
+                               aria-describedby="fileHelp" accept="*/*" tabindex="3"
+                               title="Select a file to backup"
                                aria-label="File selection for backup">
                         <div class="file-button">
                             📁 Select File to Backup
@@ -132,7 +135,7 @@
                         </div>
                     </div>
                     <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn"
-                            title="Show recent files" aria-label="Show recent files">
+                            title="Show recent files">
                         📂 Recent Files
                     </button>
                 </div>
@@ -143,7 +146,7 @@
                 </div>
                 <div id="filePreview" class="file-preview-container file-preview-layout"></div>
             </div>
-            
+
             <div class="config-section">
                 <label class="config-label">Client ID</label>
                 <div class="copy-container">
@@ -159,13 +162,13 @@
             <div class="panel-header panel-header-spaced">
                 <h2 class="panel-title">Theme Selection</h2>
             </div>
-            
+
             <div class="theme-selector">
-                <button type="button" class="theme-btn cyberpunk active" 
+                <button type="button" class="theme-btn cyberpunk active"
                         aria-label="Cyberpunk theme" title="Cyberpunk Theme"></button>
-                <button type="button" class="theme-btn dark" 
+                <button type="button" class="theme-btn dark"
                         aria-label="Dark theme" title="Dark Theme"></button>
-                <button type="button" class="theme-btn matrix" 
+                <button type="button" class="theme-btn matrix"
                         aria-label="Matrix theme" title="Matrix Theme"></button>
             </div>
         </aside>
@@ -175,7 +178,7 @@
             <div class="phase-display" id="currentPhase">
                 <span class="neon-text purple">SYSTEM READY</span>
             </div>
-            
+
             <div class="progress-container">
                 <svg class="progress-ring" viewBox="0 0 300 300" role="img" aria-label="Transfer progress">
                     <defs>
@@ -186,47 +189,47 @@
                             <stop offset="66%" class="gradient-stop-pink" />
                             <stop offset="100%" class="gradient-stop-green" />
                         </linearGradient>
-                        
+
                         <!-- Data channel gradient for outer ring -->
                         <linearGradient id="dataChannelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" class="gradient-stop-data-channel-start" />
                             <stop offset="50%" class="gradient-stop-data-channel-middle" />
                             <stop offset="100%" class="gradient-stop-data-channel-end" />
                         </linearGradient>
-                        
+
                         <!-- Phase indicator gradient -->
                         <linearGradient id="phaseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" class="gradient-stop-phase-start" />
                             <stop offset="100%" class="gradient-stop-phase-end" />
                         </linearGradient>
-                        
+
                         <!-- Particle glow filter -->
                         <filter id="particleGlow">
                             <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                            <feMerge> 
+                            <feMerge>
                                 <feMergeNode in="coloredBlur"/>
                                 <feMergeNode in="SourceGraphic"/>
                             </feMerge>
                         </filter>
                     </defs>
-                    
+
                     <!-- Outer Ring: Data Channel (Static, Rotating) -->
-                    <circle class="data-channel-ring" cx="150" cy="150" r="145" 
-                            fill="none" stroke="url(#dataChannelGradient)" stroke-width="2" 
+                    <circle class="data-channel-ring" cx="150" cy="150" r="145"
+                            fill="none" stroke="url(#dataChannelGradient)" stroke-width="2"
                             stroke-dasharray="8,4" id="dataChannelRing"></circle>
-                    
+
                     <!-- Background Ring -->
-                    <circle class="progress-bg" cx="150" cy="150" r="130" 
+                    <circle class="progress-bg" cx="150" cy="150" r="130"
                             fill="none" stroke="var(--bg-light)" stroke-width="16"></circle>
-                    
+
                     <!-- Middle Ring: Phase Indicator Arc -->
-                    <path class="phase-indicator-arc" id="phaseIndicatorArc" 
-                          fill="none" stroke="url(#phaseGradient)" stroke-width="6" 
+                    <path class="phase-indicator-arc" id="phaseIndicatorArc"
+                          fill="none" stroke="url(#phaseGradient)" stroke-width="6"
                           stroke-linecap="round"></path>
-                    
+
                     <!-- Inner Ring: Progress Fill (Existing) -->
                     <circle class="progress-fill" cx="150" cy="150" r="130" id="progressCircle"></circle>
-                    
+
                     <!-- Particle Stream Container -->
                     <g class="particle-stream" id="particleStream">
                         <!-- Particles will be dynamically generated here -->
@@ -250,7 +253,7 @@
                     <span class="btn-text">STOP</span>
                 </button>
             </div>
-            
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value" id="speedStat">0 B/s</div>
@@ -283,7 +286,7 @@
                     </button>
                 </div>
             </div>
-            
+
             <div class="log-container" id="logContainer" role="log" aria-live="polite" aria-label="Activity log">
                 <!-- Logs will be populated here -->
             </div>
@@ -293,10 +296,10 @@
         <div class="debug-panel glass-card" role="region" aria-label="Developer console">
             <div class="panel-header">
                 <h2 class="panel-title">Developer Console</h2>
-                <button type="button" class="cyber-btn primary small" id="debugToggle" 
+                <button type="button" class="cyber-btn primary small" id="debugToggle"
                         aria-expanded="false">🔧 Toggle Debug</button>
             </div>
-            
+
             <div class="debug-content" id="debugContent">
                 <div class="debug-grid">
                     <div class="debug-section">
@@ -310,7 +313,7 @@
                 </div>
             </div>
         </div>
-    </div>
+        </div>
 
     <!-- Enhanced Custom Confirmation Modal -->
     <div class="modal-overlay confirm-modal" id="confirmModal">
@@ -323,7 +326,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Socket.IO Client Library for Real-Time Communication -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"
             integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO"
@@ -332,6 +335,6 @@
 
     <!-- JavaScript Files (as modules for dependency management) -->
     <script type="module" src="scripts/core/app.js" onerror="console.error('Failed to load app.js')"></script>
-
+    </div>
 </body>
 </html>

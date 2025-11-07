@@ -26,7 +26,7 @@ class App {
         this.backupHistoryManager = new BackupHistoryManager();
         this.connectionHealthMonitor = new ConnectionHealthMonitor();
         this.interactiveEffects = new InteractiveEffectsManager();
-        
+
         // Initialize WebSocket connection for real-time updates
         this.socket = null;
         this.socketConnected = false;
@@ -122,13 +122,13 @@ class App {
             uiUpdateQueue: [],
             updateUIDebounced: null // Will be set after debounce method is defined
         };
-        
+
         this.pendingConfirmAction = null;
         this.autoScrollLog = true;
         this.themeManager = new ThemeManager();
 
         // Modal managers are already initialized in SystemManager constructor
-        
+
         // Set up debounced UI update after methods are defined
         this.stateManagement.updateUIDebounced = this.debounce(() => this._updateAllUI(), 150);
 
@@ -138,7 +138,7 @@ class App {
             alert('Error: Critical UI elements are missing. Please refresh the page.');
             return;
         }
-        
+
         this.initEventListeners();
         this.loadSavedConfig();
         this.themeManager.loadSavedTheme();
@@ -157,20 +157,20 @@ class App {
         this.phaseStartTime = null; // For ETA calculations
         this.fileReceiptPollingInterval = null; // For file receipt polling fallback
         this.loadProgressConfiguration();
-        
+
         // Initialize Data Stream Progress Ring system
         this.dataStreamProgressRing = new DataStreamProgressRing(this.elements);
-        
+
         this.connectWebSocket();
         this.addLog('System Initialized', 'success', 'Real-time communication enabled.');
         this.system.notifications.show('CyberBackup Pro', 'Application ready', { type: 'info', silent: true });
-        
+
         // Request notification permission on startup
         this.system.notifications.requestPermission();
-        
+
         // Setup form validation
         this.setupFormValidation();
-        
+
         // Initialize connection health monitoring
         this.setupConnectionHealthMonitoring();
     }
@@ -291,7 +291,7 @@ class App {
      */
     handleRealTimeProgressUpdate(data) {
         const { job_id, phase, data: progressData, timestamp, progress } = data;
-        
+
         // Only process updates for current job
         if (job_id && this.state.jobId && job_id !== this.state.jobId) {
             debugLog('Ignoring progress update for different job', 'WEBSOCKET');
@@ -310,7 +310,7 @@ class App {
             // Use rich phase description from configuration
             this.state.phaseDescription = this.getPhaseDescription(phase);
         }
-        
+
         if (progress !== null && progress !== undefined) {
             this.state.progress = progress;
         }
@@ -320,7 +320,7 @@ class App {
             if (typeof progressData === 'object') {
                 const message = progressData.message || this.state.phaseDescription;
                 this.state.log = { operation: phase, success: true, details: message };
-                
+
                 if (progressData.progress !== undefined) {
                     this.state.progress = progressData.progress;
                 }
@@ -342,18 +342,18 @@ class App {
 
         // Debounced UI update for smooth performance (50ms debounce)
         this.debouncedUIUpdate();
-        
+
         // Add timestamped log entry with rich context
         const timestampStr = new Date(timestamp * 1000).toLocaleTimeString();
         const phaseDesc = this.state.phaseDescription || phase;
         const etaInfo = this.state.eta ? ` (ETA: ${this.state.eta})` : '';
         debugLog(`Real-time update [${timestampStr}]: ${phaseDesc} - ${progress}%${etaInfo}`, 'PROGRESS');
-        
+
         // Show phase transition notifications for important phases
         if (phase && ['CONNECTING', 'AUTHENTICATING', 'ENCRYPTING', 'TRANSFERRING', 'VERIFYING', 'COMPLETED'].includes(phase)) {
             this.showPhaseTransitionNotification(phase, this.state.phaseDescription);
         }
-        
+
         // Check for completion and schedule auto-reset
         this.checkForCompletionAndScheduleReset(phase, progress);
     }
@@ -366,9 +366,9 @@ class App {
         if (this.lastNotificationPhase === phase) {
             return;
         }
-        
+
         this.lastNotificationPhase = phase;
-        
+
         // Use the existing toast system for phase notifications
         if (phase === 'COMPLETED') {
             this.showToast(description, 'success', 3000);
@@ -385,28 +385,28 @@ class App {
      */
     handleBackupError(errorData) {
         const { message, phase, job_id } = errorData;
-        
+
         // Update state to reflect error
         this.state.phase = 'ERROR';
         this.state.isRunning = false;
         this.state.hasError = true;
         this.state.errorMessage = message || 'Backup failed unexpectedly';
         this.state.errorPhase = phase || 'UNKNOWN';
-        
+
         // Clear progress and ETA
         this.state.progress = 0;
         this.state.eta = null;
         this.state.etaSeconds = 0;
-        
+
         // Add error log entry
         this.addLog('Backup failed', 'error', this.state.errorMessage);
-        
+
         // Show error toast with restart option
         this.showErrorWithRestart(this.state.errorMessage);
-        
+
         // Update UI to show error state
         this.updateAllUI();
-        
+
         debugLog(`Backup error in phase ${this.state.errorPhase}: ${this.state.errorMessage}`, 'ERROR');
     }
 
@@ -427,17 +427,17 @@ class App {
         const errorHtml = `
             <div class="error-restart-container">
                 <div class="error-message">❌ ${errorMessage}</div>
-                <button id="restartBackupBtn" class="restart-btn" 
-                                onclick="window.app.restartBackup()" 
+                <button id="restartBackupBtn" class="restart-btn"
+                                onclick="window.app.restartBackup()"
                                 style="margin-top: 10px; padding: 8px 16px; background: var(--neon-blue); color: var(--bg-dark); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
                             🔄 Restart Backup
                         </button>
             </div>
         `;
-        
+
         // Show persistent error toast
         this.showToast(errorHtml, 'error', 0); // 0 = persistent (won't auto-hide)
-        
+
         // Also update any error display elements in the UI
         this.updateErrorDisplay();
     }
@@ -470,22 +470,22 @@ class App {
      */
     restartBackup() {
         debugLog('Manual backup restart requested', 'RESTART');
-        
+
         // Cancel any pending auto-reset when user manually restarts
         this.cancelAutoReset();
-        
+
         // Clear error state
         this.clearErrorState();
-        
+
         // Reset progress state
         this.resetProgressState();
-        
+
         // Close any error toasts
         this.clearErrorToasts();
-        
+
         // Start fresh backup with current settings
         this.startBackup();
-        
+
         this.addLog('Backup restarted', 'info', 'Manual restart initiated');
         this.showToast('Backup restarted - attempting fresh upload', 'info', 3000);
     }
@@ -499,7 +499,7 @@ class App {
         this.state.errorPhase = null;
         this.state.phase = 'READY';
         this.lastNotificationPhase = null;
-        
+
         // Update error display elements
         this.updateErrorDisplay();
     }
@@ -514,7 +514,7 @@ class App {
         this.state.isRunning = false;
         this.state.phaseDescription = null;
         this.phaseStartTime = null;
-        
+
         // Reset Data Stream Progress Ring
         if (this.dataStreamProgressRing) {
             this.dataStreamProgressRing.reset();
@@ -533,13 +533,13 @@ class App {
      */
     resetToInitialState() {
         debugLog('Performing complete application reset', 'RESET');
-        
+
         // Clear any pending timeouts/intervals
         if (this.intervals) {
             this.intervals.clear('autoReset');
             this.intervals.clear('resetCountdown');
         }
-        
+
         // Reset all state to initial values
         this.state = {
             isConnected: false,
@@ -558,29 +558,29 @@ class App {
             errorPhase: null,
             websocketConnected: false
         };
-        
+
         // Reset phase timing
         this.phaseStartTime = null;
         this.backupStartTime = null;
         this.lastNotificationPhase = null;
-        
+
         // Clear file input
         if (this.elements.fileInput) {
             this.elements.fileInput.value = '';
         }
-        
+
         // Clear selected file display
         if (this.elements.selectedFileDisplay) {
             this.elements.selectedFileDisplay.textContent = 'No file selected';
             this.elements.selectedFileDisplay.classList.remove('file-info');
         }
-        
+
         // Hide file copy button
         if (this.elements.copyFileInfoButton) {
             this.elements.copyFileInfoButton.classList.add('u-hidden');
             this.elements.copyFileInfoButton.classList.remove('u-inline-flex');
         }
-        
+
         // Clear and hide file preview
         if (this.elements.filePreview) {
             this.elements.filePreview.textContent = '';
@@ -588,7 +588,7 @@ class App {
             this.elements.filePreview.style.display = 'none';
             this.elements.filePreview.classList.add('u-hidden');
         }
-        
+
         // Clear progress display
         if (this.elements.progressPercentage) {
             this.elements.progressPercentage.textContent = '0%';
@@ -600,30 +600,30 @@ class App {
             this.elements.progressCircle.style.strokeDashoffset = '';
             this.elements.progressCircle.classList.remove('active');
         }
-        
+
         // Reset Data Stream Progress Ring
         if (this.dataStreamProgressRing) {
             this.dataStreamProgressRing.reset();
         }
-        
+
         // Clear any file preview blob URLs to prevent memory leaks
         document.querySelectorAll('img[src^="blob:"]').forEach(img => {
             URL.revokeObjectURL(img.src);
             img.remove();
         });
-        
+
         // Clear any lingering file-related elements
         const filePreviewElements = document.querySelectorAll('.file-preview, .file-preview-container, .enhanced-file-preview');
         filePreviewElements.forEach(element => {
             element.style.display = 'none';
             element.innerHTML = '';
         });
-        
+
         // Reset button states
         if (this.buttonStateManager) {
             this.buttonStateManager.resetAll();
         }
-        
+
         // Explicitly reset primary action button to initial state
         if (this.elements.primaryActionButton) {
             this.updateButtonContent(this.elements.primaryActionButton, '🚀', 'CONNECT');
@@ -631,26 +631,26 @@ class App {
             this.elements.primaryActionButton.classList.add('primary');
             this.elements.primaryActionButton.disabled = false;
         }
-        
+
         // Clear any success/error toasts
         this.clearErrorToasts();
         const successToasts = document.querySelectorAll('.toast.success, .toast.info');
         successToasts.forEach(toast => {
             toast.remove();
         });
-        
+
         // Stop any active polling/monitoring
         this.stopFileReceiptPolling();
         if (this.stateManagement) {
             this.stateManagement.isProcessingQueue = false;
             this.stateManagement.eventQueue = [];
         }
-        
+
         // Clear client ID display if present
         if (this.elements.clientIdDisplay) {
             this.elements.clientIdDisplay.textContent = 'Not connected';
         }
-        
+
         // Reset connection status
         if (this.elements.connectionLed) {
             this.elements.connectionLed.classList.remove('connected', 'connecting');
@@ -658,14 +658,14 @@ class App {
         if (this.elements.connectionText) {
             this.elements.connectionText.textContent = 'OFFLINE';
         }
-        
+
         // Force UI update to reflect reset state
         this.updateAllUI();
         this.updateTabTitle();
-        
+
         // Add log entry
         this.addLog('System reset', 'info', 'Application reset to initial state - ready for next backup');
-        
+
         debugLog('Application reset completed successfully', 'RESET');
     }
 
@@ -674,9 +674,9 @@ class App {
      */
     handleFileReceiptNotification(data) {
         const { event_type, data: receiptData, timestamp } = data;
-        
+
         debugLog(`File receipt event: ${event_type}`, receiptData, 'FILE_RECEIPT');
-        
+
         switch (event_type) {
             case 'file_received':
                 this.handleFileReceived(receiptData);
@@ -694,17 +694,17 @@ class App {
      */
     handleFileReceived(data) {
         const { filename, status, timestamp } = data;
-        
+
         debugLog(`File received on server: ${filename}`, 'FILE_RECEIPT');
         this.addLog('File received', 'success', `Server detected file: ${filename}`);
-        
+
         // Update progress to show file was received (but not yet verified)
         this.state.progress = Math.max(this.state.progress, 85);
         this.state.phase = 'FILE_RECEIVED';
         this.state.message = 'File received on server - verifying...';
-        
+
         this.updateAllUI();
-        
+
         // Show quick notification
         this.showToast(`📄 File received: ${filename}`, 'info', 2000);
     }
@@ -714,35 +714,35 @@ class App {
      */
     handleTransferCompleted(data) {
         const { filename, status, size, hash, duration, timestamp } = data;
-        
+
         debugLog(`Transfer completed: ${filename}`, data, 'FILE_RECEIPT');
-        
+
         // OVERRIDE ANY PREVIOUS FAILURE STATUS - FILE RECEIPT IS DEFINITIVE
         this.state.phase = 'COMPLETED';
         this.state.progress = 100;
         this.state.isRunning = false;
         this.state.hasError = false; // Clear any error state
         this.state.errorMessage = null;
-        
+
         // Update with success information
         const sizeFormatted = this.formatBytes(size || 0);
         const durationFormatted = duration ? `${duration.toFixed(1)}s` : 'unknown';
-        
+
         this.state.message = `✅ Transfer completed successfully! (${sizeFormatted} in ${durationFormatted})`;
         this.addLog('Transfer completed', 'success', `File: ${filename}, Size: ${sizeFormatted}, Duration: ${durationFormatted}`);
-        
+
         // Show celebration notification
         this.showToast(`🎉 Backup completed successfully!\n${filename} (${sizeFormatted})`, 'success', 5000);
-        
+
         // Update title and UI
         this.updateAllUI();
         this.updateTabTitle();
-        
+
         // Stop file receipt polling since we have definitive confirmation
         this.stopFileReceiptPolling();
-        
+
         debugLog(`DEFINITIVE SUCCESS: ${filename} received and verified on server`, 'FILE_RECEIPT');
-        
+
         // Schedule auto-reset after success (7 seconds delay)
         this.scheduleAutoReset(7000);
     }
@@ -752,27 +752,27 @@ class App {
      */
     scheduleAutoReset(delayMs = 7000) {
         debugLog(`Scheduling auto-reset in ${delayMs}ms`, 'AUTO_RESET');
-        
+
         // Clear any existing reset timers
         if (this.intervals) {
             this.intervals.clear('autoReset');
             this.intervals.clear('resetCountdown');
         }
-        
+
         let remainingSeconds = Math.ceil(delayMs / 1000);
-        
+
         // Show initial reset notification
         this.showToast(`🔄 Auto-reset in ${remainingSeconds} seconds...`, 'info', remainingSeconds * 1000 + 500);
-        
+
         // Start countdown timer
         this.intervals.set('resetCountdown', () => {
             remainingSeconds--;
-            
+
             if (remainingSeconds > 0) {
                 // Update countdown message
                 this.state.message = `✅ Transfer completed! Auto-reset in ${remainingSeconds}s...`;
                 this.updateAllUI();
-                
+
                 // Show countdown toast for last 3 seconds
                 if (remainingSeconds <= 3) {
                     this.showToast(`🔄 Resetting in ${remainingSeconds}...`, 'info', 1000);
@@ -780,12 +780,12 @@ class App {
             } else {
                 // Clear the countdown interval
                 this.intervals.clear('resetCountdown');
-                
+
                 // Perform the reset
                 this.performAutoReset();
             }
         }, 1000);
-        
+
         // Set the main reset timer as backup
         this.intervals.setTimeout('autoReset', () => {
             this.performAutoReset();
@@ -797,16 +797,16 @@ class App {
      */
     performAutoReset() {
         debugLog('Performing scheduled auto-reset', 'AUTO_RESET');
-        
+
         // Clear any remaining timers
         if (this.intervals) {
             this.intervals.clear('autoReset');
             this.intervals.clear('resetCountdown');
         }
-        
+
         // Show reset notification
         this.showToast('🔄 Resetting for next backup...', 'info', 2000);
-        
+
         // Small delay to show the reset message
         setTimeout(() => {
             this.resetToInitialState();
@@ -822,7 +822,7 @@ class App {
         if (this.intervals && (this.intervals.has('autoReset') || this.intervals.has('resetCountdown'))) {
             return;
         }
-        
+
         // Check for various completion scenarios
         const isCompleted = (
             // Phase-based completion
@@ -833,10 +833,10 @@ class App {
             // State-based completion
             (!this.state.isRunning && this.state.progress >= 100 && ['COMPLETED', 'SUCCESS'].includes(this.state.phase))
         );
-        
+
         if (isCompleted) {
             debugLog(`Completion detected: phase=${phase}, progress=${progress}`, 'AUTO_RESET');
-            
+
             // Add a small delay to let the UI show the completion state
             setTimeout(() => {
                 // Double-check we're still in a completed state
@@ -855,13 +855,13 @@ class App {
             debugLog('Auto-reset cancelled due to user interaction', 'AUTO_RESET');
             this.intervals.clear('autoReset');
             this.intervals.clear('resetCountdown');
-            
+
             // Update message to show reset was cancelled
             if (this.state.phase === 'COMPLETED' && this.state.message && this.state.message.includes('Auto-reset')) {
                 this.state.message = this.state.message.replace(/Auto-reset in \d+s\.\.\./, 'Auto-reset cancelled');
                 this.updateAllUI();
             }
-            
+
             this.showToast('Auto-reset cancelled', 'info', 2000);
             return true;
         }
@@ -874,13 +874,13 @@ class App {
     async checkFileReceiptHTTP(filename) {
         try {
             debugLog(`Checking file receipt via HTTP: ${filename}`, 'FILE_RECEIPT');
-            
+
             const response = await fetch(`/api/check_receipt/${encodeURIComponent(filename)}`);
             const result = await response.json();
-            
+
             if (result.success && result.received) {
                 debugLog(`HTTP confirmed file receipt: ${filename}`, result, 'FILE_RECEIPT');
-                
+
                 // Simulate transfer completed event
                 this.handleTransferCompleted({
                     filename: result.filename,
@@ -890,7 +890,7 @@ class App {
                     duration: 0,
                     timestamp: Date.now() / 1000
                 });
-                
+
                 return true;
             } else {
                 debugLog(`HTTP file receipt check failed: ${filename}`, result, 'FILE_RECEIPT');
@@ -910,18 +910,18 @@ class App {
         if (this.fileReceiptPollingInterval) {
             return;
         }
-        
+
         debugLog(`Starting file receipt polling for: ${filename}`, 'FILE_RECEIPT');
-        
+
         this.fileReceiptPollingInterval = setInterval(async () => {
             const received = await this.checkFileReceiptHTTP(filename);
-            
+
             if (received) {
                 // File found - stop polling
                 this.stopFileReceiptPolling();
             }
         }, 2000); // Check every 2 seconds
-        
+
         // Auto-stop polling after 60 seconds
         setTimeout(() => {
             if (this.fileReceiptPollingInterval) {
@@ -969,7 +969,7 @@ class App {
             });
             return true;
         }
-        
+
         // Detect timeout conditions
         if (this.state.isRunning && this.state.progress === 0) {
             const elapsedTime = Date.now() - (this.backupStartTime || Date.now());
@@ -982,7 +982,7 @@ class App {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -993,7 +993,7 @@ class App {
         if (this.uiUpdateTimeout) {
             clearTimeout(this.uiUpdateTimeout);
         }
-        
+
         this.uiUpdateTimeout = setTimeout(() => {
             requestAnimationFrame(() => {
                 this.updateAllUI();
@@ -1079,10 +1079,10 @@ class App {
 
         // Calculate total expected duration
         const totalExpectedMs = this.progressConfig.calibration_info.total_avg_duration_ms || 4200;
-        
+
         // Calculate progress through current phase
         const phaseProgress = this.getPhaseProgress(currentPhase);
-        
+
         // Estimate remaining time
         const completedWeight = this.getCompletedWeight(currentPhase, phaseProgress);
         const remainingWeight = 1.0 - completedWeight;
@@ -1098,23 +1098,23 @@ class App {
         if (!this.progressConfig || !currentPhase) {
             return 0;
         }
-        
+
         const phaseConfig = this.progressConfig.phases[currentPhase];
         if (!phaseConfig || !phaseConfig.progress_range) {
             return 0;
         }
-        
+
         const [rangeStart, rangeEnd] = phaseConfig.progress_range;
         const rangeSize = rangeEnd - rangeStart;
-        
+
         if (rangeSize <= 0) {
             return 1.0;
         }
-        
+
         // Calculate progress within this phase based on current overall progress
         const currentProgress = this.state.progress || 0;
         const progressInRange = Math.max(0, Math.min(currentProgress - rangeStart, rangeSize));
-        
+
         return progressInRange / rangeSize;
     }
 
@@ -1125,23 +1125,23 @@ class App {
         if (!this.progressConfig) {
             return 0;
         }
-        
+
         let completedWeight = 0;
         const phases = Object.keys(this.progressConfig.phases);
         const currentPhaseIndex = phases.indexOf(currentPhase);
-        
+
         // Add weight from completed phases
         for (let i = 0; i < currentPhaseIndex; i++) {
             const phase = phases[i];
             completedWeight += this.progressConfig.phases[phase].weight || 0;
         }
-        
+
         // Add partial weight from current phase
         if (currentPhaseIndex >= 0) {
             const currentPhaseWeight = this.progressConfig.phases[currentPhase].weight || 0;
             completedWeight += currentPhaseWeight * phaseProgress;
         }
-        
+
         return Math.min(1.0, completedWeight);
     }
 
@@ -1152,7 +1152,7 @@ class App {
         if (!this.progressConfig || !phase) {
             return phase;
         }
-        
+
         const phaseConfig = this.progressConfig.phases[phase];
         return phaseConfig ? phaseConfig.description : phase;
     }
@@ -1164,7 +1164,7 @@ class App {
         if (!seconds || seconds <= 0) {
             return 'Calculating...';
         }
-        
+
         if (seconds < 60) {
             return `${seconds}s remaining`;
         } else if (seconds < 3600) {
@@ -1229,7 +1229,7 @@ class App {
         console.log('[DOM_VERIFICATION] Verifying critical DOM elements...');
         const criticalElements = [
             'primaryActionButton',
-            'pauseButton', 
+            'pauseButton',
             'stopButton',
             'serverInput',
             'usernameInput',
@@ -1237,9 +1237,9 @@ class App {
             'saveConfigBtn',
             'confirmModal'
         ];
-        
+
         const missingElements = [];
-        
+
         for (const elementKey of criticalElements) {
             const element = this.elements[elementKey];
             if (!element) {
@@ -1249,12 +1249,12 @@ class App {
                 console.log(`[DOM_VERIFICATION] ✓ Found: ${elementKey}`);
             }
         }
-        
+
         if (missingElements.length > 0) {
             console.error('[DOM_VERIFICATION] CRITICAL: Missing DOM elements:', missingElements);
             return false;
         }
-        
+
         console.log('[DOM_VERIFICATION] All critical elements found successfully');
         return true;
     }
@@ -1262,21 +1262,21 @@ class App {
     initEventListeners() {
         console.log('[EVENT_DEBUG] Initializing event listeners...');
         console.log('[EVENT_DEBUG] Primary action button element:', this.elements.primaryActionButton);
-        
+
         // Main action buttons - using managed event listeners for cleanup
         const primaryResult = this.eventListeners.add('primary-action', this.elements.primaryActionButton, 'click', () => this.handlePrimaryAction());
         console.log('[EVENT_DEBUG] Primary action listener result:', primaryResult);
         this.eventListeners.add('pause-action', this.elements.pauseButton, 'click', () => this.togglePause());
         this.eventListeners.add('stop-action', this.elements.stopButton, 'click', () => this.stopBackup());
-        
+
         // Copy buttons - using managed event listeners
         this.eventListeners.add('copy-client-id', this.elements.copyClientIdButton, 'click', () => this.copyClientId());
         this.eventListeners.add('copy-server-addr', this.elements.copyServerAddressButton, 'click', () => this.copyServerAddress());
         this.eventListeners.add('copy-file-info', this.elements.copyFileInfoButton, 'click', () => this.copyFileInfo());
-        
+
         // Recent files button
         this.elements.recentFilesBtn.addEventListener('click', () => this.showRecentFiles());
-        
+
         // Config save button
         this.elements.saveConfigBtn.addEventListener('click', () => this.saveConfig());
 
@@ -1429,7 +1429,7 @@ class App {
             element: '#debugContent',
             initFunction: () => this.initializeDebugConsole()
         });
-        
+
         this.lazyComponents.set('advancedSettings', {
             initialized: false,
             element: '.advanced-settings',
@@ -1440,7 +1440,7 @@ class App {
         if ('IntersectionObserver' in window) {
             this.setupLazyLoadObserver();
         }
-        
+
         console.log('[LazyLoad] Lazy loading system initialized for', this.lazyComponents.size, 'components');
     }
 
@@ -1491,7 +1491,7 @@ class App {
         const { advancedSettings } = this.elements;
         if (advancedSettings && !advancedSettings.getAttribute('data-initialized')) {
             advancedSettings.setAttribute('data-initialized', 'true');
-            // Additional heavy settings initialization can go here  
+            // Additional heavy settings initialization can go here
             console.log('[LazyLoad] Advanced settings initialized');
         }
     }
@@ -1558,16 +1558,11 @@ class App {
      * Ensures proper cleanup of all polling intervals
      */
     stopAdaptivePolling() {
-        let cleared1 = true;
-        let cleared2 = true;
+        let cleared1 = this.intervals?.clear('statusPoll') ?? true;
+        let cleared2 = this.intervals?.clear('statusPollFallback') ?? true;
 
-        if (this.intervals && this.intervals.has) {
-            cleared1 = this.intervals.clear('statusPoll');
-            cleared2 = this.intervals.clear('statusPollFallback');
-
-            if (!cleared1 || !cleared2) {
-                console.warn('Some polling intervals could not be cleared');
-            }
+        if (!cleared1 || !cleared2) {
+            console.warn('Some polling intervals could not be cleared');
         }
 
         // Always update state flag (even if cleanup had issues)
@@ -1667,21 +1662,21 @@ class App {
                 const fileIcon = document.createElement('span');
                 fileIcon.className = 'file-icon neon-text blue';
                 fileIcon.textContent = '📄';
-                
+
                 const fileDetails = document.createElement('div');
                 fileDetails.className = 'file-details';
-                
+
                 const fileName = document.createElement('div');
                 fileName.className = 'file-name';
                 fileName.textContent = this.state.selectedFile.name;
-                
+
                 const fileSize = document.createElement('div');
                 fileSize.className = 'file-size';
                 fileSize.textContent = this.formatBytes(this.state.selectedFile.size);
-                
+
                 fileDetails.appendChild(fileName);
                 fileDetails.appendChild(fileSize);
-                
+
                 this.elements.selectedFileDisplay.textContent = '';
                 this.elements.selectedFileDisplay.appendChild(fileIcon);
                 this.elements.selectedFileDisplay.appendChild(fileDetails);
@@ -1732,7 +1727,7 @@ class App {
                 // Show progress percentage when backup is running
                 const progressPercent = Math.round(this.state.progress);
                 titleParts.unshift(`${progressPercent}%`);
-                
+
                 // Add operation status
                 if (this.state.isPaused) {
                     titleParts.push('(Paused)');
@@ -1754,7 +1749,7 @@ class App {
 
             // Set the title
             document.title = titleParts.join(' ');
-            
+
         } catch (error) {
             console.error('Error updating tab title:', error);
             debugLog('Error updating tab title: ' + error.message, 'ERROR');
@@ -1819,10 +1814,10 @@ class App {
 
     async handlePrimaryAction() {
         console.log('[BUTTON_DEBUG] handlePrimaryAction called!');
-        
+
         // Cancel any pending auto-reset when user interacts
         this.cancelAutoReset();
-        
+
         // Prevent multiple simultaneous actions
         if (this.buttonStateManager.isLoading(this.elements.primaryActionButton)) {
             console.log('[BUTTON_DEBUG] Button is loading, skipping action');
@@ -1845,7 +1840,7 @@ class App {
 
             // Set loading state
             this.buttonStateManager.setLoading(this.elements.primaryActionButton, '🔄 Connecting...');
-            
+
             this.addLog(`Attempting to connect to ${serverIP}:${serverPort} as ${username}...`, 'info');
             this.state.phase = 'CONNECT';
             this.state.log = { operation: 'Connecting...', success: true, details: '' };
@@ -1904,7 +1899,7 @@ class App {
             if (confirm) {
                 // Set loading state
                 this.buttonStateManager.setLoading(this.elements.primaryActionButton, '🚀 Starting...');
-                
+
                 this.addLog(`Starting backup of ${this.state.selectedFile.name}...`, 'info');
                 this.state.isRunning = true;
                 this.state.phase = 'START';
@@ -1914,7 +1909,7 @@ class App {
                 try {
                     const result = await this.apiClient.startBackup(
                         this.state.selectedFile,
-                        { 
+                        {
                             username: this.elements.usernameInput.value,
                             serverIP: this.elements.serverInput.value.split(':')[0],
                             serverPort: parseInt(this.elements.serverInput.value.split(':')[1])
@@ -1924,11 +1919,11 @@ class App {
                         this.buttonStateManager.setSuccess(this.elements.primaryActionButton, '✅ Started!');
                         this.showToast('Backup process started!', 'success');
                         this.addLog('Backup initiated', 'success', `File: ${result.filename}`);
-                        
+
                         // Start file receipt polling as fallback mechanism
                         const filename = result.filename || this.state.selectedFile.name;
                         this.startFileReceiptPolling(filename);
-                        
+
                         // Status polling will update the rest
                     } else {
                         const errorInfo = this.errorMessageFormatter.formatError('backup', result.message);
@@ -1960,7 +1955,7 @@ class App {
     async togglePause() {
         // Cancel any pending auto-reset when user interacts
         this.cancelAutoReset();
-        
+
         // Prevent multiple simultaneous actions
         if (this.buttonStateManager.isLoading(this.elements.pauseButton)) {
             return;
@@ -2032,7 +2027,7 @@ class App {
     async stopBackup() {
         // Cancel any pending auto-reset when user interacts
         this.cancelAutoReset();
-        
+
         // Prevent multiple simultaneous actions
         if (this.buttonStateManager.isLoading(this.elements.stopButton)) {
             return;
@@ -2086,19 +2081,19 @@ class App {
 
     handleFileSelection(file) {
         debugLog('File selected:' + file.name, 'FILE_MANAGER');
-        
+
         // Cancel any pending auto-reset when user selects a new file
         this.cancelAutoReset();
-        
+
         // Validate the file before accepting it
         const validation = this.system.fileManager.validateFile(file);
-        
+
         if (!validation.isValid) {
             // File has errors - reject it
             const errorInfo = this.errorMessageFormatter.formatFileValidationError(validation.errors);
             this.addLog(`File rejected: ${file.name}`, 'error', `${errorInfo.message} - ${validation.errors.join('; ')}`);
             this.showToast(`${errorInfo.message}. ${errorInfo.suggestion}`, 'error', 5000);
-            
+
             // Show detailed error in a modal
             this.system.modal.show(
                 'File Validation Failed',
@@ -2107,7 +2102,7 @@ class App {
             );
             return;
         }
-        
+
         // File is valid - show warnings if any
         if (validation.warnings.length > 0) {
             validation.warnings.forEach(warning => {
@@ -2115,21 +2110,21 @@ class App {
                 this.showToast(warning, 'warning', 4000);
             });
         }
-        
+
         // Accept the file
         this.state.selectedFile = file;
-        
+
         // Save file to memory for future quick access
         this.fileMemoryManager.saveFileSelection(file);
-        
+
         this.updateAllUI();
-        this.addLog(`File selected: ${file.name}`, 'success', 
+        this.addLog(`File selected: ${file.name}`, 'success',
             `Size: ${this.formatBytes(file.size)}, Type: ${file.type || 'unknown'}`);
-        
+
         // Show success with file details
         this.showToast(
-            `File selected: ${file.name} (${this.system.fileManager.formatFileSize(file.size)})`, 
-            'success', 
+            `File selected: ${file.name} (${this.system.fileManager.formatFileSize(file.size)})`,
+            'success',
             3000
         );
     }
@@ -2153,7 +2148,7 @@ class App {
         `;
 
         const fileInfo = this.getFileTypeInfo(file);
-        
+
         // File icon and type
         const iconElement = document.createElement('div');
         iconElement.className = 'file-preview-icon';
@@ -2190,20 +2185,20 @@ class App {
             color: var(--text-muted);
             text-align: center;
         `;
-        
+
         // Batch metadata elements using DocumentFragment to reduce reflows
         const metadataFragment = document.createDocumentFragment();
-        
+
         const sizeInfo = document.createElement('div');
         sizeInfo.textContent = `Size: ${this.formatBytes(file.size)}`;
         metadataFragment.appendChild(sizeInfo);
-        
+
         const lastModified = document.createElement('div');
         lastModified.textContent = `Modified: ${new Date(file.lastModified).toLocaleDateString()}`;
         metadataFragment.appendChild(lastModified);
-        
+
         metadata.appendChild(metadataFragment);
-        
+
         previewWrapper.appendChild(metadata);
 
         // Content preview for specific file types
@@ -2232,7 +2227,7 @@ class App {
             'png': { icon: '🖼️', color: 'var(--neon-blue)', typeLabel: 'PNG Image' },
             'gif': { icon: '🎞️', color: 'var(--neon-purple)', typeLabel: 'GIF Animation' },
             'svg': { icon: '🎨', color: 'var(--neon-blue)', typeLabel: 'SVG Vector' },
-            
+
             // Documents
             'application/pdf': { icon: '📄', color: 'var(--error)', typeLabel: 'PDF Document' },
             'txt': { icon: '📝', color: 'var(--text-primary)', typeLabel: 'Text File' },
@@ -2240,7 +2235,7 @@ class App {
             'json': { icon: '🔧', color: 'var(--warning)', typeLabel: 'JSON Data' },
             'xml': { icon: '🏷️', color: 'var(--neon-green)', typeLabel: 'XML Data' },
             'csv': { icon: '📊', color: 'var(--success)', typeLabel: 'CSV Data' },
-            
+
             // Code files
             'js': { icon: '⚡', color: 'var(--warning)', typeLabel: 'JavaScript' },
             'html': { icon: '🌐', color: 'var(--neon-orange)', typeLabel: 'HTML' },
@@ -2248,19 +2243,19 @@ class App {
             'py': { icon: '🐍', color: 'var(--neon-green)', typeLabel: 'Python' },
             'cpp': { icon: '⚙️', color: 'var(--neon-blue)', typeLabel: 'C++' },
             'c': { icon: '⚙️', color: 'var(--neon-blue)', typeLabel: 'C' },
-            
+
             // Archives
             'zip': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'ZIP Archive' },
             'rar': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'RAR Archive' },
             'tar': { icon: '📦', color: 'var(--neon-purple)', typeLabel: 'TAR Archive' },
             '7z': { icon: '📦', color: 'var(--neon-purple)', typeLabel: '7-Zip Archive' },
-            
+
             // Media
             'mp3': { icon: '🎵', color: 'var(--neon-green)', typeLabel: 'MP3 Audio' },
             'mp4': { icon: '🎬', color: 'var(--neon-red)', typeLabel: 'MP4 Video' },
             'avi': { icon: '🎬', color: 'var(--neon-red)', typeLabel: 'AVI Video' },
             'wav': { icon: '🎵', color: 'var(--neon-green)', typeLabel: 'WAV Audio' },
-            
+
             // Default
             'default': { icon: '📄', color: 'var(--text-secondary)', typeLabel: 'Unknown File' }
         };
@@ -2303,7 +2298,7 @@ class App {
         if (file.size > 50000) {
             return; // Skip large files
         }
-        
+
         const reader = new FileReader();
         reader.onload = (e) => {
             const content = e.target.result;
@@ -2351,12 +2346,12 @@ class App {
         // Store log entry for potential batching
         this._pendingLogs = this._pendingLogs || [];
         this._pendingLogs.push({ message, type, details, timestamp: new Date() });
-        
+
         // Debounce DOM updates but show critical logs immediately
         if (!this._logUpdateDebounced) {
             this._logUpdateDebounced = this.debounce(() => this._flushPendingLogs(), 50);
         }
-        
+
         // Show critical errors immediately
         if (type === 'error') {
             this._flushPendingLogs();
@@ -2372,46 +2367,46 @@ class App {
 
         // Process all pending logs
         const fragment = document.createDocumentFragment();
-        
+
         this._pendingLogs.forEach(logData => {
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry ${logData.type}`;
             logEntry.setAttribute('tabindex', '0');
-            
+
             // Create safe DOM elements instead of innerHTML
             const timestamp = document.createElement('span');
             timestamp.className = 'log-timestamp';
             timestamp.textContent = logData.timestamp.toLocaleTimeString();
-            
+
             const icon = document.createElement('span');
             icon.className = `log-icon ${logData.type}`;
             icon.textContent = this.getLogIcon(logData.type);
-            
+
             const content = document.createElement('div');
             content.className = 'log-content';
-            
+
             const messageDiv = document.createElement('div');
             messageDiv.className = 'log-message';
             messageDiv.textContent = logData.message;
             content.appendChild(messageDiv);
-            
+
             if (logData.details) {
                 const detailsDiv = document.createElement('div');
                 detailsDiv.className = 'log-details';
                 detailsDiv.textContent = logData.details;
                 content.appendChild(detailsDiv);
             }
-            
+
             logEntry.appendChild(timestamp);
             logEntry.appendChild(icon);
             logEntry.appendChild(content);
-            
+
             fragment.appendChild(logEntry);
         });
-        
+
         // Add all entries at once to reduce reflows
         this.elements.logContainer.prepend(fragment);
-        
+
         // Clear pending logs
         this._pendingLogs = [];
 
@@ -2600,9 +2595,9 @@ class App {
             this.showToast('No client ID available to copy', 'warning');
             return;
         }
-        
+
         this.copyManager.copyToClipboard(
-            clientId, 
+            clientId,
             this.elements.copyClientIdButton,
             'Client ID copied to clipboard!'
         );
@@ -2617,9 +2612,9 @@ class App {
             this.showToast('No server address to copy', 'warning');
             return;
         }
-        
+
         this.copyManager.copyToClipboard(
-            serverAddress, 
+            serverAddress,
             this.elements.copyServerAddressButton,
             'Server address copied to clipboard!'
         );
@@ -2633,11 +2628,11 @@ class App {
             this.showToast('No file selected to copy', 'warning');
             return;
         }
-        
+
         const fileInfo = `File: ${this.state.selectedFile.name}\nSize: ${this.formatBytes(this.state.selectedFile.size)}\nType: ${this.state.selectedFile.type || 'Unknown'}`;
-        
+
         this.copyManager.copyToClipboard(
-            fileInfo, 
+            fileInfo,
             null,
             'File information copied to clipboard!'
         );
@@ -2648,14 +2643,14 @@ class App {
      */
     showRecentFiles() {
         const container = this.elements.recentFilesBtn.parentElement;
-        
+
         // Remove any existing dropdown
         const existingDropdown = container.querySelector('.recent-files-dropdown');
         if (existingDropdown) {
             existingDropdown.remove();
             return; // Toggle behavior
         }
-        
+
         // Create and show recent files dropdown
         this.fileMemoryManager.createRecentFilesUI(container, (fileInfo) => {
             // Create a simulated file object from stored info
@@ -2665,20 +2660,20 @@ class App {
                 type: fileInfo.type,
                 lastModified: fileInfo.lastModified
             };
-            
+
             // Update state and UI as if user selected this file
             this.state.selectedFile = simulatedFile;
-            this.addLog(`Recent file selected: ${fileInfo.name}`, 'info', 
+            this.addLog(`Recent file selected: ${fileInfo.name}`, 'info',
                 `Size: ${fileInfo.sizeFormatted}, Selected ${fileInfo.timeAgo}`);
-            
+
             this.showToast(`Selected recent file: ${fileInfo.displayName}`, 'success', 2000);
             this.updateAllUI();
         });
-        
+
         // Update button text temporarily
         const originalText = this.elements.recentFilesBtn.textContent;
         this.elements.recentFilesBtn.textContent = '✨ Select from recent...';
-        
+
         setTimeout(() => {
             this.elements.recentFilesBtn.textContent = originalText;
         }, 3000);
@@ -2705,17 +2700,17 @@ class App {
             };
 
             const backupId = this.backupHistoryManager.addBackup(backupInfo);
-            
+
             if (success) {
-                this.addLog(`Backup recorded to history`, 'success', 
+                this.addLog(`Backup recorded to history`, 'success',
                     `File: ${backupInfo.filename}, Size: ${this.formatBytes(backupInfo.fileSize)}`);
                 this.showToast(`✅ Backup completed and saved to history`, 'success', 4000);
             } else {
-                this.addLog(`Failed backup recorded to history`, 'warning', 
+                this.addLog(`Failed backup recorded to history`, 'warning',
                     `File: ${backupInfo.filename}, Error: ${backupInfo.error}`);
                 this.showToast(`❌ Backup failed - recorded to history`, 'error', 4000);
             }
-            
+
             debugLog(`Backup ${success ? 'completed' : 'failed'} - recorded to history with ID: ${backupId}`, 'BACKUP_HISTORY');
         } catch (error) {
             console.warn('Failed to record backup to history:', error);
@@ -2739,7 +2734,7 @@ class App {
     // Enhanced cleanup method to prevent memory leaks
     cleanup() {
         debugLog('Performing app cleanup...', 'APP_CLEANUP');
-        
+
         try {
             // Clear all intervals and timeouts
             if (this.intervals) {
@@ -2791,7 +2786,7 @@ class App {
             if (this.particleSystem) {
                 this.particleSystem.destroy();
             }
-        
+
 
             // Cleanup error boundary
             if (this.errorBoundary) {
@@ -2859,7 +2854,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Performance Monitoring
             tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
             profilesSampleRate: 0.1, // 10% of transactions for profiling
-            
+
             // Additional configuration
             debug: window.location.hostname === 'localhost',
             beforeSend(event, hint) {
@@ -2878,7 +2873,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return event;
             },
         });
-        
+
         // Set user context
         Sentry.setTag('component', 'web-gui');
         Sentry.setTag('framework', 'cyberbackup');
@@ -2886,17 +2881,17 @@ document.addEventListener('DOMContentLoaded', () => {
             name: navigator.userAgent,
             url: window.location.href
         });
-        
+
         console.log('✅ Sentry initialized successfully for CyberBackup Web GUI');
     } catch (error) {
         console.warn('⚠️ Failed to initialize Sentry:', error);
     }
-    
+
     // === IMMEDIATE TEST ===
     console.log('JavaScript is working! Script started loading...');
-    
+
     debugLog('=== SCRIPT LOADING STARTED ===');
-    
+
     debugLog('Defining App class...');
 
     // Initialize the main application
@@ -2940,7 +2935,7 @@ class DataStreamProgressRing {
         this.particleCount = 0;
         this.maxParticles = 12;
         this.animationSpeed = 3000; // Base animation duration in ms
-        
+
         // Phase position mapping (in degrees, starting from top)
         this.phasePositions = {
             'SYSTEM_READY': 0,
@@ -2952,10 +2947,10 @@ class DataStreamProgressRing {
             'COMPLETED': 360,
             'ERROR': 315
         };
-        
+
         this.init();
     }
-    
+
     init() {
         // Initialize SVG path for progress circle
         if (this.elements.progressCircle) {
@@ -2963,13 +2958,13 @@ class DataStreamProgressRing {
             this.circleRadius = radius;
             this.circumference = radius * 2 * Math.PI;
         }
-        
+
         // Create particle template
         this.createParticleTemplate();
-        
+
         console.log('[DataStreamProgressRing] Initialized');
     }
-    
+
     createParticleTemplate() {
         // Create reusable SVG path for particles to follow
         this.particlePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -2977,75 +2972,75 @@ class DataStreamProgressRing {
         this.particlePath.setAttribute('fill', 'none');
         this.particlePath.setAttribute('stroke', 'none');
         this.particlePath.setAttribute('id', 'particleMotionPath');
-        
+
         // Add path to SVG defs
         const defs = this.elements.progressRing.querySelector('defs');
         if (defs && !document.getElementById('particleMotionPath')) {
             defs.appendChild(this.particlePath);
         }
     }
-    
+
     updatePhase(phase, speed = 0) {
         if (this.lastPhase !== phase) {
             this.animatePhaseTransition(phase);
             this.lastPhase = phase;
         }
-        
+
         this.updatePhaseIndicator(phase);
         this.updateParticleSystem(speed, phase);
         this.updateRingState(phase);
     }
-    
+
     updatePhaseIndicator(phase) {
         const position = this.phasePositions[phase] || 0;
         const arcLength = 60; // 60 degree arc
-        
+
         // Calculate SVG path for phase indicator arc
         const startAngle = (position - arcLength / 2) * Math.PI / 180;
         const endAngle = (position + arcLength / 2) * Math.PI / 180;
-        
+
         const radius = this.circleRadius - 10; // Slightly inside the main progress ring
         const centerX = 150;
         const centerY = 150;
-        
+
         const startX = centerX + radius * Math.sin(startAngle);
         const startY = centerY - radius * Math.cos(startAngle);
         const endX = centerX + radius * Math.sin(endAngle);
         const endY = centerY - radius * Math.cos(endAngle);
-        
+
         const largeArcFlag = arcLength > 180 ? 1 : 0;
-        
+
         const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
-        
+
         if (this.elements.phaseIndicatorArc) {
             this.elements.phaseIndicatorArc.setAttribute('d', pathData);
             this.elements.phaseIndicatorArc.classList.add('active');
         }
     }
-    
+
     updateParticleSystem(speed, phase) {
         if (!this.elements.particleStream) {
             return;
         }
-        
+
         // Adjust particle count and speed based on transfer speed
         const targetParticleCount = Math.min(this.maxParticles, Math.max(2, Math.floor(speed / 100000))); // 1 particle per 100KB/s
         const speedMultiplier = Math.max(0.5, Math.min(3, speed / 1000000)); // Speed factor based on MB/s
-        
+
         // Generate new particles if needed
         if (this.particles.length < targetParticleCount && phase === 'TRANSFERRING') {
             this.generateParticles(targetParticleCount - this.particles.length, speedMultiplier);
         }
-        
+
         // Remove excess particles
         if (this.particles.length > targetParticleCount) {
             this.removeParticles(this.particles.length - targetParticleCount);
         }
-        
+
         // Update particle animation speed
         this.updateParticleSpeed(speedMultiplier, phase);
     }
-    
+
     generateParticles(count, speedMultiplier) {
         for (let i = 0; i < count; i++) {
             const particle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -3053,19 +3048,19 @@ class DataStreamProgressRing {
             particle.setAttribute('r', '2');
             particle.setAttribute('fill', 'var(--neon-blue)');
             particle.setAttribute('filter', 'url(#particleGlow)');
-            
+
             // Create animation
             const animateMotion = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
             animateMotion.setAttribute('dur', `${this.animationSpeed / speedMultiplier}ms`);
             animateMotion.setAttribute('repeatCount', 'indefinite');
             animateMotion.setAttribute('begin', `${i * 200}ms`); // Stagger particles
-            
+
             const mpath = document.createElementNS('http://www.w3.org/2000/svg', 'mpath');
             mpath.setAttribute('href', '#particleMotionPath');
-            
+
             animateMotion.appendChild(mpath);
             particle.appendChild(animateMotion);
-            
+
             this.elements.particleStream.appendChild(particle);
             this.particles.push({
                 element: particle,
@@ -3074,7 +3069,7 @@ class DataStreamProgressRing {
             });
         }
     }
-    
+
     removeParticles(count) {
         for (let i = 0; i < count && this.particles.length > 0; i++) {
             const particle = this.particles.pop();
@@ -3083,14 +3078,14 @@ class DataStreamProgressRing {
             }
         }
     }
-    
+
     updateParticleSpeed(speedMultiplier, phase) {
         const newDuration = this.animationSpeed / speedMultiplier;
-        
+
         this.particles.forEach(particle => {
             if (particle.animation) {
                 particle.animation.setAttribute('dur', `${newDuration}ms`);
-                
+
                 // Apply phase-specific particle styling
                 if (phase === 'TRANSFERRING') {
                     particle.element.setAttribute('fill', 'var(--neon-green)');
@@ -3102,15 +3097,15 @@ class DataStreamProgressRing {
             }
         });
     }
-    
+
     updateRingState(phase) {
         if (!this.elements.progressRing) {
             return;
         }
-        
+
         // Remove existing phase classes
         this.elements.progressRing.classList.remove('connecting', 'encrypting', 'transferring');
-        
+
         // Add current phase class
         if (phase === 'CONNECTING' || phase === 'AUTHENTICATING') {
             this.elements.progressRing.classList.add('connecting');
@@ -3120,44 +3115,44 @@ class DataStreamProgressRing {
             this.elements.progressRing.classList.add('transferring');
         }
     }
-    
+
     animatePhaseTransition(newPhase) {
         // Trigger glitch effect on phase display
         if (this.elements.progressStatus) {
             this.elements.progressStatus.classList.add('phase-transition');
-            
+
             setTimeout(() => {
                 this.elements.progressStatus.classList.remove('phase-transition');
             }, 800);
         }
-        
+
         // Reset phase indicator for smooth transition
         if (this.elements.phaseIndicatorArc) {
             this.elements.phaseIndicatorArc.classList.remove('active');
-            
+
             setTimeout(() => {
                 this.elements.phaseIndicatorArc.classList.add('active');
             }, 100);
         }
     }
-    
+
     reset() {
         // Clear all particles
         this.removeParticles(this.particles.length);
-        
+
         // Reset phase indicator
         if (this.elements.phaseIndicatorArc) {
             this.elements.phaseIndicatorArc.classList.remove('active');
         }
-        
+
         // Reset ring state
         if (this.elements.progressRing) {
             this.elements.progressRing.classList.remove('connecting', 'encrypting', 'transferring');
         }
-        
+
         this.lastPhase = null;
     }
-    
+
     setActive(isActive) {
         if (this.elements.progressRing) {
             this.elements.progressRing.classList.toggle('active', isActive);
@@ -3165,14 +3160,7 @@ class DataStreamProgressRing {
     }
 }
 
-// Initialize the app when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.app = new App();
-    });
-} else {
-    // DOM already loaded
-    window.app = new App();
-}
+// Note: App instance is already initialized in the DOMContentLoaded handler above
+// Avoid a second initialization here to prevent duplicate event listeners and performance issues.
 
 export { App };

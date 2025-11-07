@@ -570,9 +570,7 @@ def serve_client_assets(filename: str):
 
         # Explicitly set MIME type for JavaScript modules to fix ES6 import issues
         response = send_from_directory(client_dir, filename)
-        if filename.endswith('.js'):
-            response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
-        elif filename.endswith('.mjs'):
+        if filename.endswith(('.js', '.mjs')):
             response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
         elif filename.endswith('.css'):
             response.headers['Content-Type'] = 'text/css; charset=utf-8'

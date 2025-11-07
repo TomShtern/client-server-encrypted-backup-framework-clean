@@ -2,24 +2,33 @@ class ParticleSystem {
     constructor(app) {
         this.container = app.elements.particleContainer;
         this.particles = [];
-        this.maxParticles = 75; // Increased for desktop focus
+        // Default reduced count; will scale up per screen size below
+        this.maxParticles = 30;
         this.colors = ['#00FFFF', '#FF00FF', '#00FF00', '#FFFF00', '#FF0040'];
         this.isEnabled = true;
         this.animationId = null;
         this.currentContext = 'idle'; // 'idle', 'connecting', 'transferring', 'complete'
         this.app = app; // Store app reference for context awareness
-        
+
+        // Respect user preference for reduced motion
+        try {
+            const prefersReducedMotion = globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReducedMotion) {
+                this.isEnabled = false;
+                this.maxParticles = 0;
+            }
+        } catch (_) { /* no-op */ }
         // Desktop-focused particle optimization
         if (window.innerWidth < 768) {
-            this.maxParticles = 25; // Basic mobile support
+            this.maxParticles = Math.min(this.maxParticles, 20); // Basic mobile support
         } else if (window.innerWidth < 1200) {
-            this.maxParticles = 50; // Tablet/small desktop
+            this.maxParticles = Math.max(this.maxParticles, 40); // Tablet/small desktop
         } else if (window.innerWidth >= 1440) {
-            this.maxParticles = 100; // Large desktop
+            this.maxParticles = Math.max(this.maxParticles, 70); // Large desktop
         } else if (window.innerWidth >= 1920) {
-            this.maxParticles = 150; // 4K+ displays
+            this.maxParticles = Math.max(this.maxParticles, 90); // 4K+ displays
         }
-        
+
         // Context-specific particle configurations
         this.contextConfigs = {
             idle: {
@@ -53,15 +62,15 @@ class ParticleSystem {
         if (!this.container || !this.isEnabled) {
             return;
         }
-        
+
         this.createInitialParticles();
         this.startAnimation();
-        
+
         // Handle window resize
         window.addEventListener('resize', () => {
             this.handleResize();
         });
-        
+
         console.log('[ParticleSystem] Initialized with', this.maxParticles, 'max particles');
     }
 
@@ -78,7 +87,7 @@ class ParticleSystem {
 
         const particle = document.createElement('div');
         particle.className = 'particle';
-        
+
         // Use context-aware configuration
         const config = this.contextConfigs[this.currentContext];
         const color = config.colors[Math.floor(Math.random() * config.colors.length)];
@@ -86,7 +95,7 @@ class ParticleSystem {
         const startX = Math.random() * window.innerWidth;
         const speed = Math.random() * (config.speed.max - config.speed.min) + config.speed.min;
         const drift = (Math.random() - 0.5) * 2;
-        
+
         particle.style.cssText = `
             left: ${startX}px;
             top: ${window.innerHeight + 10}px;
@@ -108,33 +117,33 @@ class ParticleSystem {
 
         this.particles.push(particleData);
         this.container.appendChild(particle);
-        
+
         return particleData;
     }
 
     updateParticles() {
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const particle = this.particles[i];
-            
+
             // Update position
             particle.y -= particle.speed;
             particle.x += particle.drift;
-            
+
             // Update opacity for twinkling effect
             particle.opacity += (Math.random() - 0.5) * particle.fadeSpeed;
             particle.opacity = Math.max(0.1, Math.min(1, particle.opacity));
-            
+
             // Apply changes
             particle.element.style.transform = `translate(${particle.x}px, ${particle.y}px)`;
             particle.element.style.opacity = particle.opacity;
-            
+
             // Remove particles that are off-screen
             if (particle.y < -10 || particle.x < -10 || particle.x > window.innerWidth + 10) {
                 particle.element.remove();
                 this.particles.splice(i, 1);
             }
         }
-        
+
         // Context-aware particle spawning
         const config = this.contextConfigs[this.currentContext];
         if (Math.random() < config.spawnRate && this.particles.length < this.maxParticles) {
@@ -188,12 +197,12 @@ class ParticleSystem {
         } else {
             this.maxParticles = 75; // Standard desktop
         }
-        
+
         // Remove excess particles if screen got smaller
         if (this.maxParticles < oldMax) {
             const particlesToRemove = this.particles.length - this.maxParticles;
             if (particlesToRemove > 0) {
-                const removedParticles = this.particles.splice(-particlesToRemove);
+                const removedParticles = this.particles.splice(this.particles.length - particlesToRemove, particlesToRemove);
                 removedParticles.forEach(particle => particle.element.remove());
             }
         }
@@ -204,7 +213,7 @@ class ParticleSystem {
         if (this.contextConfigs[context] && context !== this.currentContext) {
             console.log(`[ParticleSystem] Context changed: ${this.currentContext} → ${context}`);
             this.currentContext = context;
-            
+
             // Gradually transition existing particles to new context
             this.transitionToContext();
         }
