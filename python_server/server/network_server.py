@@ -70,7 +70,7 @@ class NetworkServer:
         self.active_connections: dict[bytes, socket.socket] = {}
         self.connections_lock = threading.Lock()
         self.host = '0.0.0.0' # Default host
-        self.start_time = time.time() # Server start time
+        self.start_time = time.monotonic() # Server start time (monotonic to avoid clock changes)
         self.last_error: str | None = None # Last error encountered by the server
 
         # Setup signal handlers for graceful shutdown
@@ -79,9 +79,21 @@ class NetworkServer:
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
         def signal_handler(signum: int, frame: Any | None):
-            sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else f"Signal {signum}"
-            logger.warning(f"{sig_name} received by network server. Initiating shutdown...")
-            self.stop()
+            try:
+                sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else f"Signal {signum}"
+                logger.warning(f"{sig_name} received by network server. Initiating shutdown...")
+
+                # Attempt graceful shutdown
+                self.stop()
+
+            except Exception as e:
+                # Log error but ensure shutdown continues
+                logger.error(f"Error during signal handler shutdown: {e}", exc_info=True)
+
+                # Force exit if graceful shutdown fails
+                import sys
+                logger.critical("Forcing immediate exit due to signal handler failure")
+                sys.exit(1)
 
         if hasattr(signal, 'SIGTERM'):
             signal.signal(signal.SIGTERM, signal_handler)
@@ -165,23 +177,33 @@ class NetworkServer:
                 except TimeoutError:
                     continue  # Check shutdown status and continue loop
 
-                # Acquire semaphore slot for this client
-                if not self.client_connection_semaphore.acquire(blocking=False):
-                    logger.warning(f"Connection limit ({MAX_CONCURRENT_CLIENTS}) reached. Rejecting connection from {client_address}")
+                # Try to acquire a semaphore slot for this client connection
+                # Note: acquire(blocking=False) returns False if no slots are available
+                slot_acquired = self.client_connection_semaphore.acquire(blocking=False)
+
+                if not slot_acquired:
+                    # No slots available - reject connection immediately
+                    # No semaphore was acquired, so no release is needed
+                    logger.warning(f"Connection limit ({MAX_CONCURRENT_CLIENTS}) reached - rejecting connection from {client_address}")
                     client_conn.close()
-                    continue
+                    continue  # Skip to next connection (no semaphore to release)
+
+                # Slot acquired successfully - continue with connection setup
+                # The semaphore will be released in the client handler thread's finally block
 
                 # Enable TCP keepalive for long-lived connections (OS defaults)
                 try:
                     client_conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                except Exception:
-                    pass
+                except Exception as keepalive_error:
+                    logger.debug(f"Failed to set TCP keepalive for {client_address}: {keepalive_error}")
+                    # Continue without keepalive - not critical for functionality
 
                 # Register connection with health monitor
                 try:
                     health.open_conn(client_conn.fileno(), client_address)
-                except Exception:
-                    pass
+                except Exception as health_error:
+                    logger.debug(f"Failed to register connection with health monitor for {client_address}: {health_error}")
+                    # Continue without health monitoring - not critical for functionality
 
                 logger.info(f"New client connection accepted from {client_address[0]}:{client_address[1]}")
 
@@ -255,16 +277,26 @@ class NetworkServer:
                 'active_connections': len(self.active_connections),
                 'max_connections': MAX_CONCURRENT_CLIENTS,
                 'available_slots': self.client_connection_semaphore._value,
-                'uptime_seconds': int(time.time() - self.start_time)
+                'uptime_seconds': int(time.monotonic() - self.start_time)
             }
 
-    def send_response(self, sock: socket.socket, code: int, payload: bytes = b''):
-        """Send a response to the client using the protocol format."""
+    def send_response(self, sock: socket.socket, code: int, payload: bytes = b'') -> bool:
+        """
+        Send a response to the client using the protocol format.
+
+        Returns:
+            True if sent successfully, False otherwise
+
+        Note: Callers should check the return value and handle failures appropriately,
+        such as cleaning up state or closing the connection.
+        """
         try:
             response_bytes = protocol.create_response(code, payload)
             sock.sendall(response_bytes)
+            return True
         except Exception as e:
             logger.error(f"Failed to send response code {code}: {e}")
+            return False
 
 
 
@@ -280,6 +312,7 @@ class NetworkServer:
         """
         client_ip, client_port = client_address
         active_client_obj: Any = None
+        active_conn_key: bytes | None = None  # Track the key used for active_connections dict
         log_client_identifier = f"{client_ip}:{client_port}"
 
         try:
@@ -300,7 +333,8 @@ class NetworkServer:
                     client_id_from_header, version_from_header, code_from_header, payload_size_from_header = protocol.parse_request_header(header_bytes)
 
                     # Update log identifier with Client ID and register in monitor
-                    current_log_id_str = client_id_from_header.hex() if any(client_id_from_header) else "REGISTRATION_ATTEMPT"
+                    # Check if client_id is all zeros (unregistered client) using proper byte comparison
+                    current_log_id_str = client_id_from_header.hex() if client_id_from_header != b'\x00' * 16 else "REGISTRATION_ATTEMPT"
                     log_client_identifier = f"{client_ip}:{client_port} (ID:{current_log_id_str})"
                     try:
                         health.set_client_id(client_conn.fileno(), current_log_id_str)
@@ -339,9 +373,10 @@ class NetworkServer:
                         active_client_obj.update_last_seen()
                         log_client_identifier = f"{client_ip}:{client_port} (Name:'{active_client_obj.name}', ID:{current_log_id_str})"
 
-                        # Add to active connections
+                        # Add to active connections and track the key for proper cleanup
                         with self.connections_lock:
                             self.active_connections[client_id_from_header] = client_conn
+                            active_conn_key = client_id_from_header  # Track key for cleanup
 
                     # Process the Request
                     self.request_handler(
@@ -373,11 +408,11 @@ class NetworkServer:
         except Exception as e:
             logger.critical(f"Unhandled exception in client handler for {log_client_identifier}: {e}", exc_info=True)
         finally:
-            # Remove from active connections
-            if active_client_obj:
+            # Remove from active connections using the same key that was used for insertion
+            if active_conn_key is not None:
                 with self.connections_lock:
-                    if active_client_obj.id in self.active_connections:
-                        del self.active_connections[active_client_obj.id]
+                    if active_conn_key in self.active_connections:
+                        del self.active_connections[active_conn_key]
 
 
             try:

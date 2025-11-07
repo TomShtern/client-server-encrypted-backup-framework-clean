@@ -496,13 +496,8 @@ class BackupServer:
     def _calculate_active_transfers(self) -> int:
         """Return the number of currently active file transfers across clients."""
         with self.clients_lock:
+            # Transfer state is tracked per-client in client.partial_files
             in_progress = sum(len(client.partial_files) for client in self.clients.values())
-
-        # Also account for global transfer manager state without double-counting
-        if transfer_manager := self.request_handler.file_transfer_manager:
-            with contextlib.suppress(Exception):
-                with transfer_manager.transfer_lock:
-                    in_progress = max(in_progress, len(transfer_manager.active_transfers))
 
         return in_progress
 
@@ -2863,8 +2858,10 @@ if __name__ == "__main__":
 
         # Quick check to ensure PyCryptodome is available and basic operations work
         try:
-            _ = RSA.generate(1024, randfunc=get_random_bytes) # Test RSA key generation
-            _ = AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16))  # type: ignore[misc]  # Test AES cipher creation
+            # Test RSA key generation functionality
+            RSA.generate(1024, randfunc=get_random_bytes)
+            # Test AES cipher creation functionality
+            AES.new(get_random_bytes(AES_KEY_SIZE_BYTES), AES.MODE_CBC, iv=get_random_bytes(16))  # type: ignore[misc]
             logger.info("PyCryptodome library check passed: Basic crypto operations are available.")
         except Exception as e_crypto_check:
             print(f"CRITICAL FAILURE: PyCryptodome library is not installed correctly or is non-functional: {e_crypto_check}", file=sys.stderr)

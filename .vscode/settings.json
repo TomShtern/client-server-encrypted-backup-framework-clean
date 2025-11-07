@@ -44,7 +44,6 @@
     "**/*.pyc": true,
     "**/node_modules": true,
     "logs": true,
-    "**/*.md": true,
     "**/*.txt": true,
     "archive": true,
     "**/archive/**": true,
@@ -86,7 +85,7 @@
   "tailwindCSS.rootFontSize": 17,
   "editor.mouseWheelZoom": true,
   "terminal.integrated.mouseWheelZoom": true,
-  "chat.agent.thinking.collapsedTools": false,
+  "chat.agent.thinking.collapsedTools": "readOnly",
   "chat.edits2.enabled": true,
   "chat.extensionUnification.enabled": false,
   "accessibility.openChatEditedFiles": true

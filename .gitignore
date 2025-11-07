@@ -259,37 +259,29 @@ type_errors.txt
 temp_errors.txt
 mypy_errors.txt
 gui_errors.txt
+# Documentation & AI assistant files
 CLAUDE.md
 .github/copilot-instructions.md
 qwen.md
 .qwen/settings.json
-CLAUDE.md
-.github/copilot-instructions.md
-CLAUDE.md
-.vscode/extensions.json
-.qwen/settings.json
-CLAUDE.md
-qwen.md
-.github/copilot-instructions.md
 .vscode/extensions.json
 .vscode/settings.json
 
 
-#Ignore vscode AI rules
+# Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+# Various generated files and screenshots
 FletV2/image.png
 pyproject.toml
-.vscode/settings.json
 .codacy/codacy.yaml
 Screenshot 2025-09-09 213155.png
 Screenshot 2025-09-08 031857.png
 2025-09-09-trying_to_fix_the_logs.txt
+# Environment files (keep one entry for each)
 FletV2/.env
 .gemini/.vscode/settings.json
-FletV2/.env
 FletV2/.vscode/mcp.json
 FletV2/.vscode/settings.json
-FletV2/.env
 scripts/setup_zai_key.ps1
 scripts/setup_zai_key.bat
 scripts/run_with_zai_key.ps1
@@ -310,6 +302,4 @@ windows-terminal-info-bar-for-ai-coding-agents/scripts/bunx-statusline-safe.js
 windows-terminal-info-bar-for-ai-coding-agents/scripts/setup-statusline.ps1
 windows-terminal-info-bar-for-ai-coding-agents/scripts/windows-statusline.ps1
 .roo/mcp.json
-.vscode/settings.json
 .roomodes
-.vscode/settings.json

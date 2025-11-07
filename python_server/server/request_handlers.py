@@ -43,6 +43,9 @@ from Shared.observability import get_metrics_collector
 # Import error handling utilities
 from Shared.utils.error_handling import handle_request_errors_detailed, handle_specific_request_errors
 
+# Import validation utilities
+from Shared.utils.validation_utils import is_valid_filename_for_storage
+
 # Import configuration constants
 from .config import (
     AES_KEY_SIZE_BYTES,
@@ -175,15 +178,23 @@ class RequestHandler:
 
             self.server.db_manager.save_client_to_db(new_client.id, new_client.name, new_client.public_key_bytes, new_client.get_aes_key())
 
-        logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
+            logger.info(f"Client '{client_name}' successfully registered with New Client ID: {new_client_id_bytes.hex()}.")
 
-        # Record metrics for client registration
-        get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
+            # Record metrics for client registration
+            get_metrics_collector().record_counter("client.connections.total", tags={'type': 'registration'})
 
-        # GUI updates removed - FletV2 GUI gets client registration data through ServerBridge
+            # GUI updates removed - FletV2 GUI gets client registration data through ServerBridge
 
-        # Send Registration Success (1600) response with the new client ID as payload
-        self.server.network_server.send_response(sock, RESP_REG_OK, new_client_id_bytes)
+            # Send Registration Success (1600) response with the new client ID as payload
+            # IMPORTANT: Response must be sent inside lock to prevent race condition
+            # where two threads could both pass the name check and register duplicate clients
+            if not self.server.network_server.send_response(sock, RESP_REG_OK, new_client_id_bytes):
+                # Response send failed - client won't receive confirmation
+                # Clean up the registration state to prevent orphaned entries
+                logger.error(f"Failed to send registration response to '{client_name}', rolling back registration")
+                self.server.clients.pop(new_client_id_bytes, None)
+                self.server.clients_by_name.pop(client_name, None)
+                # Note: Database record remains but will be cleaned up by maintenance
 
     def _handle_send_public_key(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -417,11 +428,14 @@ class RequestHandler:
         """
         return self.server._parse_string_from_payload(payload_bytes, field_len, max_actual_len, field_name)
 
-    
+
     def _is_valid_filename_for_storage(self, filename_str: str) -> bool:
         """
         Validates a filename string for storage on the server.
-        Checks length, allowed characters, and common OS reserved names.
+
+        NOTE: This method now delegates to the shared validation utility
+        (Shared.utils.validation_utils.is_valid_filename_for_storage) to ensure
+        consistency across the entire codebase.
 
         Args:
             filename_str: The filename string to validate.
@@ -429,32 +443,4 @@ class RequestHandler:
         Returns:
             True if the filename is considered valid and safe for storage, False otherwise.
         """
-        # Check actual length of the filename string (not the padded field size)
-        if not (1 <= len(filename_str) <= MAX_ACTUAL_FILENAME_LENGTH):
-            logger.debug(f"Filename validation failed for '{filename_str}': Length ({len(filename_str)}) is out of allowed range (1-{MAX_ACTUAL_FILENAME_LENGTH}).")
-            return False
-
-        # Disallow path traversal characters (slashes, backslashes, '..') and null bytes within the actual filename
-        if '/' in filename_str or '\\' in filename_str or '..' in filename_str or '\0' in filename_str:
-            logger.debug(f"Filename validation failed for '{filename_str}': Contains path traversal sequence or null characters.")
-            return False
-
-        # Regex for generally safe filename characters:
-        # Allows alphanumeric, dots, underscores, hyphens, spaces, ampersands, and hash symbols.
-        # This can be made stricter or more lenient based on specific server OS and policies.
-        if not re.match(r"^[a-zA-Z0-9._\-\s&#]+$", filename_str):
-            logger.debug(f"Filename validation failed for '{filename_str}': Contains disallowed characters (does not match regex '^[a-zA-Z0-9._\\-\\s&#]+$').")
-            return False
-
-        # Check for names that are problematic on some operating systems (e.g., Windows reserved names like CON, PRN)
-        # Comparison is case-insensitive for these reserved names.
-        # We check the base name of the file (without extension) against reserved names.
-        base_filename_no_ext = os.path.splitext(filename_str)[0].upper()
-        reserved_os_names = {"CON", "PRN", "AUX", "NUL"} | \
-                            {f"COM{i}" for i in range(1,10)} | \
-                            {f"LPT{i}" for i in range(1,10)}
-        if base_filename_no_ext in reserved_os_names:
-             logger.debug(f"Filename validation failed for '{filename_str}': Base name '{base_filename_no_ext}' is a reserved OS name.")
-             return False
-
-        return True
+        return is_valid_filename_for_storage(filename_str)

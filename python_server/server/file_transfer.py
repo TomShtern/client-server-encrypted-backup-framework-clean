@@ -43,6 +43,9 @@ from typing import Any
 # Import observability components
 from Shared.observability import get_metrics_collector
 
+# Import validation utilities
+from Shared.utils.validation_utils import is_valid_filename_for_storage
+
 # Import crypto components through compatibility layer
 # Import configuration constants
 from .config import (
@@ -89,10 +92,50 @@ class FileTransferManager:
         """
         self.server = server_instance
         self.transfer_lock = threading.Lock()  # Global lock for transfer operations
-        self.active_transfers: dict[str, dict[str, Any]] = {}  # Track active transfers
+        # Per-file locking for concurrent transfers of different files from same client
+        self._file_locks: dict[tuple[bytes, str], threading.Lock] = {}
+        self._locks_lock = threading.Lock()  # Lock for accessing the file_locks dict
+        # Note: Transfer state is tracked per-client in client.partial_files, not globally
         self.version = __FTM_VERSION__
 
         logger.info(f"FileTransferManager initialized (version={__FTM_VERSION__})")
+
+    def _get_file_lock(self, client_id: bytes, filename: str) -> threading.Lock:
+        """
+        Get a lock specific to this file transfer.
+
+        This allows concurrent transfers of different files from the same client
+        while ensuring thread safety for transfers of the same file.
+
+        Args:
+            client_id: The client's unique identifier
+            filename: The name of the file being transferred
+
+        Returns:
+            A lock specific to this client+file combination
+        """
+        key = (client_id, filename)
+
+        with self._locks_lock:
+            if key not in self._file_locks:
+                self._file_locks[key] = threading.Lock()
+                logger.debug(f"Created new file lock for {client_id.hex()}:{filename}")
+            return self._file_locks[key]
+
+    def _cleanup_file_lock(self, client_id: bytes, filename: str) -> None:
+        """
+        Clean up a file lock when the transfer is complete.
+
+        Args:
+            client_id: The client's unique identifier
+            filename: The name of the file being transferred
+        """
+        key = (client_id, filename)
+
+        with self._locks_lock:
+            if key in self._file_locks:
+                del self._file_locks[key]
+                logger.debug(f"Cleaned up file lock for {client_id.hex()}:{filename}")
 
     def handle_send_file(self, sock: socket.socket, client: Any, payload: bytes) -> None:
         """
@@ -113,11 +156,16 @@ class FileTransferManager:
           uint8_t  content[];         // Encrypted file chunk for this packet
         """
         # High-signal pre-parse log
-        with contextlib.suppress(Exception):
+        try:
             # Do not let logging failures impact flow
             logger.debug(
                 f"XFER/PARSE: client='{client.name}', payload_len={len(payload)}"
             )
+        except Exception as log_error:
+            # Logging failures should not interrupt file transfer processing,
+            # but should be logged at DEBUG level for visibility
+            logger.debug(f"Logging failure in file transfer processing: {log_error}")
+            # Continue execution - file transfer should not fail due to logging issues
 
         try:
             self._process_file_transfer_packet(payload, client, sock)  # type: ignore
@@ -274,7 +322,9 @@ class FileTransferManager:
         packet_number = metadata['packet_number']
         total_packets = metadata['total_packets']
 
-        with client.lock:  # Thread-safe access to client's partial files
+        # Use per-file lock to allow concurrent transfers of different files
+        file_lock = self._get_file_lock(client.id, filename)
+        with file_lock:  # Thread-safe access to this specific file transfer
             # Initialize or validate partial file state
             if packet_number == 1:
                 if filename in client.partial_files:
@@ -311,7 +361,7 @@ class FileTransferManager:
             file_state["timestamp"] = time.monotonic()
 
             # Emit concise state snapshot
-            with contextlib.suppress(Exception):
+            try:
                 received_count = len(file_state["received_chunks"])
                 # For efficiency, only compute cumulative bytes for small N
                 cumulative_enc = sum(len(ch) for ch in file_state["received_chunks"].values()) if received_count <= 64 else -1
@@ -319,9 +369,29 @@ class FileTransferManager:
                     f"XFER/REASM_STATE: client='{client.name}', file='{filename}', received={received_count}/{total_packets}, "
                     f"cum_enc_bytes={cumulative_enc if cumulative_enc >= 0 else 'skipped'}"
                 )
+            except Exception:
+                # Debug logging failures should not interrupt file processing
+                pass
 
-            # Check if transfer is complete
-            return len(file_state["received_chunks"]) == total_packets
+            # Check if transfer is complete - validate we have exactly packets 1 through total_packets
+            if len(file_state["received_chunks"]) == total_packets:
+                # Validate that we have the correct packet numbers (1 through total_packets)
+                expected_packets = set(range(1, total_packets + 1))
+                received_packets = set(file_state["received_chunks"].keys())
+
+                if received_packets != expected_packets:
+                    missing = expected_packets - received_packets
+                    extra = received_packets - expected_packets
+                    logger.error(
+                        f"XFER/REASM_ERR: packet_mismatch client='{client.name}', file='{filename}', "
+                        f"missing={sorted(missing)}, extra={sorted(extra)}"
+                    )
+                    client.clear_partial_file(filename)
+                    raise ProtocolError(f"File transfer packet number mismatch for '{filename}'")
+
+                return True
+
+            return False
 
     def _process_complete_file(self, sock: socket.socket, client: Any,
                               filename: str, aes_key: bytes) -> None:
@@ -337,7 +407,9 @@ class FileTransferManager:
         # Start timing the complete file processing operation
         processing_start = time.time()
 
-        with client.lock:
+        # Use per-file lock to allow concurrent transfers of different files
+        file_lock = self._get_file_lock(client.id, filename)
+        with file_lock:
             file_state = client.partial_files.get(filename)
             if not file_state:
                 raise ServerError(f"File state missing for complete transfer: {filename}")
@@ -398,6 +470,8 @@ class FileTransferManager:
             finally:
                 # Always clean up partial file state
                 client.clear_partial_file(filename)
+                # Clean up the per-file lock to prevent memory leaks
+                self._cleanup_file_lock(client.id, filename)
 
     def _reassemble_encrypted_data(self, file_state: dict[str, Any]) -> bytes:
         """
@@ -483,12 +557,20 @@ class FileTransferManager:
             return self._perform_atomic_file_save(
                 temp_path, data, final_path, filename
             )
-        except OSError as e:
-            # Cleanup temporary file on error
-            if os.path.exists(temp_path):
-                with contextlib.suppress(OSError):
-                    os.remove(temp_path)
+        except Exception as e:
+            # Catch all exceptions to ensure proper cleanup and error reporting
+            logger.error(f"File save failed for '{filename}': {e}")
             raise FileError(f"Failed to save file '{filename}': {e}") from e
+        finally:
+            # ALWAYS attempt cleanup of temporary file in finally block
+            # This ensures cleanup happens regardless of success or exception type
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    logger.debug(f"Cleaned up temp file: {temp_path}")
+            except OSError as cleanup_err:
+                # Log but don't propagate cleanup errors
+                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_err}")
 
     def _perform_atomic_file_save(self, temp_path: str, data: bytes,
                                  final_path: str, filename: str) -> tuple[str, str]:
@@ -553,10 +635,14 @@ class FileTransferManager:
         self.server.network_server.send_response(sock, RESP_FILE_CRC, response_payload)
         logger.info(f"Client '{client.name}': Sent CRC response for '{filename}' (CRC: {crc_value})")
 
-    
+
     def _is_valid_filename_for_storage(self, filename: str) -> bool:
         """
         Validates a filename for secure storage.
+
+        NOTE: This method now delegates to the shared validation utility
+        (Shared.utils.validation_utils.is_valid_filename_for_storage) to ensure
+        consistency across the entire codebase.
 
         Args:
             filename: The filename to validate
@@ -564,35 +650,7 @@ class FileTransferManager:
         Returns:
             True if filename is valid and safe
         """
-        # Check length
-        if not (1 <= len(filename) <= MAX_ACTUAL_FILENAME_LENGTH):
-            logger.debug(f"Filename validation failed: invalid length {len(filename)}")
-            return False
-
-        # Prevent path traversal
-        if ('/' in filename or '\\' in filename or
-            '..' in filename or '\0' in filename):
-            logger.debug("Filename validation failed: contains path traversal chars")
-            return False
-
-        # Check for safe characters only
-        # Allow common punctuation often present in user filenames: space, dot, underscore, dash,
-        # ampersand, hash, parentheses, plus, comma
-        if not re.match(r"^[a-zA-Z0-9._\-\s&#()+,]+$", filename):
-            logger.debug("Filename validation failed: contains unsafe characters")
-            return False
-
-        # Check for OS reserved names
-        base_name = os.path.splitext(filename)[0].upper()
-        reserved_names = {"CON", "PRN", "AUX", "NUL"} | \
-                         {f"COM{i}" for i in range(1, 10)} | \
-                         {f"LPT{i}" for i in range(1, 10)}
-
-        if base_name in reserved_names:
-            logger.debug(f"Filename validation failed: reserved OS name '{base_name}'")
-            return False
-
-        return True
+        return is_valid_filename_for_storage(filename)
 
     def _update_gui_stats(self, filename: str, client_name: str, bytes_transferred: int) -> None:
         """
@@ -605,36 +663,17 @@ class FileTransferManager:
         """
         # GUI notifications removed - FletV2 GUI gets file transfer data through ServerBridge
 
-    
-    def cleanup_stale_transfers(self, timeout_seconds: int = 900) -> int:
-        _ = timeout_seconds  # Currently unused but preserved for API compatibility
-        """
-        Cleans up stale file transfers that have been inactive.
-
-        Args:
-            timeout_seconds: Timeout in seconds for considering transfers stale
-
-        Returns:
-            Number of transfers cleaned up
-        """
-        _ = time.monotonic()  # Reserved for future stale transfer detection
-
-        with self.transfer_lock:
-            # This would be used if we maintained global transfer state
-            # For now, individual clients handle their own cleanup
-            pass
-
-        return 0  # Inline the immediately returned variable
-
     def get_transfer_statistics(self) -> dict[str, Any]:
         """
         Gets current transfer statistics.
+
+        Note: Transfer state is tracked per-client in client.partial_files.
+        To get active transfer count, query each client's partial_files dict.
 
         Returns:
             Dictionary containing transfer statistics
         """
         with self.transfer_lock:
             return {
-                'active_transfers': len(self.active_transfers),
                 'last_activity': datetime.now().isoformat()
             }

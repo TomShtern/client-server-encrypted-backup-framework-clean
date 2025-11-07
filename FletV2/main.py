@@ -294,8 +294,9 @@ class AsyncManager:
 
     def __init__(self):
         self._cancelled: bool = False
-        self._tasks: set[asyncio.Task] = set()
+        self._tasks: dict[int, asyncio.Task] = {}  # Use dict for explicit cleanup
         self._view_name: str | None = None
+        self._cleanup_lock = asyncio.Lock()
 
     def set_view(self, view_name: str) -> None:
         """Associate this manager with a specific view."""
@@ -306,12 +307,12 @@ class AsyncManager:
         self._cancelled = True
         logger.info(f"[ASYNC_MANAGER] Cancelling all tasks for view: {self._view_name}")
 
-        # Cancel all tasks
-        for task in list(self._tasks):
+        # Cancel all tasks with explicit cleanup
+        for task_id, task in list(self._tasks.items()):
             if not task.done():
                 task.cancel()
 
-        # Clear the task set
+        # Clear the task dict
         self._tasks.clear()
 
     def is_cancelled(self) -> bool:
@@ -319,12 +320,14 @@ class AsyncManager:
         return self._cancelled
 
     def register_task(self, task: asyncio.Task) -> None:
-        """Register a task for cleanup."""
-        self._tasks.add(task)
+        """Register a task for cleanup with explicit dict-based tracking."""
+        task_id = id(task)
+        self._tasks[task_id] = task
 
-        # Auto-remove task when done
+        # Auto-remove task when done with explicit dict cleanup
         def cleanup(task_future: asyncio.Task) -> None:
-            self._tasks.discard(task)
+            # Explicit removal from dict - more reliable than discard on set
+            self._tasks.pop(id(task_future), None)
 
         task.add_done_callback(cleanup)
 
@@ -343,10 +346,10 @@ class AsyncManager:
             logger.debug(f"[ASYNC_MANAGER] Task cancelled for view: {self._view_name}")
             # Best-effort remove the task from our registry (done callback may already have removed it)
             try:
-                self._tasks.discard(task)
+                self._tasks.pop(id(task), None)
             except Exception:
                 # Suppress any errors during cleanup but still re-raise cancellation
-                logger.debug("Failed to discard cancelled task from registry")
+                logger.debug("Failed to remove cancelled task from registry")
             raise
 
     def safe_update(self, control: ft.Control) -> None:
@@ -464,6 +467,10 @@ class FletV2App(ft.Row):
         self._current_view_name: str | None = None
         self._current_setup_task: asyncio.Task | None = None  # Track setup task for cancellation
 
+        # AnimatedSwitcher animation timing constants - keep in sync with duration parameter
+        self.ANIMATION_DURATION_MS = 160  # Animation duration in milliseconds (for AnimatedSwitcher.duration)
+        self.ANIMATION_DURATION_SEC = 0.160  # Same duration in seconds (for asyncio.sleep)
+
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self._animated_switcher = ft.AnimatedSwitcher(
             content=ft.Card(  # Modern card-based loading state
@@ -499,7 +506,7 @@ class FletV2App(ft.Row):
                 surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             ),
             transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
-            duration=160,  # Balanced for smoothness and speed
+            duration=self.ANIMATION_DURATION_MS,  # Use constant for consistency
             reverse_duration=100,
             switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,  # Modern curves
             switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
@@ -688,7 +695,7 @@ class FletV2App(ft.Row):
 
         logger.info("View change requested: %s", view_name)
 
-        # Update navigation rail selected index
+        # Update navigation rail selected index (update will happen automatically with content update)
         view_names = [
             "dashboard", "clients", "files", "database",
             "analytics", "logs", "settings", "experimental"
@@ -696,13 +703,9 @@ class FletV2App(ft.Row):
         if view_name in view_names and hasattr(self, "_nav_rail_control") and self._nav_rail_control:
             new_index = view_names.index(view_name)
             self._nav_rail_control.selected_index = new_index
-            try:
-                self._nav_rail_control.update()
-            except Exception as rail_err:
-                logger.warning("Navigation rail update failed: %s", rail_err)
-            else:
-                if _VERBOSE_NAV_LOGS:
-                    logger.debug("Navigation rail updated to index %s", new_index)
+            # Note: No need to call update() here - AnimatedSwitcher.update() later will update entire page tree
+            if _VERBOSE_NAV_LOGS:
+                logger.debug("Navigation rail index set to %s (update deferred to content update)", new_index)
         elif _VERBOSE_NAV_LOGS:
             logger.debug("Navigation rail not available or view missing: %s", view_name)
 
@@ -927,8 +930,6 @@ class FletV2App(ft.Row):
             )
             self._breadcrumb_strip.content = breadcrumb_container
             self._breadcrumb_strip.visible = True
-            if getattr(self._breadcrumb_strip, "page", None):
-                self._breadcrumb_strip.update()
 
             # Add global search to the header
             if self.global_search:
@@ -937,17 +938,15 @@ class FletV2App(ft.Row):
                 self._global_search_container.visible = True
                 logger.info(f"🔍 Search container visible={self._global_search_container.visible}")
 
-                # Force update of both container and parent row
-                if getattr(self._global_search_container, "page", None):
-                    self._global_search_container.update()
-                    logger.info("🔍 Search container updated")
-                if getattr(self._header_row, "page", None):
-                    self._header_row.update()
-                    logger.info("🔍 Header row updated")
+            # Update all components with a single page.update() call
+            needs_update = (
+                getattr(self._breadcrumb_strip, "page", None) or
+                (self.global_search and (getattr(self._global_search_container, "page", None) or getattr(self._header_row, "page", None)))
+            )
 
-                # Final page update to ensure rendering
+            if needs_update:
                 self.page.update()
-                logger.info("🔍 Page force updated after adding search")
+                logger.info("🔍 Page updated after navigation setup")
 
             # Prime breadcrumb trail with the current or default view
             current_view = self._current_view_name or "dashboard"
@@ -1345,8 +1344,9 @@ class FletV2App(ft.Row):
             async def delayed_setup():
                 """Delay setup until controls are fully attached to page tree."""
                 try:
-                    # Wait for AnimatedSwitcher transition to complete (160ms) + safety margin
-                    await asyncio.sleep(0.25)  # Let Flet complete rendering and transition
+                    # Wait for AnimatedSwitcher transition to complete + safety margin
+                    # Matches AnimatedSwitcher duration (160ms) + 50ms buffer = 210ms total
+                    await asyncio.sleep(self.ANIMATION_DURATION_SEC + 0.05)
 
                     # Check cancellation after sleep - prevents race conditions
                     if self.async_manager.is_cancelled():

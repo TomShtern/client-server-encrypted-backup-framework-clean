@@ -209,6 +209,9 @@ class App {
             debugLog('WebSocket connected successfully', 'WEBSOCKET');
             this.addLog('Real-time connection', 'success', 'WebSocket connected - live updates enabled');
             this.updateConnectionStatus(true);
+            // Stop polling when WebSocket reconnects to prevent redundancy
+            this.stopAdaptivePolling();
+            this.addLog('Connection mode', 'success', 'Switched to real-time WebSocket mode');
         });
 
         this.socket.on('disconnect', () => {
@@ -1000,7 +1003,13 @@ class App {
             return;
         }
 
-        debugLog('Starting polling fallback...', 'POLL');
+        if (this.stateManagement.isPolling) {
+            debugLog('Polling already active, skipping duplicate start', 'POLL');
+            return;
+        }
+
+        debugLog('Starting polling fallback - WebSocket unavailable', 'POLL');
+        this.addLog('Connection mode', 'info', 'Switched to polling mode');
         this.startAdaptivePolling();
     }
 
@@ -1476,6 +1485,14 @@ class App {
 
     // Adaptive polling system - adjusts frequency based on activity
     startAdaptivePolling() {
+        if (this.stateManagement.isPolling) {
+            debugLog('Polling already active', 'POLL');
+            return;
+        }
+
+        this.stateManagement.isPolling = true;
+        debugLog('Starting adaptive polling system', 'POLL');
+
         const scheduleNextPoll = () => {
             if (this.intervals && this.intervals.has) {
                 this.intervals.clear('statusPoll');
@@ -1501,6 +1518,18 @@ class App {
         // Start the adaptive polling
         scheduleNextPoll();
         // console.log('[Polling] Adaptive polling started with initial interval:', this.stateManagement.adaptivePollInterval + 'ms');
+    }
+
+    /**
+     * Stop adaptive polling when WebSocket is available
+     */
+    stopAdaptivePolling() {
+        if (this.intervals && this.intervals.has) {
+            this.intervals.clear('statusPoll');
+            this.intervals.clear('statusPollFallback');
+        }
+        this.stateManagement.isPolling = false;
+        debugLog('Adaptive polling stopped - WebSocket is handling updates', 'POLL');
     }
 
     // Public UI Update Function (uses debouncing)

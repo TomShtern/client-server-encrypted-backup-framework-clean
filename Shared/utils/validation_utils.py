@@ -17,42 +17,44 @@ MAX_ACTUAL_FILENAME_LENGTH = 255  # Maximum filename length
 def is_valid_filename_for_storage(filename: str) -> bool:
     """
     Validate a filename for safe storage, checking for security issues and OS compatibility.
-    
+
+    This is the canonical filename validation for the entire CyberBackup system.
+    All filename validation should use this function to ensure consistency.
+
     Args:
         filename: The filename to validate
-        
+
     Returns:
         True if the filename is valid, False otherwise
     """
-    if not filename:
-        logger.warning("Filename validation failed: Empty filename")
-        return False
-        
-    if len(filename) < 1 or len(filename) > MAX_ACTUAL_FILENAME_LENGTH:
-        logger.warning(f"Filename validation failed: Length check failed for '{filename}'")
+    # Check length (must be between 1 and MAX_ACTUAL_FILENAME_LENGTH)
+    if not (1 <= len(filename) <= MAX_ACTUAL_FILENAME_LENGTH):
+        logger.debug(f"Filename validation failed: Length ({len(filename)}) out of range (1-{MAX_ACTUAL_FILENAME_LENGTH})")
         return False
 
-    # Check for path traversal characters
-    if any(char in filename for char in ('/', '\\', '..', '\0')):
-        logger.warning(f"Filename validation failed: Path traversal detected in '{filename}'")
+    # Prevent path traversal attacks
+    if '/' in filename or '\\' in filename or '..' in filename or '\0' in filename:
+        logger.debug(f"Filename validation failed: Contains path traversal or null characters")
         return False
 
-    # Special character checks for reserved names
-    if filename.strip().lower() in {'con', 'prn', 'aux', 'nul'}:
-        logger.warning(f"Filename validation failed: Reserved filename '{filename}'")
+    # Character validation using regex - allow common safe characters
+    # Allows: alphanumeric, dot, underscore, hyphen, space, ampersand, hash, parentheses, plus, comma
+    if not re.match(r"^[a-zA-Z0-9._\-\s&#()+,]+$", filename):
+        logger.debug(f"Filename validation failed: Contains unsafe characters")
         return False
 
-    # Reserved device names (COM/LPT + number)
-    if re.match(r'^(com|lpt)[1-9]$', filename.strip().lower()):
-        logger.warning(f"Filename validation failed: Reserved device name '{filename}'")
+    # Check for OS reserved names (Windows)
+    # Extract base name without extension for comparison
+    base_name = os.path.splitext(filename)[0].upper()
+    reserved_names = {"CON", "PRN", "AUX", "NUL"} | \
+                     {f"COM{i}" for i in range(1, 10)} | \
+                     {f"LPT{i}" for i in range(1, 10)}
+
+    if base_name in reserved_names:
+        logger.debug(f"Filename validation failed: '{base_name}' is a reserved OS name")
         return False
 
-    # Character validation using regex - only allow safe characters
-    if not re.match(r"^[a-zA-Z0-9._\-\s&#]+$", filename):
-        logger.warning(f"Filename validation failed: Invalid characters in '{filename}'")
-        return False
-
-    # If all checks pass
+    # All checks passed
     return True
 
 

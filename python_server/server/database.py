@@ -279,16 +279,28 @@ class DatabaseConnectionPool:
 
     def get_connection(self) -> sqlite3.Connection:
         """Get a connection from the pool with monitoring."""
-        start_time = time.time()
+        start_time = time.monotonic()
 
         try:
             conn = self.pool.get(timeout=self.timeout)
+
+            # Validate connection is still alive by pinging it
+            try:
+                conn.execute("SELECT 1").fetchone()
+            except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+                logger.warning(f"Connection {id(conn)} is stale or invalid ({e}), recreating")
+                self._close_connection_with_tracking(conn, f"Stale connection: {e}")
+                # Create a new connection to replace the stale one
+                new_conn = self._create_monitored_connection(f"replacement_{int(time.monotonic())}")
+                if not new_conn:
+                    raise ServerError("Failed to create replacement database connection") from None
+                conn = new_conn
 
             # Update connection tracking
             conn_id = id(conn)
             if conn_id in self.connection_info:
                 with self.lock:
-                    self.connection_info[conn_id].last_used_time = time.time()
+                    self.connection_info[conn_id].last_used_time = time.monotonic()
                     self.connection_info[conn_id].use_count += 1
                     self.connection_info[conn_id].thread_id = threading.get_ident()
                     self.metrics.active_connections += 1
@@ -302,7 +314,7 @@ class DatabaseConnectionPool:
                 structured_logger.info(  # type: ignore
                     "Database connection acquired",
                     connection_id=conn_id,
-                    wait_time_ms=(time.time() - start_time) * 1000,
+                    wait_time_ms=(time.monotonic() - start_time) * 1000,
                     active_connections=self.metrics.active_connections,
                     pool_size=self.pool_size
                 )
@@ -361,6 +373,14 @@ class DatabaseConnectionPool:
     def return_connection(self, conn: sqlite3.Connection):
         """Return a connection to the pool with enhanced stale connection detection."""
         conn_id = id(conn)
+
+        # Check if this is an emergency connection - close instead of returning to pool
+        with self.lock:
+            if conn_id in self.emergency_connections:
+                logger.info(f"Closing emergency connection {conn_id} instead of returning to pool")
+                self._close_connection_with_tracking(conn, "Emergency connection cleanup")
+                del self.emergency_connections[conn_id]
+                return
 
         try:
             # Enhanced validation - detect stale/locked connections
@@ -2135,7 +2155,8 @@ class DatabaseManager:
                     'indexes_count': len(index_info) if index_info else 0,
                     'indexes': [idx[0] for idx in index_info] if index_info else []
                 }
-            except Exception:
+            except Exception as perf_error:
+                logger.debug(f"Failed to collect performance info for storage stats: {perf_error}")
                 stats['performance_info'] = {'indexes_count': 0, 'indexes': []}
 
         except Exception as e:
