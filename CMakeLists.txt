@@ -36,9 +36,9 @@ add_executable(EncryptedBackupClient
     Client/deps/Base64Wrapper.cpp
     Client/deps/crc.cpp  # CRC implementation for file verification
 )
- 
+
 # 5. Configure Include Directories: Tell our code where to find header files.
-target_include_directories(EncryptedBackupClient PRIVATE 
+target_include_directories(EncryptedBackupClient PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Client/cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Client/deps
     ${CMAKE_CURRENT_SOURCE_DIR}/Client/deps/shared
@@ -52,9 +52,9 @@ if(NOT Boost_FOUND)
     # Fallback to traditional FindBoost module
     message(STATUS "Config-based Boost discovery failed, trying traditional FindBoost...")
     find_package(Boost REQUIRED COMPONENTS system thread)
-    
+
     if(NOT Boost_FOUND)
-        message(FATAL_ERROR 
+        message(FATAL_ERROR
             "Boost not found! Please install Boost using vcpkg:\n"
             "  vcpkg install boost-asio boost-beast\n"
             "Or ensure Boost is installed and CMAKE_PREFIX_PATH includes the Boost installation directory."
@@ -78,7 +78,7 @@ target_link_libraries(EncryptedBackupClient PRIVATE
 
 # 8. Windows-specific libraries (minimal set for networking)
 if(WIN32)
-    target_link_libraries(EncryptedBackupClient PRIVATE 
+    target_link_libraries(EncryptedBackupClient PRIVATE
         ws2_32      # Windows Sockets - required for networking
     )
 endif()
@@ -89,3 +89,5 @@ if(MSVC)
 else()
     target_compile_options(EncryptedBackupClient PRIVATE -Wall -Wextra -pedantic)
 endif()
+
+add_subdirectory(cpp_api_server)

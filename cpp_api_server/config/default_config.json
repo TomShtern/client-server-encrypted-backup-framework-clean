@@ -1,0 +1,62 @@
+{
+  "listeners": [
+    {
+      "address": "127.0.0.1",
+      "port": 9090,
+      "https": false
+    }
+  ],
+  "threads_num": 4,
+  "document_root": "../Client/Client-gui",
+  "use_gzip": true,
+  "use_sendfile": true,
+  "enable_session": true,
+  "session_timeout": 1200,
+  "max_connections": 100,
+  "max_connections_per_ip": 12,
+  "keepalive_requests": 100,
+  "pipelining_requests": 10,
+  "client_max_body_size": "100M",
+  "file_types": [
+    "html",
+    "htm",
+    "css",
+    "js",
+    "json",
+    "ico",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "svg",
+    "woff",
+    "woff2",
+    "ttf",
+    "eot"
+  ],
+  "app": {
+    "backup_server": {
+      "host": "127.0.0.1",
+      "port": 1256
+    },
+    "database": {
+      "path": "../python_server/server/defensive.db",
+      "readonly": true
+    },
+    "job_runner": {
+      "client_exe": "../build/Release/EncryptedBackupClient.exe",
+      "max_concurrent_jobs": 5,
+      "timeout_seconds": 3600
+    },
+    "websocket": {
+      "max_connections": 10,
+      "ping_interval_seconds": 10,
+      "ping_timeout_seconds": 20
+    },
+    "observability": {
+      "log_level": "info",
+      "log_file": "logs/cpp_api_server.log",
+      "metrics_enabled": true
+    }
+  }
+}

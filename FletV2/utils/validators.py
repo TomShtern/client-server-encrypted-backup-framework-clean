@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from config import MAX_PORT, MIN_PORT
+try:
+    from ..config import MAX_PORT, MIN_PORT
+except ImportError:  # pragma: no cover - fallback for direct execution
+    try:
+        from FletV2.config import MAX_PORT, MIN_PORT  # type: ignore
+    except ImportError:
+        from config import MAX_PORT, MIN_PORT  # type: ignore
 
 
 def validate_port(value: str) -> tuple[bool, str]:

@@ -569,8 +569,11 @@ class RealBackupExecutor:
 
             # --- Job Registration ---
             expected_size = os.path.getsize(file_path)
-            with open(file_path, 'rb') as f:
-                expected_hash = hashlib.sha256(f.read()).hexdigest()
+            # Use streaming hash calculation to prevent memory overflow on large files
+            from Shared.utils.streaming_file_utils import calculate_file_hash_streaming
+            expected_hash = calculate_file_hash_streaming(file_path, 'sha256')
+            if expected_hash is None:
+                raise RuntimeError("Failed to calculate file hash - file may be inaccessible")
 
             job_id = f"backup_{username}_{os.path.basename(file_path)}"
 

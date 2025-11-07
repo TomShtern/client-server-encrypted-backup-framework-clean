@@ -918,8 +918,11 @@ def api_start_backup_working():
         def run_backup(executor: RealBackupExecutor, temp_file_path_for_thread: str, filename_for_thread: str, temp_dir_for_thread: str) -> None:
             try:
                 expected_size = os.path.getsize(temp_file_path_for_thread)
-                with open(temp_file_path_for_thread, 'rb') as f:
-                    expected_hash = hashlib.sha256(f.read()).hexdigest()
+                # Use streaming hash calculation to prevent memory overflow on large files
+                from Shared.utils.streaming_file_utils import calculate_file_hash_streaming
+                expected_hash = calculate_file_hash_streaming(temp_file_path_for_thread, 'sha256')
+                if expected_hash is None:
+                    raise RuntimeError("Failed to calculate file hash - file may be inaccessible")
                 logger.info(f"[Job {job_id}] Calculated verification data: Size={expected_size}, Hash={expected_hash[:8]}...")
 
                 def on_completion(result: Any) -> None:

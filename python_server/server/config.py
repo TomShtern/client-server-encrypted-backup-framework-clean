@@ -19,9 +19,41 @@ COMPATIBLE_VERSIONS = [3]  # List of explicitly compatible versions
 ALLOW_BACKWARD_COMPATIBILITY = True  # Allow clients with older compatible versions
 VERSION_TOLERANCE_ENABLED = True  # Enable flexible version checking
 PORT_CONFIG_FILE = "port.info"
-# DATABASE_NAME is now managed by config.database_config
-# Import from unified config: from config.database_config import get_database_path
-DATABASE_NAME = None  # Use unified config instead
+# Database name is managed by the unified configuration helper
+logger = logging.getLogger(__name__)
+
+try:
+    from config import database_config as _unified_database_config
+except ImportError:  # pragma: no cover - fallback when config package unavailable
+    _unified_database_config = None
+
+
+def _resolve_database_name() -> str:
+    """Resolve the database path using the unified configuration helpers."""
+
+    if _unified_database_config is not None:
+        try:
+            database_name = _unified_database_config.get_database_path()
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            logger.warning(
+                "Unified database configuration failed; falling back to legacy path: %s",
+                exc,
+            )
+        else:
+            if database_name:
+                return database_name
+            logger.warning(
+                "Unified database configuration returned an empty path; using legacy fallback.",
+            )
+    else:  # pragma: no cover - executed when config package missing entirely
+        logger.warning(
+            "Unified database configuration package unavailable; falling back to 'defensive.db'.",
+        )
+
+    return "defensive.db"
+
+
+DATABASE_NAME = _resolve_database_name()
 FILE_STORAGE_DIR = "received_files"  # Directory to store received files
 
 # Enhanced Database Configuration
@@ -67,20 +99,32 @@ def setup_logging():
     )
     return logging.getLogger(__name__)
 
+def _read_port_from_file(file_path: str) -> int:
+    """Read and validate port number from a configuration file.
+
+    Raises:
+        FileNotFoundError: if the file does not exist.
+        ValueError: if the file is empty, contains non-integer data, or the port is out of range.
+    """
+    with open(file_path) as f:
+        port_str = f.read().strip()
+    if not port_str:
+        raise ValueError("Port configuration file is empty.")
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(f"Invalid port number '{port_str}' in configuration file.")
+    # Typically, ports 0-1023 are privileged. Users should use >1023.
+    if not (1024 <= port <= 65535):
+        raise ValueError(f"Port number {port} is out of the recommended user range (1024-65535).")
+    logging.getLogger(__name__).info(f"Successfully read port {port} from configuration file '{file_path}'.")
+    return port
+
 def read_port_config() -> int:
     """Reads server port from `port.info`, defaults to `DEFAULT_PORT` on error."""
     logger = logging.getLogger(__name__)
     try:
-        with open(PORT_CONFIG_FILE) as f:
-            port_str = f.read().strip()
-            if not port_str:  # Handle case where port.info is empty
-                raise ValueError("Port configuration file is empty.")
-            port = int(port_str)
-            # Typically, ports 0-1023 are privileged. Users should use >1023.
-            if not (1024 <= port <= 65535):
-                raise ValueError(f"Port number {port} is out of the recommended user range (1024-65535).")
-            logger.info(f"Successfully read port {port} from configuration file '{PORT_CONFIG_FILE}'.")
-            return port
+        return _read_port_from_file(PORT_CONFIG_FILE)
     except FileNotFoundError:
         logger.warning(f"Port configuration file '{PORT_CONFIG_FILE}' not found. Using default port {DEFAULT_PORT}.")
         return DEFAULT_PORT
@@ -91,18 +135,19 @@ def read_port_config() -> int:
         logger.error(f"Unexpected error reading port configuration file '{PORT_CONFIG_FILE}': {e}. Using default port {DEFAULT_PORT}.")
         return DEFAULT_PORT
 
-def get_database_path():
-    """
-    Get database path from unified configuration.
+def get_database_path() -> str:
+    """Return the active database path, refreshing from the unified helper when possible."""
 
-    Returns:
-        str: Database path from unified config
-    """
-    try:
-        # Try to import from unified config
-        from config.database_config import get_database_path as unified_get_path
-        return unified_get_path()
-    except ImportError as e:
-        # Fallback to legacy behavior if unified config is not available
-        logger.warning(f"Could not import unified database config: {e}. Using legacy fallback.")
-        return "defensive.db"
+    if _unified_database_config is not None:
+        try:
+            if (path := _unified_database_config.get_database_path()):
+                return path
+            logger.warning(
+                "Unified database configuration returned an empty path during refresh; reusing cached value.",
+            )
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            logger.warning(
+                "Failed to refresh database path from unified configuration: %s. Reusing cached value.",
+                exc,
+            )
+    return DATABASE_NAME

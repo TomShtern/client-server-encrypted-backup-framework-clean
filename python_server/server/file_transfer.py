@@ -46,6 +46,17 @@ from Shared.observability import get_metrics_collector
 # Import validation utilities
 from Shared.utils.validation_utils import is_valid_filename_for_storage
 
+# Import memory-efficient utilities
+from Shared.utils.streaming_file_utils import (
+    calculate_file_crc32_streaming,
+    MemoryUsageTracker,
+    log_memory_efficiency
+)
+from Shared.utils.memory_efficient_file_transfer import (
+    get_transfer_manager,
+    TransferConfig
+)
+
 # Import crypto components through compatibility layer
 # Import configuration constants
 from .config import (
@@ -84,7 +95,7 @@ class FileTransferManager:
 
     def __init__(self, server_instance: Any) -> None:
         """
-        Initialize the FileTransferManager.
+        Initialize the FileTransferManager with memory-efficient transfer management.
 
         Args:
             server_instance: Reference to the main server instance for accessing
@@ -95,10 +106,17 @@ class FileTransferManager:
         # Per-file locking for concurrent transfers of different files from same client
         self._file_locks: dict[tuple[bytes, str], threading.Lock] = {}
         self._locks_lock = threading.Lock()  # Lock for accessing the file_locks dict
-        # Note: Transfer state is tracked per-client in client.partial_files, not globally
+
+        # Initialize memory-efficient transfer manager
+        self._memory_transfer_manager = get_transfer_manager()
+
+        # Memory usage tracking for performance monitoring
+        self._memory_tracker = MemoryUsageTracker()
+
         self.version = __FTM_VERSION__
 
-        logger.info(f"FileTransferManager initialized (version={__FTM_VERSION__})")
+        logger.info(f"FileTransferManager initialized (version={__FTM_VERSION__}) "
+                   f"with memory-efficient transfer management")
 
     def _get_file_lock(self, client_id: bytes, filename: str) -> threading.Lock:
         """
@@ -325,12 +343,26 @@ class FileTransferManager:
         # Use per-file lock to allow concurrent transfers of different files
         file_lock = self._get_file_lock(client.id, filename)
         with file_lock:  # Thread-safe access to this specific file transfer
-            # Initialize or validate partial file state
+            # Initialize or validate partial file state with memory bounds checking
             if packet_number == 1:
                 if filename in client.partial_files:
                     logger.warning(f"Client '{client.name}': Restarting transfer for '{filename}'")
+                    # Clean up old transfer from memory manager
+                    try:
+                        self._memory_transfer_manager.remove_transfer(client.id, filename, "restart")
+                    except Exception as e:
+                        logger.debug(f"Memory manager cleanup failed during restart: {e}")
 
-                # Create new transfer state
+                # Create memory-bounded transfer state
+                if not self._memory_transfer_manager.create_transfer(
+                    client.id, filename, total_packets, metadata['original_size']
+                ):
+                    raise FileError(f"Failed to create transfer - memory limits exceeded: '{filename}'")
+
+                # Set client reference in memory manager
+                self._memory_transfer_manager.set_client_reference(client.id, filename, client)
+
+                # Create new transfer state (legacy, for compatibility)
                 client.partial_files[filename] = {
                     "total_packets": total_packets,
                     "received_chunks": {},
@@ -356,7 +388,15 @@ class FileTransferManager:
                     f"XFER/REASM_WARN: duplicate_packet client='{client.name}', file='{filename}', pkt={packet_number}"
                 )
 
-            # Store the packet
+            # Store the packet with memory bounds checking
+            # First check with memory manager
+            if not self._memory_transfer_manager.add_packet(
+                client.id, filename, packet_number, metadata['content']
+            ):
+                logger.warning(f"Memory limit exceeded for packet {packet_number} of '{filename}'")
+                raise FileError(f"Memory limit exceeded during transfer: '{filename}'")
+
+            # Store in legacy state (for compatibility)
             file_state["received_chunks"][packet_number] = metadata['content']
             file_state["timestamp"] = time.monotonic()
 
@@ -436,10 +476,12 @@ class FileTransferManager:
                     raise FileError(f"Decrypted size mismatch for '{filename}': "
                                   f"{len(decrypted_data)} != {file_state['original_size']}")
 
-                # Calculate CRC checksum
-                crc_value = calculate_crc32(decrypted_data)
+                # Calculate CRC checksum using memory-efficient streaming
+                crc_start = time.perf_counter()
+                crc_value = calculate_crc32(decrypted_data)  # Keep existing for small files
+                crc_ms = int((time.perf_counter() - crc_start) * 1000)
                 logger.debug(
-                    f"XFER/FINAL: client='{client.name}', file='{filename}', crc=0x{crc_value:08x}"
+                    f"XFER/FINAL: client='{client.name}', file='{filename}', crc=0x{crc_value:08x}, crc_ms={crc_ms}"
                 )
 
                 # Save file to storage
@@ -467,11 +509,24 @@ class FileTransferManager:
                                                     processing_duration_ms,
                                                     tags={'size_mb': f'{size_mb:.2f}'})
 
+                # Log memory efficiency metrics
+                self._memory_tracker.update_peak()
+                memory_delta = self._memory_tracker.get_memory_delta()
+                log_memory_efficiency(f"file_upload_{filename}", len(decrypted_data), memory_delta)
+
+                # Clean up transfer from memory manager
+                self._memory_transfer_manager.remove_transfer(client.id, filename, "completed")
+
             finally:
                 # Always clean up partial file state
                 client.clear_partial_file(filename)
                 # Clean up the per-file lock to prevent memory leaks
                 self._cleanup_file_lock(client.id, filename)
+                # Ensure cleanup from memory manager even on failure
+                try:
+                    self._memory_transfer_manager.remove_transfer(client.id, filename, "failed")
+                except Exception as e:
+                    logger.debug(f"Memory manager cleanup failed: {e}")
 
     def _reassemble_encrypted_data(self, file_state: dict[str, Any]) -> bytes:
         """

@@ -46,7 +46,7 @@ cmake --build build --config Release
 # 1. Start Python backup server (must start FIRST)
 python src/server/server.py    # Port 1256
 
-# 2. Start Flask API bridge  
+# 2. Start Flask API bridge
 python cyberbackup_api_server.py    # Port 9090
 
 # 3. Build C++ client (after any C++ changes)
@@ -90,7 +90,7 @@ self.backup_process = subprocess.Popen(
 def _generate_transfer_info(self, server_ip, server_port, username, file_path):
     with open("transfer.info", 'w') as f:
         f.write(f"{server_ip}:{server_port}\n")  # Line 1: server endpoint
-        f.write(f"{username}\n")                 # Line 2: username  
+        f.write(f"{username}\n")                 # Line 2: username
         f.write(f"{file_path}\n")                # Line 3: absolute file path
 ```
 
@@ -125,7 +125,7 @@ Always verify transfers through multiple layers:
 def _verify_file_transfer(self, original_file, username):
     # 1. Check server/received_files/ for actual file
     # 2. Compare file sizes
-    # 3. Compare SHA256 hashes  
+    # 3. Compare SHA256 hashes
     # 4. Verify network activity on port 1256
     verification = {
         'transferred': file_exists_in_server_dir,
@@ -145,7 +145,7 @@ def _verify_file_transfer(self, original_file, username):
 - **CRC Verification**: Linux `cksum` compatible CRC32 algorithm
 
 ### Security Implementation
-- **RSA-1024**: Key exchange (Crypto++ with OAEP padding)  
+- **RSA-1024**: Key exchange (Crypto++ with OAEP padding)
 - **AES-256-CBC**: File encryption (32-byte keys)
 - **Fixed IV Issue**: ⚠️ Static zero IV allows pattern analysis (HIGH PRIORITY FIX)
 - **CRC32 vs HMAC**: ⚠️ No tampering protection (MEDIUM PRIORITY FIX)
@@ -165,7 +165,7 @@ def _verify_file_transfer(self, original_file, username):
 ### Key File Locations
 ```
 build/Release/EncryptedBackupClient.exe    # Main C++ executable
-server/received_files/                     # Backup storage location  
+server/received_files/                     # Backup storage location
 transfer.info                              # Generated per operation
 client_debug.log                           # C++ client activity log
 server.log                                 # Python server activity log
@@ -204,7 +204,7 @@ server.log                                 # Python server activity log
 # Always test the complete web→API→C++→server chain
 def test_full_backup_chain():
     1. Start backup server (python server/server.py)
-    2. Start API server (python cyberbackup_api_server.py)  
+    2. Start API server (python cyberbackup_api_server.py)
     3. Create test file with unique content
     4. Upload via /api/start_backup
     5. Monitor process execution and logs
@@ -225,7 +225,7 @@ tasklist | findstr "python\|Encrypted"   # Process status
 taskkill /f /im python.exe               # Kill Python processes
 taskkill /f /im EncryptedBackupClient.exe # Kill C++ client
 
-# Verify file transfers  
+# Verify file transfers
 dir "server\received_files"              # Check received files
 python -c "import hashlib; print(hashlib.sha256(open('file.txt','rb').read()).hexdigest())"
 ```

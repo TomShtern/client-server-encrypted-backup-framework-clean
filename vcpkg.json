@@ -3,8 +3,13 @@
     "boost-asio",
     "boost-beast",
     "boost-iostreams",
+    "boost-process",
     "cryptopp",
-    "zlib",
-    "sentry-native"
+    "drogon",
+    "nlohmann-json",
+    "sentry-native",
+    "spdlog",
+    "sqlitecpp",
+    "zlib"
   ]
 }

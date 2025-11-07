@@ -1,370 +1,584 @@
----
-description: AI rules derived by SpecStory from the project AI interaction history
+# Client-Server Encrypted Backup Framework – AI Agent Guide
 
----
+## System Architecture
 
-# Client-Server Encrypted Backup Framework – AI Field Guide
+**Dual-GUI encrypted backup system** with three independent paths to the same BackupServer:
 
-## Mission Snapshot
-- Production-grade encrypted backup stack combining Flet 0.28.3 desktop GUI, Flask bridge, Python TCP server, native C++ client, and SQLite database.
-- Security pipeline: RSA-1024 handshake seeds AES-256-CBC streams, CRC32 verifies payload integrity, timestamps use `time.monotonic()`, structured logging via `Shared/logging_config`.
-- Windows-first deployment: PowerShell launchers prepare environment, activate `flet_venv`, start TCP server, then launch GUI.
-- **CRITICAL**: All entry points must import `Shared.utils.utf8_solution` **before anything else** for reliable UTF-8 console I/O on Windows.
-- Direct Python method integration: GUI creates BackupServer instance and calls methods directly (no HTTP API overhead).
-- Network server runs on TCP 1256 for C++ clients, Flask bridge on HTTP 9090 for web GUI, Flet GUI as desktop app.
-- `defensive.db` stores metadata; binary files in `python_server/server/received_files/`.
+```
+FletV2 Desktop GUI (admin) → ServerBridge → BackupServer (port 1256) ← C++ Client
+                                                ↑
+Web GUI (end-users) → Flask API Server (port 9090) → RealBackupExecutor → C++ Client
+                                                ↓
+                              SQLite defensive.db (shared)
+```
 
-## Architecture Big Picture
-- **Flow**: FletV2 GUI creates BackupServer instance directly → ServerBridge delegates to Python methods → C++ client connects via TCP 1256 → encrypted storage in `defensive.db` and files in `python_server/server/received_files/`.
-- **FletV2/**: Feature views (`views/`), shared UI components (`utils/`), ServerBridge for server integration, advanced theming (`theme.py`).
-- **python_server/**: BackupServer main class, network layer (`network_server.py`), database pool (`database.py`), protocol handling (`protocol.py`).
-- **api_server/**: Flask bridge for C++ client web GUI, REST endpoints for external automation.
-- **Client/**: C++ implementation of binary protocol; rebuild when protocol changes.
-- **Shared/**: UTF-8 bootstrap, logging config, retry utilities, metrics collection.
+- **FletV2 Desktop**: Admin interface with direct Python method calls via ServerBridge (no HTTP)
+- **Web GUI**: End-user backup interface via Flask API spawning C++ client subprocesses
+- **C++ Client**: Binary protocol implementation for encrypted file transfers
+- **BackupServer**: Python server with TCP listener on port 1256, handles protocol messages
+- **Database**: SQLite `defensive.db` with file-level locking for concurrent access
 
-## Critical Integration Patterns (Updated October 2025)
+## Critical Integration Points
 
-### 🚨 CRITICAL: Async/Sync Integration & Deadlock Prevention
-**99% of GUI freezes come from blocking calls in async functions**. Dashboard deadlock (24 Oct 2025) was caused by `server_bridge.is_connected()` called from async context.
+### The Network Listener Problem (January 2025 Fix)
+**MUST call `server_instance.start()`** in `FletV2/start_with_server.py` (line 78) or C++ clients cannot connect. The BackupServer creates a NetworkServer daemon thread that listens on port 1256. Without this call, the system appears to run but all file transfers fail silently.
+
+### Protocol Version Lock
+Protocol version **3** is hardcoded in both client and server. Changes require:
+1. Update `python_server/server/protocol.py` constants (REQ_*/RESP_* codes)
+2. Update `Client/include/ProtocolEnums.h` matching definitions
+3. Rebuild C++ client: `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake" && cmake --build build --config Release`
+4. Update tests in `tests/test_protocol.py`
+
+### ServerBridge Pattern (FletV2 Only)
+- Direct delegation to BackupServer Python methods (no API layer)
+- Normalizes responses to `{"success": bool, "data": ..., "error": str}`
+- Mock mode (`utils/mock_database_simulator.py`) returns empty structures, not fabricated data
+- Auto-detects real server via `/health` check when `REAL_SERVER_URL` set
+
+## Essential Workflows
+
+### Launch Commands
+```bash
+# Recommended: Full system (builds C++ client, starts all services)
+python scripts/one_click_build_and_run.py
+
+# FletV2 GUI only (for UI dev)
+python FletV2/start_with_server.py
+# OR use VS Code task: "Run FletV2 App(Desktop mode-NO browser) with Server (PS1)"
+
+# Flask API bridge only (for web GUI dev)
+python api_server/cyberbackup_api_server.py
+```
+
+### Build System
+C++ client requires vcpkg toolchain. Missing this causes cryptic linker errors:
+```bash
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg\scripts\buildsystems\vcpkg.cmake"
+cmake --build build --config Release
+```
+
+### Testing Strategy
+```bash
+# Protocol/database tests (fast)
+pytest tests/test_protocol.py tests/test_comprehensive_database.py tests/test_async_patterns.py
+
+# Code quality
+ruff check FletV2 Shared python_server api_server  # Linting
+pyright                                              # Type checking
+python -m compileall FletV2/main.py                 # Syntax validation
+
+# GUI smoke test: manual after UI changes (navigate Dashboard → Clients → Files → Database → Analytics)
+```
+## FletV2 Development Patterns
+
+### Async/Sync Integration Rule
+**99% of GUI freezes** come from blocking calls in async functions. Dashboard deadlock (Oct 2024) was caused by `server_bridge.is_connected()` in async context.
 
 ```python
-# ❌ WRONG - Causes deadlock/freeze
-async def _apply_snapshot(snapshot):
-    status = server_bridge.is_connected()  # BLOCKS EVENT LOOP!
-
-# ❌ ALSO WRONG - Direct await on sync method
+# ❌ WRONG - Freezes UI
 async def load_data():
-    result = await bridge.get_clients()  # FREEZE if get_clients() is sync!
+    result = server_bridge.get_clients()  # BLOCKS event loop
 
-# ✅ CORRECT - Use run_sync_in_executor for ALL sync server calls
-async def load_data():
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, bridge.get_clients)
-
-# ✅ BETTER - Use helper from async_helpers
+# ✅ CORRECT - Use executor
 from FletV2.utils.async_helpers import run_sync_in_executor
 async def load_data():
-    result = await run_sync_in_executor(bridge.get_clients)
+    result = await run_sync_in_executor(server_bridge.get_clients)
 ```
 
-**Deadlock Prevention Rules:**
-1. **NEVER** call `server_bridge.is_connected()` from async functions - it can block
-2. **NEVER** call ANY `server_bridge.*()` sync method directly from async code
-3. **ALWAYS** wrap with `run_sync_in_executor()` or use `_async` variant
-4. **PREFER** snapshot data over live queries (faster, non-blocking)
-5. **ADD** `await asyncio.sleep(0)` before `.update()` calls to yield event loop
-6. **ServerBridge.is_connected()** now has 1-second cache - still avoid calling from async
+### View Architecture (5-Section Pattern)
+All views follow: Data Fetching → Business Logic → UI Components → Event Handlers → Main View
+- See `FletV2/architecture_guide.md` for full pattern
+- Use `ft.Ref[ft.ControlType]()` for controls referenced before `build()`.
+- Every `setup_fn` needs matching `dispose_fn` (cancel tasks, remove overlays, unsubscribe)
 
-**See:** `AI-Context/DASHBOARD_DEADLOCK_FIX_24OCT2025.md` for full post-mortem
+### UI Update Hierarchy
+1. **Prefer** `control.update()` (fastest, targeted)
+2. **Use** `page.update()` only for themes/dialogs/overlays
+3. **Never** loop `page.update()` - causes 16ms+ frame times
 
-### The 5-Section Pattern for Views
-All new views must follow the 5-section architecture (see `FletV2/architecture_guide.md`):
-1. **Data Fetching** - Async wrappers for ServerBridge calls with `run_in_executor`
-2. **Business Logic** - Pure functions for filtering, calculations, exports (testable)
-3. **UI Components** - Flet control builders (cards, buttons, containers)
-4. **Event Handlers** - User interaction handlers (clicks, changes, form submissions)
-5. **Main View** - View composition, lifecycle, and public API
+### Flet 0.28.3 Limitations
+- No `SelectableText` - use `ft.Text(selectable=True)`
+- No `ft.Colors.SURFACE_VARIANT` - use `ft.Colors.SURFACE` or `ft.Colors.GREY_100`
+- No `Dropdown(height=...)` - parameter not supported
+- Icons: use `SAVE_OUTLINED` not `SAVE_AS_OUTLINE`, `DATASET` not `DATABASE`
+## Data & Protocol Contracts
 
-### ServerBridge Direct Method Pattern
-- **NO API calls** - ServerBridge delegates directly to BackupServer Python methods
-- **Data conversion** - Handles BLOB UUID ↔ string conversions automatically
-- **Structured responses** - Always returns `{'success': bool, 'data': Any, 'error': str}`
-- **No mock data** - Mock mode returns empty structures, not fabricated data
+### Binary Protocol Structure
+- **Frame**: 16-byte UUID | 1-byte version | 2-byte opcode (LE) | 4-byte payload size (LE) | payload | CRC32
+- **Encryption**: RSA-1024 (OAEP-SHA256) for key exchange, AES-256-CBC for files (zero IV per spec)
+- **Checksum**: Linux `cksum` algorithm (NOT standard CRC-32)
 
-## Environment & Tooling Essentials
-- Python tooling pinned in `flet_venv\`; activate with `flet_venv\Scripts\Activate.ps1` before manual commands.
-- Flet version **0.28.3** is required; avoid newer APIs (no `SelectableText`, limited icons). Use `ft.Text(selectable=True)` instead.
-- **CRITICAL environment variables** (PowerShell launchers set these automatically):
-  - `PYTHONNOUSERSITE=1` - Prevents user-site package conflicts (common source of `pydantic_core` errors)
-  - `CYBERBACKUP_DISABLE_INTEGRATED_GUI=1` - Disable server's embedded GUI, use FletV2 instead
-  - `FLET_V2_DEBUG=1` - Verbose GUI logging for debugging
-  - `FLET_DASHBOARD_DEBUG=1` - Dashboard debugging output
-- **Launch workflows**:
-  - **Recommended**: `pwsh -File FletV2/start_with_server.ps1` - Starts server + GUI
-  - **Development**: `python FletV2/start_with_server.py` - Manual server start
-  - **C++ client build**: `cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake" && cmake --build build --config Release`
+### Transfer Configuration (`transfer.info`)
+Exactly 3 lines (no empty lines):
+```
+127.0.0.1:1256
+username
+C:\absolute\path\to\file.ext
+```
 
-## Development Workflow
-- **Lint & Format**: `ruff check FletV2 Shared python_server api_server` and `ruff format FletV2 Shared python_server api_server`
-- **Type checking**: `pyright` (configured in `pyrightconfig.json`, excludes `python_server/`)
-- **Testing**: `pytest tests/` - focus on business logic and protocol tests
-- **Syntax validation**: `python -m compileall FletV2/main.py` catches issues linters miss
-- **GUI smoke test**: Run PowerShell launcher, navigate Dashboard → Clients → Files → Database → Analytics
+### Database Schema
+- `clients`: id, client_id (UUID), name, created_at, last_seen, total_files, total_bytes
+- `files`: id, client_id FK, path_hash, original_name, size_bytes, checksum_crc32, stored_at
+- `transfers`: id, file_id FK, status, started_at, completed_at, duration_ms, failure_reason
+- Connection via `DatabaseManager.get_connection()` with retry decorator for `sqlite3.OperationalError`
+- Files stored in `python_server/server/received_files/` with hashed names
+## Configuration & Environment
 
-## Critical Database Patterns (Updated October 2025)
-- **Always use connection pooling**: `with db_manager.get_connection() as conn:`
-- **Database-first operations**: Modify database before memory to prevent phantom records
-- **Retry decorators**: All database methods must use `@retry` decorator for `sqlite3.OperationalError`
-- **Input validation**: Centralized validation patterns (see `server.py` lines 857-877)
-- **Time calculations**: Use `time.monotonic()` never `time.time()` for durations
-
-## Data & Protocol Contract
-- **Frame layout** (little-endian): 16-byte UUID | 1-byte protocol version | 2-byte opcode | 4-byte payload length | payload bytes | CRC32
-- **Protocol sync**: Keep Python (`python_server/server/protocol.py`) and C++ (`Client/include/ProtocolEnums.h`) definitions identical
-- **transfer.info**: Exactly three UTF-8 lines - `host:port`, username, absolute file path
-- **Database**: `defensive.db` stores metadata; binary files in `python_server/server/received_files/` using hashed naming
-- **Schema changes**: Update migrations, GUI converters, and analytics simultaneously
-
-## Key Database Tables
-- **clients**: id, client_id (UUID), name, created_at, last_seen, total_files, total_bytes
-- **files**: id, client_id FK, path_hash, original_name, size_bytes, checksum_crc32, stored_at
-- **transfers**: id, file_id FK, status, started_at, completed_at, duration_ms, failure_reason
-- **alerts**: id, severity, component, message, created_at, acknowledged_at
-- **telemetry**: retry counters, queue depth, worker_pool metrics for historical analytics
-
-## Flet 0.28.3 Ground Rules
-- **ALWAYS call** `page.run_task(my_async_fn)` with the coroutine **function**, never `my_async_fn()` (raises `AssertionError`)
-- **NEVER block UI thread**: Replace `time.sleep()` with `await asyncio.sleep()` or schedule via `page.run_task`
-- **Use targeted updates**: `control.update()` wherever possible; reserve `page.update()` for global changes (theme, overlays)
-- **Attach before updating**: ListView updates before attachment trigger "ListView Control must be added to the page first"
-- **Icon availability**: Check `ft.Icons` - use `SAVE_OUTLINED` instead of `SAVE_AS_OUTLINE`, `DATASET` instead of `DATABASE`
-- **Avoid unsupported params**: `ft.Dropdown(height=...)` is unsupported; `ResponsiveRow` does NOT support `column_spacing`
-- **Proper cleanup**: Every `setup_fn` needs `dispose_fn` that cancels tasks, unsubscribes listeners, removes overlays
-- **Theme system**: All tokens in `theme.py` (`PRONOUNCED_NEUMORPHIC_SHADOWS`, `GLASS_MODERATE`) - use them for consistent styling
-
-## Critical Anti-Patterns (Updated October 2025)
-- **❌ NEVER await sync methods**: `result = await bridge.get_clients()` causes permanent freeze
-- **✅ ALWAYS use run_in_executor**: `result = await loop.run_in_executor(None, bridge.get_clients)`
-- **❌ NEVER use `time.sleep()`** in async code: causes UI freeze
-- **✅ ALWAYS use `await asyncio.sleep()`** for delays
-- **❌ NEVER call `asyncio.run()`** inside Flet: event loop already running
-- **✅ ALWAYS add diagnostic logging** to identify freeze points
-
-## View Development Best Practices (October 2025)
-
-### Critical Initialization Patterns:
-- **Always initialize all instance attributes in `__init__`** before they're referenced in `build()` or helper methods
-- **Use `ft.Ref[ft.ControlType]()` pattern** for controls that need to be referenced before the view is built
-- **Prefer dynamic calculation over stored state** for derived values to eliminate state synchronization bugs
-
-### UI Simplification Principles:
-- **Simpler is better**: Remove complexity rather than adding it
-- **Follow community patterns**: ListTile-style rows, clean section headers, subtle borders
-- **One responsibility per component**: Status bars show status, action buttons handle actions
-
-### Space-Efficient Layout Patterns:
-- **Horizontal label+control layout**: Use `Row([Container(Text(label), width=fixed), control])` instead of vertical stacking
-- **Use tooltips over descriptions**: `control.tooltip = description` instead of separate `Text(description)` control
-- **Compact padding values**: ListView `padding=ft.padding.all(10-12)`, field rows `vertical=6-8px`
-- **Responsive breakpoints**: Horizontal layout >800px, vertical layout ≤800px
-
-## Common Error Patterns & Solutions
-- **UTF-8 corruption**: Verify `Shared.utils.utf8_solution` import is first in the file
-- **GUI freeze**: Check for `await bridge.method()` calls - wrap with `run_in_executor`
-- **Database locks**: Use `with db_manager.get_connection() as conn:` context managers
-- **Protocol mismatch**: Compare Python `OPCODE_*` with `Client/include/ProtocolEnums.h`
-- **Mock bridge confusion**: Check `server_bridge.is_real()` before destructive actions
-- **AttributeError**: Ensure all attributes initialized in `__init__` before use
-- **ListView errors**: Delay updates until after `setup_fn` or guard with `if control.page:`
-
-## Known Flet 0.28.3 Limitations
-- **No `SelectableText`**: Use `ft.Text(selectable=True)`
-- **No `text_style` parameter**: Set `size`, `weight`, `color` directly on `ft.Text`
-- **No `Dropdown(height=...)`**: Remove height parameter
-- **No `ResponsiveRow(column_spacing=...)`**: Use only `run_spacing`
-- **No `ft.Colors.SURFACE_VARIANT`**: Use `ft.Colors.SURFACE` or `ft.Colors.GREY_100`
-- **Missing icons**: Use `SAVE_OUTLINED` instead of `SAVE_AS_OUTLINE`, `DATASET` instead of `DATABASE`
-
-## Security & Compliance
-- Never commit private keys or credentials. Key rotation scripts in `scripts/`; document runs in `security_notes.md`
-- Store secrets in environment variables; sanitize logs with `StructuredLogger`. Avoid `print()` for debugging
-- AES must use 256-bit keys and fresh IV per chunk; verify via integration tests after crypto changes
-- After dependency changes, run `codacy_cli_analyze --root-path . --tool trivy` when Codacy MCP is available
-
-## Release & Ops Checklists
-- **Pre-commit**: `ruff check`, `ruff format --check`, `pytest -vv`, C++ rebuild, `python -m compileall FletV2/main.py`, GUI smoke test
-- **Pre-release**: Full E2E transfer (create `transfer.info`, send file, confirm DB entry and CRC), review analytics, archive logs + SQLite snapshots
-- **Incident response**: Collect `server.log`, `defensive.db` copy, `received_files` artifacts, `transfer.info`, GUI logs from `FletV2/logs/`
-- **Protocol bump**: Update Python + C++ enums, document in `Protocol_Change_Log.md`, rebuild client, update tests
-- **Schema changes**: Sync migrations, DB init scripts, GUI forms, analytics transformers; update `DATABASE_VIEW_FIX_SUMMARY.md`
-
-## Development Tools & Diagnostics
-- **Configuration validation**: `python python_server/server/server.py --dry-run`
-- **Dashboard testing**: `python FletV2/debug_dashboard.py`
-- **Database inspection**: `python scripts/check_db.py`
-- **Full flow validation**: `python debug_full_flow.py`
-- **UI optimization**: `rg "page\.update" FletV2` to locate heavy UI updates
-- **Async pattern testing**: `pytest tests/test_async_patterns.py` to find blocking calls
-
-## Documentation & Code Quality
-- Update `FletV2_Fix_Verification_Report.md`, `ANALYTICS_VIEW_FIXES.md`, `Protocol_Change_Log.md` when touching subsystems
-- Add architectural notes in `AI-Context/` for major changes
-- Keep diagrams in `important_docs/` aligned with code changes
-- **Code style**: Use `with contextlib.suppress(Exception):`, avoid bare `except:`, prefer `len()` over generator sums
-- **Import patterns**: Use relative→absolute fallback pattern for cross-context compatibility
-- **Performance**: Limit `page.update()` usage, log counts to audit regressions
-
-## Styling & UX Standards
-- Preserve neumorphic and glassmorphism treatments: use theme helpers, consistent blur (10–14px) and opacity (0.08–0.18)
-- Follow 8px spacing grid; prefer Flet native spacing parameters
-- Keep KPI cards actionable (dashboard cards navigate to relevant views)
-- Maintain accessibility: color contrast, focus indicators, tooltips for truncated text
-
-## Troubleshooting Common Issues
-- **Blank/gray view**: Confirm AnimatedSwitcher `setup_fn` executed after attachment; add `await asyncio.sleep(0.25)` post-transition
-- **Missing mock banner**: Ensure `server_bridge` publishes state to `StateManager` in `setup_fn`
-- **Database view freeze**: Replace DataTable with themed cards; batch updates
-- **Native client hang**: Regenerate `transfer.info`, confirm server listening on 1256, verify handshake version
-- **Retry storms**: Check `Shared/metrics_collector` output; throttle via retry decorator
-- **Analytics showing zeros**: Kick off data fetch with `page.run_task(fetch_fn)`, guard against `None`
-- **Large files**: When modifying `views/enhanced_logs.py`, `views/database_pro.py`, `views/dashboard.py`, extract helpers into `utils/`
-
-## ServerBridge API Cheatsheet
-- `get_all_clients_from_db()` returns list of dicts; expect keys `id`, `client_id`, `name`, `status`, `last_seen`, `files_count`, `total_size`
-- `get_files()` enumerates every record; pass filtering to the view to avoid extra server calls
-- `get_client_files(client_id)` is synchronous; wrap in `page.run_task` to keep UI responsive
-- `download_file(file_id)` emits bytes; real bridge streams to disk, mock writes into temp directory
-- `delete_file(file_id)` cascades to metadata tables; confirm `.success` and refresh UI via `StateManager.publish`
-- `get_database_info()` returns schema summary; hydrate DataTable headings from the `columns` list
-- `update_table_row(table_name, row_id, payload)` is tolerant of partial payloads but requires matching column names
-- `get_logs(offset, limit)` and `get_log_stats()` power the enhanced logs view; mock mode uses JSON fixtures
-- `get_server_status_async()` pairs with `get_system_metrics()` to drive dashboard gauges; expect `uptime`, `active_clients`, `queue_depth`
-- `start_server()` and `stop_server()` exist for integration testing; no-ops in mock mode but return informative `.message`
-
-## Database Quick Reference
-- **Connection pattern**: `with db_manager.get_connection() as conn:`
-- **CRUD operations**: Use helper methods in `database.py` - never raw SQL
-- **Transaction handling**: Use `conn.execute()` for multiple statements, commit manually
-- **UUID handling**: Convert between string and BLOB formats using `blob_to_uuid_string()` and `uuid_string_to_blob()`
-- **Time calculations**: Always use `time.monotonic()` for durations, never `time.time()`
-- **Retry pattern**: All database methods must use `@retry` decorator for `sqlite3.OperationalError`
-
-## Critical Testing Commands
+### Required Environment Variables (set by launchers)
 ```bash
-# Lint and format
-ruff check FletV2 Shared python_server api_server
-ruff format FletV2 Shared python_server api_server
-
-# Type checking
-pyright  # Respects pyrightconfig.json exclusions
-
-# Protocol testing
-pytest tests/test_protocol.py::test_handshake_success -vv
-
-# Database testing
-pytest tests/test_comprehensive_database.py -v
-
-# Async pattern validation
-pytest tests/test_async_patterns.py -v
-
-# GUI smoke test
-pwsh -File FletV2/start_with_server.ps1
+PYTHONNOUSERSITE=1                      # Prevent user site-packages conflicts
+CYBERBACKUP_DISABLE_INTEGRATED_GUI=1   # Use FletV2 instead of embedded server GUI
+FLET_V2_DEBUG=1                         # Verbose GUI logging
+FLET_DASHBOARD_DEBUG=1                  # Dashboard-specific logging (use sparingly - performance hit)
 ```
 
-## Quick Reference Commands
+### UTF-8 Bootstrap Requirement
+**First import** in entry files must be `Shared.utils.utf8_solution` to configure Windows console encoding. Missing this causes:
+- UnicodeEncodeError when printing logs
+- GUI display corruption with non-ASCII characters
+- Applies to: `FletV2/main.py`, `python_server/server/server.py`, `api_server/cyberbackup_api_server.py`
+## Common Pitfalls
 
-### Development Workflow
-```bash
-# Start full system (recommended)
-pwsh -File FletV2/start_with_server.ps1
+1. **Port 1256 conflicts**: Stale Python processes hold the socket. Kill before restart: `taskkill /f /im python.exe`
+2. **Missing network listener**: Verify "Network server started" in logs. See "Network Listener Problem" above.
+3. **Protocol version mismatch**: Update both `protocol.py` and `ProtocolEnums.h`, rebuild C++ client.
+4. **Async freeze**: Never call sync ServerBridge methods from async code without executor wrapper.
+5. **Mock mode confusion**: Check `server_bridge.is_real()` before destructive operations.
+6. **Theme token changes**: Preserve neumorphic/glassmorphism tokens in `FletV2/theme.py` - QA depends on them.
 
-# Start GUI only (development mode)
-python FletV2/start_with_server.py
+## Code Quality Standards
 
-# Build C++ client
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
-cmake --build build --config Release
-
-# Code quality checks
-ruff check FletV2 Shared python_server api_server
-ruff format FletV2 Shared python_server api_server
-pyright
-python -m compileall FletV2/main.py
+### Structured Logging
+Use `Shared/logging_config.py` for all logging. Avoid `print()` except for startup messages:
+```python
+import logging
+logger = logging.getLogger(__name__)
+logger.info("Client connected", extra={"client_id": uuid_str, "ip": addr})
 ```
 
-### Environment Setup
-```bash
-# Activate virtual environment
-flet_venv\Scripts\Activate.ps1
+### Type Safety
+- Run `pyright` before committing (config in `pyrightconfig.json`)
+- `python_server/` excluded from type checking due to dynamic protocol handling
 
-# Set critical environment variables
-$env:PYTHONNOUSERSITE = "1"
-$env:CYBERBACKUP_DISABLE_INTEGRATED_GUI = "1"
-$env:FLET_V2_DEBUG = "1"
+### File Organization
+Legacy TkInter GUI (40k+ lines) archived to `_legacy/server_gui/` (Jan 2025). Do not modify.
+
+## ServerBridge API Reference
+
+### Core Methods
+All methods return `{"success": bool, "data": Any, "error": str}` structure.
+
+**Client Operations:**
+```python
+get_all_clients_from_db() -> dict  # Returns list of clients with UUID conversion
+get_clients_async() -> dict        # Async variant
+get_client_by_id(client_id: str) -> dict
+add_client(client_data: dict) -> dict
+delete_client(client_id: str) -> dict
+update_client(client_id: str, data: dict) -> dict
+disconnect_client(client_id: str) -> dict
 ```
 
-## Final Reminders
-- **ALWAYS summarize findings** before large fixes; stakeholders expect quick brief referencing component + command run
-- **Re-run lint/tests** after edits even if changes seem trivial; `ruff` catches stray imports quickly
-- **Remove temporary prints** and ensure structured logging includes `client_id`, `opcode`, durations
-- **Keep Codacy MCP results** attached to PRs once toolchain is restored; for now document attempts if CLI is unavailable
-- **Update this guide** whenever workflows, protocol, or architecture boundaries move so future agents inherit accurate playbooks
+**File Operations:**
+```python
+get_files() -> dict                 # All files
+get_client_files(client_id: str) -> dict
+delete_file(file_id: str) -> dict
+download_file(file_id: str) -> bytes | Path  # Returns temp path in mock mode
+verify_file(file_id: str) -> dict
+```
 
-## Quick Reference Commands
+**Database Operations:**
+```python
+get_database_info() -> dict         # Schema, table stats, size
+get_table_data(table_name: str) -> dict
+update_row(table: str, id: str, data: dict) -> dict
+delete_row(table: str, id: str) -> dict
+add_row(table: str, data: dict) -> dict
+```
 
-## ServerBridge API Cheatsheet
-- `get_all_clients_from_db()` returns list of dicts; expect keys `id`, `client_id`, `name`, `status`, `last_seen`, `files_count`, `total_size`.
-- `get_files()` enumerates every record; pass filtering to the view to avoid extra server calls.
-- `get_client_files(client_id)` is synchronous; wrap in `page.run_task` to keep UI responsive.
-- `download_file(file_id)` emits bytes; real bridge streams to disk, mock writes into temp directory defined in `mock_database_simulator.py`.
-- `delete_file(file_id)` cascades to metadata tables; confirm `.success` and refresh UI via `StateManager.publish`.
-- `get_database_info()` returns schema summary; hydrate DataTable headings from the `columns` list.
-- `update_table_row(table_name, row_id, payload)` is tolerant of partial payloads but requires matching column names.
-- `get_logs(offset, limit)` and `get_log_stats()` power the enhanced logs view; mock mode uses JSON fixtures under `FletV2/data/`.
-- `get_server_status_async()` pairs with `get_system_metrics()` to drive dashboard gauges; expect `uptime`, `active_clients`, `queue_depth`.
-- `start_server()` and `stop_server()` exist for integration testing; no-ops in mock mode but return informative `.message`.
+**Server Status:**
+```python
+get_server_status_async() -> dict   # Health, uptime, active connections
+get_system_status() -> dict         # CPU, memory, disk metrics
+get_analytics_data() -> dict        # Aggregated statistics
+start_server() -> dict              # Control operations
+stop_server() -> dict
+test_connection() -> dict
+```
 
-## Database Tables Overview
-- `clients`: id, client_id (UUID), name, created_at, last_seen, total_files, total_bytes.
-- `files`: id, client_id FK, path_hash, original_name, size_bytes, checksum_crc32, stored_at.
-- `transfers`: id, file_id FK, status, started_at, completed_at, duration_ms, failure_reason.
-- `alerts`: id, severity, component, message, created_at, acknowledged_at.
-- `telemetry`: captures retry counters, queue depth, worker_pool metrics for historical dashboards.
-- Use the helper `database_migrations.py` to apply schema upgrades; never hand-edit `defensive.db`.
-- When introducing new tables, update ORM-like accessors in `database.py` and converters in `server_bridge.py`.
+**Logs:**
+```python
+get_logs(offset: int = 0, limit: int = 100) -> dict
+get_log_stats() -> dict
+clear_logs() -> dict
+export_logs(format: str) -> dict
+```
 
-## Testing Scenarios Worth Automating
-- **Handshake regression**: `pytest tests/test_protocol.py::test_handshake_success` ensures RSA/AES pipeline intact.
-- **Mock bridge CRUD**: `pytest tests/test_mock_server_bridge.py -k crud` for client/file operations without server.
-- **Database smoke**: `pytest tests/test_comprehensive_database.py` verifies pooling, migrations, and stats functions.
-- **Async guardrails**: `pytest tests/test_async_patterns.py` catches accidental `time.sleep` usage or missing awaits.
-- **GUI snapshot**: use Playwright MCP (once enabled) to capture dashboard after initial load; confirm cards, charts, and banners render.
-- **C++ client integration**: after building, run `EncryptedBackupClient.exe --batch tests/artifacts/transfer.info` and check server logs for CRC confirmation.
+### Data Conversion Utilities
+Located in `FletV2/utils/server_bridge.py`:
 
-## Known Error Messages & Resolutions
-- `sqlite3.OperationalError: database is locked` → ensure all DB writes run inside `with db_manager.get_connection()` and commit quickly.
-- `ValueError: AnimatedSwitcher requires a child control` → view returned `None`; verify `create_*_view` returns actual `ft.Control`.
-- `AttributeError: 'NoneType' object has no attribute 'page'` → control updated before attachment; add guard `if control and control.page`.
-- `OSError: [WinError 10048] Address already in use` → port 1256 busy; kill stray python instances or adjust `server_port` in config.
-- `RuntimeError: Task pending after dispose` → cancel background tasks in `dispose_fn` using stored cancellation tokens.
-- `httpx.ConnectError` in real bridge mode → confirm `REAL_SERVER_URL`, TLS settings, and network reachability before retrying.
-- `CRC mismatch` in transfer logs → cross-check AES key negotiation, regenerate client binary if protocol version diverges.
-- `PermissionError` writing to `received_files` → ensure process has write permissions; PowerShell script sets ACLs during launch.
+```python
+# UUID conversions (BackupServer uses BLOB format)
+blob_to_uuid_string(blob: bytes) -> str
+uuid_string_to_blob(uuid_str: str) -> bytes
 
-## Integration & External Dependencies
-- Flask bridge listens on HTTP 9090; endpoints defined in `api_server/routes`. Use for REST automation or remote dashboards.
-- vcpkg toolchain pinned under `vcpkg/`; run `git submodule update --init` if headers missing.
-- Observatory integration uses optional `Shared/observability.py`; when absent, stub classes in `database.py` keep logging silent.
-- `scripts/one_click_build_and_run.ps1` orchestrates build + launch; keep it updated when CLI options evolve.
-- Playwright MCP and Factory CLI integrations documented in `important_docs/mcp_playbooks.md`; follow those to capture UI evidence for QA.
+# Format normalization for FletV2
+convert_backupserver_client_to_fletv2(client: dict) -> dict
+convert_backupserver_file_to_fletv2(file: dict) -> dict
+```
 
-## MCP & Codacy Expectations
-- After every edit, attempt `codacy_cli_analyze --root-path . --file <path>`; if command unavailable, log the failure in PR notes.
-- When adding dependencies or touching security-sensitive code, rerun Codacy with `--tool trivy` to surface CVEs.
-- MCP server configuration stored in `.vscode/mcp.json`; back up before editing and wrap `npx` commands with `cmd /c` on Windows.
-- Capture screenshots via Playwright MCP before and after major UI adjustments to validate visual parity.
+**Example - Client Data Flow:**
+```python
+# BackupServer format (raw SQLite)
+{"id": b'\x12\x34...', "name": "Client1", "files_count": 5}
 
-## Collaboration Tips
-- Document major fixes in the appropriate report file (`FletV2_Critical_Issues_Report.md`, `ASYNC_SYNC_FIX_REPORT.md`, etc.).
-- Reference ticket IDs or GitHub issues in comments sparingly; rely on structured logging and commit messages instead of inline TODOs.
-- When pairing with other agents, add scratch notes under `AI-Context/` and clean them once the fix lands.
-- Use `Duplication_mindset.md` as a reminder of anti-duplication strategy; refactor repeated patterns into utilities promptly.
+# After conversion (FletV2 format)
+{"id": "12345678-1234-...", "name": "Client1", "files_count": 5,
+ "status": "Active", "ip_address": "192.168.1.1"}
+```
 
-## Frequently Overlooked Tasks
-- Remove stale `transfer.info` between manual runs to avoid replaying outdated jobs.
-- Clear `python_server/server/logs/` after large test batches; the enhanced logs view reads newest files only.
-- Sync theme updates in `theme.py` with `ui_components.py`; mismatches cause inconsistent neumorphic shadows.
-- Track Flet version drift—if upgrading past 0.28.3, audit every view for API changes before deploying.
+## Database Operation Patterns
 
-## Future Enhancement Backlog (Context Only)
-- Planned analytics refresh pipeline outlined in `ANALYTICS_VIEW_ENHANCEMENT_SUMMARY.md`.
-- Settings re-architecture detailed in `CENTRALIZED_ERROR_BOUNDARY_SYSTEM.md` and `settings_refactor_notes.md` (if present).
-- Pending export optimizations captured in `ENHANCED_OUTPUT_IMPLEMENTATION_SUMMARY.md`; review before touching log export routines.
+### Connection Management
+Always use context managers:
 
+```python
+from python_server.server.database import DatabaseManager
 
-## Final Reminders
-- Always summarize findings before large fixes; stakeholders expect a quick brief referencing component + command run.
-- Re-run lint/tests after edits even if changes seem trivial; `ruff` catches stray imports quickly.
-- Remove temporary prints and ensure structured logging includes `client_id`, `opcode`, durations.
-- Keep Codacy MCP results attached to PRs once the toolchain is restored; for now document attempts if the CLI is unavailable.
-- Update this guide whenever workflows, protocol, or architecture boundaries move so future agents inherit accurate playbooks.
+db_manager = DatabaseManager()
+
+# ✅ CORRECT - Auto-closes connection
+with db_manager.get_connection() as conn:
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM clients")
+    results = cursor.fetchall()
+    conn.commit()  # For writes
+
+# ❌ WRONG - Leaks connections
+conn = db_manager.get_connection()
+cursor = conn.cursor()
+# ... forgot to close
+```
+
+### Retry Pattern
+All database operations use retry decorator for `sqlite3.OperationalError`:
+
+```python
+from functools import wraps
+import time
+
+@retry(max_attempts=3, backoff_base=0.5, exceptions=(sqlite3.OperationalError,))
+def my_database_operation():
+    with db_manager.get_connection() as conn:
+        # Operation here
+        pass
+```
+
+**Why:** SQLite locks database during writes. Retry handles concurrent access automatically.
+
+### Transaction Patterns
+```python
+# Single statement - auto-commit via context manager
+with db_manager.get_connection() as conn:
+    conn.execute("INSERT INTO clients VALUES (?, ?)", (id, name))
+
+# Multiple statements - manual transaction
+with db_manager.get_connection() as conn:
+    conn.execute("INSERT INTO clients ...")
+    conn.execute("INSERT INTO files ...")
+    conn.commit()  # Atomic - both or neither
+```
+
+### Connection Pooling Metrics
+Database maintains connection pool (default: 5 connections):
+- Monitor via `DatabaseManager.get_pool_metrics()`
+- Connections auto-cleaned after 1 hour idle
+- Emergency connections created if pool exhausted
+
+## C++ Client Integration Patterns
+
+### Subprocess Execution (API Server Path)
+Flask API spawns C++ client as subprocess:
+
+```python
+from api_server.real_backup_executor import RealBackupExecutor
+
+executor = RealBackupExecutor(
+    client_exe="build/Release/EncryptedBackupClient.exe",
+    server_ip="127.0.0.1",
+    server_port=1256
+)
+
+# Execute backup
+result = executor.execute_backup(
+    username="user1",
+    file_path="C:\\path\\to\\file.txt"
+)
+
+# Check result
+if result['success']:
+    print(f"File transferred: {result['file_path']}")
+```
+
+### Transfer Configuration Generation
+`transfer.info` MUST be exactly 3 lines:
+
+```python
+def generate_transfer_info(server_ip: str, server_port: int,
+                          username: str, file_path: str):
+    with open("transfer.info", "w", encoding="utf-8") as f:
+        f.write(f"{server_ip}:{server_port}\n")  # Line 1
+        f.write(f"{username}\n")                 # Line 2
+        f.write(f"{file_path}\n")                # Line 3
+    # NO empty lines, NO extra content
+```
+
+### Batch Mode Requirement
+C++ client MUST be launched with `--batch` flag in subprocess:
+
+```python
+# ✅ CORRECT
+process = subprocess.Popen(
+    ["EncryptedBackupClient.exe", "--batch"],
+    cwd=client_dir,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True
+)
+
+# ❌ WRONG - Will hang waiting for user input
+process = subprocess.Popen(["EncryptedBackupClient.exe"], ...)
+```
+
+## View Lifecycle Management
+
+### Standard View Pattern
+```python
+def create_my_view(server_bridge, page, state_manager=None):
+    """
+    Standard view creation pattern.
+
+    Returns:
+        tuple: (content_control, dispose_fn, setup_fn)
+    """
+    # 1. Local state
+    data_ref = ft.Ref[ft.Column]()
+    subscriptions = []
+
+    # 2. Data fetching
+    async def load_data():
+        result = await run_sync_in_executor(server_bridge.get_data)
+        if result['success']:
+            update_ui(result['data'])
+
+    # 3. Event handlers
+    def on_refresh(e):
+        page.run_task(load_data)
+
+    # 4. Dispose function - REQUIRED
+    def dispose_fn():
+        # Cancel tasks
+        for sub in subscriptions:
+            state_manager.unsubscribe(sub)
+        # Remove overlays
+        if hasattr(page, 'overlay'):
+            page.overlay.clear()
+
+    # 5. Setup function - Called AFTER view attached
+    def setup_fn():
+        page.run_task(load_data)
+        if state_manager:
+            sub = state_manager.subscribe('event', on_event)
+            subscriptions.append(sub)
+
+    # 6. Build UI
+    content = ft.Column(
+        ref=data_ref,
+        controls=[...]
+    )
+
+    return content, dispose_fn, setup_fn
+```
+
+### FilePicker Lifecycle
+One FilePicker per view instance:
+
+```python
+# ✅ CORRECT
+class MyView:
+    def __init__(self):
+        self.file_picker = ft.FilePicker(on_result=self.on_files_selected)
+
+    def setup(self, page):
+        # Add to overlay once
+        if self.file_picker not in page.overlay:
+            page.overlay.append(self.file_picker)
+        page.update()
+
+    def dispose(self):
+        # Remove from overlay
+        if self.file_picker in page.overlay:
+            page.overlay.remove(self.file_picker)
+```
+
+## Error Handling Conventions
+
+### Structured Error Responses
+All methods follow consistent error pattern:
+
+```python
+# Success case
+{"success": True, "data": {...}, "error": None}
+
+# Error case
+{"success": False, "data": None, "error": "Descriptive error message"}
+
+# Partial success (e.g., some operations failed)
+{"success": True, "data": {...}, "error": "Warning: 2 operations failed"}
+```
+
+### Exception Hierarchy
+```python
+ServerError              # Base class
+├── ProtocolError       # Protocol violations
+├── ClientError         # Client state issues
+├── FileError           # File operation failures
+└── DatabaseError       # Database operation failures
+```
+
+### Error Handling in Views
+```python
+async def handle_operation():
+    try:
+        result = await run_sync_in_executor(server_bridge.operation)
+
+        if not result['success']:
+            # Show error to user
+            show_snackbar(page, result['error'], error=True)
+            return
+
+        # Handle success
+        update_ui(result['data'])
+        show_snackbar(page, "Operation completed")
+
+    except Exception as e:
+        logger.exception("Unexpected error")
+        show_snackbar(page, f"Error: {str(e)}", error=True)
+```
+
+## Performance Considerations
+
+### UI Update Batching
+```python
+# ❌ WRONG - Multiple page.update() calls
+for item in items:
+    control.controls.append(create_item(item))
+    page.update()  # SLOW - triggers rerender each time
+
+# ✅ CORRECT - Batch updates
+controls_to_add = [create_item(item) for item in items]
+control.controls.extend(controls_to_add)
+control.update()  # Single update
+```
+
+### Connection Pool Sizing
+- Default: 5 connections (adequate for most workloads)
+- Increase for high concurrency: `DatabaseManager(pool_size=10)`
+- Monitor pool exhaustion via metrics
+
+### Async Task Management
+```python
+# ❌ WRONG - Blocking async function
+async def load_data():
+    result = server_bridge.get_data()  # Blocks event loop
+
+# ✅ CORRECT - Non-blocking
+async def load_data():
+    result = await run_sync_in_executor(server_bridge.get_data)
+```
+
+## Real-World Task Examples
+
+### Task: Add New Client via GUI
+```python
+async def add_client_handler(e):
+    client_data = {
+        "name": name_field.value,
+        "ip_address": ip_field.value,
+        "platform": platform_dropdown.value
+    }
+
+    result = await run_sync_in_executor(
+        server_bridge.add_client, client_data
+    )
+
+    if result['success']:
+        # Refresh client list
+        await refresh_clients()
+        show_snackbar(page, f"Client {client_data['name']} added")
+    else:
+        show_snackbar(page, result['error'], error=True)
+```
+
+### Task: Download File from Backup
+```python
+async def download_file_handler(file_id: str):
+    # Get file info first
+    file_info = await run_sync_in_executor(
+        server_bridge.get_file_by_id, file_id
+    )
+
+    if not file_info['success']:
+        show_snackbar(page, "File not found", error=True)
+        return
+
+    # Download to temp location
+    result = await run_sync_in_executor(
+        server_bridge.download_file, file_id
+    )
+
+    if result['success']:
+        # result['data'] contains file path
+        show_snackbar(page, f"Downloaded to {result['data']}")
+```
+
+### Task: Query Database Directly
+```python
+from python_server.server.database import DatabaseManager
+
+db = DatabaseManager()
+
+with db.get_connection() as conn:
+    cursor = conn.cursor()
+
+    # Get clients with > 100 files
+    cursor.execute("""
+        SELECT c.*, COUNT(f.id) as file_count
+        FROM clients c
+        LEFT JOIN files f ON f.client_id = c.id
+        GROUP BY c.id
+        HAVING file_count > 100
+    """)
+
+    results = cursor.fetchall()
+```
+
+### Task: Execute C++ Backup from Python
+```python
+from api_server.real_backup_executor import RealBackupExecutor
+
+executor = RealBackupExecutor(
+    client_exe="build/Release/EncryptedBackupClient.exe"
+)
+
+result = executor.execute_backup(
+    username="admin",
+    file_path=r"C:\sensitive_data.xlsx"
+)
+
+if result['success']:
+    print(f"Backup completed in {result['duration_ms']}ms")
+    print(f"File stored as: {result['stored_filename']}")
+```

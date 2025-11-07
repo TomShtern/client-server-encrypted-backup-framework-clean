@@ -1,11 +1,37 @@
+import importlib
 import logging
 import os
 import sys
 import traceback
 from datetime import datetime
+from functools import lru_cache
 
 # Global flag to ensure setup runs only once
 _debug_setup_done = False
+
+
+@lru_cache(maxsize=1)
+def _resolve_debug_mode() -> bool:
+    """Determine whether debug mode is enabled without triggering circular imports."""
+    flet_config = None
+    if __package__:
+        try:
+            from .. import config as flet_config  # type: ignore
+        except ImportError:
+            flet_config = None
+
+    if flet_config and hasattr(flet_config, "DEBUG_MODE"):
+        return bool(getattr(flet_config, "DEBUG_MODE"))
+
+    try:
+        root_config = importlib.import_module("config")
+    except ModuleNotFoundError:
+        root_config = None
+
+    if root_config and hasattr(root_config, "DEBUG_MODE"):
+        return bool(getattr(root_config, "DEBUG_MODE"))
+
+    return False
 
 # Enhanced formatter with more context
 class EnhancedFormatter(logging.Formatter):
@@ -28,12 +54,11 @@ class EnhancedFormatter(logging.Formatter):
         log_message = super().format(record)
 
         # Add stack trace for errors and warnings
-        if record.levelno >= logging.WARNING and hasattr(record, 'exc_info') and record.exc_info:
+        if record.levelno >= logging.WARNING and hasattr(record, 'exc_info') and record.exc_info and record.exc_info != (None, None, None):
             # Add stack trace for better debugging
-            if record.exc_info != (None, None, None):
-                tb_lines = traceback.format_exception(record.exc_info[0], record.exc_info[1], record.exc_info[2])
-                tb_text = ''.join(tb_lines)
-                log_message += f"\nStack Trace:\n{tb_text}"
+            tb_lines = traceback.format_exception(record.exc_info[0], record.exc_info[1], record.exc_info[2])
+            tb_text = ''.join(tb_lines)
+            log_message += f"\nStack Trace:\n{tb_text}"
 
         return log_message
 
@@ -51,17 +76,9 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
     """
     global _debug_setup_done
 
-    # Import DEBUG_MODE here to avoid circular imports
-    try:
-        from config import DEBUG_MODE
-        # In debug mode, allow INFO and above, but suppress specific noisy components
-        if DEBUG_MODE:
-            log_level = logging.INFO  # Allow INFO level but suppress specific noisy loggers
-        else:
-            log_level = logging.WARNING  # Only show warnings and errors when not in debug mode
-    except ImportError:
-        # Fallback if config is not available
-        log_level = logging.WARNING
+    # Determine effective log level based on debug mode configuration
+    debug_mode_enabled = _resolve_debug_mode()
+    log_level = logging.INFO if debug_mode_enabled else logging.WARNING
 
     if not _debug_setup_done:
         # Create enhanced formatter
@@ -186,12 +203,8 @@ def get_logger(name: str) -> logging.Logger:
 
     # Only set level if not already configured (respect levels set in setup_terminal_debugging)
     if logger.level == logging.NOTSET:
-        # Import DEBUG_MODE here to avoid circular imports
-        try:
-            from config import DEBUG_MODE
-            log_level = logging.INFO if DEBUG_MODE else logging.WARNING
-        except ImportError:
-            log_level = logging.WARNING  # Default to WARNING if config not available
+        debug_mode_enabled = _resolve_debug_mode()
+        log_level = logging.INFO if debug_mode_enabled else logging.WARNING
 
         logger.setLevel(log_level)
 

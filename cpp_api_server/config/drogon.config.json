@@ -1,0 +1,13 @@
+{
+  "listeners": [
+    {
+      "address": "0.0.0.0",
+      "port": 9090,
+      "https": false
+    }
+  ],
+  "app": {
+    "thread_num": 0,
+    "document_root": "Client/Client-gui"
+  }
+}
