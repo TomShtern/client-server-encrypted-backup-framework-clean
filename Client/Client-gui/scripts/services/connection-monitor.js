@@ -16,12 +16,12 @@ export class ConnectionMonitor {
   start() {
     this.stop();
     this.#tick();
-    this.timer = window.setInterval(() => this.#tick(), this.interval);
+    this.timer = globalThis.setInterval(() => this.#tick(), this.interval);
   }
 
   stop() {
     if (this.timer) {
-      clearInterval(this.timer);
+      globalThis.clearInterval(this.timer);
       this.timer = null;
     }
     this.inFlight = null;

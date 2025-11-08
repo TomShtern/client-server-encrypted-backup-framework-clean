@@ -9,9 +9,14 @@ const DEFAULT_OPTIONS = {
   withCredentials: true,
 };
 
+const DEFAULT_SOCKET_URL =
+  typeof globalThis.location === 'object' && globalThis.location
+    ? globalThis.location.origin
+    : '';
+
 export class SocketClient {
-  constructor({ url = window.location.origin, options = {}, onConnect, onDisconnect, onError, onStatus, onProgress, onFileReceipt }) {
-    this.url = url;
+  constructor({ url = DEFAULT_SOCKET_URL, options = {}, onConnect, onDisconnect, onError, onStatus, onProgress, onFileReceipt }) {
+    this.url = url ?? DEFAULT_SOCKET_URL;
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.onConnect = typeof onConnect === 'function' ? onConnect : () => {};
     this.onDisconnect = typeof onDisconnect === 'function' ? onDisconnect : () => {};
@@ -100,8 +105,8 @@ export class SocketClient {
       return this.ioFactory;
     }
 
-    if (typeof window !== 'undefined' && window.io) {
-      this.ioFactory = window.io;
+    if (globalThis.io) {
+      this.ioFactory = globalThis.io;
       return this.ioFactory;
     }
 

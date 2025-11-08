@@ -80,6 +80,7 @@ summary {
 .container {
   width: min(1280px, calc(100vw - 64px));
   margin: 0 auto;
+  padding: 0 32px 32px; /* add consistent horizontal rhythm */
   display: flex;
   flex-direction: column;
   gap: var(--gap-4);
@@ -206,6 +207,58 @@ section.logs {
   display: flex;
   flex-direction: column;
   gap: var(--gap-3);
+  position: relative;
+}
+
+/* Alignment helpers: ensure both primary panels share baseline and internal spacing */
+main > .stack:first-child {
+  max-width: 420px;
+}
+main > .stack:last-child {
+  min-height: 100%;
+}
+
+/* Consistent heading spacing */
+.stack .phase:first-child {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* Ring centering adjustments */
+main > .stack:last-child .center {
+  padding-top: 12px;
+}
+
+/* Actions row width limit for neat alignment */
+.actions {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Stats grid fluid layout with a max width to align under actions */
+#statsGrid {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Log section alignment: center within container width */
+section.logs {
+  max-width: 100%;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Tighten label spacing for visual neatness */
+label {
+  margin-bottom: 4px;
+}
+
+/* Button visual consistency */
+button.primary {
+  font-weight: 600;
+  letter-spacing: .3px;
 }
 
 .row {
@@ -370,6 +423,7 @@ svg {
   place-items: center;
   /* subtle glow */
   filter: drop-shadow(0 0 6px rgba(0,191,255,0.25)) drop-shadow(0 0 18px rgba(0,191,255,0.12));
+  margin: 8px auto 0; /* center horizontally, slight top offset */
 }
 
 .kpi {
@@ -548,6 +602,61 @@ svg {
 .toast.closing {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.load-error__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--gap-4);
+  box-shadow: var(--shadow);
+  max-width: 420px;
+  display: grid;
+  gap: var(--gap-3);
+}
+
+.load-error__title {
+  font-size: var(--fs-20);
+  font-weight: 700;
+  margin: 0;
+  color: var(--danger);
+}
+
+.load-error__message {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-14);
+}
+
+.load-error__action {
+  justify-self: center;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #091017;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.04s ease, filter 0.12s ease;
+}
+
+.load-error__action:hover {
+  filter: brightness(1.05);
+}
+
+.load-error__action:active {
+  transform: translateY(1px);
 }
 
 .modal {

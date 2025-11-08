@@ -29,8 +29,8 @@ class ErrorBoundary {
 
     // Log to application logs if available
     try {
-      if (window.cyberBackupApp?.logs) {
-        window.cyberBackupApp.logs.add(userMessage, { level: 'error', phase: 'ERROR' });
+      if (globalThis.cyberBackupApp?.logs) {
+        globalThis.cyberBackupApp.logs.add(userMessage, { level: 'error', phase: 'ERROR' });
       }
     } catch (logError) {
       console.warn('Failed to log error to application logs:', logError);
@@ -38,8 +38,8 @@ class ErrorBoundary {
 
     // Show toast notification if available
     try {
-      if (window.cyberBackupApp?.toast) {
-        window.cyberBackupApp.toast.show(userMessage, 'error', 5000);
+      if (globalThis.cyberBackupApp?.toast) {
+        globalThis.cyberBackupApp.toast.show(userMessage, 'error', 5000);
       }
     } catch (toastError) {
       console.warn('Failed to show error toast:', toastError);
@@ -488,7 +488,7 @@ class App {
     this.modalKeyHandler = (event) => this.#handleModalKeydown(event);
     dom.modal.addEventListener('keydown', this.modalKeyHandler);
 
-    window.requestAnimationFrame(() => {
+    globalThis.requestAnimationFrame(() => {
       const target = this.modalFocusables[0] || dom.modal;
       if (target && typeof target.focus === 'function') {
         target.focus();
@@ -861,7 +861,7 @@ class App {
   #startJobStatusLoop(jobId) {
     this.#stopJobStatusLoop();
     const poll = () => this.#refreshStatus(jobId);
-    this.jobStatusTimer = window.setInterval(poll, STATUS_INTERVAL_MS);
+    this.jobStatusTimer = globalThis.setInterval(poll, STATUS_INTERVAL_MS);
     poll();
   }
 
@@ -883,7 +883,7 @@ class App {
       }
       this.#refreshStatus();
     };
-    this.generalStatusTimer = window.setInterval(poll, GENERAL_STATUS_INTERVAL_MS);
+    this.generalStatusTimer = globalThis.setInterval(poll, GENERAL_STATUS_INTERVAL_MS);
     poll();
   }
 

@@ -219,35 +219,24 @@
         // Create fallback error element safely
         function createErrorElement() {
             const container = document.createElement('div');
-            container.style.display = 'flex';
-            container.style.alignItems = 'center';
-            container.style.justifyContent = 'center';
-            container.style.height = '100vh';
-            container.style.fontFamily = 'system-ui';
-            container.style.textAlign = 'center';
-            container.style.padding = '20px';
+            container.className = 'load-error';
 
             const innerDiv = document.createElement('div');
+            innerDiv.className = 'load-error__card';
 
             const title = document.createElement('h2');
+            title.className = 'load-error__title';
             title.textContent = '⚠️ Application Loading Failed';
-            title.style.color = '#dc2626';
-            title.style.marginBottom = '16px';
 
             const message = document.createElement('p');
+            message.className = 'load-error__message';
             message.textContent = 'A required module failed to load. Please refresh the page.';
-            message.style.color = '#6b7280';
-            message.style.marginBottom = '16px';
 
             const button = document.createElement('button');
+            button.className = 'load-error__action';
+            button.type = 'button';
             button.textContent = 'Refresh Page';
-            button.style.background = '#2563eb';
-            button.style.color = 'white';
-            button.style.border = 'none';
-            button.style.padding = '8px 16px';
-            button.style.borderRadius = '4px';
-            button.style.cursor = 'pointer';
-            button.onclick = () => window.location.reload();
+            button.onclick = () => globalThis.location.reload();
 
             innerDiv.appendChild(title);
             innerDiv.appendChild(message);
@@ -258,7 +247,7 @@
         }
 
         // Global error handler for module loading failures
-        window.addEventListener('error', function(event) {
+        globalThis.addEventListener('error', function(event) {
             if (event.filename && event.filename.includes('scripts/')) {
                 console.error('Module loading failed:', event.filename, event.message);
                 document.body.replaceChildren(createErrorElement());
@@ -267,13 +256,13 @@
 
         // Module loading timeout
         const loadTimeout = setTimeout(() => {
-            if (!window.cyberBackupApp) {
+            if (!globalThis.cyberBackupApp) {
                 console.warn('Application loading timeout - please check console for errors');
             }
         }, 10000);
 
         // Clear timeout if app loads successfully
-        window.addEventListener('DOMContentLoaded', () => {
+        globalThis.addEventListener('DOMContentLoaded', () => {
             clearTimeout(loadTimeout);
         });
     </script>
