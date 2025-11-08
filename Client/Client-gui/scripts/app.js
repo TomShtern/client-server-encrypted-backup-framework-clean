@@ -19,6 +19,94 @@ import { ConnectionMonitor } from './services/connection-monitor.js';
 import { SocketClient } from './services/socket-client.js';
 import { evaluateConnectionQuality, getQualityLabel } from './services/connection-metrics.js';
 
+// Error boundary utilities
+class ErrorBoundary {
+  static handle(error, context, recovery = null) {
+    console.error(`[${context}] Error:`, error);
+
+    // Create user-friendly error message
+    const userMessage = this.formatUserMessage(error, context);
+
+    // Log to application logs if available
+    try {
+      if (window.cyberBackupApp?.logs) {
+        window.cyberBackupApp.logs.add(userMessage, { level: 'error', phase: 'ERROR' });
+      }
+    } catch (logError) {
+      console.warn('Failed to log error to application logs:', logError);
+    }
+
+    // Show toast notification if available
+    try {
+      if (window.cyberBackupApp?.toast) {
+        window.cyberBackupApp.toast.show(userMessage, 'error', 5000);
+      }
+    } catch (toastError) {
+      console.warn('Failed to show error toast:', toastError);
+    }
+
+    // Attempt recovery if provided
+    if (recovery) {
+      try {
+        recovery();
+      } catch (recoveryError) {
+        console.error('Recovery failed:', recoveryError);
+      }
+    }
+  }
+
+  static formatUserMessage(error, context) {
+    if (error.name === 'NetworkError' || error.message.includes('fetch')) {
+      return `Network error: Unable to connect to server. Please check your connection and try again.`;
+    }
+
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return `Connection error: Server is not responding. Please verify the server is running.`;
+    }
+
+    if (error.message.includes('Missing required element')) {
+      return `UI error: A required interface element is missing. Please refresh the page.`;
+    }
+
+    if (error.name === 'AbortError') {
+      return `Operation cancelled.`;
+    }
+
+    // Generic error message
+    return error.message || `An unexpected error occurred in ${context}. Please try again.`;
+  }
+
+  static async withErrorHandling(promise, context, recovery = null) {
+    try {
+      return await promise;
+    } catch (error) {
+      this.handle(error, context, recovery);
+      throw error; // Re-throw so calling code can handle it if needed
+    }
+  }
+
+  static wrapFunction(fn, context, recovery = null) {
+    return (...args) => {
+      try {
+        const result = fn.apply(this, args);
+
+        // Handle both sync and async functions
+        if (result && typeof result.catch === 'function') {
+          return result.catch(error => {
+            this.handle(error, context, recovery);
+            throw error;
+          });
+        }
+
+        return result;
+      } catch (error) {
+        this.handle(error, context, recovery);
+        throw error;
+      }
+    };
+  }
+}
+
 const CIRCUMFERENCE = 282.743; // Precomputed circumference for r=45 circle
 const STATUS_INTERVAL_MS = 2500;
 const GENERAL_STATUS_INTERVAL_MS = 12000;
@@ -45,16 +133,28 @@ const INITIAL_STATE = {
   fileSize: 0,
   lastUpdated: null,
   systemMetrics: null,
+  connectionAttempted: false,
 };
 
 class App {
   constructor() {
-    this.api = new ApiClient('');
-    this.toast = new ToastManager(dom.toastStack);
-    this.announcer = new ScreenReaderAnnouncer(dom.srLive);
-    this.state = new StateStore(INITIAL_STATE);
-    this.logs = new LogStore(dom.logContainer);
-    this.theme = new ThemeManager(dom.themeToggle);
+    // Initialize with error boundaries
+    try {
+      this.api = new ApiClient('');
+      this.toast = new ToastManager(dom.toastStack);
+      this.announcer = new ScreenReaderAnnouncer(dom.srLive);
+      this.state = new StateStore(INITIAL_STATE);
+      this.logs = new LogStore(dom.logContainer);
+      this.theme = new ThemeManager(dom.themeToggle);
+    } catch (error) {
+      ErrorBoundary.handle(error, 'App Initialization', () => {
+        // Fallback initialization
+        this.state = new StateStore(INITIAL_STATE);
+        this.toast = { show: (msg, type, duration) => console.log(`${type}: ${msg}`) };
+        this.logs = { add: (msg, opts) => console.log(`LOG: ${msg}`) };
+      });
+      return;
+    }
     this.fileManager = new FileManager({
       dropZone: dom.fileDropZone,
       fileInput: dom.fileInput,
@@ -100,15 +200,31 @@ class App {
     this.modalFocusables = [];
     this.actionLock = false;
 
-    this.#bindEvents();
-
-    this.state.subscribe((snapshot) => this.#render(snapshot));
+      try {
+      this.#bindEvents();
+      this.state.subscribe((snapshot) => this.#render(snapshot));
+    } catch (error) {
+      ErrorBoundary.handle(error, 'Event Binding', () => {
+        // Minimal fallback binding
+        const primaryBtn = document.getElementById('primaryActionBtn');
+        if (primaryBtn) {
+          primaryBtn.addEventListener('click', () => {
+            this.toast.show('Application initialization incomplete. Please refresh.', 'error', 5000);
+          });
+        }
+      });
+    }
   }
 
   async init() {
-    this.connectionMonitor.start();
-    await this.socket.start();
-    await this.#bootstrap();
+    return ErrorBoundary.withErrorHandling(async () => {
+      this.connectionMonitor.start();
+      await this.socket.start();
+      await this.#bootstrap();
+    }, 'Application Initialization', () => {
+      // Fallback to basic functionality
+      this.logs.add('Application started in safe mode with limited functionality', { level: 'warn' });
+    });
   }
 
   async #bootstrap() {
@@ -209,7 +325,7 @@ class App {
       throw new Error('Username is required');
     }
 
-    this.state.update({ connecting: true });
+    this.state.update({ connecting: true, connectionAttempted: true });
     this.toast.show(`Connecting to ${server.host}:${server.port}…`, 'info', 2600);
 
     const startTime = performance.now();
@@ -772,65 +888,195 @@ class App {
   }
 
   #render(state) {
-    this.#renderConnection(state);
-    this.#renderProgress(state);
-    this.#renderStats(state);
-    this.#renderButtons(state);
+    // Cache previous render state to avoid unnecessary DOM updates
+    if (!this._prevRenderState) {
+      this._prevRenderState = {};
+    }
+
+    // Only update changed sections
+    if (this.#hasConnectionChanged(state)) {
+      this.#renderConnection(state);
+    }
+    if (this.#hasProgressChanged(state)) {
+      this.#renderProgress(state);
+    }
+    if (this.#hasStatsChanged(state)) {
+      this.#renderStats(state);
+    }
+    if (this.#hasButtonsChanged(state)) {
+      this.#renderButtons(state);
+    }
+
+    this._prevRenderState = { ...state };
+  }
+
+  #hasConnectionChanged(state) {
+    const prev = this._prevRenderState;
+    return !prev ||
+      prev.connecting !== state.connecting ||
+      prev.connected !== state.connected ||
+      prev.connectionLatency !== state.connectionLatency ||
+      prev.connectionQuality !== state.connectionQuality;
+  }
+
+  #hasProgressChanged(state) {
+    const prev = this._prevRenderState;
+    return !prev ||
+      prev.jobMessage !== state.jobMessage ||
+      prev.jobPhase !== state.jobPhase ||
+      prev.progress !== state.progress ||
+      prev.etaSeconds !== state.etaSeconds;
+  }
+
+  #hasStatsChanged(state) {
+    const prev = this._prevRenderState;
+    return !prev ||
+      prev.bytesTransferred !== state.bytesTransferred ||
+      prev.speed !== state.speed ||
+      prev.totalBytes !== state.totalBytes ||
+      prev.fileSize !== state.fileSize ||
+      prev.elapsedSeconds !== state.elapsedSeconds;
+  }
+
+  #hasButtonsChanged(state) {
+    const prev = this._prevRenderState;
+    return !prev ||
+      prev.connecting !== state.connecting ||
+      prev.connected !== state.connected ||
+      prev.jobStatus !== state.jobStatus ||
+      prev.jobRunning !== state.jobRunning ||
+      prev.paused !== state.paused;
   }
 
   #renderConnection(state) {
-    const badgeClass = state.connecting
-      ? 'badge connecting'
-      : state.connected
-        ? 'badge connected'
-        : 'badge disconnected';
-    dom.connStatus.className = badgeClass;
-    dom.connStatus.textContent = state.connecting ? 'Connecting…' : state.connected ? 'Connected' : 'Disconnected';
+    let badgeClass;
+    let statusText;
+    if (state.connecting) {
+      badgeClass = 'badge connecting';
+      statusText = 'Connecting…';
+    } else if (state.connected) {
+      badgeClass = 'badge connected';
+      statusText = 'Connected';
+    } else if (!state.connectionAttempted) {
+      badgeClass = 'badge muted';
+      statusText = 'Ready';
+    } else {
+      badgeClass = 'badge disconnected';
+      statusText = 'Disconnected';
+    }
 
-    dom.connHealth.textContent = `Latency ${formatLatency(state.connectionLatency)}`;
+    if (dom.connStatus.className !== badgeClass) {
+      dom.connStatus.className = badgeClass;
+    }
+    if (dom.connStatus.textContent !== statusText) {
+      dom.connStatus.textContent = statusText;
+    }
+
+    const healthText = `Latency ${formatLatency(state.connectionLatency)}`;
+    if (dom.connHealth.textContent !== healthText) {
+      dom.connHealth.textContent = healthText;
+    }
 
     const quality = state.connectionQuality || 'offline';
-    dom.connQuality.className = `chip quality-${quality}`;
-    dom.connQuality.textContent = getQualityLabel(quality);
+    const qualityClass = `chip quality-${quality}`;
+    const qualityLabel = getQualityLabel(quality);
+
+    if (dom.connQuality.className !== qualityClass) {
+      dom.connQuality.className = qualityClass;
+    }
+    if (dom.connQuality.textContent !== qualityLabel) {
+      dom.connQuality.textContent = qualityLabel;
+    }
   }
 
   #renderProgress(state) {
     const phaseLabel = state.jobMessage || state.jobPhase;
-    dom.phaseText.textContent = phaseLabel;
+    if (dom.phaseText.textContent !== phaseLabel) {
+      dom.phaseText.textContent = phaseLabel;
+    }
 
     const progress = Math.max(0, Math.min(100, state.progress || 0));
     const offset = CIRCUMFERENCE - (progress / 100) * CIRCUMFERENCE;
-    dom.progressArc.style.strokeDashoffset = offset.toString();
-    dom.progressPct.textContent = formatPercentage(progress);
-    dom.etaText.textContent = state.etaSeconds ? formatDuration(state.etaSeconds) : 'ETA —';
+    const offsetStr = offset.toFixed(2);
+
+    // Only update if changed significantly (avoid micro-updates)
+    const currentOffset = dom.progressArc.style.strokeDashoffset;
+    if (!currentOffset || Math.abs(parseFloat(currentOffset) - offset) > 0.5) {
+      dom.progressArc.style.strokeDashoffset = offsetStr;
+    }
+
+    const progressText = formatPercentage(progress);
+    if (dom.progressPct.textContent !== progressText) {
+      dom.progressPct.textContent = progressText;
+    }
+
+    const etaText = state.etaSeconds ? formatDuration(state.etaSeconds) : 'ETA —';
+    if (dom.etaText.textContent !== etaText) {
+      dom.etaText.textContent = etaText;
+    }
   }
 
   #renderStats(state) {
-    dom.stats.bytes.textContent = formatBytes(state.bytesTransferred);
-    dom.stats.speed.textContent = formatSpeed(state.speed);
+    const bytesText = formatBytes(state.bytesTransferred);
+    if (dom.stats.bytes.textContent !== bytesText) {
+      dom.stats.bytes.textContent = bytesText;
+    }
+
+    const speedText = formatSpeed(state.speed);
+    if (dom.stats.speed.textContent !== speedText) {
+      dom.stats.speed.textContent = speedText;
+    }
+
     const total = state.totalBytes || state.fileSize;
-    dom.stats.size.textContent = formatBytes(total);
-    dom.stats.elapsed.textContent = state.elapsedSeconds ? formatDuration(state.elapsedSeconds) : '—';
+    const sizeText = formatBytes(total);
+    if (dom.stats.size.textContent !== sizeText) {
+      dom.stats.size.textContent = sizeText;
+    }
+
+    const elapsedText = state.elapsedSeconds ? formatDuration(state.elapsedSeconds) : '—';
+    if (dom.stats.elapsed.textContent !== elapsedText) {
+      dom.stats.elapsed.textContent = elapsedText;
+    }
   }
 
   #renderButtons(state) {
+    let btnText, btnDisabled;
+
     if (state.connecting) {
-      dom.primaryActionBtn.textContent = 'Connecting…';
-      dom.primaryActionBtn.disabled = true;
+      btnText = 'Connecting…';
+      btnDisabled = true;
     } else if (!state.connected) {
-      dom.primaryActionBtn.textContent = 'Connect';
-      dom.primaryActionBtn.disabled = false;
+      btnText = 'Connect';
+      btnDisabled = false;
     } else if (state.jobStatus === 'running') {
-      dom.primaryActionBtn.textContent = 'Backup in progress';
-      dom.primaryActionBtn.disabled = true;
+      btnText = 'Backup in progress';
+      btnDisabled = true;
     } else {
-      dom.primaryActionBtn.textContent = 'Start Backup';
-      dom.primaryActionBtn.disabled = false;
+      btnText = 'Start Backup';
+      btnDisabled = false;
     }
 
-    dom.pauseBtn.disabled = !state.jobRunning || state.paused;
-    dom.resumeBtn.disabled = !state.jobRunning || !state.paused;
-    dom.stopBtn.disabled = !state.jobRunning;
+    if (dom.primaryActionBtn.textContent !== btnText) {
+      dom.primaryActionBtn.textContent = btnText;
+    }
+    if (dom.primaryActionBtn.disabled !== btnDisabled) {
+      dom.primaryActionBtn.disabled = btnDisabled;
+    }
+
+    const pauseDisabled = !state.jobRunning || state.paused;
+    if (dom.pauseBtn.disabled !== pauseDisabled) {
+      dom.pauseBtn.disabled = pauseDisabled;
+    }
+
+    const resumeDisabled = !state.jobRunning || !state.paused;
+    if (dom.resumeBtn.disabled !== resumeDisabled) {
+      dom.resumeBtn.disabled = resumeDisabled;
+    }
+
+    const stopDisabled = !state.jobRunning;
+    if (dom.stopBtn.disabled !== stopDisabled) {
+      dom.stopBtn.disabled = stopDisabled;
+    }
   }
 
   #exportLogs() {
@@ -857,4 +1103,21 @@ globalThis.addEventListener('DOMContentLoaded', () => {
   const app = new App();
   void app.init();
   globalThis.cyberBackupApp = app;
+  // Prefill server/username from localStorage if present
+  try {
+    const savedServer = localStorage.getItem('cyberbackup-server');
+    if (savedServer && typeof savedServer === 'string' && savedServer.trim()) {
+      dom.serverInput.value = savedServer.trim();
+    }
+    const savedUser = localStorage.getItem('cyberbackup-username');
+    if (savedUser && typeof savedUser === 'string' && savedUser.trim()) {
+      dom.usernameInput.value = savedUser.trim();
+    }
+  } catch {}
+  dom.serverInput.addEventListener('input', () => {
+    try { localStorage.setItem('cyberbackup-server', dom.serverInput.value.trim()); } catch {}
+  });
+  dom.usernameInput.addEventListener('input', () => {
+    try { localStorage.setItem('cyberbackup-username', dom.usernameInput.value.trim()); } catch {}
+  });
 });

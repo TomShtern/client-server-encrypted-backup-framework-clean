@@ -26,6 +26,10 @@
   --fs-20: 20px;
   --fs-24: 24px;
   --fs-28: 28px;
+  /* Enhancements */
+  --card-gradient: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+  --ring-size: 340px; /* base size */
+  --ring-max: 360px; /* hard ceiling to prevent overflow */
 }
 
 html.theme-light {
@@ -41,6 +45,7 @@ html.theme-light {
 }
 
 * {
+    --card-gradient: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
   box-sizing: border-box;
 }
 
@@ -50,6 +55,9 @@ body {
 }
 
 body {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
   margin: 0;
   font-family: "Inter", "Segoe UI", Roboto, system-ui, -apple-system, Arial, sans-serif;
   background: linear-gradient(180deg, var(--bg), #0b0f13 60%);
@@ -72,10 +80,10 @@ summary {
 .container {
   width: min(1280px, calc(100vw - 64px));
   margin: 0 auto;
-  padding: var(--gap-4) 0 var(--gap-5);
   display: flex;
   flex-direction: column;
   gap: var(--gap-4);
+  overflow: visible; /* ensure children (ring) never clip */
 }
 
 header {
@@ -148,6 +156,14 @@ header {
   color: var(--danger);
 }
 
+
+  /* Responsive ring size */
+  @media (max-width: 800px) {
+    :root { --ring-size: 300px; }
+  }
+  @media (max-width: 560px) {
+    :root { --ring-size: 260px; }
+  }
 .chip.quality-excellent {
   color: var(--success);
 }
@@ -173,6 +189,7 @@ main {
   grid-template-columns: 420px 1fr;
   gap: var(--gap-4);
   align-items: start;
+  overflow: visible;
 }
 
 .stack,
@@ -336,11 +353,23 @@ button[disabled] {
   font-weight: 700;
   font-size: var(--fs-18);
   text-align: center;
+  letter-spacing: 0.2px;
 }
 
 svg {
-  width: 240px;
-  height: 240px;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+#progressRing {
+  width: min(var(--ring-size), var(--ring-max));
+  height: min(var(--ring-size), var(--ring-max));
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* subtle glow */
+  filter: drop-shadow(0 0 6px rgba(0,191,255,0.25)) drop-shadow(0 0 18px rgba(0,191,255,0.12));
 }
 
 .kpi {
@@ -351,8 +380,13 @@ svg {
 }
 
 .kpi .pct {
-  font-size: var(--fs-28);
+  font-size: clamp(28px, 4.2vw, 52px);
   font-weight: 800;
+  background: linear-gradient(90deg,#00bfff,#39c4ff 55%,#00bfff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 4px rgba(0,191,255,0.35));
 }
 
 .kpi .eta {
@@ -379,6 +413,9 @@ svg {
   border-radius: var(--radius-sm);
   padding: 14px;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .stat .label {
@@ -390,7 +427,20 @@ svg {
   font-weight: 700;
   margin-top: 6px;
   font-size: var(--fs-16);
+  letter-spacing: .3px;
 }
+
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 25%, rgba(0,191,255,0.18), transparent 60%);
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+.stat:hover::before { opacity: .8; }
+.stat:hover { border-color: #2d3c48; }
 
 .logs {
   margin-top: var(--gap-4);
@@ -470,6 +520,8 @@ svg {
   box-shadow: var(--shadow);
   font-size: var(--fs-13);
   transition: opacity 0.2s ease, transform 0.2s ease;
+  -webkit-backdrop-filter: blur(4px) saturate(140%);
+  backdrop-filter: blur(4px) saturate(140%);
 }
 
 .toast.success {
@@ -539,11 +591,12 @@ svg {
 }
 
 @media (max-width: 1080px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-
-  #statsGrid {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
+  main { grid-template-columns: 1fr; }
+  #statsGrid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  :root { --ring-size: 300px; }
 }
+
+/* Responsive progress ring size */
+@media (max-width: 800px) { :root { --ring-size: 280px; } }
+@media (max-width: 640px) { :root { --ring-size: 250px; } }
+@media (max-width: 560px) { :root { --ring-size: 230px; } }

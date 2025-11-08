@@ -5,13 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CyberBackup – Client</title>
 
-    <script
-        src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
-        integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
-        crossorigin="anonymous"
-        async
-        onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"
-    ></script>
+        <!-- Load Sentry only in non-local environments to avoid CORS noise during local dev/tests -->
+        <script>
+            (function () {
+                var host = location.hostname;
+                if (host === '127.0.0.1' || host === 'localhost') {
+                    console.info('Sentry disabled in local mode');
+                    return;
+                }
+                var s = document.createElement('script');
+                s.src = 'https://js.sentry.io/7.96.0/bundle.tracing.min.js';
+                s.async = true;
+                s.crossOrigin = 'anonymous';
+                s.integrity = 'sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+';
+                s.onerror = function(){ console.warn('Sentry SDK failed to load - continuing without error tracking'); };
+                document.head.appendChild(s);
+            })();
+        </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,19 +30,15 @@
         rel="stylesheet"
     />
 
-    <link rel="shortcut icon" href="../../favicon_stuff/favicon.ico" type="image/x-icon" />
-    <link rel="icon" href="../../favicon_stuff/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" type="image/png" sizes="32x32" href="../../favicon_stuff/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="../../favicon_stuff/favicon-16x16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="../../favicon_stuff/apple-icon-180x180.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="../../favicon_stuff/apple-icon-152x152.png" />
-    <link rel="apple-touch-icon" sizes="120x120" href="../../favicon_stuff/apple-icon-120x120.png" />
-    <link rel="apple-touch-icon" sizes="76x76" href="../../favicon_stuff/apple-icon-76x76.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="../../favicon_stuff/android-icon-192x192.png" />
-    <link rel="manifest" href="../../favicon_stuff/manifest.json" />
-    <meta name="msapplication-TileColor" content="#ffffff" />
-    <meta name="msapplication-TileImage" content="../../favicon_stuff/ms-icon-144x144.png" />
+    <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#2563eb" />
 
+    <link rel="stylesheet" href="styles/theme.css" />
+    <!-- Trimmed stylesheet set to reduce conflicting layout rules -->
+    <!-- Removed layout.css grid and auxiliary experimental layers for stability -->
+    <link rel="stylesheet" href="styles/components.css" />
+    <link rel="stylesheet" href="styles/animations.css" />
     <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
@@ -58,7 +64,7 @@
                         title="Toggle theme"
                         aria-label="Toggle theme"
                     >
-                        Theme
+                        ☀️ Light mode
                     </button>
                 </div>
             </div>
@@ -73,6 +79,7 @@
                     <input
                         id="serverInput"
                         type="text"
+                        value="127.0.0.1:1256"
                         placeholder="127.0.0.1:1256"
                         autocomplete="off"
                         aria-describedby="serverHint"
@@ -85,6 +92,7 @@
                     <input
                         id="usernameInput"
                         type="text"
+                        value="user"
                         placeholder="user"
                         autocomplete="off"
                         aria-describedby="usernameHint"
@@ -146,31 +154,46 @@
 
                 <div class="center">
                     <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
-                        <circle cx="50" cy="50" r="45" stroke="#2a3a48" stroke-width="6" fill="none"></circle>
+                        <defs>
+                            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="none"></circle>
                         <circle
                             id="progressArc"
                             cx="50"
                             cy="50"
                             r="45"
-                            stroke="var(--accent)"
-                            stroke-width="6"
+                            stroke="url(#progressGradient)"
+                            stroke-width="8"
                             fill="none"
                             stroke-linecap="round"
                             stroke-dasharray="282.743"
                             stroke-dashoffset="282.743"
+                            filter="url(#glow)"
                         ></circle>
                     </svg>
                     <div class="kpi">
                         <div id="progressPct" class="pct">0%</div>
-                        <div class="eta">· <span id="etaText">ETA —</span></div>
+                        <div class="eta">⏱ <span id="etaText">ETA —</span></div>
                     </div>
                 </div>
 
                 <div class="actions" aria-label="Transfer actions">
-                    <button id="primaryActionBtn" class="primary" type="button">Connect / Start</button>
-                    <button id="pauseBtn" type="button" disabled>Pause</button>
-                    <button id="resumeBtn" type="button" disabled>Resume</button>
-                    <button id="stopBtn" type="button" disabled>Stop</button>
+                    <button id="primaryActionBtn" class="primary" type="button">Connect</button>
+                    <button id="pauseBtn" class="ghost" type="button" disabled>⏸ Pause</button>
+                    <button id="resumeBtn" class="ghost" type="button" disabled>▶️ Resume</button>
+                    <button id="stopBtn" class="ghost" type="button" disabled>⏹ Stop</button>
                 </div>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
@@ -234,6 +257,71 @@
     <div id="srLive" class="sr-only" aria-live="polite"></div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous" defer onerror="console.warn('Socket.IO failed to load - real-time features disabled')"></script>
+
+    <!-- Module loading error boundary -->
+    <script>
+        // Create fallback error element safely
+        function createErrorElement() {
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.height = '100vh';
+            container.style.fontFamily = 'system-ui';
+            container.style.textAlign = 'center';
+            container.style.padding = '20px';
+
+            const innerDiv = document.createElement('div');
+
+            const title = document.createElement('h2');
+            title.textContent = '⚠️ Application Loading Failed';
+            title.style.color = '#dc2626';
+            title.style.marginBottom = '16px';
+
+            const message = document.createElement('p');
+            message.textContent = 'A required module failed to load. Please refresh the page.';
+            message.style.color = '#6b7280';
+            message.style.marginBottom = '16px';
+
+            const button = document.createElement('button');
+            button.textContent = 'Refresh Page';
+            button.style.background = '#2563eb';
+            button.style.color = 'white';
+            button.style.border = 'none';
+            button.style.padding = '8px 16px';
+            button.style.borderRadius = '4px';
+            button.style.cursor = 'pointer';
+            button.onclick = () => window.location.reload();
+
+            innerDiv.appendChild(title);
+            innerDiv.appendChild(message);
+            innerDiv.appendChild(button);
+            container.appendChild(innerDiv);
+
+            return container;
+        }
+
+        // Global error handler for module loading failures
+        window.addEventListener('error', function(event) {
+            if (event.filename && event.filename.includes('scripts/')) {
+                console.error('Module loading failed:', event.filename, event.message);
+                document.body.replaceChildren(createErrorElement());
+            }
+        });
+
+        // Module loading timeout
+        const loadTimeout = setTimeout(() => {
+            if (!window.cyberBackupApp) {
+                console.warn('Application loading timeout - please check console for errors');
+            }
+        }, 10000);
+
+        // Clear timeout if app loads successfully
+        window.addEventListener('DOMContentLoaded', () => {
+            clearTimeout(loadTimeout);
+        });
+    </script>
+
     <script type="module" src="scripts/app.js"></script>
 </body>
 </html>

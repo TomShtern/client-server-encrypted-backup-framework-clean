@@ -1,8 +1,21 @@
-"""Playwright script to inspect the CyberBackup web GUI and capture console errors"""
+"""Playwright script to inspect the CyberBackup web GUI and capture console errors.
+
+Usage:
+    python test_web_gui.py [TARGET_URL]
+
+If TARGET_URL is omitted, defaults to http://localhost:9090
+This script saves a full-page screenshot and writes console logs to console_logs.json.
+"""
 from playwright.sync_api import sync_playwright
 import json
+import sys
 
 def main():
+    target_url = (
+        sys.argv[1]
+        if len(sys.argv) > 1 and isinstance(sys.argv[1], str)
+        else "http://localhost:9090"
+    )
     console_logs = []
     errors = []
 
@@ -33,9 +46,9 @@ def main():
         page.on('pageerror', handle_page_error)
 
         # Navigate to the web GUI
-        print("Navigating to http://localhost:9090...")
+        print(f"Navigating to {target_url}...")
         try:
-            response = page.goto('http://localhost:9090', wait_until='networkidle', timeout=30000)
+            response = page.goto(target_url, wait_until='networkidle', timeout=30000)
             print(f"Page loaded with status: {response.status}")
         except Exception as e:
             print(f"ERROR navigating to page: {e}")

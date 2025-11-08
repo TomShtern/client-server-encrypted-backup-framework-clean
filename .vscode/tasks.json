@@ -2,6 +2,91 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Capture Client Web GUI (Integrated)",
+			"type": "shell",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"scripts/capture_client_web_gui.py",
+				"--port",
+				"9091",
+				"--page",
+				"NewGUIforClient.html"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": true
+			}
+		},
+		{
+			"label": "Run Client Web GUI (static)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$ErrorActionPreference='Stop'; cd '${workspaceFolder}/Client/Client-gui'; if (-not (Test-Path node_modules)) { echo 'Installing client web GUI dependencies...'; npm install --no-audit --no-fund }; echo 'Starting static client web GUI on http://localhost:9091'; npx http-server -p 9091 -c-1 ."
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": false
+			}
+		},
+		{
+			"label": "Capture Client Web GUI (Playwright)",
+			"type": "shell",
+			"dependsOn": "Run Client Web GUI (static)",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"test_web_gui.py",
+				"http://localhost:9091"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": false
+			}
+		},
+		{
+			"label": "Capture Client Web GUI (Playwright) - Direct",
+			"type": "shell",
+			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
+			"args": [
+				"test_web_gui.py",
+				"http://localhost:9091/NewGUIforClient.html"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": true
+			}
+		},
+		{
 			"label": "Run FletV2 App in the browser WITHOUT server",
 			"type": "shell",
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",

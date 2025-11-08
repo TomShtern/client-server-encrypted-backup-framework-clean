@@ -1,0 +1,63 @@
+{
+  "name": "cyberbackup-web-gui",
+  "version": "1.0.0",
+  "description": "CyberBackup 3.0 Web GUI - Encrypted file backup client interface",
+  "type": "module",
+  "main": "scripts/app.js",
+  "scripts": {
+    "dev": "http-server . -p 8080 -c-1 --cors",
+    "start": "http-server . -p 8080 -c-1",
+    "build": "npm run validate && npm run lint",
+    "validate": "node scripts/validate-modules.js",
+    "lint": "echo 'ESLint not configured - skipping'",
+    "test": "echo 'Tests not configured - skipping'",
+    "serve": "python -m http.server 8080",
+    "clean": "find . -name '*.log' -delete && find . -name '.DS_Store' -delete",
+    "check": "npm run validate && echo '✅ All checks passed'",
+    "offline": "python -m http.server 8080 --bind 127.0.0.1",
+    "setup": "npm install && npm run check && echo '✅ Setup complete'"
+  },
+  "keywords": [
+    "backup",
+    "encryption",
+    "cyberbackup",
+    "web-gui",
+    "file-transfer",
+    "security"
+  ],
+  "author": "CyberBackup Team",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie <= 11"
+  ],
+  "files": [
+    "scripts/",
+    "styles/",
+    "*.html",
+    "*.ico",
+    "*.png",
+    "*.svg",
+    "package.json",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "config": {
+    "port": 8080,
+    "host": "0.0.0.0"
+  }
+}

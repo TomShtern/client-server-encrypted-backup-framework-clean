@@ -44,6 +44,11 @@ export function formatSpeed(bytesPerSecond) {
   return `${value.toFixed(precision)} ${BYTE_UNITS[exponent]}/s`;
 }
 
+/**
+ * Format duration in seconds to human-readable string
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted duration string
+ */
 export function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return '—';
@@ -78,14 +83,26 @@ export function formatPercentage(value) {
   return `${Math.min(100, Math.max(0, value)).toFixed(0)}%`;
 }
 
+/**
+ * Parse server address string into host and port components
+ * @param {string} input - Server address in format "host:port" or "host"
+ * @returns {Object|null} Parsed address {host, port} or null if invalid
+ */
 export function parseServerAddress(input) {
   if (!input || typeof input !== 'string') {
     return null;
   }
-  const trimmed = input.trim();
+  let trimmed = input.trim();
   if (trimmed.length === 0) {
     return null;
   }
+
+  // Strip protocol if provided
+  if (trimmed.startsWith('http://')) trimmed = trimmed.slice(7);
+  else if (trimmed.startsWith('https://')) trimmed = trimmed.slice(8);
+  // Remove any trailing path
+  const slashIdx = trimmed.indexOf('/');
+  if (slashIdx > -1) trimmed = trimmed.slice(0, slashIdx);
 
   const hasColon = trimmed.includes(':');
   if (!hasColon) {

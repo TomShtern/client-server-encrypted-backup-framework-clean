@@ -1,330 +1,283 @@
-<!DOCTYPE html><html lang="en"><head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberBackup (Connected)</title>
-    
-    <!-- Sentry JavaScript SDK for error tracking (async to prevent blocking) -->
-    <script src="https://js.sentry.io/7.96.0/bundle.tracing.min.js" integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+" crossorigin="anonymous" async="" onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"></script>
-    
-    <!-- Google Fonts -->
+<!DOCTYPE html><html lang="en" class="theme-dark"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CyberBackup – Client</title>
+
+        <!-- Load Sentry only in non-local environments to avoid CORS noise during local dev/tests -->
+        <script>
+            (function () {
+                var host = location.hostname;
+                if (host === '127.0.0.1' || host === 'localhost') {
+                    console.info('Sentry disabled in local mode');
+                    return;
+                }
+                var s = document.createElement('script');
+                s.src = 'https://js.sentry.io/7.96.0/bundle.tracing.min.js';
+                s.async = true;
+                s.crossOrigin = 'anonymous';
+                s.integrity = 'sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+';
+                s.onerror = function(){ console.warn('Sentry SDK failed to load - continuing without error tracking'); };
+                document.head.appendChild(s);
+            })();
+        </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&amp;family=Share+Tech+Mono:wght@400&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
 
-    <!-- CSS Files -->
+    <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <meta name="theme-color" content="#2563eb">
+
     <link rel="stylesheet" href="styles/theme.css">
+    <!-- Trimmed stylesheet set to reduce conflicting layout rules -->
+    <!-- Removed layout.css grid and auxiliary experimental layers for stability -->
     <link rel="stylesheet" href="styles/components.css">
-    <link rel="stylesheet" href="styles/layout.css">
     <link rel="stylesheet" href="styles/animations.css">
-    <!-- Favicons: loaded from repo folder 'favicon_stuff' -->
-    <!-- Adjust paths if you later move the favicon files to a different location or static server root -->
-    <link rel="shortcut icon" href="../../favicon_stuff/favicon.ico" type="image/x-icon">
-    <!-- SVG favicon (scales nicely on modern browsers) -->
-    <link rel="icon" href="../../favicon_stuff/favicon.svg" type="image/svg+xml">
-    <link rel="icon" type="image/png" sizes="32x32" href="../../favicon_stuff/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="../../favicon_stuff/favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="../../favicon_stuff/apple-icon-180x180.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="../../favicon_stuff/apple-icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="../../favicon_stuff/apple-icon-120x120.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="../../favicon_stuff/apple-icon-76x76.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="../../favicon_stuff/android-icon-192x192.png">
-    <link rel="manifest" href="../../favicon_stuff/manifest.json">
-    <meta name="msapplication-TileColor" content="#ffffff">
-    <meta name="msapplication-TileImage" content="../../favicon_stuff/ms-icon-144x144.png">
-    <!-- Cross-browser theme integration via CSS custom properties -->
-    <style>
-        /* Theme color integration for all browsers including Opera */
-        :root {
-            --browser-chrome-color: #000000;
-        }
-        
-        /* Apply theme color to browser chrome where supported */
-        html {
-            background-color: var(--browser-chrome-color);
-        }
-        
-        /* Opera-specific viewport styling */
-        @supports (-webkit-appearance: none) and (not (-webkit-text-stroke: initial)) {
-            html {
-                background: linear-gradient(135deg, var(--bg-black) 0%, var(--bg-dark) 100%);
-            }
-        }
-        
-        /* Integration with existing CyberBackup theme variables */
-        [data-theme="cyberpunk"] {
-            --browser-chrome-color: var(--bg-black, #000000);
-        }
-        
-        [data-theme="matrix"] {
-            --browser-chrome-color: #001100;
-        }
-        
-        [data-theme="dark"] {
-            --browser-chrome-color: #111111;
-        }
-    </style>
+    <link rel="stylesheet" href="styles/app.css">
 </head>
-<body><a href="#primaryAction" class="skip-link" style="position: absolute; top: -40px; left: 6px; background: var(--surface-08); color: var(--text-primary); padding: var(--space-8); border-radius: var(--radius-sm); text-decoration: none; z-index: 9999; transform: translateY(-100%); transition: transform 0.3s;">Skip to main controls</a><a href="#primaryAction" class="skip-link" style="position: absolute; top: -40px; left: 6px; background: var(--surface-08); color: var(--text-primary); padding: var(--space-8); border-radius: var(--radius-sm); text-decoration: none; z-index: 9999; transform: translateY(-100%); transition: transform 0.3s;">Skip to main controls</a>
-    <div class="cyber-grid"></div>
-    <div class="particle-container" id="particleContainer"><div class="particle" style="left: 527.775px; top: 730px; background: rgb(255, 255, 0); width: 2.35418px; height: 2.35418px; box-shadow: rgb(255, 255, 0) 0px 0px 7.06253px; transform: translate(537.164px, 643.802px); opacity: 0.802784;"></div><div class="particle" style="left: 133.219px; top: 730px; background: rgb(255, 0, 255); width: 2.53055px; height: 2.53055px; box-shadow: rgb(255, 0, 255) 0px 0px 7.59166px; transform: translate(118.91px, 636.415px); opacity: 0.777807;"></div><div class="particle" style="left: 612.47px; top: 730px; background: rgb(255, 0, 255); width: 2.47281px; height: 2.47281px; box-shadow: rgb(255, 0, 255) 0px 0px 7.41844px; transform: translate(620.807px, 625.294px); opacity: 0.82661;"></div><div class="particle" style="left: 333.335px; top: 730px; background: rgb(0, 255, 0); width: 2.17452px; height: 2.17452px; box-shadow: rgb(0, 255, 0) 0px 0px 6.52356px; transform: translate(317.456px, 543.534px); opacity: 0.564491;"></div><div class="particle" style="left: 1221.32px; top: 730px; background: rgb(0, 255, 255); width: 2.32875px; height: 2.32875px; box-shadow: rgb(0, 255, 255) 0px 0px 6.98624px; transform: translate(1133.39px, 540.647px); opacity: 0.818855;"></div><div class="particle" style="left: 1054.91px; top: 730px; background: rgb(0, 255, 0); width: 2.05997px; height: 2.05997px; box-shadow: rgb(0, 255, 0) 0px 0px 6.17991px; transform: translate(1030.1px, 572.421px); opacity: 0.868761;"></div><div class="particle" style="left: 660.262px; top: 730px; background: rgb(0, 255, 0); width: 2.51205px; height: 2.51205px; box-shadow: rgb(0, 255, 0) 0px 0px 7.53615px; transform: translate(752.212px, 656.041px); opacity: 0.929956;"></div><div class="particle" style="left: 950.217px; top: 730px; background: rgb(0, 255, 255); width: 1.94381px; height: 1.94381px; box-shadow: rgb(0, 255, 255) 0px 0px 5.83143px; transform: translate(884.897px, 575.678px); opacity: 0.744537;"></div><div class="particle" style="left: 902.017px; top: 730px; background: rgb(0, 255, 0); width: 2.92777px; height: 2.92777px; box-shadow: rgb(0, 255, 0) 0px 0px 8.78331px; transform: translate(906.712px, 648.021px); opacity: 0.718536;"></div><div class="particle" style="left: 88.3476px; top: 730px; background: rgb(255, 0, 255); width: 2.4265px; height: 2.4265px; box-shadow: rgb(255, 0, 255) 0px 0px 7.27951px; transform: translate(142.156px, 617.689px); opacity: 0.767147;"></div><div class="particle" style="left: 856.15px; top: 730px; background: rgb(0, 255, 0); width: 2.84054px; height: 2.84054px; box-shadow: rgb(0, 255, 0) 0px 0px 8.52163px; transform: translate(794.044px, 643.589px); opacity: 0.798139;"></div><div class="particle" style="left: 1205.36px; top: 730px; background: rgb(0, 255, 255); width: 1.58915px; height: 1.58915px; box-shadow: rgb(0, 255, 255) 0px 0px 4.76746px; transform: translate(1238.21px, 614.253px); opacity: 0.898105;"></div><div class="particle" style="left: 842.698px; top: 730px; background: rgb(255, 255, 0); width: 2.50912px; height: 2.50912px; box-shadow: rgb(255, 255, 0) 0px 0px 7.52737px; transform: translate(885.885px, 658.904px); opacity: 0.905101;"></div><div class="particle" style="left: 5.79102px; top: 730px; background: rgb(255, 255, 0); width: 2.8201px; height: 2.8201px; box-shadow: rgb(255, 255, 0) 0px 0px 8.4603px; transform: translate(19.9787px, 539.789px); opacity: 0.808845;"></div><div class="particle" style="left: 1142.7px; top: 730px; background: rgb(0, 255, 0); width: 1.91277px; height: 1.91277px; box-shadow: rgb(0, 255, 0) 0px 0px 5.73831px; transform: translate(1126.37px, 574.307px); opacity: 0.71738;"></div><div class="particle" style="left: 834.044px; top: 730px; background: rgb(0, 255, 255); width: 1.29062px; height: 1.29062px; box-shadow: rgb(0, 255, 255) 0px 0px 3.87186px; transform: translate(737.288px, 593.463px); opacity: 0.526894;"></div><div class="particle" style="left: 1178.76px; top: 730px; background: rgb(255, 0, 255); width: 1.56577px; height: 1.56577px; box-shadow: rgb(255, 0, 255) 0px 0px 4.6973px; transform: translate(1080.1px, 623.703px); opacity: 0.833624;"></div><div class="particle" style="left: 1225.27px; top: 730px; background: rgb(255, 0, 255); width: 2.87854px; height: 2.87854px; box-shadow: rgb(255, 0, 255) 0px 0px 8.63563px; transform: translate(1158.71px, 663.861px); opacity: 0.560605;"></div><div class="particle" style="left: 739.704px; top: 730px; background: rgb(255, 0, 255); width: 1.16507px; height: 1.16507px; box-shadow: rgb(255, 0, 255) 0px 0px 3.49522px; transform: translate(656.359px, 599.042px); opacity: 0.46137;"></div><div class="particle" style="left: 634.193px; top: 730px; background: rgb(255, 255, 0); width: 2.8028px; height: 2.8028px; box-shadow: rgb(255, 255, 0) 0px 0px 8.40841px; transform: translate(642.862px, 550.035px); opacity: 0.487454;"></div><div class="particle" style="left: 864.621px; top: 730px; background: rgb(0, 255, 0); width: 2.76735px; height: 2.76735px; box-shadow: rgb(0, 255, 0) 0px 0px 8.30205px; transform: translate(947.178px, 572.759px); opacity: 0.705034;"></div><div class="particle" style="left: 1042.56px; top: 730px; background: rgb(0, 255, 255); width: 2.87245px; height: 2.87245px; box-shadow: rgb(0, 255, 255) 0px 0px 8.61735px; transform: translate(1060.91px, 574.839px); opacity: 0.88638;"></div><div class="particle" style="left: 993.922px; top: 730px; background: rgb(0, 255, 255); width: 1.23374px; height: 1.23374px; box-shadow: rgb(0, 255, 255) 0px 0px 3.70121px; transform: translate(1082.86px, 552.744px); opacity: 0.849837;"></div><div class="particle" style="left: 194.717px; top: 730px; background: rgb(255, 0, 255); width: 1.97576px; height: 1.97576px; box-shadow: rgb(255, 0, 255) 0px 0px 5.92727px; transform: translate(198.37px, 591.676px); opacity: 0.725173;"></div><div class="particle" style="left: 1081.18px; top: 730px; background: rgb(0, 255, 0); width: 2.64607px; height: 2.64607px; box-shadow: rgb(0, 255, 0) 0px 0px 7.9382px; transform: translate(1155.29px, 606.201px); opacity: 0.897303;"></div><div class="particle" style="left: 48.5545px; top: 730px; background: rgb(255, 0, 255); width: 2.49303px; height: 2.49303px; box-shadow: rgb(255, 0, 255) 0px 0px 7.47908px; transform: translate(18.3649px, 650.381px); opacity: 0.695996;"></div><div class="particle" style="left: 1215.78px; top: 730px; background: rgb(255, 255, 0); width: 2.08913px; height: 2.08913px; box-shadow: rgb(255, 255, 0) 0px 0px 6.26738px; transform: translate(1212.54px, 651.973px); opacity: 0.857551;"></div><div class="particle" style="left: 311.589px; top: 730px; background: rgb(0, 255, 0); width: 1.65965px; height: 1.65965px; box-shadow: rgb(0, 255, 0) 0px 0px 4.97896px; transform: translate(338.436px, 637.098px); opacity: 1;"></div><div class="particle" style="left: 1042.1px; top: 730px; background: rgb(255, 255, 0); width: 2.10706px; height: 2.10706px; box-shadow: rgb(255, 255, 0) 0px 0px 6.32117px; transform: translate(1097.2px, 647.056px); opacity: 0.567951;"></div><div class="particle" style="left: 745.432px; top: 730px; background: rgb(255, 255, 0); width: 1.11199px; height: 1.11199px; box-shadow: rgb(255, 255, 0) 0px 0px 3.33597px; transform: translate(696.661px, 617.167px); opacity: 0.952738;"></div><div class="particle" style="left: 110.998px; top: 730px; background: rgb(0, 255, 0); width: 2.02772px; height: 2.02772px; box-shadow: rgb(0, 255, 0) 0px 0px 6.08317px; transform: translate(68.4808px, 668.055px); opacity: 0.736937;"></div><div class="particle" style="left: 292.077px; top: 730px; background: rgb(255, 0, 255); width: 1.56616px; height: 1.56616px; box-shadow: rgb(255, 0, 255) 0px 0px 4.69848px; transform: translate(318.418px, 661.679px); opacity: 0.723788;"></div><div class="particle" style="left: 138.209px; top: 730px; background: rgb(0, 255, 255); width: 2.22029px; height: 2.22029px; box-shadow: rgb(0, 255, 255) 0px 0px 6.66086px; transform: translate(137.067px, 684.437px); opacity: 0.724509;"></div><div class="particle" style="left: 14.9732px; top: 730px; background: rgb(0, 255, 255); width: 2.30518px; height: 2.30518px; box-shadow: rgb(0, 255, 255) 0px 0px 6.91555px; transform: translate(-8.85881px, 663.412px); opacity: 0.868759;"></div><div class="particle" style="left: 1275.25px; top: 730px; background: rgb(255, 255, 0); width: 1.40014px; height: 1.40014px; box-shadow: rgb(255, 255, 0) 0px 0px 4.20043px; transform: translate(1267.25px, 686.383px); opacity: 0.585737;"></div><div class="particle" style="left: 291.516px; top: 730px; background: rgb(0, 255, 255); width: 2.54011px; height: 2.54011px; box-shadow: rgb(0, 255, 255) 0px 0px 7.62032px; transform: translate(291.957px, 681.705px); opacity: 0.80454;"></div><div class="particle" style="left: 945.838px; top: 730px; background: rgb(255, 255, 0); width: 1.64232px; height: 1.64232px; box-shadow: rgb(255, 255, 0) 0px 0px 4.92695px; transform: translate(944.189px, 672.264px); opacity: 0.745924;"></div><div class="particle" style="left: 370.885px; top: 730px; background: rgb(0, 255, 255); width: 1.58965px; height: 1.58965px; box-shadow: rgb(0, 255, 255) 0px 0px 4.76896px; transform: translate(354.331px, 702.988px); opacity: 0.772578;"></div><div class="particle" style="left: 190.679px; top: 730px; background: rgb(255, 255, 0); width: 1.67912px; height: 1.67912px; box-shadow: rgb(255, 255, 0) 0px 0px 5.03736px; transform: translate(201.027px, 702.268px); opacity: 0.734569;"></div><div class="particle" style="left: 1212.66px; top: 730px; background: rgb(0, 255, 255); width: 1.74106px; height: 1.74106px; box-shadow: rgb(0, 255, 255) 0px 0px 5.22319px; transform: translate(1215.62px, 708.433px); opacity: 0.91893;"></div><div class="particle" style="left: 1111.21px; top: 730px; background: rgb(0, 255, 255); width: 2.08593px; height: 2.08593px; box-shadow: rgb(0, 255, 255) 0px 0px 6.25779px; transform: translate(1110.65px, 721.811px); opacity: 0.867811;"></div><div class="particle" style="left: 1028.72px; top: 730px; background: rgb(0, 255, 255); width: 2.98032px; height: 2.98032px; box-shadow: rgb(0, 255, 255) 0px 0px 8.94095px; transform: translate(1019.53px, 721.244px); opacity: 0.884835;"></div><div class="particle" style="left: 957.541px; top: 730px; background: rgb(0, 255, 0); width: 2.23848px; height: 2.23848px; box-shadow: rgb(0, 255, 0) 0px 0px 6.71544px; transform: translate(953.128px, 716.929px); opacity: 0.56091;"></div></div>
-    <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
-    <div aria-live="polite" aria-atomic="true" class="sr-only" id="announcements"></div>
-    
+<body>
+    <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
+
     <div class="container">
-        <!-- Header -->
-        <header class="header" role="banner">
-            <div class="logo">
-                <div class="logo-icon neon-text pink" tabindex="0" role="button" aria-label="CyberBackup Logo">⚡</div>
-                <div class="logo-text">
-                    <h1 class="neon-text pink">CYBERBACKUP PRO</h1>
-                    <div class="subtitle">v3.0 (API Driven)</div>
+        <header role="banner">
+            <div class="header-row">
+                <div class="brand">
+                    <div class="name" id="appLogo">CyberBackup</div>
+                    <div class="tag">Client</div>
                 </div>
-            </div>
-            <div class="connection-status">
-                <div class="status-led connected" id="connectionLed" aria-label="Connection status"></div>
-                <span id="connectionText" class="connection-text-bold">ONLINE</span>
-                <div class="connection-health" id="connectionHealth">
-                    <span id="healthIndicator">📶</span>
-                    <span id="pingDisplay">-- ms</span>
+                <div class="status-bar">
+                    <output id="statusOutput" class="status-output" aria-live="polite">
+                        <span id="connStatus" class="badge muted" title="Connection state">Ready</span>
+                        <span id="connHealth" class="muted" title="Round-trip latency">Latency —</span>
+                        <span id="connQuality" class="chip quality-offline" title="Connection quality">● Offline</span>
+                    </output>
+                    <button id="themeToggle" class="ghost" type="button" title="Toggle theme" aria-label="Switch to light mode">☀️ Light mode</button>
                 </div>
             </div>
         </header>
 
-        <!-- Configuration Panel -->
-        <aside class="config-panel glass-card" role="region" aria-label="Configuration">
-            <div class="panel-header">
-                <h2 class="panel-title">System Configuration</h2>
-            </div>
-            
-            <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
-                <div class="copy-container">
-                    <input type="text" class="config-input copy-content valid" id="serverInput" placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp" tabindex="1" style="">
-                    <button type="button" class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
-                <div class="validation-helper valid show">Valid input</div></div>
-                <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
-            </div>
-            
-            <div class="config-section">
-                <label class="config-label" for="usernameInput">Username</label>
-                <input type="text" class="config-input invalid" id="usernameInput" placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp" tabindex="2" style="">
-                <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
-            <span class="validation-icon invalid" style="display: block;">✗</span><div class="validation-helper invalid show">Username must be 2-32 characters (letters, numbers, _ -)</div></div>
-            
-            <div class="config-section">
-                <label class="config-label">Target File</label>
-                <div class="file-selection-container file-selection-container-positioned">
-                    <div class="file-drop-zone" id="fileDropZone">
-                        <input type="file" class="file-input" id="fileInput" aria-describedby="fileHelp" accept="*/*" tabindex="3" title="Select a file to backup" aria-label="File selection for backup" style="">
-                        <div class="file-button">
-                            📁 Select File to Backup
-                            <span class="sr-only">or drag and drop a file here</span>
+        <main id="mainContent" aria-label="Backup workflow">
+            <section class="stack" aria-labelledby="cfgTitle">
+                <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
+
+                <label>
+                    Server
+                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:1256" autocomplete="off" aria-describedby="serverHint" style="">
+                    <span id="serverHint" class="hint" role="alert" hidden="">Invalid host:port format</span>
+                </label>
+
+                <label>
+                    Username
+                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off" aria-describedby="usernameHint" style="">
+                    <span id="usernameHint" class="hint" role="alert" hidden="">Username is required</span>
+                </label>
+
+                <div id="fileDropZone" class="stack file-drop-zone" aria-label="File selection area" title="Drag &amp; drop a file or use Choose File">
+                    <div class="row">
+                        <button id="fileSelectBtn" class="ghost" type="button" aria-controls="fileInput">
+                            Choose File
+                        </button>
+                        <input id="fileInput" type="file" hidden="" style="">
+                        <button id="recentFilesBtn" class="ghost" type="button" title="Recent files">
+                            Recent
+                        </button>
+                    </div>
+                    <div class="file-card" aria-live="polite">
+                        <div class="file-icon" aria-hidden="true">📄</div>
+                        <div class="file-meta">
+                            <div class="file-name" id="fileName">Drag &amp; drop a file here or choose above</div>
+                            <div class="file-sub" id="fileInfo">Size — • Type —</div>
+                        </div>
+                        <div class="file-actions">
+                            <button id="clearFileBtn" class="ghost" type="button" disabled="">Clear</button>
                         </div>
                     </div>
-                    <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn" title="Show recent files" aria-label="Show recent files">
-                        📂 Recent Files
-                    </button>
                 </div>
-                <div id="fileHelp" class="sr-only">Select a file for backup or drag and drop</div>
-                <div class="copy-container">
-                    <div class="config-value copy-content" id="selectedFile">No file selected</div>
-                    <button type="button" class="copy-btn copy-btn-hidden u-hidden" id="copyFileInfo" title="Copy File Info" aria-label="Copy File Info">📋</button>
-                </div>
-                <div id="filePreview" class="file-preview-container file-preview-layout u-hidden"></div>
-            </div>
-            
-            <div class="config-section">
-                <label class="config-label">Client ID</label>
-                <div class="copy-container">
-                    <div class="config-value copy-content" id="clientId">Not connected</div>
-                    <button type="button" class="copy-btn" id="copyClientId" title="Copy Client ID" aria-label="Copy Client ID">📋</button>
-                </div>
-            </div>
 
-            <div class="btn-group">
-                <button type="button" class="cyber-btn success" data-action="save-config">💾 Save Config</button>
-            </div>
+                <details id="advancedPanel">
+                    <summary>Advanced</summary>
+                    <div class="adv-body">
+                        <div class="split">
+                            <label>
+                                Chunk Size (MB)
+                                <input id="advChunkSize" type="text" placeholder="8" aria-invalid="false" style="">
+                            </label>
+                            <label>
+                                Retry Limit
+                                <input id="advRetryLimit" type="text" placeholder="3" aria-invalid="false" style="">
+                            </label>
+                        </div>
+                        <div class="row">
+                            <button id="advResetBtn" class="ghost" type="button">Reset to defaults</button>
+                        </div>
+                    </div>
+                </details>
+            </section>
 
-            <div class="panel-header panel-header-spaced">
-                <h2 class="panel-title">Theme Selection</h2>
-            </div>
-            
-            <div class="theme-selector">
-                <button type="button" class="theme-btn cyberpunk active" aria-label="Cyberpunk theme" title="Cyberpunk Theme"></button>
-                <button type="button" class="theme-btn dark" aria-label="Dark theme" title="Dark Theme"></button>
-                <button type="button" class="theme-btn matrix" aria-label="Matrix theme" title="Matrix Theme"></button>
-            </div>
-        </aside>
+            <section class="stack" aria-labelledby="statusTitle">
+                <div id="statusTitle" class="phase" aria-hidden="true">Status</div>
 
-        <!-- Main Panel -->
-        <main class="main-panel glass-card" role="main">
-            <div class="phase-display" id="currentPhase">
-                <span class="neon-text purple">SYSTEM READY</span>
-            </div>
-            
-            <div class="progress-container">
-                <svg class="progress-ring" viewBox="0 0 300 300" role="img" aria-label="Transfer progress">
-                    <defs>
-                        <!-- Enhanced gradients for multi-ring system -->
-                        <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-blue"></stop>
-                            <stop offset="33%" class="gradient-stop-purple"></stop>
-                            <stop offset="66%" class="gradient-stop-pink"></stop>
-                            <stop offset="100%" class="gradient-stop-green"></stop>
-                        </linearGradient>
-                        
-                        <!-- Data channel gradient for outer ring -->
-                        <linearGradient id="dataChannelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-data-channel-start"></stop>
-                            <stop offset="50%" class="gradient-stop-data-channel-middle"></stop>
-                            <stop offset="100%" class="gradient-stop-data-channel-end"></stop>
-                        </linearGradient>
-                        
-                        <!-- Phase indicator gradient -->
-                        <linearGradient id="phaseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-phase-start"></stop>
-                            <stop offset="100%" class="gradient-stop-phase-end"></stop>
-                        </linearGradient>
-                        
-                        <!-- Particle glow filter -->
-                        <filter id="particleGlow">
-                            <feGaussianBlur stdDeviation="2" result="coloredBlur"></feGaussianBlur>
-                            <feMerge> 
-                                <feMergeNode in="coloredBlur"></feMergeNode>
-                                <feMergeNode in="SourceGraphic"></feMergeNode>
-                            </feMerge>
-                        </filter>
-                    <path d="M 150 20 A 130 130 0 1 1 149.9 20" fill="none" stroke="none" id="particleMotionPath"></path></defs>
-                    
-                    <!-- Outer Ring: Data Channel (Static, Rotating) -->
-                    <circle class="data-channel-ring" cx="150" cy="150" r="145" fill="none" stroke="url(#dataChannelGradient)" stroke-width="2" stroke-dasharray="8,4" id="dataChannelRing"></circle>
-                    
-                    <!-- Background Ring -->
-                    <circle class="progress-bg" cx="150" cy="150" r="130" fill="none" stroke="var(--bg-light)" stroke-width="16"></circle>
-                    
-                    <!-- Middle Ring: Phase Indicator Arc -->
-                    <path class="phase-indicator-arc active" id="phaseIndicatorArc" fill="none" stroke="url(#phaseGradient)" stroke-width="6" stroke-linecap="round" d="M 90 46.07695154586736 A 120 120 0 0 1 210 46.07695154586736"></path>
-                    
-                    <!-- Inner Ring: Progress Fill (Existing) -->
-                    <circle class="progress-fill" cx="150" cy="150" r="130" id="progressCircle" style="stroke-dasharray: 816.814, 816.814; stroke-dashoffset: 816.814;"></circle>
-                    
-                    <!-- Particle Stream Container -->
-                    <g class="particle-stream" id="particleStream">
-                        <!-- Particles will be dynamically generated here -->
-                    </g>
-                </svg>
-                <div class="progress-text">
-                    <div class="progress-percentage neon-text" id="progressPercentage">0%</div>
-                    <div class="progress-label" id="progressStatus">System Initialized</div>
+                <div id="phaseText" class="phase">Idle</div>
+
+                <div class="center">
+                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1"></stop>
+                                <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1"></stop>
+                                <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1"></stop>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="coloredBlur"></feGaussianBlur>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"></feMergeNode>
+                                    <feMergeNode in="SourceGraphic"></feMergeNode>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="none"></circle>
+                        <circle id="progressArc" cx="50" cy="50" r="45" stroke="url(#progressGradient)" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="282.743" stroke-dashoffset="282.743" filter="url(#glow)" style="stroke-dashoffset: 282.74;"></circle>
+                    </svg>
+                    <div class="kpi">
+                        <div id="progressPct" class="pct">0%</div>
+                        <div class="eta">⏱ <span id="etaText">ETA —</span></div>
+                    </div>
                 </div>
-            </div>            <div class="control-panel">
-                <button type="button" class="cyber-btn large control-btn success" id="primaryAction" tabindex="4">
-                    <span class="btn-icon">🚀</span>
-                    <span class="btn-text">START BACKUP</span>
-                </button>
-                <button type="button" class="cyber-btn secondary large control-btn" id="pauseBtn" disabled="" tabindex="5">⏸️ PAUSE</button>
-                <button type="button" class="cyber-btn danger large control-btn" id="stopBtn" disabled="" tabindex="6">
-                    <span class="btn-icon">🛑</span>
-                    <span class="btn-text">STOP</span>
-                </button>
-            </div>
-            
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="speedStat">0 B/s</div>
-                    <div class="stat-label">Transfer Speed</div>
+
+                <div class="actions" aria-label="Transfer actions">
+                    <button id="primaryActionBtn" class="primary" type="button">Connect</button>
+                    <button id="pauseBtn" class="ghost" type="button" disabled="">⏸ Pause</button>
+                    <button id="resumeBtn" class="ghost" type="button" disabled="">▶️ Resume</button>
+                    <button id="stopBtn" class="ghost" type="button" disabled="">⏹ Stop</button>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="etaStat">--:--</div>
-                    <div class="stat-label">ETA</div>
+
+                <div id="statsGrid" aria-label="Transfer statistics">
+                    <div class="stat">
+                        <div class="label">Bytes Sent</div>
+                        <div class="value" id="statBytes">0 B</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Speed</div>
+                        <div class="value" id="statSpeed">0 B/s</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">File Size</div>
+                        <div class="value" id="statSize">0 B</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Elapsed</div>
+                        <div class="value" id="statElapsed">—</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="transferredStat">0 Bytes</div>
-                    <div class="stat-label">Transferred</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="sizeStat">0 Bytes</div>
-                    <div class="stat-label">Total Size</div>
-                </div>
-            </div>
+            </section>
         </main>
 
-        <!-- Status Panel -->
-        <aside class="status-panel glass-card" role="region" aria-label="Operation log">
-            <div class="panel-header">
-                <h2 class="panel-title">Operation Log</h2>
-                <div class="btn-group">
-                    <button type="button" class="cyber-btn success small" data-action="export-log">📥 Export</button>
-                    <button type="button" class="cyber-btn danger small" data-action="clear-log">🗑️ Clear</button>
-                    <button type="button" class="cyber-btn primary small" id="autoScrollBtn">
-                        📜 Auto-scroll: ON
-                    </button>
-                </div>
-            </div>
-            
-            <div class="log-container" id="logContainer" role="log" aria-live="polite" aria-label="Activity log"><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:53</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Real-time connection</div><div class="log-details">WebSocket connected - live updates enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:53</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Real-time connection</div><div class="log-details">WebSocket connected - live updates enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:52</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Real-time connection</div><div class="log-details">WebSocket connected - live updates enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:53</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Real-time connection</div><div class="log-details">WebSocket connected - live updates enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:53</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Progress system</div><div class="log-details">Rich progress context enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:52</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">Progress system</div><div class="log-details">Rich progress context enabled</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:52</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">System Initialized</div><div class="log-details">Real-time communication enabled.</div></div></div><div class="log-entry success" tabindex="0"><span class="log-timestamp">18:42:52</span><span class="log-icon success">✅</span><div class="log-content"><div class="log-message">System Initialized</div><div class="log-details">Real-time communication enabled.</div></div></div>
-                <!-- Logs will be populated here -->
-            </div>
-        </aside>
-
-        <!-- Debug Panel -->
-        <div class="debug-panel glass-card" role="region" aria-label="Developer console">
-            <div class="panel-header">
-                <h2 class="panel-title">Developer Console</h2>
-                <button type="button" class="cyber-btn primary small" id="debugToggle" aria-expanded="false">🔧 Toggle Debug</button>
-            </div>
-            
-            <div class="debug-content" id="debugContent">
-                <div class="debug-grid">
-                    <div class="debug-section">
-                        <h3>📊 Last API Response</h3>
-                        <div class="json-viewer" id="statusJsonViewer">null</div>
-                    </div>
-                    <div class="debug-section">
-                        <h3>📈 State Machine</h3>
-                        <div class="json-viewer" id="progressJsonViewer">{
-  "isConnected": true,
-  "isRunning": false,
-  "isPaused": false,
-  "phase": "SYSTEM_READY",
-  "progress": 0,
-  "file_name": "",
-  "file_size": 0,
-  "transferred": 0,
-  "speed": 0,
-  "eta": "--:--",
-  "clientId": null,
-  "log": {
-    "operation": "System Initialized",
-    "success": true,
-    "details": ""
-  },
-  "lastApiStatus": null,
-  "selectedFile": null,
-  "websocketConnected": true
-}</div>
+        <section class="logs" aria-labelledby="logTitle">
+            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Logs</div>
+            <div class="card">
+                <div class="toolbar">
+                    <fieldset class="filter-group">
+                        <legend class="sr-only">Log filters</legend>
+                        <button id="filterAll" class="filter-btn active" type="button" data-level="all" aria-pressed="true">
+                            All
+                        </button>
+                        <button id="filterInfo" class="filter-btn" type="button" data-level="info">Info</button>
+                        <button id="filterWarn" class="filter-btn" type="button" data-level="warn">Warn</button>
+                        <button id="filterError" class="filter-btn" type="button" data-level="error">Error</button>
+                    </fieldset>
+                    <div class="row">
+                        <label class="row" for="logAutoscrollToggle" title="Autoscroll new lines">
+                            <input id="logAutoscrollToggle" type="checkbox" checked="" style="">
+                            <span>Autoscroll</span>
+                        </label>
+                        <button id="logExportBtn" type="button">Export</button>
                     </div>
                 </div>
+                <pre id="logContainer" aria-live="polite"></pre>
             </div>
-        </div>
+        </section>
     </div>
 
-    <!-- Enhanced Custom Confirmation Modal -->
-    <div class="modal-overlay confirm-modal" id="confirmModal">
-        <div class="modal">
-            <h3 class="modal-title" id="confirmTitle">Confirm Action</h3>
-            <p class="modal-message" id="confirmMessage">Are you sure?</p>
-            <div class="modal-buttons">
-                <button type="button" class="cyber-btn secondary" id="cancelModalBtn" data-action="cancel-modal">Cancel</button>
-                <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
+    <dialog id="modalConfirm" class="modal" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <div class="modal-card">
+            <div id="modalTitle" class="phase heading-centered">Confirm</div>
+            <div id="modalDesc" class="muted heading-centered">Are you sure you want to stop the transfer?</div>
+            <div class="modal-actions">
+                <button id="modalCancelBtn" class="ghost" type="button">Cancel</button>
+                <button id="modalOkBtn" class="primary" type="button">OK</button>
             </div>
         </div>
-    </div>
-    
-    <!-- Socket.IO Client Library for Real-Time Communication -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous" onerror="console.warn('Socket.IO failed to load - WebSocket features will be disabled')"></script>
+    </dialog>
 
-    <!-- JavaScript Files (as modules for dependency management) -->
-    <script type="module" src="scripts/core/app.js" onerror="console.error('Failed to load app.js')"></script>
+    <div id="srLive" class="sr-only" aria-live="polite"></div>
 
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous" defer="" onerror="console.warn('Socket.IO failed to load - real-time features disabled')"></script>
+
+    <!-- Module loading error boundary -->
+    <script>
+        // Create fallback error element safely
+        function createErrorElement() {
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.height = '100vh';
+            container.style.fontFamily = 'system-ui';
+            container.style.textAlign = 'center';
+            container.style.padding = '20px';
+
+            const innerDiv = document.createElement('div');
+
+            const title = document.createElement('h2');
+            title.textContent = '⚠️ Application Loading Failed';
+            title.style.color = '#dc2626';
+            title.style.marginBottom = '16px';
+
+            const message = document.createElement('p');
+            message.textContent = 'A required module failed to load. Please refresh the page.';
+            message.style.color = '#6b7280';
+            message.style.marginBottom = '16px';
+
+            const button = document.createElement('button');
+            button.textContent = 'Refresh Page';
+            button.style.background = '#2563eb';
+            button.style.color = 'white';
+            button.style.border = 'none';
+            button.style.padding = '8px 16px';
+            button.style.borderRadius = '4px';
+            button.style.cursor = 'pointer';
+            button.onclick = () => window.location.reload();
+
+            innerDiv.appendChild(title);
+            innerDiv.appendChild(message);
+            innerDiv.appendChild(button);
+            container.appendChild(innerDiv);
+
+            return container;
+        }
+
+        // Global error handler for module loading failures
+        window.addEventListener('error', function(event) {
+            if (event.filename && event.filename.includes('scripts/')) {
+                console.error('Module loading failed:', event.filename, event.message);
+                document.body.replaceChildren(createErrorElement());
+            }
+        });
+
+        // Module loading timeout
+        const loadTimeout = setTimeout(() => {
+            if (!window.cyberBackupApp) {
+                console.warn('Application loading timeout - please check console for errors');
+            }
+        }, 10000);
+
+        // Clear timeout if app loads successfully
+        window.addEventListener('DOMContentLoaded', () => {
+            clearTimeout(loadTimeout);
+        });
+    </script>
+
+    <script type="module" src="scripts/app.js"></script>
 
 </body></html>

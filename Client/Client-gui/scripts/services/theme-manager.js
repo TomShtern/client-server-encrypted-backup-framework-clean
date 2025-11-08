@@ -27,9 +27,9 @@ export class ThemeManager {
 
   #updateLabel() {
     if (!this.toggleButton) return;
-    const nextTheme = this.current === 'theme-dark' ? 'Light' : 'Dark';
-    this.toggleButton.textContent = `${nextTheme} mode`;
-    this.toggleButton.setAttribute('aria-label', `Switch to ${nextTheme} mode`);
+    const isLight = this.current === 'theme-light';
+    this.toggleButton.textContent = isLight ? '🌙 Dark mode' : '☀️ Light mode';
+    this.toggleButton.setAttribute('aria-label', `Switch to ${isLight ? 'dark' : 'light'} mode`);
   }
 
   #save(theme) {
