@@ -53,10 +53,29 @@
                 </div>
                 <div class="status-bar">
                     <output id="statusOutput" class="status-output" aria-live="polite">
-                        <span id="connStatus" class="badge disconnected" title="Connection state">Disconnected</span>
+                        <span id="connStatus" class="badge disconnected" title="Connection state" style="cursor: pointer;">Disconnected</span>
                         <span id="connHealth" class="muted" title="Round-trip latency">Latency —</span>
                         <span id="connQuality" class="chip quality-offline" title="Connection quality">● Offline</span>
                     </output>
+                    <div id="connectionDetails" class="connection-details">
+                        <h4>Connection Details</h4>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Status:</span>
+                            <span class="connection-metric-value" id="detailStatus">Offline</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Latency:</span>
+                            <span class="connection-metric-value" id="detailLatency">—</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Server:</span>
+                            <span class="connection-metric-value" id="detailServer">Not connected</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Uptime:</span>
+                            <span class="connection-metric-value" id="detailUptime">—</span>
+                        </div>
+                    </div>
                     <button
                         id="themeToggle"
                         class="ghost"
@@ -72,110 +91,120 @@
 
         <main id="mainContent" aria-label="Backup workflow">
             <section class="stack" aria-labelledby="cfgTitle">
-                <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
+                <div id="cfgTitle" class="phase">Configuration</div>
 
-                <label>
+                <label for="serverInput">
                     Server
-                    <input
-                        id="serverInput"
-                        type="text"
-                        value="127.0.0.1:1256"
-                        placeholder="127.0.0.1:1256"
-                        autocomplete="off"
-                        aria-describedby="serverHint"
-                    />
+                    <div class="input-wrapper">
+                        <input
+                            id="serverInput"
+                            type="text"
+                            value="127.0.0.1:1256"
+                            placeholder="127.0.0.1:1256"
+                            autocomplete="off"
+                            aria-describedby="serverHint"
+                        />
+                        <span id="serverValidIcon" class="validation-icon hidden" aria-hidden="true"></span>
+                    </div>
                     <span id="serverHint" class="hint" role="alert" hidden>Invalid host:port format</span>
                 </label>
 
-                <label>
+                <label for="usernameInput">
                     Username
-                    <input
-                        id="usernameInput"
-                        type="text"
-                        value="user"
-                        placeholder="user"
-                        autocomplete="off"
-                        aria-describedby="usernameHint"
-                    />
+                    <div class="input-wrapper">
+                        <input
+                            id="usernameInput"
+                            type="text"
+                            value="user"
+                            placeholder="user"
+                            autocomplete="off"
+                            aria-describedby="usernameHint"
+                        />
+                        <span id="usernameValidIcon" class="validation-icon hidden" aria-hidden="true"></span>
+                    </div>
                     <span id="usernameHint" class="hint" role="alert" hidden>Username is required</span>
                 </label>
 
                 <div
                     id="fileDropZone"
-                    class="stack file-drop-zone"
+                    class="file-drop-zone"
                     aria-label="File selection area"
                     title="Drag & drop a file or use Choose File"
                 >
                     <div class="row">
-                        <button id="fileSelectBtn" class="ghost" type="button" aria-controls="fileInput">
-                            Choose File
+                        <button id="fileSelectBtn" class="primary" type="button" aria-controls="fileInput">
+                            📁 Choose File
                         </button>
                         <input id="fileInput" type="file" hidden />
                         <button id="recentFilesBtn" class="ghost" type="button" title="Recent files">
-                            Recent
+                            🕐 Recent
                         </button>
                     </div>
                     <div class="file-card" aria-live="polite">
-                        <div class="file-icon" aria-hidden="true">📄</div>
+                        <div class="file-icon" id="fileIcon" aria-hidden="true">📄</div>
                         <div class="file-meta">
-                            <div class="file-name" id="fileName">Drag & drop a file here or choose above</div>
-                            <div class="file-sub" id="fileInfo">Size — • Type —</div>
+                            <div class="file-name" id="fileName">No file selected</div>
+                            <div class="file-sub" id="fileInfo">Choose a file to backup</div>
+                            <div class="file-metadata" id="fileMetadata" style="display: none;">
+                                <span class="file-badge" id="fileTypeBadge"></span>
+                                <span id="fileModified" style="font-size: var(--fs-11); color: var(--muted);"></span>
+                            </div>
                         </div>
                         <div class="file-actions">
-                            <button id="clearFileBtn" class="ghost" type="button" disabled>Clear</button>
+                            <button id="clearFileBtn" class="ghost" type="button" disabled title="Clear selected file">✕</button>
                         </div>
                     </div>
                 </div>
 
                 <details id="advancedPanel">
-                    <summary>Advanced</summary>
+                    <summary>⚙️ Advanced Options</summary>
                     <div class="adv-body">
                         <div class="split">
-                            <label>
+                            <label for="advChunkSize">
                                 Chunk Size (MB)
                                 <input id="advChunkSize" type="text" placeholder="8" />
                             </label>
-                            <label>
+                            <label for="advRetryLimit">
                                 Retry Limit
                                 <input id="advRetryLimit" type="text" placeholder="3" />
                             </label>
                         </div>
                         <div class="row">
-                            <button id="advResetBtn" class="ghost" type="button">Reset to defaults</button>
+                            <button id="advResetBtn" class="ghost" type="button">🔄 Reset Defaults</button>
                         </div>
                     </div>
                 </details>
             </section>
 
             <section class="stack" aria-labelledby="statusTitle">
-                <div id="statusTitle" class="phase" aria-hidden="true">Status</div>
+                <div id="statusTitle" class="phase">Transfer Status</div>
 
-                <div id="phaseText" class="phase">Idle</div>
+                <div id="phaseText" class="phase phase-subtitle">Idle</div>
 
                 <div class="center">
                     <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
                         <defs>
                             <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
-                                <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                                <stop offset="0%" style="stop-color:#1f6feb;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#58a6ff;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#79c0ff;stop-opacity:1" />
                             </linearGradient>
                             <filter id="glow">
-                                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
                                 <feMerge>
                                     <feMergeNode in="coloredBlur"/>
                                     <feMergeNode in="SourceGraphic"/>
                                 </feMerge>
                             </filter>
                         </defs>
-                        <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="none"></circle>
+                        <circle cx="50" cy="50" r="45" stroke="var(--border)" stroke-width="6" fill="none"></circle>
                         <circle
                             id="progressArc"
                             cx="50"
                             cy="50"
                             r="45"
                             stroke="url(#progressGradient)"
-                            stroke-width="8"
+                            stroke-width="6"
                             fill="none"
                             stroke-linecap="round"
                             stroke-dasharray="282.743"
@@ -190,7 +219,10 @@
                 </div>
 
                 <div class="actions" aria-label="Transfer actions">
-                    <button id="primaryActionBtn" class="primary" type="button">Connect</button>
+                    <button id="primaryActionBtn" class="primary" type="button">
+                        <span id="primaryBtnSpinner" class="loading-spinner" style="display: none;"></span>
+                        <span id="primaryBtnText">Select a file first</span>
+                    </button>
                     <button id="pauseBtn" class="ghost" type="button" disabled>⏸ Pause</button>
                     <button id="resumeBtn" class="ghost" type="button" disabled>▶️ Resume</button>
                     <button id="stopBtn" class="ghost" type="button" disabled>⏹ Stop</button>
@@ -214,13 +246,29 @@
                         <div class="value" id="statElapsed">—</div>
                     </div>
                 </div>
+
+                <div id="speedChartContainer" class="speed-chart-container">
+                    <div class="speed-chart-header">
+                        <span class="speed-chart-title">Transfer Speed (Last 30s)</span>
+                        <button id="toggleSpeedChart" class="ghost" type="button" style="padding: 4px 8px; font-size: var(--fs-11);">Hide</button>
+                    </div>
+                    <canvas id="speedChart" class="speed-chart"></canvas>
+                </div>
             </section>
         </main>
 
         <section class="logs" aria-labelledby="logTitle">
-            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Logs</div>
-            <div class="card">
+            <div id="logTitle" class="heading-centered">Activity Logs</div>
+            <div class="card card-transparent">
                 <div class="toolbar">
+                    <div class="log-search">
+                        <input
+                            id="logSearchInput"
+                            type="text"
+                            placeholder="Search logs..."
+                            aria-label="Search logs"
+                        />
+                    </div>
                     <fieldset class="filter-group">
                         <legend class="sr-only">Log filters</legend>
                         <button id="filterAll" class="filter-btn active" type="button" data-level="all" aria-pressed="true">
@@ -231,11 +279,11 @@
                         <button id="filterError" class="filter-btn" type="button" data-level="error">Error</button>
                     </fieldset>
                     <div class="row">
-                        <label class="row" for="logAutoscrollToggle" title="Autoscroll new lines">
+                        <label class="row label-autoscroll" for="logAutoscrollToggle" title="Autoscroll new lines">
                             <input id="logAutoscrollToggle" type="checkbox" checked />
                             <span>Autoscroll</span>
                         </label>
-                        <button id="logExportBtn" type="button">Export</button>
+                        <button id="logExportBtn" class="ghost" type="button">📥 Export</button>
                     </div>
                 </div>
                 <pre id="logContainer" aria-live="polite"></pre>
@@ -311,6 +359,7 @@
         });
     </script>
 
+    <script type="module" src="scripts/enhancements.js"></script>
     <script type="module" src="scripts/app.js"></script>
 </body>
 </html>
