@@ -85,5 +85,9 @@
   "chat.agent.thinking.collapsedTools": "readOnly",
   "chat.edits2.enabled": true,
   "chat.extensionUnification.enabled": false,
-  "accessibility.openChatEditedFiles": true
+  "accessibility.openChatEditedFiles": true,
+  "sonarlint.connectedMode.project": {
+    "connectionId": "c-ares",
+    "projectKey": "c-ares_c-ares"
+  }
 }

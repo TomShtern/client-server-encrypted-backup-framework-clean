@@ -262,6 +262,48 @@ callback_multiplexer = CallbackMultiplexer()
 # For job-specific data
 active_backup_jobs: dict[str, dict[str, Any]] = {}
 active_backup_jobs_lock = threading.Lock()
+# Keep executors in a dedicated registry so they never leak into JSON responses
+job_executors: dict[str, RealBackupExecutor] = {}
+
+
+def _make_json_safe(value: Any, depth: int = 0, max_depth: int = 6) -> Any:
+    """Best-effort conversion of Python objects to JSON-serializable structures."""
+    if depth >= max_depth:
+        return str(value)
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, bytes):
+        try:
+            return value.decode('utf-8')
+        except Exception:
+            return value.decode('utf-8', errors='replace')
+
+    if isinstance(value, dict):
+        return {
+            str(k): _make_json_safe(v, depth + 1, max_depth)
+            for k, v in value.items()
+            if k != 'executor'
+        }
+
+    if isinstance(value, (list, tuple, set)):
+        return [_make_json_safe(item, depth + 1, max_depth) for item in value]
+
+    return str(value)
+
+
+def _sanitize_job_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-safe representation of a job snapshot without executors."""
+    safe_snapshot = {}
+    for key, value in snapshot.items():
+        if key == 'executor':
+            continue
+        safe_snapshot[key] = _make_json_safe(value)
+    return safe_snapshot
 
 # For general, non-job-specific server status
 def get_default_server_status() -> dict[str, Any]:
@@ -312,10 +354,12 @@ def broadcast_file_receipt(event_type: str, data: dict):
 
 def update_server_status(phase: str, message: str) -> None:
     """Update general server status with thread safety"""
+    global last_known_status
     with server_status_lock:
         server_status['phase'] = phase
         server_status['message'] = message
         server_status['last_updated'] = datetime.now().isoformat()
+        last_known_status = _sanitize_job_snapshot(server_status)
     print(f"[SERVER_STATUS] {phase}: {message}")
 
 def check_backup_server_status(host: str | None = None, port: int | None = None):
@@ -373,7 +417,13 @@ def handle_disconnect():
 def handle_status_request(data: dict[str, Any] | None) -> None:
     """Handle client status requests via WebSocket"""
     job_id = data.get('job_id') if data else None
-    status = active_backup_jobs.get(job_id, last_known_status) if job_id else last_known_status
+
+    if job_id:
+        with active_backup_jobs_lock:
+            job_snapshot = active_backup_jobs.get(job_id)
+            status = _sanitize_job_snapshot(job_snapshot) if isinstance(job_snapshot, dict) else dict(last_known_status)
+    else:
+        status = dict(last_known_status)
 
     # Always provide the latest connection status
     status['connected'] = check_backup_server_status() and connection_established
@@ -631,16 +681,17 @@ def api_status():
     if job_id:
         with active_backup_jobs_lock:
             if job_status := active_backup_jobs.get(job_id):
-                status = job_status.copy()
-                # Clear events after reading them
-                events_to_send = status.get('events', [])
+                events_to_send = job_status.get('events', [])
+                # Clear events after pulling snapshot
                 active_backup_jobs[job_id]['events'] = []
-                status['events'] = events_to_send
+                snapshot = dict(job_status)
+                snapshot['events'] = events_to_send
+                status = _sanitize_job_snapshot(snapshot)
 
     if status is None:
         # No job_id provided or job_id not found, return general server status
         with server_status_lock:
-            status = server_status.copy()
+            status = _sanitize_job_snapshot(server_status)
         status['backing_up'] = False # General status is never "backing up"
 
     # Always provide the latest connection status
@@ -833,7 +884,7 @@ def api_start_backup_working():
 
         backup_executor = RealBackupExecutor(client_exe_path)
         with active_backup_jobs_lock:
-            active_backup_jobs[job_id]['executor'] = backup_executor
+            job_executors[job_id] = backup_executor
 
         # Register executor with callback multiplexer for thread-safe callback routing
         callback_multiplexer.set_executor(backup_executor)
@@ -871,18 +922,20 @@ def api_start_backup_working():
         server_port: int = int(server_port_val or 1256)
 
         def status_handler(phase: str, data: Any) -> None:
+            global last_known_status
             with active_backup_jobs_lock:
                 if job_id not in active_backup_jobs:
                     return
 
                 job_data = active_backup_jobs[job_id]
-                job_data['events'].append({'phase': phase, 'data': data})
+                safe_event_data = _make_json_safe(data)
+                job_data['events'].append({'phase': phase, 'data': safe_event_data})
                 job_data['phase'] = phase
                 job_data['last_updated'] = datetime.now().isoformat()
 
                 if isinstance(data, dict):
                     data_dict = cast(dict[str, Any], data)
-                    job_data['message'] = data_dict.get('message', phase)
+                    job_data['message'] = str(data_dict.get('message', phase))
                     if 'progress' in data_dict:
                         job_data['progress']['percentage'] = data_dict['progress']
                     if 'bytes_transferred' in data_dict:
@@ -890,7 +943,9 @@ def api_start_backup_working():
                     if 'total_bytes' in data_dict:
                         job_data['progress']['total_bytes'] = data_dict['total_bytes']
                 else:
-                    job_data['message'] = data
+                    job_data['message'] = str(safe_event_data)
+
+                last_known_status = _sanitize_job_snapshot(job_data)
 
             # Real-time WebSocket broadcasting
             if websocket_enabled and connected_clients:
@@ -982,6 +1037,8 @@ def api_start_backup_working():
             finally:
                 # Clean up callback registration to prevent memory leaks
                 callback_multiplexer.remove_job_callback(job_id)
+                with active_backup_jobs_lock:
+                    job_executors.pop(job_id, None)
                 print(f"[DEBUG] Removed callback for job {job_id}")
 
                 if os.path.exists(temp_file_path_for_thread):
@@ -1288,9 +1345,11 @@ def api_perf_job(job_id: str):
 @app.route('/api/cancel/<job_id>', methods=['POST'])
 def api_cancel_job(job_id: str):
     try:
-        if not (job := active_backup_jobs.get(job_id)):
+        with active_backup_jobs_lock:
+            job = active_backup_jobs.get(job_id)
+            executor = job_executors.get(job_id)
+        if not job:
             return jsonify({'success': False, 'error': f'Unknown job_id={job_id}'}), 404
-        executor = job.get('executor')
         if not executor:
             return jsonify({'success': False, 'error': 'No executor associated with this job'}), 400
         ok = False
@@ -1300,8 +1359,6 @@ def api_cancel_job(job_id: str):
         except Exception as e:
             return jsonify({'success': False, 'error': f'Cancel failed: {e}'}), 500
         # Update job state
-        job['phase'] = 'CANCELLED' if ok else 'CANCEL_REQUESTED'
-        job['message'] = 'Backup cancelled' if ok else 'Cancellation requested'
         # Attach optional cancel reason to job record for UI consumption
         cancel_reason = None
         try:
@@ -1312,23 +1369,39 @@ def api_cancel_job(job_id: str):
                     cancel_reason = data.get('reason')
         except Exception:
             cancel_reason = None
-        if cancel_reason:
-            job['cancel_reason'] = cancel_reason
-        if ok:
-            job['progress']['percentage'] = max(job['progress'].get('percentage', 0), 0)
+        job_snapshot: dict[str, Any] | None = None
+        with active_backup_jobs_lock:
+            if job_id in active_backup_jobs:
+                job_ref = active_backup_jobs[job_id]
+                job_ref['phase'] = 'CANCELLED' if ok else 'CANCEL_REQUESTED'
+                job_ref['message'] = 'Backup cancelled' if ok else 'Cancellation requested'
+                if cancel_reason:
+                    job_ref['cancel_reason'] = cancel_reason
+                if ok:
+                    job_ref['progress']['percentage'] = max(job_ref['progress'].get('percentage', 0), 0)
+                job_snapshot = _sanitize_job_snapshot(job_ref)
+                global last_known_status
+                last_known_status = job_snapshot
         # Broadcast over WebSocket if enabled
         try:
             if websocket_enabled and connected_clients:
-                cast(Any, socketio).emit('job_cancelled', {
+                payload = {
                     'job_id': job_id,
                     'success': ok,
-                    'phase': job['phase'],
-                    'reason': job.get('cancel_reason') if isinstance(job, dict) else None,
-                    'timestamp': time.time()
-                })
+                    'timestamp': time.time(),
+                }
+                if job_snapshot:
+                    payload['phase'] = job_snapshot.get('phase')
+                    payload['reason'] = job_snapshot.get('cancel_reason')
+                cast(Any, socketio).emit('job_cancelled', payload)
         except Exception as be:
             print(f"[WEBSOCKET] Cancel broadcast failed: {be}")
-        return jsonify({'success': ok, 'job_id': job_id, 'phase': job['phase']})
+        response_payload = {'success': ok, 'job_id': job_id}
+        if job_snapshot:
+            response_payload['phase'] = job_snapshot.get('phase')
+            if 'cancel_reason' in job_snapshot:
+                response_payload['reason'] = job_snapshot['cancel_reason']
+        return jsonify(response_payload)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1337,22 +1410,30 @@ def api_cancel_job(job_id: str):
 def api_cancel_all_jobs():
     try:
         results: dict[str, bool] = {}
-        for jid, job in list(active_backup_jobs.items()):
-            if execu := job.get('executor'):
-                try:
-                    ok = cast(Any, execu).cancel('API cancel all')
-                    job['phase'] = 'CANCELLED' if ok else job.get('phase', 'UNKNOWN')
-                    job['message'] = 'Backup cancelled' if ok else job.get('message', '')
-                    results[jid] = ok
-                except Exception:
-                    results[jid] = False
+        job_snapshots: dict[str, dict[str, Any]] = {}
+        for jid, executor in list(job_executors.items()):
+            try:
+                ok = cast(Any, executor).cancel('API cancel all')
+            except Exception:
+                ok = False
+            with active_backup_jobs_lock:
+                job_ref = active_backup_jobs.get(jid)
+                if job_ref:
+                    job_ref['phase'] = 'CANCELLED' if ok else job_ref.get('phase', 'UNKNOWN')
+                    job_ref['message'] = 'Backup cancelled' if ok else job_ref.get('message', '')
+                    job_snapshots[jid] = _sanitize_job_snapshot(job_ref)
+            results[jid] = ok
         # Broadcast
         try:
             if websocket_enabled and connected_clients:
-                cast(Any, socketio).emit('jobs_cancelled', {'results': results, 'timestamp': time.time()})
+                cast(Any, socketio).emit('jobs_cancelled', {
+                    'results': results,
+                    'jobs': job_snapshots,
+                    'timestamp': time.time()
+                })
         except Exception as be:
             print(f"[WEBSOCKET] Cancel-all broadcast failed: {be}")
-        return jsonify({'success': True, 'results': results})
+        return jsonify({'success': True, 'results': results, 'jobs': job_snapshots})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1362,16 +1443,20 @@ def api_cancel_all_jobs():
 def api_cancelable_jobs():
     try:
         items: list[dict[str, Any]] = []
-        for jid, job in active_backup_jobs.items():
-            # A job is cancelable if it has an executor and is in a running phase
-            cancelable = bool(job.get('executor')) and job.get('phase') not in ['COMPLETED', 'FAILED', 'ERROR', 'CANCELLED']
-            if cancelable:
+        with active_backup_jobs_lock:
+            for jid, job in active_backup_jobs.items():
+                # A job is cancelable if we have an executor and it is not in a terminal phase
+                has_executor = jid in job_executors
+                phase = job.get('phase')
+                if not has_executor or phase in ['COMPLETED', 'FAILED', 'ERROR', 'CANCELLED']:
+                    continue
+                snapshot = _sanitize_job_snapshot(job)
                 items.append({
                     'job_id': jid,
-                    'phase': job.get('phase'),
-                    'file': job.get('progress', {}).get('current_file'),
-                    'progress': job.get('progress', {}).get('percentage'),
-                    'message': job.get('message')
+                    'phase': snapshot.get('phase'),
+                    'file': snapshot.get('progress', {}).get('current_file') if isinstance(snapshot.get('progress'), dict) else None,
+                    'progress': snapshot.get('progress', {}).get('percentage') if isinstance(snapshot.get('progress'), dict) else None,
+                    'message': snapshot.get('message')
                 })
         return jsonify({'success': True, 'jobs': items})
     except Exception as e:

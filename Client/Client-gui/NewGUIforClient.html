@@ -1,340 +1,239 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberBackup Pro - v3.0 (API Driven)</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CyberBackup – Client</title>
 
-    <!-- Sentry JavaScript SDK for error tracking (async to prevent blocking) -->
-    <script src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
-            integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
-            crossorigin="anonymous"
-            async
-            onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"></script>
+    <script
+        src="https://js.sentry.io/7.96.0/bundle.tracing.min.js"
+        integrity="sha384-6dGzKI0R4jYF3KXfOmzwK4k8pBJWOHggNhm6+ZtSL5w4j2V2TGe8A3E1J8EZzH8+"
+        crossorigin="anonymous"
+        async
+        onerror="console.warn('Sentry SDK failed to load - continuing without error tracking')"
+    ></script>
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    />
 
-    <!-- CSS Files -->
-    <link rel="stylesheet" href="styles/theme.css">
-    <link rel="stylesheet" href="styles/components.css">
-    <link rel="stylesheet" href="styles/layout.css">
-    <link rel="stylesheet" href="styles/animations.css">
-    <!-- Modern visual refresh (overrides above styles) -->
-    <link rel="stylesheet" href="styles/modern.css">
-    <!-- Favicons: loaded from repo folder 'favicon_stuff' -->
-    <!-- Adjust paths if you later move the favicon files to a different location or static server root -->
-    <link rel="shortcut icon" href="../../favicon_stuff/favicon.ico" type="image/x-icon">
-    <!-- SVG favicon (scales nicely on modern browsers) -->
-    <link rel="icon" href="../../favicon_stuff/favicon.svg" type="image/svg+xml">
-    <link rel="icon" type="image/png" sizes="32x32" href="../../favicon_stuff/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="../../favicon_stuff/favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="../../favicon_stuff/apple-icon-180x180.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="../../favicon_stuff/apple-icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="../../favicon_stuff/apple-icon-120x120.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="../../favicon_stuff/apple-icon-76x76.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="../../favicon_stuff/android-icon-192x192.png">
-    <link rel="manifest" href="../../favicon_stuff/manifest.json">
-    <meta name="msapplication-TileColor" content="#ffffff">
-    <meta name="msapplication-TileImage" content="../../favicon_stuff/ms-icon-144x144.png">
-    <!-- Cross-browser theme integration via CSS custom properties -->
-    <style>
-        /* Theme color integration for all browsers including Opera */
-        :root {
-            --browser-chrome-color: #000000;
-        }
+    <link rel="shortcut icon" href="../../favicon_stuff/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="../../favicon_stuff/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../../favicon_stuff/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../../favicon_stuff/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../favicon_stuff/apple-icon-180x180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="../../favicon_stuff/apple-icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="../../favicon_stuff/apple-icon-120x120.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="../../favicon_stuff/apple-icon-76x76.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="../../favicon_stuff/android-icon-192x192.png" />
+    <link rel="manifest" href="../../favicon_stuff/manifest.json" />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+    <meta name="msapplication-TileImage" content="../../favicon_stuff/ms-icon-144x144.png" />
 
-        /* Apply theme color to browser chrome where supported */
-        html {
-            background-color: var(--browser-chrome-color);
-        }
-
-        /* Opera-specific viewport styling */
-        @supports (-webkit-appearance: none) and (not (-webkit-text-stroke: initial)) {
-            html {
-                background: linear-gradient(135deg, var(--bg-black) 0%, var(--bg-dark) 100%);
-            }
-        }
-
-        /* Integration with existing CyberBackup theme variables */
-        [data-theme="cyberpunk"] {
-            --browser-chrome-color: var(--bg-black, #000000);
-        }
-
-        [data-theme="matrix"] {
-            --browser-chrome-color: #001100;
-        }
-
-        [data-theme="dark"] {
-            --browser-chrome-color: #111111;
-        }
-    </style>
+    <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
-    <div id="app">
-        <div class="cyber-grid"></div>
-        <div class="particle-container" id="particleContainer"></div>
-        <output class="toast-container" id="toastContainer" aria-live="polite"></output>
-        <div aria-live="polite" aria-atomic="true" class="sr-only" id="announcements"></div>
+    <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
 
-        <div class="container">
-        <!-- Header -->
-        <header class="header" role="banner">
-            <div class="logo">
-                <div class="logo-icon neon-text pink" tabindex="0" role="button" aria-label="CyberBackup Logo">⚡</div>
-                <div class="logo-text">
-                    <h1 class="neon-text pink">CYBERBACKUP PRO</h1>
-                    <div class="subtitle">v3.0 (API Driven)</div>
+    <div class="container">
+        <header role="banner">
+            <div class="header-row">
+                <div class="brand">
+                    <div class="name" id="appLogo">CyberBackup</div>
+                    <div class="tag">Client</div>
                 </div>
-            </div>
-            <div class="connection-status">
-                <div class="status-led" id="connectionLed" aria-label="Connection status"></div>
-                <span id="connectionText" class="connection-text-bold">OFFLINE</span>
-                <div class="connection-health" id="connectionHealth">
-                    <span id="healthIndicator">📶</span>
-                    <span id="pingDisplay">-- ms</span>
+                <div class="status-bar">
+                    <output id="statusOutput" class="status-output" aria-live="polite">
+                        <span id="connStatus" class="badge disconnected" title="Connection state">Disconnected</span>
+                        <span id="connHealth" class="muted" title="Round-trip latency">Latency —</span>
+                        <span id="connQuality" class="chip quality-offline" title="Connection quality">● Offline</span>
+                    </output>
+                    <button
+                        id="themeToggle"
+                        class="ghost"
+                        type="button"
+                        title="Toggle theme"
+                        aria-label="Toggle theme"
+                    >
+                        Theme
+                    </button>
                 </div>
             </div>
         </header>
 
-        <!-- Configuration Panel -->
-        <aside class="config-panel glass-card" role="region" aria-label="Configuration">
-            <div class="panel-header">
-                <h2 class="panel-title">System Configuration</h2>
-            </div>
+        <main id="mainContent" aria-label="Backup workflow">
+            <section class="stack" aria-labelledby="cfgTitle">
+                <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
 
-            <div class="config-section">                <label class="config-label" for="serverInput">Server Address</label>
-                <div class="copy-container">
-                    <input type="text" class="config-input copy-content" id="serverInput"
-                           placeholder="127.0.0.1:1256" value="127.0.0.1:1256" aria-describedby="serverHelp" tabindex="1">
-                    <button type="button" class="copy-btn" id="copyServerAddress" title="Copy Server Address" aria-label="Copy Server Address">📋</button>
-                </div>
-                <div id="serverHelp" class="sr-only">Enter server IP address and port</div>
-            </div>
+                <label>
+                    Server
+                    <input
+                        id="serverInput"
+                        type="text"
+                        placeholder="127.0.0.1:1256"
+                        autocomplete="off"
+                        aria-describedby="serverHint"
+                    />
+                    <span id="serverHint" class="hint" role="alert" hidden>Invalid host:port format</span>
+                </label>
 
-            <div class="config-section">
-                <label class="config-label" for="usernameInput">Username</label>
-                <input type="text" class="config-input" id="usernameInput"
-                       placeholder="Enter your username" value="" maxlength="100" aria-describedby="usernameHelp" tabindex="2">
-                <div id="usernameHelp" class="sr-only">Username for authentication (max 100 characters)</div>
-            </div>
+                <label>
+                    Username
+                    <input
+                        id="usernameInput"
+                        type="text"
+                        placeholder="user"
+                        autocomplete="off"
+                        aria-describedby="usernameHint"
+                    />
+                    <span id="usernameHint" class="hint" role="alert" hidden>Username is required</span>
+                </label>
 
-            <div class="config-section">
-                <label class="config-label">Target File</label>
-                <div class="file-selection-container file-selection-container-positioned">
-                    <div class="file-drop-zone" id="fileDropZone">
-                        <input type="file" class="file-input" id="fileInput"
-                               aria-describedby="fileHelp" accept="*/*" tabindex="3"
-                               title="Select a file to backup"
-                               aria-label="File selection for backup">
-                        <div class="file-button">
-                            📁 Select File to Backup
-                            <span class="sr-only">or drag and drop a file here</span>
+                <div
+                    id="fileDropZone"
+                    class="stack file-drop-zone"
+                    aria-label="File selection area"
+                    title="Drag & drop a file or use Choose File"
+                >
+                    <div class="row">
+                        <button id="fileSelectBtn" class="ghost" type="button" aria-controls="fileInput">
+                            Choose File
+                        </button>
+                        <input id="fileInput" type="file" hidden />
+                        <button id="recentFilesBtn" class="ghost" type="button" title="Recent files">
+                            Recent
+                        </button>
+                    </div>
+                    <div class="file-card" aria-live="polite">
+                        <div class="file-icon" aria-hidden="true">📄</div>
+                        <div class="file-meta">
+                            <div class="file-name" id="fileName">Drag & drop a file here or choose above</div>
+                            <div class="file-sub" id="fileInfo">Size — • Type —</div>
+                        </div>
+                        <div class="file-actions">
+                            <button id="clearFileBtn" class="ghost" type="button" disabled>Clear</button>
                         </div>
                     </div>
-                    <button type="button" class="cyber-btn small secondary recent-files-btn" id="recentFilesBtn"
-                            title="Show recent files">
-                        📂 Recent Files
-                    </button>
                 </div>
-                <div id="fileHelp" class="sr-only">Select a file for backup or drag and drop</div>
-                <div class="copy-container">
-                    <div class="config-value copy-content" id="selectedFile">No file selected</div>
-                    <button type="button" class="copy-btn copy-btn-hidden" id="copyFileInfo" title="Copy File Info" aria-label="Copy File Info">📋</button>
+
+                <details id="advancedPanel">
+                    <summary>Advanced</summary>
+                    <div class="adv-body">
+                        <div class="split">
+                            <label>
+                                Chunk Size (MB)
+                                <input id="advChunkSize" type="text" placeholder="8" />
+                            </label>
+                            <label>
+                                Retry Limit
+                                <input id="advRetryLimit" type="text" placeholder="3" />
+                            </label>
+                        </div>
+                        <div class="row">
+                            <button id="advResetBtn" class="ghost" type="button">Reset to defaults</button>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="stack" aria-labelledby="statusTitle">
+                <div id="statusTitle" class="phase" aria-hidden="true">Status</div>
+
+                <div id="phaseText" class="phase">Idle</div>
+
+                <div class="center">
+                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
+                        <circle cx="50" cy="50" r="45" stroke="#2a3a48" stroke-width="6" fill="none"></circle>
+                        <circle
+                            id="progressArc"
+                            cx="50"
+                            cy="50"
+                            r="45"
+                            stroke="var(--accent)"
+                            stroke-width="6"
+                            fill="none"
+                            stroke-linecap="round"
+                            stroke-dasharray="282.743"
+                            stroke-dashoffset="282.743"
+                        ></circle>
+                    </svg>
+                    <div class="kpi">
+                        <div id="progressPct" class="pct">0%</div>
+                        <div class="eta">· <span id="etaText">ETA —</span></div>
+                    </div>
                 </div>
-                <div id="filePreview" class="file-preview-container file-preview-layout"></div>
-            </div>
 
-            <div class="config-section">
-                <label class="config-label">Client ID</label>
-                <div class="copy-container">
-                    <div class="config-value copy-content" id="clientId">Not connected</div>
-                    <button type="button" class="copy-btn" id="copyClientId" title="Copy Client ID" aria-label="Copy Client ID">📋</button>
+                <div class="actions" aria-label="Transfer actions">
+                    <button id="primaryActionBtn" class="primary" type="button">Connect / Start</button>
+                    <button id="pauseBtn" type="button" disabled>Pause</button>
+                    <button id="resumeBtn" type="button" disabled>Resume</button>
+                    <button id="stopBtn" type="button" disabled>Stop</button>
                 </div>
-            </div>
 
-            <div class="btn-group">
-                <button type="button" class="cyber-btn success" data-action="save-config">💾 Save Config</button>
-            </div>
-
-            <div class="panel-header panel-header-spaced">
-                <h2 class="panel-title">Theme Selection</h2>
-            </div>
-
-            <div class="theme-selector">
-                <button type="button" class="theme-btn cyberpunk active"
-                        aria-label="Cyberpunk theme" title="Cyberpunk Theme"></button>
-                <button type="button" class="theme-btn dark"
-                        aria-label="Dark theme" title="Dark Theme"></button>
-                <button type="button" class="theme-btn matrix"
-                        aria-label="Matrix theme" title="Matrix Theme"></button>
-            </div>
-        </aside>
-
-        <!-- Main Panel -->
-        <main class="main-panel glass-card" role="main">
-            <div class="phase-display" id="currentPhase">
-                <span class="neon-text purple">SYSTEM READY</span>
-            </div>
-
-            <div class="progress-container">
-                <svg class="progress-ring" viewBox="0 0 300 300" role="img" aria-label="Transfer progress">
-                    <defs>
-                        <!-- Enhanced gradients for multi-ring system -->
-                        <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-blue" />
-                            <stop offset="33%" class="gradient-stop-purple" />
-                            <stop offset="66%" class="gradient-stop-pink" />
-                            <stop offset="100%" class="gradient-stop-green" />
-                        </linearGradient>
-
-                        <!-- Data channel gradient for outer ring -->
-                        <linearGradient id="dataChannelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-data-channel-start" />
-                            <stop offset="50%" class="gradient-stop-data-channel-middle" />
-                            <stop offset="100%" class="gradient-stop-data-channel-end" />
-                        </linearGradient>
-
-                        <!-- Phase indicator gradient -->
-                        <linearGradient id="phaseGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" class="gradient-stop-phase-start" />
-                            <stop offset="100%" class="gradient-stop-phase-end" />
-                        </linearGradient>
-
-                        <!-- Particle glow filter -->
-                        <filter id="particleGlow">
-                            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                            <feMerge>
-                                <feMergeNode in="coloredBlur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                    </defs>
-
-                    <!-- Outer Ring: Data Channel (Static, Rotating) -->
-                    <circle class="data-channel-ring" cx="150" cy="150" r="145"
-                            fill="none" stroke="url(#dataChannelGradient)" stroke-width="2"
-                            stroke-dasharray="8,4" id="dataChannelRing"></circle>
-
-                    <!-- Background Ring -->
-                    <circle class="progress-bg" cx="150" cy="150" r="130"
-                            fill="none" stroke="var(--bg-light)" stroke-width="16"></circle>
-
-                    <!-- Middle Ring: Phase Indicator Arc -->
-                    <path class="phase-indicator-arc" id="phaseIndicatorArc"
-                          fill="none" stroke="url(#phaseGradient)" stroke-width="6"
-                          stroke-linecap="round"></path>
-
-                    <!-- Inner Ring: Progress Fill (Existing) -->
-                    <circle class="progress-fill" cx="150" cy="150" r="130" id="progressCircle"></circle>
-
-                    <!-- Particle Stream Container -->
-                    <g class="particle-stream" id="particleStream">
-                        <!-- Particles will be dynamically generated here -->
-                    </g>
-                </svg>
-                <div class="progress-text">
-                    <div class="progress-percentage neon-text" id="progressPercentage">0%</div>
-                    <div class="progress-label" id="progressStatus">READY</div>
+                <div id="statsGrid" aria-label="Transfer statistics">
+                    <div class="stat">
+                        <div class="label">Bytes Sent</div>
+                        <div class="value" id="statBytes">—</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Speed</div>
+                        <div class="value" id="statSpeed">—</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">File Size</div>
+                        <div class="value" id="statSize">—</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Elapsed</div>
+                        <div class="value" id="statElapsed">—</div>
+                    </div>
                 </div>
-            </div>            <div class="control-panel">
-                <button type="button" class="cyber-btn primary large control-btn" id="primaryAction" tabindex="4">
-                    <span class="btn-icon">🚀</span>
-                    <span class="btn-text">CONNECT</span>
-                </button>
-                <button type="button" class="cyber-btn secondary large control-btn" id="pauseBtn" disabled tabindex="5">
-                    <span class="btn-icon">⏸️</span>
-                    <span class="btn-text">PAUSE</span>
-                </button>
-                <button type="button" class="cyber-btn danger large control-btn" id="stopBtn" disabled tabindex="6">
-                    <span class="btn-icon">🛑</span>
-                    <span class="btn-text">STOP</span>
-                </button>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="speedStat">0 B/s</div>
-                    <div class="stat-label">Transfer Speed</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="etaStat">--:--</div>
-                    <div class="stat-label">ETA</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="transferredStat">0 B</div>
-                    <div class="stat-label">Transferred</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="sizeStat">0 B</div>
-                    <div class="stat-label">Total Size</div>
-                </div>
-            </div>
+            </section>
         </main>
 
-        <!-- Status Panel -->
-        <aside class="status-panel glass-card" role="region" aria-label="Operation log">
-            <div class="panel-header">
-                <h2 class="panel-title">Operation Log</h2>
-                <div class="btn-group">
-                    <button type="button" class="cyber-btn success small" data-action="export-log">📥 Export</button>
-                    <button type="button" class="cyber-btn danger small" data-action="clear-log">🗑️ Clear</button>
-                    <button type="button" class="cyber-btn primary small" id="autoScrollBtn">
-                        📜 Auto-scroll: ON
-                    </button>
-                </div>
-            </div>
-
-            <div class="log-container" id="logContainer" role="log" aria-live="polite" aria-label="Activity log">
-                <!-- Logs will be populated here -->
-            </div>
-        </aside>
-
-        <!-- Debug Panel -->
-        <div class="debug-panel glass-card" role="region" aria-label="Developer console">
-            <div class="panel-header">
-                <h2 class="panel-title">Developer Console</h2>
-                <button type="button" class="cyber-btn primary small" id="debugToggle"
-                        aria-expanded="false">🔧 Toggle Debug</button>
-            </div>
-
-            <div class="debug-content" id="debugContent">
-                <div class="debug-grid">
-                    <div class="debug-section">
-                        <h3>📊 Last API Response</h3>
-                        <div class="json-viewer" id="statusJsonViewer">Waiting for status data...</div>
-                    </div>
-                    <div class="debug-section">
-                        <h3>📈 State Machine</h3>
-                        <div class="json-viewer" id="progressJsonViewer">Waiting for state data...</div>
+        <section class="logs" aria-labelledby="logTitle">
+            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Logs</div>
+            <div class="card">
+                <div class="toolbar">
+                    <fieldset class="filter-group">
+                        <legend class="sr-only">Log filters</legend>
+                        <button id="filterAll" class="filter-btn active" type="button" data-level="all" aria-pressed="true">
+                            All
+                        </button>
+                        <button id="filterInfo" class="filter-btn" type="button" data-level="info">Info</button>
+                        <button id="filterWarn" class="filter-btn" type="button" data-level="warn">Warn</button>
+                        <button id="filterError" class="filter-btn" type="button" data-level="error">Error</button>
+                    </fieldset>
+                    <div class="row">
+                        <label class="row" for="logAutoscrollToggle" title="Autoscroll new lines">
+                            <input id="logAutoscrollToggle" type="checkbox" checked />
+                            <span>Autoscroll</span>
+                        </label>
+                        <button id="logExportBtn" type="button">Export</button>
                     </div>
                 </div>
+                <pre id="logContainer" aria-live="polite"></pre>
             </div>
-        </div>
-        </div>
-
-    <!-- Enhanced Custom Confirmation Modal -->
-    <div class="modal-overlay confirm-modal" id="confirmModal">
-        <div class="modal">
-            <h3 class="modal-title" id="confirmTitle">Confirm Action</h3>
-            <p class="modal-message" id="confirmMessage">Are you sure?</p>
-            <div class="modal-buttons">
-                <button type="button" class="cyber-btn secondary" id="cancelModalBtn" data-action="cancel-modal">Cancel</button>
-                <button type="button" class="cyber-btn danger" id="confirmOkBtn">Confirm</button>
-            </div>
-        </div>
+        </section>
     </div>
 
-    <!-- Socket.IO Client Library for Real-Time Communication -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"
-            integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO"
-            crossorigin="anonymous"
-            onerror="console.warn('Socket.IO failed to load - WebSocket features will be disabled')"></script>
+    <dialog id="modalConfirm" class="modal" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <div class="modal-card">
+            <div id="modalTitle" class="phase heading-centered">Confirm</div>
+            <div id="modalDesc" class="muted heading-centered">Are you sure you want to stop the transfer?</div>
+            <div class="modal-actions">
+                <button id="modalCancelBtn" class="ghost" type="button">Cancel</button>
+                <button id="modalOkBtn" class="primary" type="button">OK</button>
+            </div>
+        </div>
+    </dialog>
 
-    <!-- JavaScript Files (as modules for dependency management) -->
-    <script type="module" src="scripts/core/app.js" onerror="console.error('Failed to load app.js')"></script>
-    </div>
+    <div id="srLive" class="sr-only" aria-live="polite"></div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous" defer onerror="console.warn('Socket.IO failed to load - real-time features disabled')"></script>
+    <script type="module" src="scripts/app.js"></script>
 </body>
 </html>

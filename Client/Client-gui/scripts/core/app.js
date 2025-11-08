@@ -1,9 +1,9 @@
-import { IntervalManager, debugLog, debugLogger } from './debug-utils.js';
+import { IntervalManager, debugLog } from './debug-utils.js';
 import { EventListenerManager } from '../utils/event-manager.js';
 import { ApiClient } from './api-client.js';
-import { FileManager, FileMemoryManager } from '../managers/file-manager.js';
+import { FileMemoryManager } from '../managers/file-manager.js';
 import { SystemManager, ConnectionHealthMonitor } from '../managers/system-manager.js';
-import { NotificationManager, ModalManager, ConfirmModalManager, ThemeManager, ButtonStateManager, ToastManager } from '../managers/ui-manager.js';
+import { ThemeManager, ButtonStateManager, ToastManager } from '../managers/ui-manager.js';
 import { BackupHistoryManager } from '../managers/backup-manager.js';
 import { ErrorBoundary, ErrorMessageFormatter } from '../ui/error-boundary.js';
 import { ParticleSystem } from '../ui/particle-system.js';
@@ -448,7 +448,7 @@ class App {
     updateErrorDisplay() {
         // Find error display elements and update them
         const errorElements = document.querySelectorAll('.error-display, .backup-error');
-        errorElements.forEach(element => {
+        for (const element of errorElements) {
             if (this.state.hasError) {
                 element.innerHTML = `
                     <div class="error-content">
@@ -462,7 +462,7 @@ class App {
             } else {
                 element.style.display = 'none';
             }
-        });
+        }
     }
 
     /**
@@ -607,17 +607,18 @@ class App {
         }
 
         // Clear any file preview blob URLs to prevent memory leaks
-        document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+        const blobImages = document.querySelectorAll('img[src^="blob:"]');
+        for (const img of blobImages) {
             URL.revokeObjectURL(img.src);
             img.remove();
-        });
+        }
 
         // Clear any lingering file-related elements
         const filePreviewElements = document.querySelectorAll('.file-preview, .file-preview-container, .enhanced-file-preview');
-        filePreviewElements.forEach(element => {
+        for (const element of filePreviewElements) {
             element.style.display = 'none';
             element.innerHTML = '';
-        });
+        }
 
         // Reset button states
         if (this.buttonStateManager) {
@@ -635,9 +636,9 @@ class App {
         // Clear any success/error toasts
         this.clearErrorToasts();
         const successToasts = document.querySelectorAll('.toast.success, .toast.info');
-        successToasts.forEach(toast => {
+        for (const toast of successToasts) {
             toast.remove();
-        });
+        }
 
         // Stop any active polling/monitoring
         this.stopFileReceiptPolling();
@@ -952,7 +953,7 @@ class App {
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     /**
@@ -1058,7 +1059,7 @@ class App {
                 "ENCRYPTING": { weight: 0.30, description: "Encrypting file...", progress_range: [25, 55] },
                 "TRANSFERRING": { weight: 0.35, description: "Transferring data...", progress_range: [55, 90] },
                 "VERIFYING": { weight: 0.10, description: "Verifying integrity...", progress_range: [90, 100] },
-                "COMPLETED": { weight: 0.00, description: "Backup completed!", progress_range: [100, 100] }
+                "COMPLETED": { weight: 0, description: "Backup completed!", progress_range: [100, 100] }
             },
             calibration_info: { total_avg_duration_ms: 4200 }
         };
@@ -1085,14 +1086,14 @@ class App {
 
         // Estimate remaining time
         const completedWeight = this.getCompletedWeight(currentPhase, phaseProgress);
-        const remainingWeight = 1.0 - completedWeight;
+        const remainingWeight = 1 - completedWeight;
         const estimatedRemainingMs = remainingWeight * totalExpectedMs;
 
         return Math.max(0, Math.round(estimatedRemainingMs / 1000)); // Return seconds
     }
 
     /**
-     * Get progress within current phase (0.0 to 1.0)
+    * Get progress within current phase (0 to 1)
      */
     getPhaseProgress(currentPhase) {
         if (!this.progressConfig || !currentPhase) {
@@ -1108,7 +1109,7 @@ class App {
         const rangeSize = rangeEnd - rangeStart;
 
         if (rangeSize <= 0) {
-            return 1.0;
+            return 1;
         }
 
         // Calculate progress within this phase based on current overall progress
@@ -1142,7 +1143,7 @@ class App {
             completedWeight += currentPhaseWeight * phaseProgress;
         }
 
-        return Math.min(1.0, completedWeight);
+        return Math.min(1, completedWeight);
     }
 
     /**
@@ -1295,12 +1296,14 @@ class App {
         this.elements.debugToggle.addEventListener('click', () => this.toggleDebugConsole());
 
         // Theme buttons - using managed event listeners to prevent memory leaks
-        this.elements.themeButtons.forEach((btn, index) => {
+        const { themeButtons } = this.elements;
+        for (let index = 0; index < themeButtons.length; index++) {
+            const btn = themeButtons[index];
             this.eventListeners.add(`theme-btn-${index}`, btn, 'click', (e) => {
                 const theme = e.target.classList[1]; // e.g., 'cyberpunk', 'dark', 'matrix'
                 this.themeManager.setTheme(theme);
             });
-        });
+        }
 
         // Modals
         this.elements.confirmOkBtn.addEventListener('click', () => {
@@ -1446,20 +1449,20 @@ class App {
 
     setupLazyLoadObserver() {
         const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
+            for (const entry of entries) {
                 if (entry.isIntersecting) {
                     const componentId = entry.target.getAttribute('data-lazy-component');
                     if (componentId && this.lazyComponents.has(componentId)) {
                         this.loadLazyComponent(componentId);
                     }
                 }
-            });
+            }
         }, { threshold: 0.1 });
 
         // Observe elements marked for lazy loading
-        this.elements.lazyComponents.forEach(el => {
+        for (const el of this.elements.lazyComponents) {
             observer.observe(el);
-        });
+        }
     }
 
     loadLazyComponent(componentId) {
@@ -1829,7 +1832,7 @@ class App {
             const serverAddress = this.elements.serverInput.value;
             const username = this.elements.usernameInput.value;
             const [serverIP, serverPortStr] = serverAddress.split(':');
-            const serverPort = parseInt(serverPortStr);
+            const serverPort = Number.parseInt(serverPortStr, 10);
 
             if (!serverIP || isNaN(serverPort) || !username) {
                 this.buttonStateManager.setError(this.elements.primaryActionButton, '❌ Invalid Input');
@@ -1912,7 +1915,7 @@ class App {
                         {
                             username: this.elements.usernameInput.value,
                             serverIP: this.elements.serverInput.value.split(':')[0],
-                            serverPort: parseInt(this.elements.serverInput.value.split(':')[1])
+                            serverPort: Number.parseInt(this.elements.serverInput.value.split(':')[1], 10)
                         }
                     );
                     if (result.success) {
@@ -2105,10 +2108,10 @@ class App {
 
         // File is valid - show warnings if any
         if (validation.warnings.length > 0) {
-            validation.warnings.forEach(warning => {
+            for (const warning of validation.warnings) {
                 this.addLog(`File warning: ${file.name}`, 'warning', warning);
                 this.showToast(warning, 'warning', 4000);
-            });
+            }
         }
 
         // Accept the file
@@ -2368,7 +2371,7 @@ class App {
         // Process all pending logs
         const fragment = document.createDocumentFragment();
 
-        this._pendingLogs.forEach(logData => {
+        for (const logData of this._pendingLogs) {
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry ${logData.type}`;
             logEntry.setAttribute('tabindex', '0');
@@ -2402,7 +2405,7 @@ class App {
             logEntry.appendChild(content);
 
             fragment.appendChild(logEntry);
-        });
+        }
 
         // Add all entries at once to reduce reflows
         this.elements.logContainer.prepend(fragment);
@@ -2424,7 +2427,9 @@ class App {
         if (childrenToRemove > 0) {
             // Remove excess children in batch to reduce reflows
             const elementsToRemove = Array.from(logContainer.children).slice(-childrenToRemove);
-            elementsToRemove.forEach(element => logContainer.removeChild(element));
+            for (const element of elementsToRemove) {
+                logContainer.removeChild(element);
+            }
         }
 
         if (this.autoScrollLog) {
@@ -2527,7 +2532,7 @@ class App {
             return '0 B';
         }
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
     }
 
@@ -2536,7 +2541,7 @@ class App {
             return '0 B/s';
         }
         const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];
-        const i = parseInt(Math.floor(Math.log(bytesPerSecond) / Math.log(1024)));
+        const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
         return Math.round(bytesPerSecond / Math.pow(1024, i), 2) + ' ' + sizes[i];
     }
 
@@ -2728,7 +2733,7 @@ class App {
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     // Enhanced cleanup method to prevent memory leaks
@@ -2751,11 +2756,11 @@ class App {
             if (this.system && this.system.fileManager) {
                 // Remove any temporary file inputs created by FileManager
                 const tempFileInputs = document.querySelectorAll('input[type="file"]');
-                tempFileInputs.forEach(input => {
+                for (const input of tempFileInputs) {
                     if (input.style.display === 'none' && !input.id) {
                         input.remove();
                     }
-                });
+                }
             }
 
             // Cleanup modals and overlays
@@ -2778,7 +2783,9 @@ class App {
                 if (childrenToRemove > 0) {
                     // Batch remove for better performance
                     const elementsToRemove = Array.from(logContainer.children).slice(-childrenToRemove);
-                    elementsToRemove.forEach(element => logContainer.removeChild(element));
+                    for (const element of elementsToRemove) {
+                        logContainer.removeChild(element);
+                    }
                 }
             }
 
@@ -2794,9 +2801,10 @@ class App {
             }
 
             // Revoke any object URLs that might have been created for file previews
-            document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+            const blobImages = document.querySelectorAll('img[src^="blob:"]');
+            for (const img of blobImages) {
                 URL.revokeObjectURL(img.src);
-            });
+            }
 
             debugLog('App cleanup completed successfully', 'APP_CLEANUP');
         } catch (error) {
@@ -3082,7 +3090,7 @@ class DataStreamProgressRing {
     updateParticleSpeed(speedMultiplier, phase) {
         const newDuration = this.animationSpeed / speedMultiplier;
 
-        this.particles.forEach(particle => {
+        for (const particle of this.particles) {
             if (particle.animation) {
                 particle.animation.setAttribute('dur', `${newDuration}ms`);
 
@@ -3095,7 +3103,7 @@ class DataStreamProgressRing {
                     particle.element.setAttribute('fill', 'var(--neon-blue)');
                 }
             }
-        });
+        }
     }
 
     updateRingState(phase) {

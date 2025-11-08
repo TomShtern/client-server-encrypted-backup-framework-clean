@@ -1,0 +1,860 @@
+import { dom } from './utils/dom.js';
+import {
+  formatBytes,
+  formatSpeed,
+  formatDuration,
+  formatLatency,
+  formatPercentage,
+  parseServerAddress,
+} from './utils/formatters.js';
+import { ApiClient } from './services/api-client.js';
+import { ToastManager } from './ui/toasts.js';
+import { ScreenReaderAnnouncer } from './ui/accessibility.js';
+import { StateStore } from './state/state-store.js';
+import { LogStore } from './services/log-store.js';
+import { FileManager } from './services/file-manager.js';
+import { ThemeManager } from './services/theme-manager.js';
+import { AdvancedSettings } from './services/advanced-settings.js';
+import { ConnectionMonitor } from './services/connection-monitor.js';
+import { SocketClient } from './services/socket-client.js';
+import { evaluateConnectionQuality, getQualityLabel } from './services/connection-metrics.js';
+
+const CIRCUMFERENCE = 282.743; // Precomputed circumference for r=45 circle
+const STATUS_INTERVAL_MS = 2500;
+const GENERAL_STATUS_INTERVAL_MS = 12000;
+
+const INITIAL_STATE = {
+  connecting: false,
+  connected: false,
+  connectionLatency: null,
+  connectionQuality: 'offline',
+  jobId: null,
+  jobStatus: 'idle',
+  jobPhase: 'Idle',
+  jobMessage: 'Idle',
+  jobRunning: false,
+  paused: false,
+  progress: 0,
+  bytesTransferred: 0,
+  totalBytes: 0,
+  speed: 0,
+  etaSeconds: null,
+  elapsedSeconds: 0,
+  startTimestamp: null,
+  fileName: null,
+  fileSize: 0,
+  lastUpdated: null,
+  systemMetrics: null,
+};
+
+class App {
+  constructor() {
+    this.api = new ApiClient('');
+    this.toast = new ToastManager(dom.toastStack);
+    this.announcer = new ScreenReaderAnnouncer(dom.srLive);
+    this.state = new StateStore(INITIAL_STATE);
+    this.logs = new LogStore(dom.logContainer);
+    this.theme = new ThemeManager(dom.themeToggle);
+    this.fileManager = new FileManager({
+      dropZone: dom.fileDropZone,
+      fileInput: dom.fileInput,
+      selectButton: dom.fileSelectBtn,
+      clearButton: dom.clearFileBtn,
+      recentButton: dom.recentFilesBtn,
+      nameLabel: dom.fileName,
+      infoLabel: dom.fileInfo,
+      announcer: this.announcer,
+      onRecent: (meta) => {
+        const message = `Most recent • ${meta.name} (${meta.formattedSize})`;
+        this.toast.show(message, 'info', 2600);
+      },
+    });
+    this.advanced = new AdvancedSettings({
+      chunkInput: dom.advChunkSize,
+      retryInput: dom.advRetryLimit,
+      resetButton: dom.advResetBtn,
+      toast: this.toast,
+      announcer: this.announcer,
+    });
+
+    this.connectionMonitor = new ConnectionMonitor({
+      api: this.api,
+      onResult: (payload) => this.#handleConnectionUpdate(payload),
+    });
+
+    this.socket = new SocketClient({
+      onConnect: () => this.#onSocketConnect(),
+      onDisconnect: (reason) => this.#onSocketDisconnect(reason),
+      onError: (error) => this.#onSocketError(error),
+      onStatus: (payload) => this.#onSocketStatus(payload),
+      onProgress: (payload) => this.#handleSocketProgress(payload),
+      onFileReceipt: (payload) => this.#handleFileReceipt(payload),
+    });
+
+    this.generalStatusTimer = null;
+    this.jobStatusTimer = null;
+    this.lastSpeedSample = null;
+    this.lastConnectionState = null;
+    this.previousFocus = null;
+    this.modalKeyHandler = null;
+    this.modalFocusables = [];
+    this.actionLock = false;
+
+    this.#bindEvents();
+
+    this.state.subscribe((snapshot) => this.#render(snapshot));
+  }
+
+  async init() {
+    this.connectionMonitor.start();
+    await this.socket.start();
+    await this.#bootstrap();
+  }
+
+  async #bootstrap() {
+    try {
+      await this.#refreshStatus();
+      this.#startGeneralStatusLoop();
+    } catch (error) {
+      console.warn('Initial status check failed', error);
+    }
+  }
+
+  #bindEvents() {
+    dom.primaryActionBtn.addEventListener('click', () => this.#handlePrimaryAction());
+    dom.pauseBtn.addEventListener('click', () => this.#handlePause());
+    dom.resumeBtn.addEventListener('click', () => this.#handleResume());
+    dom.stopBtn.addEventListener('click', () => this.#openStopModal());
+
+    dom.modalCancelBtn.addEventListener('click', () => dom.modal.close());
+    dom.modalOkBtn.addEventListener('click', () => this.#confirmStop());
+    dom.modal.addEventListener('close', () => this.#handleModalClosed());
+    dom.modal.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      dom.modal.close();
+    });
+
+    dom.serverInput.addEventListener('input', () => dom.serverHint.setAttribute('hidden', 'true'));
+    dom.usernameInput.addEventListener('input', () => dom.usernameHint.setAttribute('hidden', 'true'));
+
+    dom.logAutoscrollToggle.addEventListener('change', (event) => {
+      const enabled = event.currentTarget.checked;
+      this.logs.setAutoScroll(enabled);
+      this.toast.show(`Autoscroll ${enabled ? 'enabled' : 'disabled'}`, 'info', 1800);
+    });
+
+    dom.logExportBtn.addEventListener('click', () => this.#exportLogs());
+
+    for (const button of dom.logFilters) {
+      button.addEventListener('click', () => {
+        for (const other of dom.logFilters) {
+          other.classList.toggle('active', other === button);
+          other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
+        }
+        this.logs.setFilter(button.dataset.level || 'all');
+      });
+    }
+
+    document.addEventListener('keydown', (event) => this.#handleKeydown(event));
+  }
+
+  async #handlePrimaryAction() {
+    const { connecting, connected, jobStatus } = this.state.snapshot;
+    if (connecting || this.actionLock) {
+      return;
+    }
+
+    try {
+      this.actionLock = true;
+      if (!connected) {
+        await this.#connect();
+        return;
+      }
+
+      if (jobStatus === 'running') {
+        this.toast.show('Backup already in progress', 'info');
+        return;
+      }
+
+      const { file } = this.fileManager;
+      if (!file) {
+        this.toast.show('Please select a file to back up', 'error');
+        this.announcer.announce('Select a file before starting backup');
+        return;
+      }
+
+      await this.#startBackup(file);
+    } catch (error) {
+      console.error('Primary action failed', error);
+      this.toast.show(error.message || 'Operation failed', 'error', 5000);
+    } finally {
+      this.actionLock = false;
+      this.state.update({ connecting: false });
+    }
+  }
+
+  async #connect() {
+    const serverRaw = dom.serverInput.value.trim();
+    const username = dom.usernameInput.value.trim();
+
+    const server = parseServerAddress(serverRaw);
+    if (!server) {
+      dom.serverHint.removeAttribute('hidden');
+      dom.serverInput.focus();
+      throw new Error('Enter a valid server address in host:port format');
+    }
+    if (!username) {
+      dom.usernameHint.removeAttribute('hidden');
+      dom.usernameInput.focus();
+      throw new Error('Username is required');
+    }
+
+    this.state.update({ connecting: true });
+    this.toast.show(`Connecting to ${server.host}:${server.port}…`, 'info', 2600);
+
+    const startTime = performance.now();
+    const result = await this.api.connect({ host: server.host, port: server.port, username });
+    const latency = performance.now() - startTime;
+
+    this.logs.add(`Connected to ${server.host}:${server.port}`, { level: 'info', phase: 'CONNECT' });
+    this.toast.show(result.message || 'Connected successfully', 'success', 2800);
+    this.announcer.announce('Connection established');
+
+    this.state.update({
+      connecting: false,
+      connected: true,
+      connectionLatency: latency,
+      connectionQuality: evaluateConnectionQuality({ latencyMs: latency }),
+    });
+
+    this.connectionMonitor.forcePing();
+  }
+
+  async #startBackup(file) {
+    const server = parseServerAddress(dom.serverInput.value.trim());
+    const username = dom.usernameInput.value.trim();
+    if (!server || !username) {
+      throw new Error('Provide server and username before starting backup');
+    }
+
+    const options = this.advanced.getOptions();
+    this.toast.show(`Starting backup for ${file.name}`, 'info');
+
+    const response = await this.api.startBackup({
+      file,
+      username,
+      host: server.host,
+      port: server.port,
+      options,
+    });
+
+    this.logs.add(`Backup started for ${file.name}`, { level: 'info', phase: 'START' });
+    this.announcer.announce(`Backup started for ${file.name}`);
+
+    const now = Date.now();
+    this.state.update({
+      jobId: response.job_id,
+      jobStatus: 'running',
+      jobPhase: 'INITIALIZING',
+      jobMessage: response.message || 'Backup initializing…',
+      jobRunning: true,
+      progress: 0,
+      bytesTransferred: 0,
+      totalBytes: file.size,
+      speed: 0,
+      etaSeconds: null,
+      startTimestamp: now,
+      lastUpdated: now,
+      fileName: file.name,
+      fileSize: file.size,
+      paused: false,
+    });
+
+    this.lastSpeedSample = { bytes: 0, time: now };
+    this.socket.watchJob(response.job_id);
+    this.#startJobStatusLoop(response.job_id);
+  }
+
+  async #handlePause() {
+    const { jobId, paused } = this.state.snapshot;
+    if (!jobId || paused) {
+      return;
+    }
+    try {
+      await this.api.pause();
+      this.toast.show('Pause command sent', 'info');
+      this.state.update({ paused: true });
+    } catch (error) {
+      this.toast.show(error.message || 'Pause failed', 'error');
+    }
+  }
+
+  async #handleResume() {
+    const { jobId, paused } = this.state.snapshot;
+    if (!jobId || !paused) {
+      return;
+    }
+    try {
+      await this.api.resume();
+      this.toast.show('Resume command sent', 'info');
+      this.state.update({ paused: false });
+    } catch (error) {
+      this.toast.show(error.message || 'Resume failed', 'error');
+    }
+  }
+
+  #openStopModal() {
+    if (typeof dom.modal.showModal !== 'function') {
+      return;
+    }
+
+    this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dom.modal.showModal();
+    this.#setupModalFocusTrap();
+  }
+
+  async #confirmStop() {
+    dom.modal.close();
+    const { jobId } = this.state.snapshot;
+    if (!jobId) {
+      return;
+    }
+    try {
+      await this.api.stop();
+      this.toast.show('Stop command sent', 'warn');
+      this.logs.add('Stop command issued by user', { level: 'warn', phase: 'STOP' });
+      this.state.update({
+        jobStatus: 'idle',
+        jobRunning: false,
+        jobId: null,
+        progress: 0,
+        speed: 0,
+        etaSeconds: null,
+        paused: false,
+        lastUpdated: Date.now(),
+      });
+      this.socket.clearJob();
+      this.lastSpeedSample = null;
+      this.#stopJobStatusLoop();
+      this.connectionMonitor.forcePing();
+      this.announcer.announce('Backup stop requested');
+    } catch (error) {
+      this.toast.show(error.message || 'Stop failed', 'error');
+    }
+  }
+
+  #handleModalClosed() {
+    this.#teardownModalFocusTrap();
+    if (this.previousFocus && typeof this.previousFocus.focus === 'function') {
+      this.previousFocus.focus();
+    }
+    this.previousFocus = null;
+  }
+
+  #setupModalFocusTrap() {
+    const focusableSelectors = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(', ');
+
+    this.modalFocusables = Array.from(dom.modal.querySelectorAll(focusableSelectors)).filter((el) =>
+      el instanceof HTMLElement && !el.hasAttribute('aria-hidden'),
+    );
+
+    if (this.modalKeyHandler) {
+      dom.modal.removeEventListener('keydown', this.modalKeyHandler);
+    }
+
+    this.modalKeyHandler = (event) => this.#handleModalKeydown(event);
+    dom.modal.addEventListener('keydown', this.modalKeyHandler);
+
+    window.requestAnimationFrame(() => {
+      const target = this.modalFocusables[0] || dom.modal;
+      if (target && typeof target.focus === 'function') {
+        target.focus();
+      }
+    });
+  }
+
+  #teardownModalFocusTrap() {
+    if (this.modalKeyHandler) {
+      dom.modal.removeEventListener('keydown', this.modalKeyHandler);
+      this.modalKeyHandler = null;
+    }
+    this.modalFocusables = [];
+  }
+
+  #handleModalKeydown(event) {
+    if (event.key !== 'Tab' || this.modalFocusables.length === 0) {
+      return;
+    }
+
+    const first = this.modalFocusables[0];
+    const last = this.modalFocusables[this.modalFocusables.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  #handleConnectionUpdate(payload) {
+    if (!payload) {
+      return;
+    }
+
+    if (payload.ok) {
+      const patch = {};
+      if (typeof payload.connected === 'boolean') {
+        patch.connected = payload.connected;
+      }
+      if (Number.isFinite(payload.latency)) {
+        patch.connectionLatency = payload.latency;
+      }
+      if (payload.quality) {
+        patch.connectionQuality = payload.quality;
+      }
+      if (payload.metrics) {
+        patch.systemMetrics = payload.metrics;
+      }
+
+      if (typeof patch.connected === 'boolean' && patch.connected !== this.lastConnectionState) {
+        const level = patch.connected ? 'info' : 'warn';
+        const message = patch.connected ? 'Link to backup server verified' : 'Backup server unreachable';
+        this.logs.add(message, { level, phase: 'CONNECT' });
+        if (!patch.connected) {
+          this.toast.show('Lost connection to backup server', 'warn', 4200);
+        }
+        this.lastConnectionState = patch.connected;
+      }
+
+      if (Object.keys(patch).length) {
+        this.state.update(patch);
+      }
+    } else {
+      if (this.lastConnectionState !== false) {
+        this.logs.add('Connection monitor: server unreachable', { level: 'warn', phase: 'CONNECT' });
+        this.toast.show('Connection monitor lost contact with server', 'warn', 3800);
+      }
+      this.lastConnectionState = false;
+      this.state.update({ connected: false, connectionQuality: 'offline', connectionLatency: null });
+    }
+  }
+
+  #onSocketConnect() {
+    this.logs.add('Realtime channel connected', { level: 'info', phase: 'SOCKET' });
+    const { jobId } = this.state.snapshot;
+    if (jobId) {
+      this.socket.requestStatus(jobId);
+    }
+  }
+
+  #onSocketDisconnect(reason) {
+    this.logs.add(`Realtime channel disconnected${reason ? ` (${reason})` : ''}`, { level: 'warn', phase: 'SOCKET' });
+  }
+
+  #onSocketError(error) {
+    const message = error?.message || 'Realtime channel error';
+    this.logs.add(message, { level: 'error', phase: 'SOCKET' });
+  }
+
+  #onSocketStatus(payload) {
+    if (!payload) {
+      return;
+    }
+    const status = payload.status ?? payload;
+    if (status && typeof status === 'object') {
+      this.#applyStatus(status);
+    }
+  }
+
+  #handleSocketProgress(payload) {
+    if (!payload) {
+      return;
+    }
+    const activeJobId = this.state.snapshot.jobId;
+    if (activeJobId && payload.job_id && payload.job_id !== activeJobId) {
+      return;
+    }
+
+    const { phase, data } = payload;
+    let message = '';
+    let level = 'info';
+    let progressValue = null;
+    let bytesTransferred;
+    let totalBytes;
+
+    if (typeof data === 'string') {
+      message = data;
+    } else if (data && typeof data === 'object') {
+      message = data.message || '';
+      if (data.success === false) {
+        level = 'error';
+      }
+      progressValue = data.progress?.percentage ?? data.progress ?? null;
+      bytesTransferred = data.bytes_transferred ?? data.bytesTransferred;
+      totalBytes = data.total_bytes ?? data.totalBytes;
+    }
+
+    if (!message) {
+      message = phase || 'Progress update';
+    }
+
+    this.logs.add(message, { level, phase: phase || 'PROGRESS' });
+
+    const now = Date.now();
+    this.state.mutate((draft) => {
+      draft.jobRunning = true;
+      draft.jobStatus = 'running';
+      draft.jobPhase = phase || draft.jobPhase;
+      draft.jobMessage = message;
+      draft.lastUpdated = now;
+
+      if (Number.isFinite(progressValue)) {
+        draft.progress = progressValue;
+      }
+
+      if (Number.isFinite(bytesTransferred)) {
+        draft.bytesTransferred = bytesTransferred;
+        if (this.lastSpeedSample) {
+          const deltaBytes = bytesTransferred - this.lastSpeedSample.bytes;
+          const deltaTime = (now - this.lastSpeedSample.time) / 1000;
+          if (deltaBytes >= 0 && deltaTime > 0) {
+            draft.speed = deltaBytes / deltaTime;
+          }
+        }
+        this.lastSpeedSample = { bytes: bytesTransferred, time: now };
+      }
+
+      if (Number.isFinite(totalBytes)) {
+        draft.totalBytes = totalBytes;
+      }
+
+      if (draft.startTimestamp) {
+        draft.elapsedSeconds = (now - draft.startTimestamp) / 1000;
+      }
+
+      if (draft.totalBytes && draft.bytesTransferred && draft.speed > 0) {
+        draft.etaSeconds = Math.max((draft.totalBytes - draft.bytesTransferred) / draft.speed, 0);
+      }
+    });
+  }
+
+  #handleFileReceipt(payload) {
+    if (!payload) {
+      return;
+    }
+    const { event_type: type, data } = payload;
+    const descriptor = typeof type === 'string' ? type.replace(/_/g, ' ') : 'File event';
+    const name = data?.filename || data?.file || '';
+    const message = name ? `${descriptor}: ${name}` : descriptor;
+    const level = /fail|error/i.test(descriptor) ? 'error' : 'info';
+    this.logs.add(message, { level, phase: 'RECEIPT' });
+    if (data?.verified || /complete|verified/i.test(descriptor)) {
+      this.toast.show('Backup verified on server', 'success', 3600);
+    }
+  }
+
+  #handleKeydown(event) {
+    if (event.defaultPrevented || event.metaKey || event.altKey) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (event.ctrlKey) {
+      switch (key) {
+        case 'k':
+          event.preventDefault();
+          dom.serverInput.focus();
+          break;
+        case 'u':
+          event.preventDefault();
+          dom.usernameInput.focus();
+          break;
+        case 'f':
+          event.preventDefault();
+          dom.fileSelectBtn.click();
+          break;
+        case 't':
+          event.preventDefault();
+          this.theme.toggle();
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  async #refreshStatus(jobId, latencyStart) {
+    try {
+      const start = latencyStart ?? performance.now();
+      const status = await this.api.status(jobId);
+      const latency = performance.now() - start;
+      this.#applyStatus(status, latency);
+    } catch (error) {
+      console.warn('Status polling failed', error);
+      this.state.update({ connected: false, connectionQuality: 'offline' });
+    }
+  }
+
+  #applyStatus(status, latency) {
+    if (!status) {
+      return;
+    }
+
+    const connected = Boolean(status.connected);
+    const jobRunning = Boolean(status.backing_up);
+    const phase = status.phase || status.status || 'Idle';
+    const message = status.message || phase;
+    const progress = status.progress?.percentage ?? status.progress?.progress ?? null;
+    const bytesTransferred = status.progress?.bytes_transferred ?? status.progress?.bytesTransferred ?? null;
+    const totalBytes = status.progress?.total_bytes ?? status.progress?.totalBytes ?? null;
+    const jobId = status.job_id ?? status.jobId ?? this.state.snapshot.jobId ?? null;
+    const paused = Boolean(status.paused ?? status.progress?.paused ?? status.job_paused);
+
+    const now = Date.now();
+    const {
+      speed: previousSpeed = 0,
+      totalBytes: previousTotalBytes,
+      bytesTransferred: previousTransferred,
+      progress: previousProgress,
+      connectionLatency: previousLatency,
+      connectionQuality: previousQuality,
+      elapsedSeconds: previousElapsedSeconds,
+      startTimestamp,
+      jobStatus: previousJobStatus,
+    } = this.state.snapshot;
+
+    let speed = previousSpeed || 0;
+    if (typeof bytesTransferred === 'number') {
+      if (this.lastSpeedSample) {
+        const deltaBytes = bytesTransferred - this.lastSpeedSample.bytes;
+        const deltaTime = (now - this.lastSpeedSample.time) / 1000;
+        if (deltaBytes >= 0 && deltaTime > 0) {
+          speed = deltaBytes / deltaTime;
+        }
+      }
+      this.lastSpeedSample = { bytes: bytesTransferred, time: now };
+    }
+
+    const total = typeof totalBytes === 'number' ? totalBytes : previousTotalBytes;
+    const transferred = typeof bytesTransferred === 'number' ? bytesTransferred : previousTransferred;
+    const pct = progress ?? previousProgress;
+
+    let etaSeconds = null;
+    if (Number.isFinite(total) && Number.isFinite(transferred) && speed > 0 && total > transferred) {
+      etaSeconds = (total - transferred) / speed;
+    }
+
+    let elapsedSeconds = previousElapsedSeconds;
+    if (startTimestamp) {
+      elapsedSeconds = (now - startTimestamp) / 1000;
+    }
+
+    const connectionQuality = latency
+      ? evaluateConnectionQuality({ latencyMs: latency })
+      : previousQuality;
+
+    const nextState = {
+      jobId,
+      connected,
+      connectionLatency: latency ?? previousLatency,
+      connectionQuality,
+      jobRunning,
+      jobPhase: phase,
+      jobMessage: message,
+      jobStatus: this.#deriveJobStatus(status, previousJobStatus),
+      progress: Number.isFinite(pct) ? pct : previousProgress,
+      bytesTransferred: Number.isFinite(transferred) ? transferred : previousTransferred,
+      totalBytes: Number.isFinite(total) ? total : previousTotalBytes,
+      speed,
+      etaSeconds,
+      elapsedSeconds,
+      lastUpdated: now,
+      paused,
+    };
+
+    if (!jobRunning) {
+      nextState.jobRunning = false;
+      nextState.paused = false;
+      if (this.state.snapshot.jobId && (!jobId || jobId === this.state.snapshot.jobId)) {
+        this.socket.clearJob();
+      }
+    }
+
+    if (!jobRunning && nextState.jobStatus === 'completed') {
+      this.#stopJobStatusLoop();
+      this.toast.show('Backup completed', 'success', 4000);
+      this.announcer.announce('Backup completed successfully');
+    }
+
+    if (Array.isArray(status.events)) {
+      status.events.forEach((event) => {
+        if (!event) return;
+        const { phase: eventPhase, data } = event;
+        let messageText = '';
+        let level = 'info';
+        if (typeof data === 'string') {
+          messageText = data;
+        } else if (data && typeof data === 'object') {
+          messageText = data.message || JSON.stringify(data);
+          if (data.success === false) {
+            level = 'error';
+          }
+        }
+        if (!messageText) {
+          messageText = eventPhase || 'Event';
+        }
+        if (eventPhase && /error|fail/i.test(eventPhase)) {
+          level = 'error';
+        }
+        this.logs.add(messageText, { level, phase: eventPhase });
+      });
+    }
+
+    this.state.update(nextState);
+  }
+
+  #deriveJobStatus(status, previousStatus) {
+    if (!status) return previousStatus;
+    const phase = status.phase || '';
+    if (/failed|error/i.test(phase) || status.error) {
+      return 'error';
+    }
+    if (/completed/i.test(phase)) {
+      return 'completed';
+    }
+    if (Boolean(status.backing_up)) {
+      return 'running';
+    }
+    if (/idle|waiting|ready/i.test(phase)) {
+      return 'idle';
+    }
+    if (previousStatus === 'running') {
+      return 'idle';
+    }
+    return previousStatus || 'idle';
+  }
+
+  #startJobStatusLoop(jobId) {
+    this.#stopJobStatusLoop();
+    const poll = () => this.#refreshStatus(jobId);
+    this.jobStatusTimer = window.setInterval(poll, STATUS_INTERVAL_MS);
+    poll();
+  }
+
+  #stopJobStatusLoop() {
+    if (this.jobStatusTimer) {
+      clearInterval(this.jobStatusTimer);
+      this.jobStatusTimer = null;
+    }
+  }
+
+  #startGeneralStatusLoop() {
+    if (this.generalStatusTimer) {
+      clearInterval(this.generalStatusTimer);
+    }
+    const poll = () => {
+      const { jobStatus, jobId } = this.state.snapshot;
+      if (jobStatus === 'running' && jobId) {
+        return;
+      }
+      this.#refreshStatus();
+    };
+    this.generalStatusTimer = window.setInterval(poll, GENERAL_STATUS_INTERVAL_MS);
+    poll();
+  }
+
+  #render(state) {
+    this.#renderConnection(state);
+    this.#renderProgress(state);
+    this.#renderStats(state);
+    this.#renderButtons(state);
+  }
+
+  #renderConnection(state) {
+    const badgeClass = state.connecting
+      ? 'badge connecting'
+      : state.connected
+        ? 'badge connected'
+        : 'badge disconnected';
+    dom.connStatus.className = badgeClass;
+    dom.connStatus.textContent = state.connecting ? 'Connecting…' : state.connected ? 'Connected' : 'Disconnected';
+
+    dom.connHealth.textContent = `Latency ${formatLatency(state.connectionLatency)}`;
+
+    const quality = state.connectionQuality || 'offline';
+    dom.connQuality.className = `chip quality-${quality}`;
+    dom.connQuality.textContent = getQualityLabel(quality);
+  }
+
+  #renderProgress(state) {
+    const phaseLabel = state.jobMessage || state.jobPhase;
+    dom.phaseText.textContent = phaseLabel;
+
+    const progress = Math.max(0, Math.min(100, state.progress || 0));
+    const offset = CIRCUMFERENCE - (progress / 100) * CIRCUMFERENCE;
+    dom.progressArc.style.strokeDashoffset = offset.toString();
+    dom.progressPct.textContent = formatPercentage(progress);
+    dom.etaText.textContent = state.etaSeconds ? formatDuration(state.etaSeconds) : 'ETA —';
+  }
+
+  #renderStats(state) {
+    dom.stats.bytes.textContent = formatBytes(state.bytesTransferred);
+    dom.stats.speed.textContent = formatSpeed(state.speed);
+    const total = state.totalBytes || state.fileSize;
+    dom.stats.size.textContent = formatBytes(total);
+    dom.stats.elapsed.textContent = state.elapsedSeconds ? formatDuration(state.elapsedSeconds) : '—';
+  }
+
+  #renderButtons(state) {
+    if (state.connecting) {
+      dom.primaryActionBtn.textContent = 'Connecting…';
+      dom.primaryActionBtn.disabled = true;
+    } else if (!state.connected) {
+      dom.primaryActionBtn.textContent = 'Connect';
+      dom.primaryActionBtn.disabled = false;
+    } else if (state.jobStatus === 'running') {
+      dom.primaryActionBtn.textContent = 'Backup in progress';
+      dom.primaryActionBtn.disabled = true;
+    } else {
+      dom.primaryActionBtn.textContent = 'Start Backup';
+      dom.primaryActionBtn.disabled = false;
+    }
+
+    dom.pauseBtn.disabled = !state.jobRunning || state.paused;
+    dom.resumeBtn.disabled = !state.jobRunning || !state.paused;
+    dom.stopBtn.disabled = !state.jobRunning;
+  }
+
+  #exportLogs() {
+    const content = this.logs.export();
+    if (!content) {
+      this.toast.show('No logs to export yet', 'info');
+      return;
+    }
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `cyberbackup-log-${timestamp}.txt`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    this.toast.show('Logs exported', 'success');
+  }
+}
+
+globalThis.addEventListener('DOMContentLoaded', () => {
+  const app = new App();
+  void app.init();
+  globalThis.cyberBackupApp = app;
+});

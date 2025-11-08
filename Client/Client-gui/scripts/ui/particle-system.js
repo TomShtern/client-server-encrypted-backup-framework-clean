@@ -11,13 +11,11 @@ class ParticleSystem {
         this.app = app; // Store app reference for context awareness
 
         // Respect user preference for reduced motion
-        try {
-            const prefersReducedMotion = globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (prefersReducedMotion) {
-                this.isEnabled = false;
-                this.maxParticles = 0;
-            }
-        } catch (_) { /* no-op */ }
+        const reducedMotionQuery = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+        if (reducedMotionQuery?.matches) {
+            this.isEnabled = false;
+            this.maxParticles = 0;
+        }
         // Desktop-focused particle optimization
         if (window.innerWidth < 768) {
             this.maxParticles = Math.min(this.maxParticles, 20); // Basic mobile support
@@ -52,7 +50,7 @@ class ParticleSystem {
             complete: {
                 colors: ['#00FF00', '#32FF32', '#00FF80'],
                 speed: { min: 3, max: 6 },
-                spawnRate: 1.0,
+                spawnRate: 1,
                 size: { min: 3, max: 6 }
             }
         };
@@ -75,7 +73,8 @@ class ParticleSystem {
     }
 
     createInitialParticles() {
-        for (let i = 0; i < this.maxParticles * 0.3; i++) {
+        const initialCount = Math.floor(this.maxParticles * 0.3);
+        for (let i = 0; i < initialCount; i++) {
             this.createParticle();
         }
     }
@@ -179,7 +178,9 @@ class ParticleSystem {
 
     destroy() {
         this.stopAnimation();
-        this.particles.forEach(particle => particle.element.remove());
+        for (const particle of this.particles) {
+            particle.element.remove();
+        }
         this.particles = [];
     }
 
@@ -203,7 +204,9 @@ class ParticleSystem {
             const particlesToRemove = this.particles.length - this.maxParticles;
             if (particlesToRemove > 0) {
                 const removedParticles = this.particles.splice(this.particles.length - particlesToRemove, particlesToRemove);
-                removedParticles.forEach(particle => particle.element.remove());
+                for (const particle of removedParticles) {
+                    particle.element.remove();
+                }
             }
         }
     }
@@ -223,12 +226,14 @@ class ParticleSystem {
         // Gradually remove existing particles to make room for new context particles
         const transitionCount = Math.min(10, this.particles.length);
         for (let i = 0; i < transitionCount; i++) {
-            if (this.particles[i]) {
-                this.particles[i].element.style.transition = 'opacity 0.5s ease-out';
-                this.particles[i].element.style.opacity = '0';
+            const particle = this.particles[i];
+            if (particle) {
+                particle.element.style.transition = 'opacity 0.5s ease-out';
+                particle.element.style.opacity = '0';
                 setTimeout(() => {
-                    if (this.particles[i]) {
-                        this.particles[i].element.remove();
+                    const target = this.particles[i];
+                    if (target) {
+                        target.element.remove();
                         this.particles.splice(i, 1);
                     }
                 }, 500);
