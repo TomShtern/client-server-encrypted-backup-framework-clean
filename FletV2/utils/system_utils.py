@@ -10,6 +10,7 @@ from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
 
+
 def get_system_metrics():
     """
     Get real system metrics using psutil.
@@ -17,25 +18,25 @@ def get_system_metrics():
     """
     try:
         memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        disk = psutil.disk_usage("/")
         return {
-            'cpu_usage': psutil.cpu_percent(interval=0.1),
-            'memory_usage': memory.percent,
-            'disk_usage': disk.percent,
-            'memory_total_gb': memory.total // (1024**3),
-            'memory_used_gb': (memory.total - memory.available) // (1024**3),
-            'disk_total_gb': disk.total // (1024**3),
-            'disk_used_gb': disk.used // (1024**3),
+            "cpu_usage": psutil.cpu_percent(interval=0.1),
+            "memory_usage": memory.percent,
+            "disk_usage": disk.percent,
+            "memory_total_gb": memory.total // (1024**3),
+            "memory_used_gb": (memory.total - memory.available) // (1024**3),
+            "disk_total_gb": disk.total // (1024**3),
+            "disk_used_gb": disk.used // (1024**3),
         }
     except Exception as e:
         logger.warning(f"Could not retrieve system metrics: {e}")
         # Return fallback data
         return {
-            'cpu_usage': 45.2,
-            'memory_usage': 67.8,
-            'disk_usage': 34.1,
-            'memory_total_gb': 16,
-            'memory_used_gb': 11,
-            'disk_total_gb': 500,
-            'disk_used_gb': 170,
+            "cpu_usage": 45.2,
+            "memory_usage": 67.8,
+            "disk_usage": 34.1,
+            "memory_total_gb": 16,
+            "memory_used_gb": 11,
+            "disk_total_gb": 500,
+            "disk_used_gb": 170,
         }

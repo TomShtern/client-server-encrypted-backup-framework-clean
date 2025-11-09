@@ -6,9 +6,11 @@ Usage:
 If TARGET_URL is omitted, defaults to http://localhost:9090
 This script saves a full-page screenshot and writes console logs to console_logs.json.
 """
-from playwright.sync_api import sync_playwright
 import json
 import sys
+
+from playwright.sync_api import sync_playwright
+
 
 def main():
     target_url = (
@@ -92,7 +94,7 @@ def main():
             print(f"Error checking elements: {e}")
 
         # Print summary
-        print(f"\n=== Summary ===")
+        print("\n=== Summary ===")
         print(f"Total console messages: {len(console_logs)}")
         print(f"Errors/Warnings: {len(errors)}")
 
@@ -100,7 +102,7 @@ def main():
             print("\n=== Errors and Warnings ===")
             for error in errors:
                 print(f"[{error.get('type', 'unknown').upper()}] {error.get('text', 'No message')}")
-                if 'location' in error and error['location']:
+                if error.get('location'):
                     loc = error['location']
                     print(f"  Location: {loc.get('url', 'unknown')}:{loc.get('lineNumber', '?')}")
 

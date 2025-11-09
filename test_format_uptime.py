@@ -2,6 +2,7 @@
 """Test format_uptime function to see if it's causing the freeze."""
 
 import sys
+
 sys.path.insert(0, 'FletV2')
 
 from FletV2.utils.formatters import format_uptime

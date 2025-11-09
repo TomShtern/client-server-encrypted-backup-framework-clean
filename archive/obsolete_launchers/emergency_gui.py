@@ -21,9 +21,9 @@ sys.path.insert(0, '.')
 sys.path.insert(0, '..')
 
 # Import UTF8 solution first to avoid issues
-import Shared.utils.utf8_solution
 
 import flet as ft
+
 
 # Define a simple stub for the emergency dashboard directly in this file
 # to avoid import issues and keep it self-contained

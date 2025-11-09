@@ -10,13 +10,13 @@ Compatible with Flet 0.28.3 and Material Design 3.
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
 
 import flet as ft
 
 
 class MenuItemType(Enum):
     """Context menu item types"""
+
     ACTION = "action"
     CHECKBOX = "checkbox"
     RADIO = "radio"
@@ -28,6 +28,7 @@ class MenuItemType(Enum):
 @dataclass
 class MenuItem:
     """Context menu item configuration"""
+
     id: str
     label: str
     type: MenuItemType
@@ -35,7 +36,7 @@ class MenuItem:
     shortcut: str | None = None
     enabled: bool = True
     checked: bool = False
-    submenu: list['MenuItem'] | None = None
+    submenu: list["MenuItem"] | None = None
     action: Callable | None = None
 
 
@@ -52,12 +53,7 @@ class ContextMenu(ft.PopupMenuButton):
     - Accessibility support
     """
 
-    def __init__(
-        self,
-        items: list[MenuItem] | None = None,
-        on_action: Callable | None = None,
-        **kwargs
-    ):
+    def __init__(self, items: list[MenuItem] | None = None, on_action: Callable | None = None, **kwargs):
         super().__init__(**kwargs)
 
         self.menu_items = items or []
@@ -104,20 +100,14 @@ class ContextMenu(ft.PopupMenuButton):
             if item.type == MenuItemType.SEPARATOR:
                 popup_items.append(ft.PopupMenuItem())
             elif item.type == MenuItemType.LABEL:
-                popup_items.append(
-                    ft.PopupMenuItem(
-                        text=item.label,
-                        on_click=None,
-                        disabled=True
-                    )
-                )
+                popup_items.append(ft.PopupMenuItem(text=item.label, on_click=None, disabled=True))
             elif item.type == MenuItemType.CHECKBOX:
                 popup_items.append(
                     ft.PopupMenuItem(
                         text=item.label,
                         icon=ft.Icons.CHECK if item.checked else None,
                         on_click=lambda e, i=item: self._on_item_click(e, i),
-                        disabled=not item.enabled
+                        disabled=not item.enabled,
                     )
                 )
             elif item.type == MenuItemType.RADIO:
@@ -125,21 +115,17 @@ class ContextMenu(ft.PopupMenuButton):
                     ft.PopupMenuItem(
                         text=item.label,
                         icon=(
-                            ft.Icons.RADIO_BUTTON_CHECKED if item.checked
-                            else ft.Icons.RADIO_BUTTON_UNCHECKED
+                            ft.Icons.RADIO_BUTTON_CHECKED if item.checked else ft.Icons.RADIO_BUTTON_UNCHECKED
                         ),
                         on_click=lambda e, i=item: self._on_item_click(e, i),
-                        disabled=not item.enabled
+                        disabled=not item.enabled,
                     )
                 )
             elif item.type == MenuItemType.SUBMENU and item.submenu:
                 submenu_items = self._create_submenu_items(item.submenu)
                 popup_items.append(
                     ft.PopupMenuItem(
-                        text=item.label,
-                        icon=item.icon,
-                        items=submenu_items,
-                        disabled=not item.enabled
+                        text=item.label, icon=item.icon, items=submenu_items, disabled=not item.enabled
                     )
                 )
             else:  # ACTION
@@ -148,7 +134,7 @@ class ContextMenu(ft.PopupMenuButton):
                         text=f"{item.label}\t{item.shortcut}" if item.shortcut else item.label,
                         icon=item.icon,
                         on_click=lambda e, i=item: self._on_item_click(e, i),
-                        disabled=not item.enabled
+                        disabled=not item.enabled,
                     )
                 )
 
@@ -162,20 +148,14 @@ class ContextMenu(ft.PopupMenuButton):
             if item.type == MenuItemType.SEPARATOR:
                 items.append(ft.PopupMenuItem())
             elif item.type == MenuItemType.LABEL:
-                items.append(
-                    ft.PopupMenuItem(
-                        text=item.label,
-                        on_click=None,
-                        disabled=True
-                    )
-                )
+                items.append(ft.PopupMenuItem(text=item.label, on_click=None, disabled=True))
             else:
                 items.append(
                     ft.PopupMenuItem(
                         text=f"{item.label}\t{item.shortcut}" if item.shortcut else item.label,
                         icon=item.icon,
                         on_click=lambda e, i=item: self._on_item_click(e, i),
-                        disabled=not item.enabled
+                        disabled=not item.enabled,
                     )
                 )
 
@@ -227,7 +207,7 @@ class StandardContextMenu:
         on_copy: Callable,
         on_export: Callable,
         on_delete: Callable,
-        has_selection: bool = False
+        has_selection: bool = False,
     ) -> ContextMenu:
         """Create a standard DataTable context menu"""
 
@@ -238,7 +218,7 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.INFO,
                 shortcut="Enter",
-                action=lambda _, __: on_view_details()
+                action=lambda _, __: on_view_details(),
             ),
             MenuItem(
                 id="edit",
@@ -246,47 +226,39 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.EDIT,
                 shortcut="F2",
-                action=lambda _, __: on_edit()
+                action=lambda _, __: on_edit(),
             ),
-            MenuItem(
-                id="separator1",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator1", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="copy",
                 label="Copy",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.CONTENT_COPY,
                 shortcut="Ctrl+C",
-                action=lambda _, __: on_copy()
+                action=lambda _, __: on_copy(),
             ),
             MenuItem(
                 id="export_csv",
                 label="Export as CSV",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.TABLE_VIEW,
-                action=lambda _, __: on_export("csv")
+                action=lambda _, __: on_export("csv"),
             ),
             MenuItem(
                 id="export_json",
                 label="Export as JSON",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.CODE,
-                action=lambda _, __: on_export("json")
+                action=lambda _, __: on_export("json"),
             ),
             MenuItem(
                 id="export_excel",
                 label="Export as Excel",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.GRID_ON,
-                action=lambda _, __: on_export("excel")
+                action=lambda _, __: on_export("excel"),
             ),
-            MenuItem(
-                id="separator2",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator2", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="delete",
                 label="Delete",
@@ -294,8 +266,8 @@ class StandardContextMenu:
                 icon=ft.Icons.DELETE,
                 shortcut="Delete",
                 enabled=has_selection,
-                action=lambda _, __: on_delete()
-            )
+                action=lambda _, __: on_delete(),
+            ),
         ]
 
         return ContextMenu(items=items)
@@ -309,7 +281,7 @@ class StandardContextMenu:
         on_move: Callable,
         on_delete: Callable,
         on_properties: Callable,
-        has_selection: bool = False
+        has_selection: bool = False,
     ) -> ContextMenu:
         """Create a standard file system context menu"""
 
@@ -320,7 +292,7 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.FOLDER_OPEN,
                 shortcut="Enter",
-                action=lambda _, __: on_open()
+                action=lambda _, __: on_open(),
             ),
             MenuItem(
                 id="edit",
@@ -328,20 +300,16 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.EDIT,
                 shortcut="F2",
-                action=lambda _, __: on_edit()
+                action=lambda _, __: on_edit(),
             ),
-            MenuItem(
-                id="separator1",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator1", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="copy",
                 label="Copy",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.CONTENT_COPY,
                 shortcut="Ctrl+C",
-                action=lambda _, __: on_copy()
+                action=lambda _, __: on_copy(),
             ),
             MenuItem(
                 id="cut",
@@ -349,7 +317,7 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.CONTENT_CUT,
                 shortcut="Ctrl+X",
-                action=lambda _, __: on_copy()  # Reuse copy with move flag
+                action=lambda _, __: on_copy(),  # Reuse copy with move flag
             ),
             MenuItem(
                 id="paste",
@@ -357,7 +325,7 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.CONTENT_PASTE,
                 shortcut="Ctrl+V",
-                action=lambda _, __: on_move()
+                action=lambda _, __: on_move(),
             ),
             MenuItem(
                 id="rename",
@@ -365,13 +333,9 @@ class StandardContextMenu:
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.DRIVE_FILE_RENAME_OUTLINE,
                 shortcut="F2",
-                action=lambda _, __: on_rename()
+                action=lambda _, __: on_rename(),
             ),
-            MenuItem(
-                id="separator2",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator2", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="delete",
                 label="Delete",
@@ -379,21 +343,17 @@ class StandardContextMenu:
                 icon=ft.Icons.DELETE,
                 shortcut="Delete",
                 enabled=has_selection,
-                action=lambda _, __: on_delete()
+                action=lambda _, __: on_delete(),
             ),
-            MenuItem(
-                id="separator3",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator3", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="properties",
                 label="Properties",
                 type=MenuItemType.ACTION,
                 icon=ft.Icons.INFO,
                 shortcut="Alt+Enter",
-                action=lambda _, __: on_properties()
-            )
+                action=lambda _, __: on_properties(),
+            ),
         ]
 
         return ContextMenu(items=items)
@@ -406,7 +366,7 @@ class StandardContextMenu:
         on_delete: Callable,
         on_select_all: Callable,
         has_selection: bool = False,
-        has_clipboard_content: bool = False
+        has_clipboard_content: bool = False,
     ) -> ContextMenu:
         """Create a standard text editing context menu"""
 
@@ -418,7 +378,7 @@ class StandardContextMenu:
                 icon=ft.Icons.CONTENT_CUT,
                 shortcut="Ctrl+X",
                 enabled=has_selection,
-                action=lambda _, __: on_cut()
+                action=lambda _, __: on_cut(),
             ),
             MenuItem(
                 id="copy",
@@ -427,7 +387,7 @@ class StandardContextMenu:
                 icon=ft.Icons.CONTENT_COPY,
                 shortcut="Ctrl+C",
                 enabled=has_selection,
-                action=lambda _, __: on_copy()
+                action=lambda _, __: on_copy(),
             ),
             MenuItem(
                 id="paste",
@@ -436,7 +396,7 @@ class StandardContextMenu:
                 icon=ft.Icons.CONTENT_PASTE,
                 shortcut="Ctrl+V",
                 enabled=has_clipboard_content,
-                action=lambda _, __: on_paste()
+                action=lambda _, __: on_paste(),
             ),
             MenuItem(
                 id="delete",
@@ -445,30 +405,22 @@ class StandardContextMenu:
                 icon=ft.Icons.DELETE,
                 shortcut="Delete",
                 enabled=has_selection,
-                action=lambda _, __: on_delete()
+                action=lambda _, __: on_delete(),
             ),
-            MenuItem(
-                id="separator1",
-                label="",
-                type=MenuItemType.SEPARATOR
-            ),
+            MenuItem(id="separator1", label="", type=MenuItemType.SEPARATOR),
             MenuItem(
                 id="select_all",
                 label="Select All",
                 type=MenuItemType.ACTION,
                 shortcut="Ctrl+A",
-                action=lambda _, __: on_select_all()
-            )
+                action=lambda _, __: on_select_all(),
+            ),
         ]
 
         return ContextMenu(items=items)
 
 
-def setup_context_menu_target(
-    control: ft.Control,
-    context_menu: ContextMenu,
-    page: ft.Page
-) -> None:
+def setup_context_menu_target(control: ft.Control, context_menu: ContextMenu, page: ft.Page) -> None:
     """
     Setup a control to show a context menu on right-click
 
@@ -483,7 +435,7 @@ def setup_context_menu_target(
         context_menu.show_at(e.global_x, e.global_y)
 
     # Add the context menu to the page overlay
-    if not hasattr(page, 'overlay'):
+    if not hasattr(page, "overlay"):
         page.overlay = []
     if context_menu not in page.overlay:
         page.overlay.append(context_menu)
@@ -492,6 +444,5 @@ def setup_context_menu_target(
     control.on_tap_down = on_right_click
 
     # Update the control
-    if getattr(control, 'page', None):
+    if getattr(control, "page", None):
         control.update()
-

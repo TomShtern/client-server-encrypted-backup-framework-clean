@@ -26,8 +26,7 @@ USAGE:
 import hashlib
 import logging
 import os
-from typing import Optional, Iterator, Union
-from pathlib import Path
+from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +36,9 @@ DEFAULT_CHUNK_SIZE = 64 * 1024  # 64KB
 LARGE_FILE_CHUNK_SIZE = 1024 * 1024  # 1MB
 
 
-def calculate_file_hash_streaming(file_path: str,
-                                algorithm: str = 'sha256',
-                                chunk_size: Optional[int] = None) -> Optional[str]:
+def calculate_file_hash_streaming(
+    file_path: str, algorithm: str = "sha256", chunk_size: int | None = None
+) -> str | None:
     """
     Calculate file hash using streaming to prevent memory overload.
 
@@ -74,18 +73,18 @@ def calculate_file_hash_streaming(file_path: str,
 
     try:
         # Initialize hash algorithm
-        if algorithm.lower() == 'sha256':
+        if algorithm.lower() == "sha256":
             hash_obj = hashlib.sha256()
-        elif algorithm.lower() == 'md5':
+        elif algorithm.lower() == "md5":
             hash_obj = hashlib.md5()
-        elif algorithm.lower() == 'sha1':
+        elif algorithm.lower() == "sha1":
             hash_obj = hashlib.sha1()
         else:
             logger.error(f"Unsupported hash algorithm: {algorithm}")
             return None
 
         # Process file in chunks to limit memory usage
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             while True:
                 chunk = f.read(chunk_size)
                 if not chunk:
@@ -110,9 +109,9 @@ def calculate_file_hash_streaming(file_path: str,
         return None
 
 
-def read_file_chunks(file_path: str,
-                    chunk_size: int = DEFAULT_CHUNK_SIZE,
-                    max_chunks: Optional[int] = None) -> Iterator[bytes]:
+def read_file_chunks(
+    file_path: str, chunk_size: int = DEFAULT_CHUNK_SIZE, max_chunks: int | None = None
+) -> Iterator[bytes]:
     """
     Generator that yields file contents in chunks to limit memory usage.
 
@@ -133,7 +132,7 @@ def read_file_chunks(file_path: str,
     chunk_count = 0
 
     try:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             while True:
                 if max_chunks is not None and chunk_count >= max_chunks:
                     break
@@ -156,8 +155,7 @@ def read_file_chunks(file_path: str,
         raise
 
 
-def validate_file_size_safe(file_path: str,
-                          max_size_bytes: int) -> tuple[bool, Optional[int]]:
+def validate_file_size_safe(file_path: str, max_size_bytes: int) -> tuple[bool, int | None]:
     """
     Safely check file size without loading file content.
 
@@ -175,8 +173,9 @@ def validate_file_size_safe(file_path: str,
         is_valid = actual_size <= max_size_bytes
 
         if not is_valid:
-            logger.warning(f"File {file_path} exceeds size limit: "
-                         f"{actual_size:,} bytes > {max_size_bytes:,} bytes")
+            logger.warning(
+                f"File {file_path} exceeds size limit: {actual_size:,} bytes > {max_size_bytes:,} bytes"
+            )
 
         return is_valid, actual_size
 
@@ -191,8 +190,7 @@ def validate_file_size_safe(file_path: str,
         return False, None
 
 
-def calculate_file_crc32_streaming(file_path: str,
-                                  chunk_size: int = DEFAULT_CHUNK_SIZE) -> Optional[int]:
+def calculate_file_crc32_streaming(file_path: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> int | None:
     """
     Calculate CRC32 checksum using streaming to prevent memory usage.
 
@@ -235,6 +233,7 @@ def calculate_crc32_chunk(chunk: bytes, previous_crc: int = 0) -> int:
     Memory Usage: O(1)
     """
     import zlib
+
     return zlib.crc32(chunk, previous_crc)
 
 
@@ -250,10 +249,10 @@ class StreamingFileReader:
         self.chunk_size = chunk_size
         self.file_handle = None
 
-    def __enter__(self) -> 'StreamingFileReader':
+    def __enter__(self) -> "StreamingFileReader":
         """Open file handle when entering context."""
         try:
-            self.file_handle = open(self.file_path, 'rb')
+            self.file_handle = open(self.file_path, "rb")
             return self
         except Exception as e:
             logger.error(f"Failed to open file {self.file_path}: {e}")
@@ -269,7 +268,7 @@ class StreamingFileReader:
         # Return False to propagate exceptions, True to suppress them
         return False
 
-    def read_chunk(self) -> Optional[bytes]:
+    def read_chunk(self) -> bytes | None:
         """
         Read a single chunk from the file.
 
@@ -318,6 +317,7 @@ class MemoryUsageTracker:
         """Get current memory usage in bytes."""
         try:
             import psutil
+
             return psutil.Process().memory_info().rss
         except ImportError:
             # psutil not available - can't track memory
@@ -350,8 +350,10 @@ def log_memory_efficiency(operation: str, file_size: int, memory_delta: int):
         memory_delta: Memory usage change during operation
     """
     if file_size > 0:
-        efficiency = (file_size / memory_delta) if memory_delta > 0 else float('inf')
-        logger.info(f"Memory efficiency - {operation}: "
-                   f"File: {file_size:,} bytes, "
-                   f"Memory: {memory_delta:,} bytes, "
-                   f"Ratio: {efficiency:.1f}x")
+        efficiency = (file_size / memory_delta) if memory_delta > 0 else float("inf")
+        logger.info(
+            f"Memory efficiency - {operation}: "
+            f"File: {file_size:,} bytes, "
+            f"Memory: {memory_delta:,} bytes, "
+            f"Ratio: {efficiency:.1f}x"
+        )

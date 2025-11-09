@@ -14,20 +14,22 @@ import asyncio
 import csv
 import json
 import re
-from pathlib import Path
-from typing import Any, Callable, Iterable
 import threading
-
-# Project requirement – must be first import for reliable UTF-8 I/O on Windows.
-import Shared.utils.utf8_solution as _  # noqa: F401
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
 import flet as ft
 
+# Project requirement – must be first import for reliable UTF-8 I/O on Windows.
+import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.utils.async_helpers import safe_server_call
+from FletV2.views.enhanced_logs import (
+    create_logs_view as _create_logs_view,
+)
 from FletV2.views.enhanced_logs import (
     fetch_app_logs_async,
     fetch_server_logs_async,
-    create_logs_view as _create_logs_view,
 )
 
 # Sensitive field handling mirrors the production view.
@@ -197,7 +199,7 @@ async def fetch_logs_async(server_bridge: Any | None) -> list[dict[str, Any]]:
 
     try:
         result = await asyncio.wait_for(future, timeout=0.35)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return []
 
     if not result.get("success"):
@@ -225,14 +227,14 @@ async def fetch_logs_with_sources_async(server_bridge: Any | None, page: ft.Page
 
 
 __all__ = [
-    "create_enhanced_logs_view",
-    "filter_logs_by_query",
-    "filter_logs_by_level",
+    "_compile_search_regex",
     "calculate_log_statistics",
+    "create_enhanced_logs_view",
     "export_logs_to_csv",
     "export_logs_to_json",
-    "highlight_text_with_search",
-    "_compile_search_regex",
-    "fetch_logs_async",
     "fetch_log_statistics_async",
+    "fetch_logs_async",
+    "filter_logs_by_level",
+    "filter_logs_by_query",
+    "highlight_text_with_search",
 ]

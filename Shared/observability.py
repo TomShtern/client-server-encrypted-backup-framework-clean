@@ -37,6 +37,7 @@ class LogLevel(Enum):
 @dataclass
 class StructuredLogEntry:
     """Structured log entry with consistent fields"""
+
     timestamp: str
     level: str
     component: str
@@ -55,6 +56,7 @@ class StructuredLogEntry:
 @dataclass
 class Metric:
     """Metric data point"""
+
     name: str
     type: MetricType
     value: float
@@ -66,6 +68,7 @@ class Metric:
 @dataclass
 class SystemMetrics:
     """System-level metrics snapshot"""
+
     timestamp: float
     cpu_percent: float
     memory_percent: float
@@ -88,7 +91,7 @@ class StructuredLogger:
         self.trace_id: str | None = None
         self.span_id: str | None = None
 
-    def with_context(self, **kwargs) -> 'StructuredLogger':
+    def with_context(self, **kwargs) -> "StructuredLogger":
         """Create a new logger with additional context"""
         new_logger = StructuredLogger(self.component, self.base_logger)
         new_logger.context = {**self.context, **kwargs}
@@ -96,7 +99,7 @@ class StructuredLogger:
         new_logger.span_id = self.span_id
         return new_logger
 
-    def with_trace(self, trace_id: str, span_id: str | None = None) -> 'StructuredLogger':
+    def with_trace(self, trace_id: str, span_id: str | None = None) -> "StructuredLogger":
         """Create a new logger with tracing information"""
         new_logger = StructuredLogger(self.component, self.base_logger)
         new_logger.context = self.context.copy()
@@ -111,15 +114,15 @@ class StructuredLogger:
             level=level.value,
             component=self.component,
             message=message,
-            context={**self.context, **kwargs.get('context', {})},
+            context={**self.context, **kwargs.get("context", {})},
             trace_id=self.trace_id,
             span_id=self.span_id,
-            user_id=kwargs.get('user_id'),
-            session_id=kwargs.get('session_id'),
-            operation=kwargs.get('operation'),
-            duration_ms=kwargs.get('duration_ms'),
-            error_code=kwargs.get('error_code'),
-            tags=kwargs.get('tags', {})
+            user_id=kwargs.get("user_id"),
+            session_id=kwargs.get("session_id"),
+            operation=kwargs.get("operation"),
+            duration_ms=kwargs.get("duration_ms"),
+            error_code=kwargs.get("error_code"),
+            tags=kwargs.get("tags", {}),
         )
 
         # Log as JSON for structured parsing
@@ -179,24 +182,14 @@ class MetricsCollector:
     def record_counter(self, name: str, value: float = 1.0, tags: dict[str, str] | None = None):
         """Record a counter metric (cumulative)"""
         metric = Metric(
-            name=name,
-            type=MetricType.COUNTER,
-            value=value,
-            timestamp=time.time(),
-            tags=tags or {}
+            name=name, type=MetricType.COUNTER, value=value, timestamp=time.time(), tags=tags or {}
         )
         with self.lock:
             self.metrics[name].append(metric)
 
     def record_gauge(self, name: str, value: float, tags: dict[str, str] | None = None):
         """Record a gauge metric (current value)"""
-        metric = Metric(
-            name=name,
-            type=MetricType.GAUGE,
-            value=value,
-            timestamp=time.time(),
-            tags=tags or {}
-        )
+        metric = Metric(name=name, type=MetricType.GAUGE, value=value, timestamp=time.time(), tags=tags or {})
         with self.lock:
             self.metrics[name].append(metric)
 
@@ -208,7 +201,7 @@ class MetricsCollector:
             value=duration_ms,
             timestamp=time.time(),
             tags=tags or {},
-            unit="ms"
+            unit="ms",
         )
         with self.lock:
             self.metrics[name].append(metric)
@@ -236,14 +229,13 @@ class MetricsCollector:
                 "sum": sum(values),
                 "latest": values[-1] if values else 0,
                 "window_seconds": window_seconds,
-                "timestamp": now
+                "timestamp": now,
             }
 
     def get_all_summaries(self, window_seconds: int = 300) -> dict[str, dict[str, Any]]:
         """Get summaries for all metrics"""
         with self.lock:
-            return {name: self.get_metric_summary(name, window_seconds)
-                   for name in self.metrics.keys()}
+            return {name: self.get_metric_summary(name, window_seconds) for name in self.metrics.keys()}
 
 
 class SystemMonitor:
@@ -288,7 +280,7 @@ class SystemMonitor:
         memory = psutil.virtual_memory()
 
         # Disk usage for current directory
-        disk = psutil.disk_usage('.')
+        disk = psutil.disk_usage(".")
 
         # Network stats
         net_io = psutil.net_io_counters()
@@ -308,7 +300,7 @@ class SystemMonitor:
             network_bytes_sent=net_io.bytes_sent,
             network_bytes_recv=net_io.bytes_recv,
             active_connections=connections,
-            open_files=open_files
+            open_files=open_files,
         )
 
     def get_latest_metrics(self) -> SystemMetrics | None:
@@ -353,8 +345,7 @@ def create_structured_logger(component: str, base_logger: logging.Logger) -> Str
 class TimedOperation:
     """Context manager for timing operations and recording metrics"""
 
-    def __init__(self, operation_name: str, logger: StructuredLogger,
-                 tags: dict[str, str] | None = None):
+    def __init__(self, operation_name: str, logger: StructuredLogger, tags: dict[str, str] | None = None):
         self.operation_name = operation_name
         self.logger = logger
         self.tags = tags or {}
@@ -362,8 +353,7 @@ class TimedOperation:
 
     def __enter__(self):
         self.start_time = time.time()
-        self.logger.info(f"Starting {self.operation_name}",
-                        operation=self.operation_name, tags=self.tags)
+        self.logger.info(f"Starting {self.operation_name}", operation=self.operation_name, tags=self.tags)
         return self
 
     def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: Any | None) -> None:
@@ -376,21 +366,22 @@ class TimedOperation:
 
         # Record timing metric
         get_metrics_collector().record_timer(
-            f"operation.{self.operation_name}.duration",
-            duration_ms,
-            self.tags
+            f"operation.{self.operation_name}.duration", duration_ms, self.tags
         )
 
         # Log completion
         if exc_type is None:
-            self.logger.info(f"Completed {self.operation_name}",
-                           operation=self.operation_name,
-                           duration_ms=duration_ms,
-                           tags=self.tags)
+            self.logger.info(
+                f"Completed {self.operation_name}",
+                operation=self.operation_name,
+                duration_ms=duration_ms,
+                tags=self.tags,
+            )
         else:
-            self.logger.error(f"Failed {self.operation_name}: {exc_val}",
-                            operation=self.operation_name,
-                            duration_ms=duration_ms,
-                            error_code=exc_type.__name__,
-                            tags=self.tags)
-
+            self.logger.error(
+                f"Failed {self.operation_name}: {exc_val}",
+                operation=self.operation_name,
+                duration_ms=duration_ms,
+                error_code=exc_type.__name__,
+                tags=self.tags,
+            )

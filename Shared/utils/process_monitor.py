@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class ProcessState(Enum):
     """Process state enumeration"""
+
     STARTING = "starting"
     RUNNING = "running"
     STOPPING = "stopping"
@@ -33,6 +34,7 @@ class ProcessState(Enum):
 @dataclass
 class ProcessMetrics:
     """Real-time process metrics"""
+
     timestamp: datetime
     cpu_percent: float
     memory_mb: float
@@ -50,6 +52,7 @@ class ProcessMetrics:
 @dataclass
 class ProcessInfo:
     """Comprehensive process information"""
+
     process_id: str
     name: str
     command: list[str]
@@ -85,9 +88,15 @@ class ProcessRegistry:
 
         logger.info("Process registry initialized")
 
-    def register_process(self, process_id: str, name: str, command: list[str],
-                        cwd: str = ".", auto_restart: bool = False,
-                        max_restarts: int = 3) -> ProcessInfo:
+    def register_process(
+        self,
+        process_id: str,
+        name: str,
+        command: list[str],
+        cwd: str = ".",
+        auto_restart: bool = False,
+        max_restarts: int = 3,
+    ) -> ProcessInfo:
         """Register a new process for monitoring"""
         with self.lock:
             process_info = ProcessInfo(
@@ -98,7 +107,7 @@ class ProcessRegistry:
                 state=ProcessState.STARTING,
                 start_time=datetime.now(),
                 auto_restart=auto_restart,
-                max_restarts=max_restarts
+                max_restarts=max_restarts,
             )
 
             self.processes[process_id] = process_info
@@ -117,11 +126,11 @@ class ProcessRegistry:
             try:
                 # Default subprocess arguments
                 default_kwargs: dict[str, Any] = {
-                    'stdout': subprocess.PIPE,
-                    'stderr': subprocess.PIPE,
-                    'text': True,
-                    'encoding': 'utf-8',
-                    'cwd': process_info.cwd
+                    "stdout": subprocess.PIPE,
+                    "stderr": subprocess.PIPE,
+                    "text": True,
+                    "encoding": "utf-8",
+                    "cwd": process_info.cwd,
                 }
                 default_kwargs.update(popen_kwargs)
 
@@ -135,9 +144,7 @@ class ProcessRegistry:
 
                 # Start monitoring thread for this process
                 monitor_thread = threading.Thread(
-                    target=self._monitor_process,
-                    args=(process_id,),
-                    daemon=True
+                    target=self._monitor_process, args=(process_id,), daemon=True
                 )
                 self.monitoring_threads[process_id] = monitor_thread
                 monitor_thread.start()
@@ -154,7 +161,7 @@ class ProcessRegistry:
                     message=f"Failed to start process {process_id}",
                     details=f"Command: {process_info.command}, Error: {e}",
                     component="process_registry",
-                    severity=ErrorSeverity.HIGH
+                    severity=ErrorSeverity.HIGH,
                 )
 
                 logger.error(f"Failed to start process {process_id}: {e}")
@@ -225,8 +232,7 @@ class ProcessRegistry:
     def get_running_processes(self) -> dict[str, ProcessInfo]:
         """Get only running processes"""
         with self.lock:
-            return {pid: info for pid, info in self.processes.items()
-                   if info.state == ProcessState.RUNNING}
+            return {pid: info for pid, info in self.processes.items() if info.state == ProcessState.RUNNING}
 
     def _monitor_process(self, process_id: str):
         """Monitor a specific process in a dedicated thread"""
@@ -264,8 +270,10 @@ class ProcessRegistry:
                         logger.info(f"Process {process_id} ended with exit code: {popen.poll()}")
 
                         # Handle auto-restart if enabled
-                        if (process_info.auto_restart and
-                            process_info.restart_count < process_info.max_restarts):
+                        if (
+                            process_info.auto_restart
+                            and process_info.restart_count < process_info.max_restarts
+                        ):
                             self._restart_process(process_id)
 
                     break
@@ -278,8 +286,9 @@ class ProcessRegistry:
 
         logger.info(f"Stopped monitoring process: {process_id}")
 
-    def _collect_process_metrics(self, popen: subprocess.Popen[str],
-                                process_info: ProcessInfo) -> ProcessMetrics | None:
+    def _collect_process_metrics(
+        self, popen: subprocess.Popen[str], process_info: ProcessInfo
+    ) -> ProcessMetrics | None:
         """Collect comprehensive process metrics"""
         try:
             proc = psutil.Process(popen.pid)
@@ -298,7 +307,7 @@ class ProcessRegistry:
                 io_read_bytes=io_counters.read_bytes,
                 io_write_bytes=io_counters.write_bytes,
                 status=proc.status(),
-                is_responsive=True  # Will be updated by health checks
+                is_responsive=True,  # Will be updated by health checks
             )
 
             # Detect warnings
@@ -336,7 +345,7 @@ class ProcessRegistry:
             return False
 
         # Process in uninterruptible sleep for too long
-        if metrics.status == 'disk-sleep':
+        if metrics.status == "disk-sleep":
             return False
 
         return True
@@ -352,7 +361,7 @@ class ProcessRegistry:
                 message=f"Process {process_id} health warning",
                 details=f"Warnings: {warning_msg}",
                 component="process_monitoring",
-                severity=ErrorSeverity.MEDIUM
+                severity=ErrorSeverity.MEDIUM,
             )
 
         # Handle unresponsive process
@@ -362,7 +371,7 @@ class ProcessRegistry:
                 message=f"Process {process_id} appears unresponsive",
                 details=f"Metrics: CPU={metrics.cpu_percent:.1f}%, Threads={metrics.num_threads}, Status={metrics.status}",
                 component="process_health",
-                severity=ErrorSeverity.HIGH
+                severity=ErrorSeverity.HIGH,
             )
 
     def _restart_process(self, process_id: str):
@@ -370,7 +379,9 @@ class ProcessRegistry:
         process_info = self.processes[process_id]
         process_info.restart_count += 1
 
-        logger.info(f"Restarting process {process_id} (attempt {process_info.restart_count}/{process_info.max_restarts})")
+        logger.info(
+            f"Restarting process {process_id} (attempt {process_info.restart_count}/{process_info.max_restarts})"
+        )
 
         # Wait a bit before restarting
         time.sleep(2)
@@ -401,9 +412,11 @@ class ProcessRegistry:
             dead_processes: list[str] = []
 
             for process_id, process_info in self.processes.items():
-                if (process_info.state == ProcessState.STOPPED and
-                    process_info.end_time and
-                    datetime.now() - process_info.end_time > timedelta(hours=1)):
+                if (
+                    process_info.state == ProcessState.STOPPED
+                    and process_info.end_time
+                    and datetime.now() - process_info.end_time > timedelta(hours=1)
+                ):
                     dead_processes.append(process_id)
 
             for process_id in dead_processes:
@@ -446,8 +459,7 @@ def get_process_registry() -> ProcessRegistry:
     return _process_registry
 
 
-def register_process(process_id: str, name: str, command: list[str],
-                    **kwargs) -> ProcessInfo:
+def register_process(process_id: str, name: str, command: list[str], **kwargs) -> ProcessInfo:
     """Convenience function to register a process"""
     return get_process_registry().register_process(process_id, name, command, **kwargs)
 

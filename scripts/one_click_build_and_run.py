@@ -496,12 +496,12 @@ def _report_terminated_processes(terminated_processes: list[str]):
         print("No CyberBackup processes found running.")
         print()
 
-def check_executable_locations(locations: list[Path] | None = None, context: str = "C++ client") -> tuple[Path | None, list[Path]]:
+def check_executable_locations(locations: list[Path] | None = None, _context: str = "C++ client") -> tuple[Path | None, list[Path]]:
     """Check multiple potential locations for the EncryptedBackupClient.exe file
 
     Args:
         locations: List of Path objects to check. Uses default locations if None.
-        context: Description of what we're looking for (for error messages)
+        _context: Description of what we're looking for (for error messages) - currently unused
 
     Returns:
         tuple: (found_path, locations_checked) where found_path is Path object or None

@@ -5,6 +5,7 @@ Lightweight Transfer Performance Monitor
 
 No external deps beyond stdlib and psutil (already in requirements).
 """
+
 from __future__ import annotations
 
 import threading
@@ -31,9 +32,9 @@ class JobStats:
     last_progress_bytes: int = 0
     last_speed_bps: float = 0.0
     peak_speed_bps: float = 0.0
-    avg_speed_bps: float = 0.0      # arithmetic mean
-    ema_speed_bps: float = 0.0      # exponential moving average
-    ema_alpha: float = 0.2          # smoothing factor
+    avg_speed_bps: float = 0.0  # arithmetic mean
+    ema_speed_bps: float = 0.0  # exponential moving average
+    ema_alpha: float = 0.2  # smoothing factor
     samples: list[Sample] = field(default_factory=list)
     stalled_since: float | None = None
 
@@ -179,4 +180,3 @@ def get_performance_monitor() -> PerformanceMonitor:
     if _monitor_instance is None:
         _monitor_instance = PerformanceMonitor()
     return _monitor_instance
-

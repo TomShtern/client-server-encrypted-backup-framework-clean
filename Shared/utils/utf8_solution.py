@@ -75,7 +75,6 @@ C++ client if you want an explicit, idempotent initialization check. Use
 environment variables propagate to child processes (best effort, optional).
 """
 
-
 import contextlib
 import locale
 import logging
@@ -96,6 +95,7 @@ except ImportError:
 # python-bidi: Proper Unicode BiDi algorithm implementation
 try:
     from bidi.algorithm import get_display
+
     HAS_BIDI = True
 except ImportError:
     get_display = None
@@ -106,6 +106,7 @@ try:
     from rich import print as rich_print
     from rich.console import Console
     from rich.text import Text
+
     HAS_RICH = True
     # Create a console instance for internal use
     _rich_console = Console(force_terminal=True, legacy_windows=False)
@@ -119,6 +120,7 @@ except ImportError:
 # wcwidth: Proper text width calculation for alignment
 try:
     import wcwidth
+
     HAS_WCWIDTH = True
 except ImportError:
     wcwidth = None
@@ -151,8 +153,8 @@ class UTF8Support:
 
         try:
             # Set environment variables that propagate to subprocesses
-            os.environ['PYTHONIOENCODING'] = 'utf-8'
-            os.environ['PYTHONUTF8'] = '1'
+            os.environ["PYTHONIOENCODING"] = "utf-8"
+            os.environ["PYTHONUTF8"] = "1"
 
             # Configure Windows console if available
             cls._setup_windows_console()
@@ -176,7 +178,7 @@ class UTF8Support:
     @classmethod
     def _setup_windows_console(cls) -> None:
         """Configure Windows console for UTF-8 (best effort, Windows only)."""
-        if sys.platform != 'win32' or ctypes is None or not hasattr(ctypes, 'windll'):
+        if sys.platform != "win32" or ctypes is None or not hasattr(ctypes, "windll"):
             return
 
         try:
@@ -206,19 +208,22 @@ class UTF8Support:
     def _fix_console_streams(cls) -> None:
         """Attempt to reconfigure stdout/stderr to UTF-8 (non-fatal)."""
         with contextlib.suppress(Exception):
-            if hasattr(sys.stdout, 'reconfigure') and hasattr(sys.stderr, 'reconfigure'):
-                sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
-                sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
+            if hasattr(sys.stdout, "reconfigure") and hasattr(sys.stderr, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+                sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
     @classmethod
     def _auto_configure_environment(cls) -> None:
         """Lightweight heuristics for terminals (PowerShell / Windows Terminal)."""
         with contextlib.suppress(Exception):
-            if sys.platform == 'win32' and (
-                'PSModulePath' in os.environ or 'WT_SESSION' in os.environ
-            ) and hasattr(sys.stdout, 'reconfigure') and hasattr(sys.stderr, 'reconfigure'):
-                sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
-                sys.stderr.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
+            if (
+                sys.platform == "win32"
+                and ("PSModulePath" in os.environ or "WT_SESSION" in os.environ)
+                and hasattr(sys.stdout, "reconfigure")
+                and hasattr(sys.stderr, "reconfigure")
+            ):
+                sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+                sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
     @classmethod
     def get_env(cls, base_env: dict[str, str] | None = None) -> dict[str, str]:
@@ -236,24 +241,21 @@ class UTF8Support:
 
         try:
             return (dict(os.environ) if base_env is None else dict(base_env)) | {
-                'PYTHONIOENCODING': 'utf-8',
-                'PYTHONUTF8': '1',
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONUTF8": "1",
             }
         except (OSError, AttributeError, KeyError):
             # Fallback to minimal environment for specific errors
-            return {
-                'PYTHONIOENCODING': 'utf-8',
-                'PYTHONUTF8': '1'
-            }
+            return {"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
 
     @classmethod
     def restore_console(cls) -> None:
         """Restore original console code pages (best effort)."""
         if (
-            sys.platform == 'win32'
+            sys.platform == "win32"
             and ctypes is not None
             and cls._original_console_cp is not None
-            and hasattr(ctypes, 'windll')
+            and hasattr(ctypes, "windll")
         ):
             with contextlib.suppress(AttributeError, OSError):
                 kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
@@ -261,10 +263,12 @@ class UTF8Support:
                 if cls._original_console_output_cp is not None:
                     kernel32.SetConsoleOutputCP(cls._original_console_output_cp)
 
+
 # === SMART BIDIRECTIONAL TEXT PROCESSING ===
 def is_hebrew_char(char: str) -> bool:
     """Check if a character is Hebrew."""
-    return '\u0590' <= char <= '\u05FF' or '\uFB00' <= char <= '\uFB4F'
+    return "\u0590" <= char <= "\u05ff" or "\ufb00" <= char <= "\ufb4f"
+
 
 def process_bidirectional_text(text: str) -> str:
     """
@@ -299,7 +303,7 @@ def process_bidirectional_text(text: str) -> str:
     current_type = None  # None, 'hebrew', 'non_hebrew'
 
     for char in text:
-        char_type = 'hebrew' if is_hebrew_char(char) else 'non_hebrew'
+        char_type = "hebrew" if is_hebrew_char(char) else "non_hebrew"
 
         if current_type is None:
             current_type = char_type
@@ -319,7 +323,7 @@ def process_bidirectional_text(text: str) -> str:
     # Process segments: reverse Hebrew segments for visual order, keep non-Hebrew as-is
     processed_segments = []
     for seg_type, segment in segments:
-        if seg_type == 'hebrew':
+        if seg_type == "hebrew":
             # For Hebrew, reverse to achieve visual RTL order
             processed_segments.append(segment[::-1])
         else:
@@ -327,7 +331,8 @@ def process_bidirectional_text(text: str) -> str:
             processed_segments.append(segment)
 
     # Join all segments
-    return ''.join(processed_segments)
+    return "".join(processed_segments)
+
 
 # === CORE UTF-8 FUNCTIONS ===
 def safe_print(message: str) -> None:
@@ -351,11 +356,11 @@ def safe_print(message: str) -> None:
 
     # Fallback path: direct buffer writing (original implementation)
     line = f"{message}\n"
-    buf = getattr(sys.stdout, 'buffer', None)
+    buf = getattr(sys.stdout, "buffer", None)
     # Primary path: write UTF-8 bytes directly
     try:
         if buf is not None:
-            buf.write(line.encode('utf-8'))
+            buf.write(line.encode("utf-8"))
             buf.flush()
             return
         # Fallback: text write (already a Unicode-capable wrapper)
@@ -367,7 +372,7 @@ def safe_print(message: str) -> None:
         with contextlib.suppress(Exception):
             safe_line = f"{message.encode('ascii', errors='replace').decode('ascii')}\n"
             if buf is not None:
-                buf.write(safe_line.encode('utf-8'))
+                buf.write(safe_line.encode("utf-8"))
                 buf.flush()
             else:
                 sys.stdout.write(safe_line)
@@ -378,13 +383,14 @@ def safe_print(message: str) -> None:
 
     # Ultimate silent fallback
     with contextlib.suppress(Exception):
-        err_buf = getattr(sys.stderr, 'buffer', None)
+        err_buf = getattr(sys.stderr, "buffer", None)
         if err_buf is not None:
             err_buf.write(b"UTF-8 safe_print failure\n")
             err_buf.flush()
         else:
             sys.stderr.write("UTF-8 safe_print failure\n")
             sys.stderr.flush()
+
 
 def rtl_print(message: str) -> None:
     """Print message after best‑effort Hebrew visual ordering.
@@ -396,6 +402,7 @@ def rtl_print(message: str) -> None:
     except Exception as e:
         logger.debug("rtl_print processing error: %s", e)
         safe_print(message)
+
 
 # Convenience functions that match the CyberBackup Framework patterns
 def get_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
@@ -425,11 +432,19 @@ def ensure_initialized(verify_child: bool = False, timeout: int = 5) -> bool:
 
     # Best-effort child verification: run `python -c 'import os; print(os.environ.get("PYTHONUTF8"))'`
     try:
-        proc = run_utf8([sys.executable, '-c', 'import os,sys; print(os.environ.get("PYTHONUTF8", "")); sys.stdout.flush()'], timeout=timeout)
-        out = getattr(proc, 'stdout', None)
-        return out is not None and out.strip() == '1'
+        proc = run_utf8(
+            [
+                sys.executable,
+                "-c",
+                'import os,sys; print(os.environ.get("PYTHONUTF8", "")); sys.stdout.flush()',
+            ],
+            timeout=timeout,
+        )
+        out = getattr(proc, "stdout", None)
+        return out is not None and out.strip() == "1"
     except Exception:
         return False
+
 
 def run_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
     """
@@ -439,18 +454,19 @@ def run_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.CompletedProcess
     and encoding parameters for subprocess.run calls.
     """
     # Set UTF-8 defaults only if not explicitly provided
-    if 'encoding' not in kwargs and 'text' not in kwargs:
-        kwargs['encoding'] = 'utf-8'
-        kwargs['text'] = True
+    if "encoding" not in kwargs and "text" not in kwargs:
+        kwargs["encoding"] = "utf-8"
+        kwargs["text"] = True
         # Add error handling for invalid UTF-8 bytes from C++ client
-        if 'errors' not in kwargs:
-            kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
+        if "errors" not in kwargs:
+            kwargs["errors"] = "replace"  # Replace invalid bytes with replacement character
 
     # Ensure UTF-8 environment
-    if 'env' not in kwargs:
-        kwargs['env'] = get_env()
+    if "env" not in kwargs:
+        kwargs["env"] = get_env()
 
     return subprocess.run(cmd, **kwargs)
+
 
 def Popen_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.Popen[str]:
     """
@@ -460,18 +476,19 @@ def Popen_utf8(cmd: str | list[str], **kwargs: Any) -> subprocess.Popen[str]:
     and encoding parameters for subprocess.Popen calls.
     """
     # Set UTF-8 defaults only if not explicitly provided
-    if 'encoding' not in kwargs and 'text' not in kwargs:
-        kwargs['encoding'] = 'utf-8'
-        kwargs['text'] = True
+    if "encoding" not in kwargs and "text" not in kwargs:
+        kwargs["encoding"] = "utf-8"
+        kwargs["text"] = True
         # Add error handling for invalid UTF-8 bytes from C++ client
-        if 'errors' not in kwargs:
-            kwargs['errors'] = 'replace'  # Replace invalid bytes with replacement character
+        if "errors" not in kwargs:
+            kwargs["errors"] = "replace"  # Replace invalid bytes with replacement character
 
     # Ensure UTF-8 environment
-    if 'env' not in kwargs:
-        kwargs['env'] = get_env()
+    if "env" not in kwargs:
+        kwargs["env"] = get_env()
 
     return subprocess.Popen(cmd, **kwargs)
+
 
 def test_utf8() -> bool:
     """Test UTF-8 capability with Hebrew and emoji characters."""
@@ -479,8 +496,8 @@ def test_utf8() -> bool:
         test_content = "Hebrew: בדיקה | Emoji: 🎉✅❌ | Mixed: קובץ_עברי_🔧_test.txt"
 
         # Test encoding/decoding cycle
-        encoded = test_content.encode('utf-8')
-        decoded = encoded.decode('utf-8')
+        encoded = test_content.encode("utf-8")
+        decoded = encoded.decode("utf-8")
 
         # Verify round-trip integrity
         return test_content == decoded
@@ -489,8 +506,9 @@ def test_utf8() -> bool:
         # Specific exceptions for encoding issues
         return False
 
+
 # === ENHANCED FILE OPERATIONS ===
-def open_utf8(file: str | bytes | int, mode: str = 'r', **kwargs: Any) -> IO[Any]:
+def open_utf8(file: str | bytes | int, mode: str = "r", **kwargs: Any) -> IO[Any]:
     """
     Enhanced open function with automatic UTF-8 handling.
 
@@ -515,14 +533,15 @@ def open_utf8(file: str | bytes | int, mode: str = 'r', **kwargs: Any) -> IO[Any
             f.write('Hello 🌍 שלום עולם ✅')
     """
     # Set default encoding to UTF-8 if not specified
-    if 'encoding' not in kwargs and ('b' not in mode):
-        kwargs['encoding'] = 'utf-8'
+    if "encoding" not in kwargs and ("b" not in mode):
+        kwargs["encoding"] = "utf-8"
 
     # Set default error handling for robustness
-    if 'errors' not in kwargs:
-        kwargs['errors'] = 'replace'
+    if "errors" not in kwargs:
+        kwargs["errors"] = "replace"
 
     return open(file, mode, **kwargs)
+
 
 def read_file(filepath: str | bytes, encoding: str | None = None, errors: str | None = None) -> str | None:
     """
@@ -544,16 +563,19 @@ def read_file(filepath: str | bytes, encoding: str | None = None, errors: str | 
             utf8.safe_print(f"File content: {content}")
     """
     try:
-        enc = encoding or 'utf-8'
-        err = errors or 'replace'
-        with open_utf8(filepath, 'r', encoding=enc, errors=err) as f:
+        enc = encoding or "utf-8"
+        err = errors or "replace"
+        with open_utf8(filepath, "r", encoding=enc, errors=err) as f:
             # f.read() is expected to return str when opened in text mode
             return cast(str, f.read())
     except Exception as e:
         safe_print(f"Error reading file {filepath}: {e}")
         return None
 
-def write_file(filepath: str | bytes, content: str, encoding: str | None = None, errors: str | None = None) -> bool:
+
+def write_file(
+    filepath: str | bytes, content: str, encoding: str | None = None, errors: str | None = None
+) -> bool:
     """
     Write file with UTF-8 support.
 
@@ -574,16 +596,17 @@ def write_file(filepath: str | bytes, content: str, encoding: str | None = None,
             utf8.safe_print("File written successfully")
     """
     try:
-        enc = encoding or 'utf-8'
-        err = errors or 'replace'
+        enc = encoding or "utf-8"
+        err = errors or "replace"
         # Cast to TextIO because open_utf8 may return BinaryIO for binary modes;
         # here we pass a text encoding so it is safe to treat as TextIO.
-        with cast(TextIO, open_utf8(filepath, 'w', encoding=enc, errors=err)) as f:
+        with cast(TextIO, open_utf8(filepath, "w", encoding=enc, errors=err)) as f:
             f.write(content)
         return True
     except Exception as e:
         safe_print(f"Error writing file {filepath}: {e}")
         return False
+
 
 # === TEXT WIDTH AND FORMATTING FUNCTIONS ===
 def get_text_width(text: str) -> int:
@@ -624,7 +647,8 @@ def get_text_width(text: str) -> int:
     # Fallback: use character count (not always accurate for Unicode)
     return len(text)
 
-def pad_text(text: str, width: int, align: str = 'left', fill_char: str = ' ') -> str:
+
+def pad_text(text: str, width: int, align: str = "left", fill_char: str = " ") -> str:
     """Pad text to specified width with proper Unicode width handling.
 
     Uses wcwidth when available for accurate padding of Unicode text.
@@ -653,16 +677,17 @@ def pad_text(text: str, width: int, align: str = 'left', fill_char: str = ' ') -
 
     padding_needed = width - text_width
 
-    if align == 'right':
+    if align == "right":
         return fill_char * padding_needed + text
-    elif align == 'center':
+    elif align == "center":
         left_padding = padding_needed // 2
         right_padding = padding_needed - left_padding
         return fill_char * left_padding + text + fill_char * right_padding
     else:  # left alignment (default)
         return text + fill_char * padding_needed
 
-def truncate_text(text: str, width: int, suffix: str = '...') -> str:
+
+def truncate_text(text: str, width: int, suffix: str = "...") -> str:
     """Truncate text to specified width with proper Unicode width handling.
 
     Uses wcwidth when available for accurate truncation of Unicode text.
@@ -692,7 +717,7 @@ def truncate_text(text: str, width: int, suffix: str = '...') -> str:
     target_width = width - suffix_width
 
     if target_width <= 0:
-        return suffix[:width] if width > 0 else ''
+        return suffix[:width] if width > 0 else ""
 
     # Find the truncation point
     current_width = 0
@@ -707,7 +732,8 @@ def truncate_text(text: str, width: int, suffix: str = '...') -> str:
 
     return text[:truncate_pos] + suffix
 
-def format_table_row(columns: list[str], widths: list[int], sep: str = ' | ', align: str = 'left') -> str:
+
+def format_table_row(columns: list[str], widths: list[int], sep: str = " | ", align: str = "left") -> str:
     """Format a table row with proper Unicode width alignment.
 
     Uses wcwidth when available for accurate column alignment with Unicode text.
@@ -732,12 +758,12 @@ def format_table_row(columns: list[str], widths: list[int], sep: str = ' | ', al
         widths = widths[:min_len]
 
     formatted_columns = [
-        pad_text(column, width, align=align)
-        for column, width in zip(columns, widths, strict=False)
+        pad_text(column, width, align=align) for column, width in zip(columns, widths, strict=False)
     ]
     return sep.join(formatted_columns)
 
-def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = '') -> list[str]:
+
+def wrap_text(text: str, width: int, indent: str = "", subsequent_indent: str = "") -> list[str]:
     """Wrap text to specified width with proper Unicode width handling.
 
     Uses wcwidth when available for accurate text wrapping with Unicode characters.
@@ -757,7 +783,7 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
             utf8.safe_print(line)
     """
     if not text:
-        return ['']
+        return [""]
 
     # Simple word-based wrapping with Unicode width awareness
     words = text.split()
@@ -767,7 +793,7 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
 
     for word in words:
         word_width = get_text_width(word)
-        space_width = get_text_width(' ')
+        space_width = get_text_width(" ")
 
         # Check if adding this word would exceed width
         needed_width = word_width
@@ -777,7 +803,7 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
         if current_width + needed_width <= width:
             # Word fits on current line
             if current_line.strip():
-                current_line += ' '
+                current_line += " "
                 current_width += space_width
             current_line += word
             current_width += word_width
@@ -792,13 +818,15 @@ def wrap_text(text: str, width: int, indent: str = '', subsequent_indent: str = 
     if current_line.strip():
         lines.append(current_line)
 
-    return lines or ['']
+    return lines or [""]
+
 
 # === CONTEXT MANAGERS ===
 ########################################
 # Removed RTLContext / rtl_context helper (unused in code base). Keeping file
 # lean; reintroduce only if genuine multi-call scoping semantics needed.
 ########################################
+
 
 # === ENHANCED ERROR REPORTING ===
 def diagnose_utf8_environment() -> dict[str, Any]:
@@ -817,57 +845,54 @@ def diagnose_utf8_environment() -> dict[str, Any]:
         utf8.safe_print(f"Rich available: {diagnosis['optional_libraries']['rich']}")
     """
     diagnosis = {
-        'platform': sys.platform,
-        'python_version': sys.version,
-        'default_encoding': sys.getdefaultencoding(),
-        'filesystem_encoding': sys.getfilesystemencoding(),
-        'preferred_encoding': locale.getpreferredencoding(),
-        'stdout_encoding': getattr(sys.stdout, 'encoding', 'Unknown'),
-        'stderr_encoding': getattr(sys.stderr, 'encoding', 'Unknown'),
-        'environment_variables': {
-            'PYTHONUTF8': os.environ.get('PYTHONUTF8', 'NOT SET'),
-            'PYTHONIOENCODING': os.environ.get('PYTHONIOENCODING', 'NOT SET')
+        "platform": sys.platform,
+        "python_version": sys.version,
+        "default_encoding": sys.getdefaultencoding(),
+        "filesystem_encoding": sys.getfilesystemencoding(),
+        "preferred_encoding": locale.getpreferredencoding(),
+        "stdout_encoding": getattr(sys.stdout, "encoding", "Unknown"),
+        "stderr_encoding": getattr(sys.stderr, "encoding", "Unknown"),
+        "environment_variables": {
+            "PYTHONUTF8": os.environ.get("PYTHONUTF8", "NOT SET"),
+            "PYTHONIOENCODING": os.environ.get("PYTHONIOENCODING", "NOT SET"),
         },
         # Optional library availability status
-        'optional_libraries': {
-            'python-bidi': HAS_BIDI,
-            'rich': HAS_RICH,
-            'wcwidth': HAS_WCWIDTH
+        "optional_libraries": {"python-bidi": HAS_BIDI, "rich": HAS_RICH, "wcwidth": HAS_WCWIDTH},
+        "enhancements_active": {
+            "bidirectional_text": HAS_BIDI,
+            "rich_console_output": HAS_RICH,
+            "unicode_width_calculation": HAS_WCWIDTH,
         },
-        'enhancements_active': {
-            'bidirectional_text': HAS_BIDI,
-            'rich_console_output': HAS_RICH,
-            'unicode_width_calculation': HAS_WCWIDTH
-        }
     }
 
     try:
-        diagnosis['utf8_test'] = test_utf8()
+        diagnosis["utf8_test"] = test_utf8()
         env = get_env()
-        diagnosis['utf8_environment'] = {
-            'PYTHONUTF8': env.get('PYTHONUTF8', 'NOT SET'),
-            'PYTHONIOENCODING': env.get('PYTHONIOENCODING', 'NOT SET')
+        diagnosis["utf8_environment"] = {
+            "PYTHONUTF8": env.get("PYTHONUTF8", "NOT SET"),
+            "PYTHONIOENCODING": env.get("PYTHONIOENCODING", "NOT SET"),
         }
 
         # Test optional library functionality
         if HAS_BIDI:
             try:
                 test_bidi = process_bidirectional_text("שלום Hello")
-                diagnosis['bidi_test'] = {'success': True, 'result': test_bidi}
+                diagnosis["bidi_test"] = {"success": True, "result": test_bidi}
             except Exception as e:
-                diagnosis['bidi_test'] = {'success': False, 'error': str(e)}
+                diagnosis["bidi_test"] = {"success": False, "error": str(e)}
 
         if HAS_WCWIDTH:
             try:
                 test_width = get_text_width("🎉 שלום 🌍")
-                diagnosis['wcwidth_test'] = {'success': True, 'width': test_width}
+                diagnosis["wcwidth_test"] = {"success": True, "width": test_width}
             except Exception as e:
-                diagnosis['wcwidth_test'] = {'success': False, 'error': str(e)}
+                diagnosis["wcwidth_test"] = {"success": False, "error": str(e)}
 
     except Exception as e:
-        diagnosis['utf8_test_error'] = str(e)
+        diagnosis["utf8_test_error"] = str(e)
 
     return diagnosis
+
 
 ########################################
 # Removed enhanced_safe_print_with_emoji (no external references, cosmetic).
@@ -875,27 +900,28 @@ def diagnose_utf8_environment() -> dict[str, Any]:
 
 # Export key functions for CyberBackup Framework usage
 __all__ = [
-    'get_env',          # Subprocess environment helper
-    'run_utf8',         # UTF-8 enabled subprocess.run wrapper
-    'Popen_utf8',       # UTF-8 enabled subprocess.Popen wrapper
-    'test_utf8',        # Simple UTF-8 round trip test
-    'UTF8Support',      # Environment support class
-    'safe_print',       # Enhanced Unicode printing with rich integration
-    'rtl_print',        # Best-effort Hebrew visual ordering print
-    'open_utf8',        # UTF-8 aware open()
-    'read_file',        # UTF-8 read helper
-    'write_file',       # UTF-8 write helper
-    'diagnose_utf8_environment',  # Diagnostics
-    'ensure_initialized',
+    "Popen_utf8",  # UTF-8 enabled subprocess.Popen wrapper
+    "UTF8Support",  # Environment support class
+    "diagnose_utf8_environment",  # Diagnostics
+    "ensure_initialized",
+    "format_table_row",  # Table row formatting with alignment
+    "get_env",  # Subprocess environment helper
     # Text width and formatting functions (wcwidth integration)
-    'get_text_width',   # Unicode-aware text width calculation
-    'pad_text',         # Unicode-aware text padding
-    'truncate_text',    # Unicode-aware text truncation
-    'format_table_row', # Table row formatting with alignment
-    'wrap_text',        # Unicode-aware text wrapping
+    "get_text_width",  # Unicode-aware text width calculation
+    "open_utf8",  # UTF-8 aware open()
+    "pad_text",  # Unicode-aware text padding
     # Bidirectional text processing
-    'process_bidirectional_text',  # BiDi text processing (bidi integration)
+    "process_bidirectional_text",  # BiDi text processing (bidi integration)
+    "read_file",  # UTF-8 read helper
+    "rtl_print",  # Best-effort Hebrew visual ordering print
+    "run_utf8",  # UTF-8 enabled subprocess.run wrapper
+    "safe_print",  # Enhanced Unicode printing with rich integration
+    "test_utf8",  # Simple UTF-8 round trip test
+    "truncate_text",  # Unicode-aware text truncation
+    "wrap_text",  # Unicode-aware text wrapping
+    "write_file",  # UTF-8 write helper
 ]
+
 
 # Automatic setup when imported (with error handling)
 def _initialize_module():
@@ -904,6 +930,7 @@ def _initialize_module():
         UTF8Support.setup()
         # Silent initialization - no console output that could cause encoding errors
 
+
 # Safe module initialization - SILENT to prevent console encoding errors
-if __name__ != '__main__':
+if __name__ != "__main__":
     _initialize_module()

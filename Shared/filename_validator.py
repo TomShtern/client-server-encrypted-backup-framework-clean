@@ -13,13 +13,32 @@ logger = logging.getLogger(__name__)
 
 # Configuration constants
 MAX_ACTUAL_FILENAME_LENGTH = 200  # Maximum allowed filename length
-MIN_FILENAME_LENGTH = 1           # Minimum allowed filename length
+MIN_FILENAME_LENGTH = 1  # Minimum allowed filename length
 
 # Reserved OS names that should be rejected (case-insensitive)
 RESERVED_OS_NAMES: set[str] = {
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
 }
 
 # Allowed filename characters pattern
@@ -27,28 +46,29 @@ RESERVED_OS_NAMES: set[str] = {
 ALLOWED_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._\-\s&#]+$")
 
 # Path traversal patterns to reject
-PATH_TRAVERSAL_CHARS = {'/', '\\', '..', '\0'}
+PATH_TRAVERSAL_CHARS = {"/", "\\", "..", "\0"}
 
 
 class FilenameValidationError(Exception):
     """Raised when filename validation fails."""
+
     pass
 
 
 def validate_filename(filename: str, strict: bool = True) -> bool:
     """
     Validate a filename for storage safety and compatibility.
-    
+
     This is the canonical filename validation function that replaces
     all duplicate validation logic throughout the codebase.
-    
+
     Args:
         filename: The filename string to validate
         strict: If True, applies strict validation rules. If False, allows more characters.
-        
+
     Returns:
         True if filename is valid, False otherwise
-        
+
     Raises:
         FilenameValidationError: If filename is invalid and strict validation is enabled
     """
@@ -81,7 +101,9 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
 
     # Check allowed characters
     if not ALLOWED_FILENAME_PATTERN.match(filename):
-        error_msg = f"Contains disallowed characters (does not match pattern '{ALLOWED_FILENAME_PATTERN.pattern}')"
+        error_msg = (
+            f"Contains disallowed characters (does not match pattern '{ALLOWED_FILENAME_PATTERN.pattern}')"
+        )
         logger.debug(f"Filename validation failed for '{filename}': {error_msg}")
         if strict:
             raise FilenameValidationError(error_msg)
@@ -99,17 +121,17 @@ def _validate_filename_internal(filename: str, strict: bool) -> bool:
     return True
 
 
-def sanitize_filename(filename: str, replacement_char: str = '_') -> str:
+def sanitize_filename(filename: str, replacement_char: str = "_") -> str:
     """
     Sanitize a filename by replacing invalid characters.
-    
+
     Args:
         filename: Original filename
         replacement_char: Character to replace invalid characters with
-        
+
     Returns:
         Sanitized filename that passes validation
-        
+
     Raises:
         ValueError: If replacement_char is not a single valid character
     """
@@ -150,11 +172,11 @@ def sanitize_filename(filename: str, replacement_char: str = '_') -> str:
 def get_safe_filename(original_filename: str, fallback_name: str = "unnamed_file") -> str:
     """
     Get a safe filename, sanitizing if necessary or using fallback.
-    
+
     Args:
         original_filename: Original filename to validate/sanitize
         fallback_name: Fallback name if sanitization fails
-        
+
     Returns:
         A valid, safe filename
     """
@@ -180,7 +202,7 @@ def get_safe_filename(original_filename: str, fallback_name: str = "unnamed_file
 def validate_filename_for_storage(filename: str) -> bool:
     """
     Legacy compatibility function for existing code.
-    
+
     DEPRECATED: Use validate_filename() instead.
     This function is provided for backward compatibility during migration.
     """
@@ -191,7 +213,7 @@ def validate_filename_for_storage(filename: str) -> bool:
 def is_valid_filename_for_storage(filename: str) -> bool:
     """
     Legacy compatibility function for existing code.
-    
+
     DEPRECATED: Use validate_filename() instead.
     This function is provided for backward compatibility during migration.
     """
@@ -203,25 +225,25 @@ def is_valid_filename_for_storage(filename: str) -> bool:
 class ValidationLevel:
     """Predefined validation levels for different use cases."""
 
-    STRICT = True      # Strict validation with exceptions
-    PERMISSIVE = False # Permissive validation without exceptions
+    STRICT = True  # Strict validation with exceptions
+    PERMISSIVE = False  # Permissive validation without exceptions
 
 
 def configure_validation(
     max_length: int | None = None,
     min_length: int | None = None,
     additional_allowed_chars: str | None = None,
-    additional_reserved_names: set[str] | None = None
+    additional_reserved_names: set[str] | None = None,
 ) -> None:
     """
     Configure global validation parameters.
-    
+
     Args:
         max_length: Override maximum filename length
         min_length: Override minimum filename length
         additional_allowed_chars: Additional characters to allow in filenames
         additional_reserved_names: Additional reserved names to reject
-        
+
     Note:
         This function modifies global state and should be used carefully.
         Consider using custom validation functions for application-specific needs.
@@ -251,7 +273,7 @@ def configure_validation(
 def get_validation_info() -> dict:
     """
     Get current validation configuration.
-    
+
     Returns:
         Dictionary with current validation settings
     """
@@ -260,5 +282,5 @@ def get_validation_info() -> dict:
         "min_length": MIN_FILENAME_LENGTH,
         "allowed_pattern": ALLOWED_FILENAME_PATTERN.pattern,
         "reserved_names": sorted(RESERVED_OS_NAMES),
-        "path_traversal_chars": sorted(PATH_TRAVERSAL_CHARS)
+        "path_traversal_chars": sorted(PATH_TRAVERSAL_CHARS),
     }

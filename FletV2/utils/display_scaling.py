@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DisplayScale(Enum):
     """Common display scale factors"""
+
     SCALE_100 = 1.0
     SCALE_125 = 1.25
     SCALE_150 = 1.5
@@ -36,6 +37,7 @@ class DisplayScale(Enum):
 @dataclass
 class DisplayInfo:
     """Display monitor information"""
+
     index: int
     width: int
     height: int
@@ -48,6 +50,7 @@ class DisplayInfo:
 @dataclass
 class ScalingConfig:
     """Display scaling configuration"""
+
     scale_factor: float
     base_font_size: float
     scaled_font_size: float
@@ -90,7 +93,9 @@ class DisplayScaler:
 
             logger.info(f"Detected {len(self.displays)} display(s)")
             for display in self.displays:
-                logger.debug(f"Display {display.index}: {display.width}x{display.height} @ {display.dpi} DPI (scale: {display.scale_factor})")
+                logger.debug(
+                    f"Display {display.index}: {display.width}x{display.height} @ {display.dpi} DPI (scale: {display.scale_factor})"
+                )
 
         except Exception as e:
             logger.error(f"Failed to detect displays: {e}")
@@ -143,7 +148,7 @@ class DisplayScaler:
                         dpi=dpi_x,
                         scale_factor=scale_factor,
                         is_primary=monitor_info.get("Flags", 0) & 1 != 0,
-                        device_name=device_name or "Unknown"
+                        device_name=device_name or "Unknown",
                     )
                 )
 
@@ -168,6 +173,7 @@ class DisplayScaler:
         try:
             # Try to get system metrics
             import ctypes
+
             user32 = ctypes.windll.user32
 
             # Get screen dimensions
@@ -192,7 +198,7 @@ class DisplayScaler:
                 dpi=dpi,
                 scale_factor=scale_factor,
                 is_primary=True,
-                device_name="Primary Display"
+                device_name="Primary Display",
             )
 
             self.displays = [self.primary_display]
@@ -205,9 +211,9 @@ class DisplayScaler:
         """Generic display detection for non-Windows systems"""
         try:
             # Try to get display info from page
-            if hasattr(self.page, 'window') and self.page.window:
-                width = getattr(self.page.window, 'width', 1920)
-                height = getattr(self.page.window, 'height', 1080)
+            if hasattr(self.page, "window") and self.page.window:
+                width = getattr(self.page.window, "width", 1920)
+                height = getattr(self.page.window, "height", 1080)
             else:
                 width, height = 1920, 1080
 
@@ -222,7 +228,7 @@ class DisplayScaler:
                 dpi=dpi,
                 scale_factor=scale_factor,
                 is_primary=True,
-                device_name="Generic Display"
+                device_name="Generic Display",
             )
 
             self.displays = [self.primary_display]
@@ -240,7 +246,7 @@ class DisplayScaler:
             dpi=96,
             scale_factor=1.0,
             is_primary=True,
-            device_name="Fallback Display"
+            device_name="Fallback Display",
         )
         self.displays = [self.primary_display]
 
@@ -262,10 +268,7 @@ class DisplayScaler:
             return scale
 
     def create_scaling_config(
-        self,
-        base_font_size: float = 14.0,
-        base_spacing: float = 8.0,
-        base_icon_size: float = 24.0
+        self, base_font_size: float = 14.0, base_spacing: float = 8.0, base_icon_size: float = 24.0
     ) -> ScalingConfig:
         """Create scaling configuration for the current display"""
         scale_factor = self.get_optimal_scale_factor()
@@ -277,7 +280,7 @@ class DisplayScaler:
             base_spacing=base_spacing,
             scaled_spacing=base_spacing * scale_factor,
             base_icon_size=base_icon_size,
-            scaled_icon_size=base_icon_size * scale_factor
+            scaled_icon_size=base_icon_size * scale_factor,
         )
 
         self.current_config = config
@@ -290,11 +293,11 @@ class DisplayScaler:
 
         try:
             # Update page font settings
-            if hasattr(self.page, 'font_family'):
+            if hasattr(self.page, "font_family"):
                 self.page.font_family = "Segoe UI Variable"
 
             # Apply scaling to window if available
-            if hasattr(self.page, 'window') and self.page.window:
+            if hasattr(self.page, "window") and self.page.window:
                 base_width, base_height = 1200, 800
                 scaled_width = int(base_width * config.scale_factor)
                 scaled_height = int(base_height * config.scale_factor)
@@ -304,7 +307,9 @@ class DisplayScaler:
                 self.page.window.min_width = int(800 * config.scale_factor)
                 self.page.window.min_height = int(600 * config.scale_factor)
 
-            logger.info(f"Applied display scaling: {config.scale_factor:.2f}x (font: {config.scaled_font_size:.1f}px)")
+            logger.info(
+                f"Applied display scaling: {config.scale_factor:.2f}x (font: {config.scaled_font_size:.1f}px)"
+            )
 
         except Exception as e:
             logger.error(f"Failed to apply scaling to page: {e}")
@@ -343,7 +348,7 @@ class DisplayScaler:
             left=base_padding.left * scale if base_padding.left else None,
             top=base_padding.top * scale if base_padding.top else None,
             right=base_padding.right * scale if base_padding.right else None,
-            bottom=base_padding.bottom * scale if base_padding.bottom else None
+            bottom=base_padding.bottom * scale if base_padding.bottom else None,
         )
 
     def register_scaling_callback(self, callback: Callable[[ScalingConfig], None]):
@@ -370,14 +375,14 @@ class DisplayScaler:
                 "resolution": f"{self.primary_display.width}x{self.primary_display.height}",
                 "dpi": self.primary_display.dpi,
                 "scale_factor": self.primary_display.scale_factor,
-                "device_name": self.primary_display.device_name
+                "device_name": self.primary_display.device_name,
             },
             "current_config": {
                 "scale_factor": self.current_config.scale_factor if self.current_config else 1.0,
                 "font_size": self.current_config.scaled_font_size if self.current_config else 14.0,
                 "spacing": self.current_config.scaled_spacing if self.current_config else 8.0,
-                "icon_size": self.current_config.scaled_icon_size if self.current_config else 24.0
-            }
+                "icon_size": self.current_config.scaled_icon_size if self.current_config else 24.0,
+            },
         }
 
 
@@ -405,9 +410,7 @@ def setup_display_scaling(page: ft.Page) -> DisplayScaler | None:
 
 
 def create_responsive_control(
-    base_control: ft.Control,
-    scaler: DisplayScaler,
-    scale_properties: list[str] | None = None
+    base_control: ft.Control, scaler: DisplayScaler, scale_properties: list[str] | None = None
 ) -> ft.Control:
     """
     Create a responsive control that adapts to display scaling
@@ -440,9 +443,7 @@ def create_responsive_control(
 
 
 def get_optimized_dimensions_for_display(
-    scaler: DisplayScaler,
-    base_width: int,
-    base_height: int
+    scaler: DisplayScaler, base_width: int, base_height: int
 ) -> tuple[int, int]:
     """
     Get optimized dimensions for the current display

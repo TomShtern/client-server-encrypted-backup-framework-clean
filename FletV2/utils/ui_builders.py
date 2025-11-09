@@ -66,10 +66,10 @@ def create_search_bar(
                     value=suggestion,
                     text=ft.Text(suggestion),
                     on_select=lambda _, s=suggestion: (
-                        setattr(search_bar, 'value', s),
+                        setattr(search_bar, "value", s),
                         on_change(s) if on_change else None,
-                        search_bar.update()
-                    )
+                        search_bar.update(),
+                    ),
                 )
             )
 
@@ -290,12 +290,8 @@ def create_view_header(
 
     leading_controls: list[ft.Control] = []
     if icon:
-        leading_controls.append(
-            ft.Icon(icon, size=26, color=ft.Colors.PRIMARY)
-        )
-    leading_controls.append(
-        ft.Text(title, size=26, weight=ft.FontWeight.BOLD)
-    )
+        leading_controls.append(ft.Icon(icon, size=26, color=ft.Colors.PRIMARY))
+    leading_controls.append(ft.Text(title, size=26, weight=ft.FontWeight.BOLD))
 
     title_row = ft.Row(
         [
@@ -358,10 +354,7 @@ def create_info_row(
     """
     if isinstance(value, str):
         value_control = ft.Text(
-            value,
-            size=value_size,
-            weight=ft.FontWeight.W_600,
-            color=ft.Colors.ON_SURFACE
+            value, size=value_size, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE
         )
     else:
         value_control = value
@@ -399,11 +392,8 @@ def create_confirmation_dialog(title, message, on_confirm, on_cancel):
     return ft.AlertDialog(
         title=ft.Text(title),
         content=ft.Text(message),
-        actions=[
-            ft.TextButton("Cancel", on_click=on_cancel),
-            ft.TextButton("Confirm", on_click=on_confirm)
-        ],
-        actions_alignment=ft.MainAxisAlignment.END
+        actions=[ft.TextButton("Cancel", on_click=on_cancel), ft.TextButton("Confirm", on_click=on_confirm)],
+        actions_alignment=ft.MainAxisAlignment.END,
     )
 
 
@@ -437,13 +427,20 @@ def create_metric_card(
     """
     card = ft.Card(
         content=ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(icon, size=24),
-                    ft.Text(title, size=14, weight=ft.FontWeight.W_500),
-                ], spacing=8),
-                value_control,
-            ], spacing=8, tight=True),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(icon, size=24),
+                            ft.Text(title, size=14, weight=ft.FontWeight.W_500),
+                        ],
+                        spacing=8,
+                    ),
+                    value_control,
+                ],
+                spacing=8,
+                tight=True,
+            ),
             padding=20,
         ),
         elevation=2,
@@ -508,7 +505,7 @@ def get_level_colors(level: str) -> tuple[str, str]:
 def create_log_level_badge(level: str) -> ft.Control:
     """Create a badge control for log levels with consistent styling."""
 
-    fg, bg = get_level_colors(level)
+    fg, _bg = get_level_colors(level)
     return ft.Container(
         content=ft.Text(level, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
         padding=ft.padding.symmetric(horizontal=8, vertical=4),

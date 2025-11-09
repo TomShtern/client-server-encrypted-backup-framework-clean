@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class WindowsTheme(Enum):
     """Windows system theme enumeration"""
+
     LIGHT = "light"
     DARK = "dark"
     UNKNOWN = "unknown"
@@ -31,6 +32,7 @@ class WindowsTheme(Enum):
 
 class WindowsColorScheme(Enum):
     """Windows color scheme enumeration"""
+
     DEFAULT = "default"
     BLUE = "blue"
     GREEN = "green"
@@ -44,6 +46,7 @@ class WindowsColorScheme(Enum):
 @dataclass
 class WindowsThemeInfo:
     """Windows theme information"""
+
     theme: WindowsTheme
     color_scheme: WindowsColorScheme
     accent_color: str
@@ -62,7 +65,7 @@ class WindowsThemeDetector:
         try:
             version = platform.version()
             # Windows 11 version starts with "10.0.22000" or higher
-            major, minor, build = map(int, version.split('.')[:3])
+            major, minor, build = map(int, version.split(".")[:3])
             return major == 10 and minor == 0 and build >= 22000
         except Exception:
             return False
@@ -80,8 +83,7 @@ class WindowsThemeDetector:
 
             try:
                 with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+                    winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
                 ) as key:
                     # AppsUseLightTheme: 0 = dark, 1 = light
                     apps_use_light_theme, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
@@ -107,8 +109,7 @@ class WindowsThemeDetector:
             colors = {}
             try:
                 with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent"
+                    winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent"
                 ) as key:
                     accent_color, _ = winreg.QueryValueEx(key, "AccentColorMenu")
                     # Convert Windows ABGR to hex RGB
@@ -131,7 +132,7 @@ class WindowsThemeDetector:
         return {
             "accent": "#0078D4",  # Windows default blue
             "background": "#F3F3F3",
-            "text": "#000000"
+            "text": "#000000",
         }
 
     @staticmethod
@@ -139,6 +140,7 @@ class WindowsThemeDetector:
         """Get Windows display scaling factor"""
         try:
             import ctypes
+
             user32 = ctypes.windll.user32
 
             # Get monitor DPI
@@ -156,17 +158,9 @@ class WindowsThemeDetector:
         """Get Windows system font information"""
         try:
             # Try to get Segoe UI Variable information
-            return {
-                "family": "Segoe UI Variable",
-                "size": 14.0,
-                "weight": "normal"
-            }
+            return {"family": "Segoe UI Variable", "size": 14.0, "weight": "normal"}
         except Exception:
-            return {
-                "family": "Arial",
-                "size": 14.0,
-                "weight": "normal"
-            }
+            return {"family": "Arial", "size": 14.0, "weight": "normal"}
 
 
 class WindowsThemeProvider:
@@ -280,10 +274,7 @@ class WindowsThemeProvider:
             colors["primary"] = self.system_colors["accent"]
 
         # Create custom theme
-        self.page.theme = ft.Theme(
-            color_scheme_seed=colors.get("primary", "#0078D4"),
-            use_material3=True
-        )
+        self.page.theme = ft.Theme(color_scheme_seed=colors.get("primary", "#0078D4"), use_material3=True)
 
     def create_mica_effect(self, opacity: float = 0.8) -> ft.BoxDecoration:
         """Create a Windows 11 Mica-like effect"""
@@ -297,7 +288,7 @@ class WindowsThemeProvider:
                     colors=[
                         ft.Colors.with_opacity(opacity, "#2C2C2C"),
                         ft.Colors.with_opacity(opacity * 0.7, "#1C1C1C"),
-                    ]
+                    ],
                 ),
                 border_radius=8,
             )
@@ -311,7 +302,7 @@ class WindowsThemeProvider:
                     colors=[
                         ft.Colors.with_opacity(opacity, "#FFFFFF"),
                         ft.Colors.with_opacity(opacity * 0.8, "#F0F0F0"),
-                    ]
+                    ],
                 ),
                 border_radius=8,
             )
@@ -345,7 +336,7 @@ class WindowsThemeProvider:
 
     def setup_window_for_windows_11(self, width: int = 1200, height: int = 800):
         """Setup window properties for Windows 11"""
-        if not hasattr(self.page, 'window') or not self.page.window:
+        if not hasattr(self.page, "window") or not self.page.window:
             return
 
         try:
@@ -355,7 +346,9 @@ class WindowsThemeProvider:
             # Set window properties
             self.page.window.width = optimized_width
             self.page.window.height = optimized_height
-            self.page.window.min_width = int(800 * scaling if (scaling := WindowsThemeDetector.get_display_scaling()) else 800)
+            self.page.window.min_width = int(
+                800 * scaling if (scaling := WindowsThemeDetector.get_display_scaling()) else 800
+            )
             self.page.window.min_height = int(600 * scaling if scaling else 600)
 
             # Enable Windows 11 features if available
@@ -376,7 +369,7 @@ class WindowsThemeProvider:
                     color=ft.Colors.ON_PRIMARY,
                     elevation=2,
                     shape=ft.RoundedRectangleBorder(radius=4),
-                    padding=ft.padding.symmetric(horizontal=16, vertical=8)
+                    padding=ft.padding.symmetric(horizontal=16, vertical=8),
                 )
             else:
                 return ft.ButtonStyle(
@@ -385,7 +378,7 @@ class WindowsThemeProvider:
                     elevation=0,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                    overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
+                    overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
                 )
         else:
             if is_primary:
@@ -394,7 +387,7 @@ class WindowsThemeProvider:
                     color=ft.Colors.ON_PRIMARY,
                     elevation=1,
                     shape=ft.RoundedRectangleBorder(radius=4),
-                    padding=ft.padding.symmetric(horizontal=16, vertical=8)
+                    padding=ft.padding.symmetric(horizontal=16, vertical=8),
                 )
             else:
                 return ft.ButtonStyle(
@@ -403,7 +396,7 @@ class WindowsThemeProvider:
                     elevation=0,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                    overlay_color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+                    overlay_color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE),
                 )
 
     def enable_theme_change_monitoring(self):
@@ -469,18 +462,12 @@ def get_windows_11_optimized_theme() -> ft.Theme:
             return ft.Theme(
                 color_scheme_seed=primary_color,
                 use_material3=True,
-                theme_mode=ft.ThemeMode.DARK if system_theme == WindowsTheme.DARK else ft.ThemeMode.LIGHT
+                theme_mode=ft.ThemeMode.DARK if system_theme == WindowsTheme.DARK else ft.ThemeMode.LIGHT,
             )
         else:
             # Fallback theme for non-Windows systems
-            return ft.Theme(
-                color_scheme_seed="#0078D4",
-                use_material3=True
-            )
+            return ft.Theme(color_scheme_seed="#0078D4", use_material3=True)
 
     except Exception:
         # Ultimate fallback
-        return ft.Theme(
-            color_scheme_seed="#0078D4",
-            use_material3=True
-        )
+        return ft.Theme(color_scheme_seed="#0078D4", use_material3=True)

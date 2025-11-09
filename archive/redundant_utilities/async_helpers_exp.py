@@ -9,15 +9,16 @@ without maintaining a forked implementation of the async patterns.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 # Project requirement – must be first import for reliable UTF-8 I/O on Windows.
 import Shared.utils.utf8_solution as _  # noqa: F401
-
 from FletV2.utils.async_helpers import (
     run_sync_in_executor as _base_run_sync_in_executor,
+)
+from FletV2.utils.async_helpers import (
     safe_server_call,
 )
 from FletV2.utils.debug_setup import get_logger
@@ -29,7 +30,7 @@ def _toggle_visibility(control: Any | None, visible: bool) -> None:
     if not control:
         return
     try:
-        setattr(control, "visible", visible)
+        control.visible = visible
         if getattr(control, "page", None) and hasattr(control, "update"):
             control.update()
     except Exception:  # pragma: no cover - UI best-effort
@@ -129,4 +130,4 @@ async def run_sync_in_executor(func: Callable[..., Any], *args: Any, **kwargs: A
     return result
 
 
-__all__ = ["run_sync_in_executor", "safe_server_call", "fetch_with_loading"]
+__all__ = ["fetch_with_loading", "run_sync_in_executor", "safe_server_call"]

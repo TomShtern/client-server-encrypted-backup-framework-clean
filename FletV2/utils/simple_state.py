@@ -14,7 +14,7 @@ Core patterns:
 import asyncio
 import time
 from collections.abc import Callable
-from typing import Any, Dict, Optional
+from typing import Any
 
 import flet as ft
 
@@ -34,7 +34,7 @@ class SimpleState:
         self.server_bridge = server_bridge
 
         # Simple state dictionary (replaces complex state.manager.state)
-        self.state: Dict[str, Any] = {
+        self.state: dict[str, Any] = {
             "clients": [],
             "files": [],
             "server_status": {},
@@ -55,7 +55,7 @@ class SimpleState:
         }
 
         # Control registry for targeted updates (replaces complex callback system)
-        self.controls: Dict[str, ft.Control] = {}
+        self.controls: dict[str, ft.Control] = {}
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get state value - simple dictionary access"""
@@ -112,68 +112,68 @@ class SimpleState:
         """Add notification to state"""
         notifications = self.get("notifications", [])
         notification = {
-            'id': f"notif_{int(time.time() * 1000)}",
-            'message': message,
-            'type': notification_type,
-            'timestamp': time.time(),
-            'auto_dismiss': auto_dismiss
+            "id": f"notif_{int(time.time() * 1000)}",
+            "message": message,
+            "type": notification_type,
+            "timestamp": time.time(),
+            "auto_dismiss": auto_dismiss,
         }
         notifications.append(notification)
         self.update("notifications", notifications)
 
         # Auto-dismiss using Flet's native run_task
         if auto_dismiss > 0:
-            self.page.run_task(self._dismiss_notification_after, notification['id'], auto_dismiss)
+            self.page.run_task(self._dismiss_notification_after, notification["id"], auto_dismiss)
 
     async def _dismiss_notification_after(self, notification_id: str, delay: int):
         """Auto-dismiss notification after delay"""
         await asyncio.sleep(delay)
         notifications = self.get("notifications", [])
-        notifications = [n for n in notifications if n['id'] != notification_id]
+        notifications = [n for n in notifications if n["id"] != notification_id]
         self.update("notifications", notifications)
 
     # Simple server integration (replaces complex server_mediated_update)
-    async def fetch_data(self, operation: str, *args, **kwargs) -> Dict[str, Any]:
+    async def fetch_data(self, operation: str, *args, **kwargs) -> dict[str, Any]:
         """
         Fetch data using server bridge with simple pattern.
 
         Replaces complex server_mediated_update with direct calls.
         """
         if not self.server_bridge:
-            return {'success': False, 'error': 'No server bridge', 'data': []}
+            return {"success": False, "error": "No server bridge", "data": []}
 
         try:
             # Get the method from server bridge
             method = getattr(self.server_bridge, operation, None)
             if not method:
-                return {'success': False, 'error': f'Method {operation} not found'}
+                return {"success": False, "error": f"Method {operation} not found"}
 
             # Call sync method in executor (non-blocking)
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, method, *args, **kwargs)
 
             # Handle result format
-            if isinstance(result, dict) and 'success' in result:
+            if isinstance(result, dict) and "success" in result:
                 return result
             else:
-                return {'success': True, 'data': result}
+                return {"success": True, "data": result}
 
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            return {"success": False, "error": str(e)}
 
     # Simple logs management (replaces complex async system)
-    async def load_logs(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def load_logs(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """Load logs data using simple pattern"""
         filters = filters or self.get("logs_filters", {"level": "ALL", "component": "ALL", "search": ""})
 
         result = await self.fetch_data("get_logs", 1000, 0, filters)
-        if result.get('success'):
-            self.update("logs_data", result.get('data', []))
+        if result.get("success"):
+            self.update("logs_data", result.get("data", []))
             self.update("logs_filters", filters)
 
         return result
 
-    def filter_logs(self, filters: Dict[str, Any]):
+    def filter_logs(self, filters: dict[str, Any]):
         """Apply filters to logs data (simple synchronous)"""
         logs_data = self.get("logs_data", [])
 
@@ -187,25 +187,28 @@ class SimpleState:
 
         if filters.get("search"):
             search_term = filters["search"].lower()
-            filtered = [log for log in filtered if
-                       search_term in (log.get("message") or "").lower() or
-                       search_term in (log.get("component") or "").lower()]
+            filtered = [
+                log
+                for log in filtered
+                if search_term in (log.get("message") or "").lower()
+                or search_term in (log.get("component") or "").lower()
+            ]
 
         self.update("logs_filtered", filtered)
         self.update("logs_filters", filters)
 
     # Simple settings management (replaces complex versioning system)
-    async def load_settings(self) -> Dict[str, Any]:
+    async def load_settings(self) -> dict[str, Any]:
         """Load settings data using simple pattern"""
         result = await self.fetch_data("load_settings")
-        if result.get('success'):
-            self.update("settings_data", result.get('data', {}))
+        if result.get("success"):
+            self.update("settings_data", result.get("data", {}))
         return result
 
-    async def save_settings(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def save_settings(self, settings_data: dict[str, Any]) -> dict[str, Any]:
         """Save settings data using simple pattern"""
         result = await self.fetch_data("save_settings", settings_data)
-        if result.get('success'):
+        if result.get("success"):
             self.update("settings_data", settings_data)
         return result
 
@@ -216,7 +219,7 @@ class SimpleState:
         progress_states[operation] = {
             "progress": max(0, min(100, progress)),
             "message": message,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
         self.update("progress_states", progress_states)
 
@@ -248,7 +251,7 @@ def create_simple_state(page: ft.Page, server_bridge=None) -> SimpleState:
         "error_states": {},
         "progress_states": {},
         "current_view": "dashboard",
-        "connection_status": "disconnected"
+        "connection_status": "disconnected",
     }
 
     for key, value in initial_state.items():

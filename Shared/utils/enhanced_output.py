@@ -30,6 +30,7 @@ from typing import Any, Protocol, cast
 # Protocol for enhanced logger with custom methods
 class EnhancedLogger(Protocol):
     """Protocol for logger with enhanced methods."""
+
     def success(self, msg: str, *args, **kwargs) -> None: ...
     def failure(self, msg: str, *args, **kwargs) -> None: ...
     def network(self, msg: str, *args, **kwargs) -> None: ...
@@ -38,23 +39,25 @@ class EnhancedLogger(Protocol):
     def startup(self, msg: str, *args, **kwargs) -> None: ...
     def progress(self, msg: str, *args, **kwargs) -> None: ...
 
+
 # Try to detect terminal color support
 def _supports_color() -> bool:
     """Detect if terminal supports ANSI color codes."""
     try:
         # Check environment variables
-        if os.getenv('NO_COLOR'):
+        if os.getenv("NO_COLOR"):
             return False
-        if os.getenv('FORCE_COLOR'):
+        if os.getenv("FORCE_COLOR"):
             return True
 
         # Check if we're in a terminal
-        if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
+        if not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
             return False
 
         # Windows 10+ supports ANSI colors
-        if platform.system() == 'Windows':
+        if platform.system() == "Windows":
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             # Enable ANSI color support on Windows
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
@@ -62,8 +65,9 @@ def _supports_color() -> bool:
 
         # Most Unix terminals support colors
         return True
-    except:
+    except Exception:
         return False
+
 
 class Colors:
     """ANSI color codes with safe fallbacks."""
@@ -71,28 +75,28 @@ class Colors:
     _SUPPORTS_COLOR = _supports_color()
 
     # ANSI Color Codes
-    RED = '\033[91m' if _SUPPORTS_COLOR else ''
-    GREEN = '\033[92m' if _SUPPORTS_COLOR else ''
-    YELLOW = '\033[93m' if _SUPPORTS_COLOR else ''
-    BLUE = '\033[94m' if _SUPPORTS_COLOR else ''
-    MAGENTA = '\033[95m' if _SUPPORTS_COLOR else ''
-    CYAN = '\033[96m' if _SUPPORTS_COLOR else ''
-    WHITE = '\033[97m' if _SUPPORTS_COLOR else ''
-    GRAY = '\033[90m' if _SUPPORTS_COLOR else ''
+    RED = "\033[91m" if _SUPPORTS_COLOR else ""
+    GREEN = "\033[92m" if _SUPPORTS_COLOR else ""
+    YELLOW = "\033[93m" if _SUPPORTS_COLOR else ""
+    BLUE = "\033[94m" if _SUPPORTS_COLOR else ""
+    MAGENTA = "\033[95m" if _SUPPORTS_COLOR else ""
+    CYAN = "\033[96m" if _SUPPORTS_COLOR else ""
+    WHITE = "\033[97m" if _SUPPORTS_COLOR else ""
+    GRAY = "\033[90m" if _SUPPORTS_COLOR else ""
 
     # Background colors
-    BG_RED = '\033[101m' if _SUPPORTS_COLOR else ''
-    BG_GREEN = '\033[102m' if _SUPPORTS_COLOR else ''
-    BG_YELLOW = '\033[103m' if _SUPPORTS_COLOR else ''
-    BG_BLUE = '\033[104m' if _SUPPORTS_COLOR else ''
+    BG_RED = "\033[101m" if _SUPPORTS_COLOR else ""
+    BG_GREEN = "\033[102m" if _SUPPORTS_COLOR else ""
+    BG_YELLOW = "\033[103m" if _SUPPORTS_COLOR else ""
+    BG_BLUE = "\033[104m" if _SUPPORTS_COLOR else ""
 
     # Text styles
-    BOLD = '\033[1m' if _SUPPORTS_COLOR else ''
-    DIM = '\033[2m' if _SUPPORTS_COLOR else ''
-    UNDERLINE = '\033[4m' if _SUPPORTS_COLOR else ''
+    BOLD = "\033[1m" if _SUPPORTS_COLOR else ""
+    DIM = "\033[2m" if _SUPPORTS_COLOR else ""
+    UNDERLINE = "\033[4m" if _SUPPORTS_COLOR else ""
 
     # Reset
-    RESET = '\033[0m' if _SUPPORTS_COLOR else ''
+    RESET = "\033[0m" if _SUPPORTS_COLOR else ""
 
     @classmethod
     def colorize(cls, text: str, color: str, bold: bool = False) -> str:
@@ -100,7 +104,7 @@ class Colors:
         if not cls._SUPPORTS_COLOR:
             return text
 
-        style = cls.BOLD if bold else ''
+        style = cls.BOLD if bold else ""
         return f"{style}{color}{text}{cls.RESET}"
 
     @classmethod
@@ -127,6 +131,7 @@ class Colors:
     def debug(cls, text: str, bold: bool = False) -> str:
         """Format text as debug (gray)."""
         return cls.colorize(text, cls.GRAY, bold)
+
 
 class Emojis:
     """Centralized emoji definitions for consistent usage across the project."""
@@ -203,6 +208,7 @@ class Emojis:
     FIRE = "🔥"
     STAR = "⭐"
 
+
 class LogLevel(Enum):
     """Enhanced log levels with emoji and color mappings."""
 
@@ -219,6 +225,7 @@ class LogLevel(Enum):
     FILE_OP = ("FILE", Emojis.FILE, Colors.BLUE)
     SECURITY = ("SECURITY", Emojis.LOCK, Colors.MAGENTA)
     PERFORMANCE = ("PERF", Emojis.PROGRESS, Colors.GREEN)
+
 
 class EmojiFormatter(logging.Formatter):
     """Custom formatter that adds emojis and colors to log messages."""
@@ -254,6 +261,7 @@ class EmojiFormatter(logging.Formatter):
 
         return formatted
 
+
 class EmojiLogger:
     """Enhanced logger with emoji and color support."""
 
@@ -275,9 +283,9 @@ class EmojiLogger:
         # Create console handler with emoji formatter
         handler = logging.StreamHandler()
         formatter = EmojiFormatter(
-            fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             use_colors=use_colors,
-            use_emojis=use_emojis
+            use_emojis=use_emojis,
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -323,6 +331,7 @@ class EmojiLogger:
         dynamic_logger.startup = startup
         dynamic_logger.progress = progress
 
+
 def enhanced_print(message: str, level: LogLevel = LogLevel.INFO, prefix: str = "") -> None:
     """Enhanced print function with emoji and color support."""
     _, emoji, color = level.value  # Unpack but ignore level_name
@@ -337,32 +346,41 @@ def enhanced_print(message: str, level: LogLevel = LogLevel.INFO, prefix: str = 
 
     print(full_message)
 
+
 def success_print(message: str, prefix: str = "") -> None:
     """Print success message with green color and checkmark emoji."""
     enhanced_print(message, LogLevel.SUCCESS, prefix)
+
 
 def error_print(message: str, prefix: str = "") -> None:
     """Print error message with red color and X emoji."""
     enhanced_print(message, LogLevel.ERROR, prefix)
 
+
 def warning_print(message: str, prefix: str = "") -> None:
     """Print warning message with yellow color and warning emoji."""
     enhanced_print(message, LogLevel.WARNING, prefix)
+
 
 def info_print(message: str, prefix: str = "") -> None:
     """Print info message with blue color and info emoji."""
     enhanced_print(message, LogLevel.INFO, prefix)
 
+
 def startup_print(message: str, prefix: str = "") -> None:
     """Print startup message with cyan color and rocket emoji."""
     enhanced_print(message, LogLevel.STARTUP, prefix)
+
 
 def network_print(message: str, prefix: str = "") -> None:
     """Print network message with cyan color and network emoji."""
     enhanced_print(message, LogLevel.NETWORK, prefix)
 
+
 # Integration with existing logging infrastructure
-def enhance_existing_logger(logger: logging.Logger, use_colors: bool = True, use_emojis: bool = True) -> logging.Logger:
+def enhance_existing_logger(
+    logger: logging.Logger, use_colors: bool = True, use_emojis: bool = True
+) -> logging.Logger:
     """Enhance an existing logger with emoji and color support."""
 
     # Find console handlers and enhance them
@@ -370,17 +388,15 @@ def enhance_existing_logger(logger: logging.Logger, use_colors: bool = True, use
         if isinstance(handler, logging.StreamHandler):
             # Check if this is a stdout handler
             try:
-                if getattr(handler, 'stream', None) == sys.stdout:
+                if getattr(handler, "stream", None) == sys.stdout:
                     # Replace formatter with emoji formatter
                     original_fmt = None
-                    if handler.formatter and hasattr(handler.formatter, '_fmt'):
+                    if handler.formatter and hasattr(handler.formatter, "_fmt"):
                         original_fmt = handler.formatter._fmt
 
-                    handler.setFormatter(EmojiFormatter(
-                        fmt=original_fmt,
-                        use_colors=use_colors,
-                        use_emojis=use_emojis
-                    ))
+                    handler.setFormatter(
+                        EmojiFormatter(fmt=original_fmt, use_colors=use_colors, use_emojis=use_emojis)
+                    )
             except (AttributeError, TypeError):
                 # Skip if we can't determine the stream
                 continue
@@ -390,18 +406,19 @@ def enhance_existing_logger(logger: logging.Logger, use_colors: bool = True, use
 
     return logger
 
+
 # Export commonly used items
 __all__ = [
-    'Colors',
-    'EmojiLogger',
-    'Emojis',
-    'LogLevel',
-    'enhance_existing_logger',
-    'enhanced_print',
-    'error_print',
-    'info_print',
-    'network_print',
-    'startup_print',
-    'success_print',
-    'warning_print'
+    "Colors",
+    "EmojiLogger",
+    "Emojis",
+    "LogLevel",
+    "enhance_existing_logger",
+    "enhanced_print",
+    "error_print",
+    "info_print",
+    "network_print",
+    "startup_print",
+    "success_print",
+    "warning_print",
 ]

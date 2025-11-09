@@ -58,7 +58,7 @@ def create_filter_controls(
     search_placeholder: str = "Search...",
     search_width: int = 300,
     filter_width: int = 150,
-    debounce_time: float = 0.5
+    debounce_time: float = 0.5,
 ) -> tuple[ft.Row, dict[str, Any]]:
     """
     Create combined search and filter controls with state management.
@@ -114,7 +114,7 @@ def create_filter_controls(
     def _handle_search_change(e: ft.ControlEvent | str):
         """Handle search input changes with debouncing."""
         value = e if isinstance(e, str) else getattr(getattr(e, "control", None), "value", "")
-        asyncio.create_task(debounced_search(value))  # noqa: RUF006
+        asyncio.create_task(debounced_search(value))
 
     def _handle_filter_change(e: ft.ControlEvent, filter_key: str):
         """Handle filter dropdown changes."""
@@ -152,9 +152,7 @@ def create_filter_controls(
 
     # Create search control
     search_control = create_search_bar(
-        on_change=_handle_search_change,
-        placeholder=search_placeholder,
-        width=search_width
+        on_change=_handle_search_change, placeholder=search_placeholder, width=search_width
     )
     search_control.ref = search_ref
 
@@ -167,16 +165,14 @@ def create_filter_controls(
             label=key.capitalize(),
             options=all_options,
             on_change=lambda e, filter_key=key: _handle_filter_change(e, filter_key),
-            width=filter_width
+            width=filter_width,
         )
         dropdown.ref = filter_refs[key]
         filter_controls.append(dropdown)
 
     # Create clear filters button
     clear_button = ft.IconButton(
-        icon=ft.Icons.CLEAR_ALL,
-        tooltip="Clear all filters",
-        on_click=_handle_clear_filters
+        icon=ft.Icons.CLEAR_ALL, tooltip="Clear all filters", on_click=_handle_clear_filters
     )
 
     # Control API methods
@@ -210,14 +206,14 @@ def create_filter_controls(
 
     # Create control state object with methods
     control_state = {
-        'get_active_filters': get_active_filters,
-        'set_search_query': set_search_query,
-        'set_filter_value': set_filter_value,
-        'clear_all_filters': clear_all_filters,
-        'update_all': update_all,
-        'search_ref': search_ref,
-        'filter_refs': filter_refs,
-        'filter_state': filter_state
+        "get_active_filters": get_active_filters,
+        "set_search_query": set_search_query,
+        "set_filter_value": set_filter_value,
+        "clear_all_filters": clear_all_filters,
+        "update_all": update_all,
+        "search_ref": search_ref,
+        "filter_refs": filter_refs,
+        "filter_state": filter_state,
     }
 
     # Create the main UI row
@@ -231,7 +227,7 @@ def create_filter_controls(
         controls=controls,
         spacing=10,
         wrap=True,  # Allow wrapping on smaller screens
-        vertical_alignment=ft.CrossAxisAlignment.CENTER
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
 
     return ui_row, control_state
@@ -242,7 +238,7 @@ def create_common_filter_controls(
     on_search_change: Callable[[str], None],
     default_filters: dict[str, list[str]] | None = None,
     on_filter_change: Callable[[str, str], None] | None = None,
-    on_clear_filters: Callable[[], None] | None = None
+    on_clear_filters: Callable[[], None] | None = None,
 ) -> tuple[ft.Row, dict[str, Any]]:
     """
     Create filter controls with common default filter options.
@@ -265,5 +261,5 @@ def create_common_filter_controls(
         on_search_change=on_search_change,
         filter_options=default_filters,
         on_filter_change=on_filter_change,
-        on_clear_filters=on_clear_filters
+        on_clear_filters=on_clear_filters,
     )

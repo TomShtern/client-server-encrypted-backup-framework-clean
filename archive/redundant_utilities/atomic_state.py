@@ -7,12 +7,12 @@ and data corruption in concurrent state updates.
 Priority: CRITICAL - Prevents race conditions and state corruption
 """
 
+import logging
 import threading
 import time
-import logging
-from typing import Any, Dict, Optional, Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class StateUpdate:
     source: str
     timestamp: float
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 class AtomicStateManager:
     """
@@ -34,8 +34,8 @@ class AtomicStateManager:
     """
 
     def __init__(self):
-        self._state: Dict[str, Any] = {}
-        self._locks: Dict[str, threading.Lock] = {}
+        self._state: dict[str, Any] = {}
+        self._locks: dict[str, threading.Lock] = {}
         self._master_lock = threading.RLock()  # Reentrant lock
         self._update_history: list[StateUpdate] = []
         self._max_history = 50  # Reduced from 100 for memory
@@ -211,7 +211,7 @@ class AtomicStateManager:
 
         return update_record
 
-    def update_multiple(self, updates: Dict[str, Any], source: str = "manual") -> list[StateUpdate]:
+    def update_multiple(self, updates: dict[str, Any], source: str = "manual") -> list[StateUpdate]:
         """
         Atomically update multiple keys at once.
         """
@@ -276,7 +276,7 @@ class AtomicStateManager:
 
         return results
 
-    def get_update_history(self, key: Optional[str] = None, limit: int = 10) -> list[StateUpdate]:
+    def get_update_history(self, key: str | None = None, limit: int = 10) -> list[StateUpdate]:
         """
         Get update history for debugging.
         """
@@ -287,7 +287,7 @@ class AtomicStateManager:
 
         return history[-limit:] if len(history) > limit else history
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get atomic state manager statistics.
         """

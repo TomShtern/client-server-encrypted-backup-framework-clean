@@ -28,9 +28,9 @@ for _path in (_flet_v2_root, _repo_root):
         sys.path.insert(0, _path)
 
 # Configure environment for GUI integration
-os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'] = '1'  # Disable server's embedded GUI
-os.environ['CYBERBACKUP_DISABLE_GUI'] = '1'  # Use standalone FletV2 GUI instead
-os.environ['PYTHONNOUSERSITE'] = '1'  # Prevent package conflicts from user site-packages
+os.environ["CYBERBACKUP_DISABLE_INTEGRATED_GUI"] = "1"  # Disable server's embedded GUI
+os.environ["CYBERBACKUP_DISABLE_GUI"] = "1"  # Use standalone FletV2 GUI instead
+os.environ["PYTHONNOUSERSITE"] = "1"  # Prevent package conflicts from user site-packages
 
 # Debugging flags (disabled for production use - causes severe performance degradation)
 # os.environ['FLET_DASHBOARD_DEBUG'] = '1'  # Uncomment only for dashboard diagnostics
@@ -45,6 +45,7 @@ print("=" * 70)
 print("\n[0/4] Initializing log capture system...")
 try:
     from Shared.logging.flet_log_capture import get_flet_log_capture
+
     _log_capture = get_flet_log_capture()
     print("[OK] Log capture initialized - ready to capture framework and app logs")
 except Exception as e:
@@ -55,6 +56,7 @@ except Exception as e:
 print("\n[1/4] Importing BackupServer...")
 try:
     from python_server.server.server import BackupServer
+
     print("[OK] BackupServer imported successfully")
 except ImportError as e:
     print(f"[ERROR] Failed to import BackupServer: {e}")
@@ -63,8 +65,8 @@ except ImportError as e:
 
 # Import Flet
 print("\n[2/4] Importing Flet...")
-import flet as ft  # noqa: E402 - Import after environment setup
-import main  # noqa: E402 - Import after environment setup
+import flet as ft
+import main
 
 # Initialize BackupServer in MAIN thread (signal handlers require main thread)
 print("\n[3/4] Initializing BackupServer (main thread)...")
@@ -83,6 +85,7 @@ try:
 except Exception as init_err:
     print(f"[ERROR] BackupServer initialization failed: {init_err}")
     import traceback as _tb
+
     _tb.print_exc()
     print("[WARN] Proceeding without real server (GUI-only mode)")
     server_instance = None
@@ -93,6 +96,7 @@ print("=" * 70)
 
 # Store app instance to prevent multiple creations
 _app_instance = None
+
 
 def gui_with_server_main(page: ft.Page):
     """
@@ -131,10 +135,10 @@ def gui_with_server_main(page: ft.Page):
         print("\n[PAGE DISCONNECT] Cleaning up resources...")
         try:
             # Call dispose function if it exists
-            if hasattr(app, 'dispose') and callable(app.dispose):
+            if hasattr(app, "dispose") and callable(app.dispose):
                 app.dispose()
             # Clean up current view
-            if hasattr(app, '_current_view_dispose') and app._current_view_dispose:
+            if hasattr(app, "_current_view_dispose") and app._current_view_dispose:
                 app._current_view_dispose()
             print("[OK] Resources cleaned up")
         except Exception as cleanup_err:
@@ -161,12 +165,14 @@ def gui_with_server_main(page: ft.Page):
         except Exception as init_err:
             print(f"[ERROR] App initialization failed: {init_err}")
             import traceback
+
             traceback.print_exc()
 
     #  Schedule initialization
     print("[DEBUG] Scheduling async initialization task...")
     page.run_task(async_init)
     print("[DEBUG] Task scheduled")
+
 
 if __name__ == "__main__":
     # Allow switching between desktop and web mode via environment variables for testing/automation
@@ -193,7 +199,9 @@ if __name__ == "__main__":
 
     if view_mode == "WEB":
         print("[LAUNCH] Starting FletV2 as WEB application (browser)...")
-        print("[INFO] This mode enables Playwright/browser-based verification while keeping direct server integration.")
+        print(
+            "[INFO] This mode enables Playwright/browser-based verification while keeping direct server integration."
+        )
         chosen_port = _pick_port(port)
         if chosen_port != port:
             print(f"[INFO] Preferred port {port} is busy; auto-selected free port {chosen_port}")
@@ -204,6 +212,7 @@ if __name__ == "__main__":
         except Exception as launch_err:
             print(f"[FATAL] FletV2 failed to launch (web): {launch_err}")
             import traceback
+
             traceback.print_exc()
             raise SystemExit(1) from launch_err
     else:
@@ -223,6 +232,7 @@ if __name__ == "__main__":
         except Exception as launch_err:
             print(f"[FATAL] FletV2 failed to launch: {launch_err}")
             import traceback
+
             traceback.print_exc()
             raise SystemExit(1) from launch_err
 
@@ -237,4 +247,5 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[WARN] Server shutdown error: {e}")
             import traceback
+
             traceback.print_exc()

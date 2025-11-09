@@ -3,6 +3,7 @@
 Utils Package Init
 Initialization file for utils package.
 """
+
 # Import commonly used utility modules
 from .debug_setup import get_logger, setup_terminal_debugging
 from .server_bridge import ServerBridge, create_server_bridge
@@ -32,5 +33,5 @@ __all__ = [
     "show_input",
     "show_success_message",
     "show_user_feedback",
-    "show_warning_message"
+    "show_warning_message",
 ]

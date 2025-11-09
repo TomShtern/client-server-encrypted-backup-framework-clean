@@ -20,7 +20,6 @@ import flet as ft
 if TYPE_CHECKING:
     from FletV2.main import AsyncManager
 
-import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.components.log_card import LogCard
 from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
 from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
@@ -60,6 +59,7 @@ except Exception:  # pragma: no cover - log capture optional in GUI-only mode
 # ============================================================================
 # SECTION 1: DATA FETCHING HELPERS
 # ============================================================================
+
 
 async def fetch_server_logs_async(bridge: Any | None, _page: ft.Page) -> list[dict[str, Any]]:
     """Retrieve and normalize server logs without blocking the UI."""
@@ -159,7 +159,11 @@ def _filter_by_query(logs: list[dict[str, Any]], query: str) -> list[dict[str, A
         return logs
 
     regex = _compile_search_regex(query)
-    return [entry for entry in logs if regex.search(entry.get("message", "")) or regex.search(entry.get("component", ""))]
+    return [
+        entry
+        for entry in logs
+        if regex.search(entry.get("message", "")) or regex.search(entry.get("component", ""))
+    ]
 
 
 def _compile_search_regex(query: str) -> re.Pattern[str]:
@@ -202,16 +206,20 @@ def _calculate_statistics(logs: list[dict[str, Any]]) -> dict[str, Any]:
 # SECTION 2: UI BUILDERS
 # ============================================================================
 
+
 def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
     if not stats["total"]:
         return ft.Container()
 
     badges = [
         ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.PRIMARY),
-                ft.Text(f"{level}: {count}", size=12),
-            ], spacing=6),
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.PRIMARY),
+                    ft.Text(f"{level}: {count}", size=12),
+                ],
+                spacing=6,
+            ),
             padding=ft.padding.symmetric(horizontal=8, vertical=4),
             border_radius=8,
             bgcolor=ft.Colors.SURFACE,
@@ -220,11 +228,15 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
     ]
 
     return ft.Container(
-        content=ft.Row([
-            ft.Text(f"Total logs: {stats['total']}", size=14, weight=ft.FontWeight.BOLD),
-            ft.VerticalDivider(width=1),
-            *badges,
-        ], spacing=10, wrap=True),
+        content=ft.Row(
+            [
+                ft.Text(f"Total logs: {stats['total']}", size=14, weight=ft.FontWeight.BOLD),
+                ft.VerticalDivider(width=1),
+                *badges,
+            ],
+            spacing=10,
+            wrap=True,
+        ),
         padding=ft.padding.symmetric(horizontal=12, vertical=8),
         border_radius=12,
         bgcolor=ft.Colors.SURFACE,
@@ -233,14 +245,14 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
 
 def _render_log_controls(logs: list[dict[str, Any]], search_query: str, page: ft.Page) -> list[ft.Control]:
     return [
-        LogCard(entry, index=index, search_query=search_query, page=page)
-        for index, entry in enumerate(logs)
+        LogCard(entry, index=index, search_query=search_query, page=page) for index, entry in enumerate(logs)
     ]
 
 
 # ============================================================================
 # SECTION 3: LOGIC HELPERS
 # ============================================================================
+
 
 def _create_level_filter() -> ft.Control:
     """Create the level filter dropdown control."""
@@ -263,8 +275,10 @@ def _create_filter_controls(
     """Create the filter controls layout."""
     return ft.ResponsiveRow(
         controls=[
-            ft.Container(content=create_search_bar(on_change=search_on_change, placeholder="Search logs…"),
-                        col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
+            ft.Container(
+                content=create_search_bar(on_change=search_on_change, placeholder="Search logs…"),
+                col={"xs": 12, "sm": 8, "md": 6, "lg": 5},
+            ),
             ft.Container(content=level_filter, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
             ft.Container(
                 content=include_switch,
@@ -293,7 +307,9 @@ def _create_export_actions(handle_export: Callable[[str], None]) -> list[ft.Cont
     """Create export action buttons."""
     return [
         create_action_button("Export CSV", lambda __: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
-        create_action_button("Export JSON", lambda __: handle_export("json"), icon=ft.Icons.CODE, primary=False),
+        create_action_button(
+            "Export JSON", lambda __: handle_export("json"), icon=ft.Icons.CODE, primary=False
+        ),
     ]
 
 
@@ -322,6 +338,7 @@ def _create_main_content(
 # ============================================================================
 # SECTION 4: EVENT HANDLERS
 # ============================================================================
+
 
 def _create_event_handlers(
     page: ft.Page,
@@ -366,7 +383,9 @@ def _create_event_handlers(
         if filtered:
             log_list_container.controls.extend(_render_log_controls(filtered, state["search_query"], page))
         else:
-            log_list_container.controls.append(create_empty_state("No logs", "Adjust filters or refresh to load logs."))
+            log_list_container.controls.append(
+                create_empty_state("No logs", "Adjust filters or refresh to load logs.")
+            )
 
         stats_container.content = _build_stats_view(state["stats"])
 
@@ -485,7 +504,9 @@ class _LogsViewController:
         self.logs_section.expand = True
 
         # Note: Global search is in the app-level header (main.py), not view-level
-        header_actions: list[ft.Control] = [create_action_button("Refresh", self._on_refresh, icon=ft.Icons.REFRESH)]
+        header_actions: list[ft.Control] = [
+            create_action_button("Refresh", self._on_refresh, icon=ft.Icons.REFRESH)
+        ]
 
         self.header = create_view_header(
             "Logs",

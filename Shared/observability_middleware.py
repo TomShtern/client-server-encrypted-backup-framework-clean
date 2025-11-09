@@ -43,7 +43,7 @@ class FlaskObservabilityMiddleware:
             g.request_logger = self.logger.with_trace(g.trace_id)
 
             # Simple request logging without complex context
-            if hasattr(request, 'method') and hasattr(request, 'path'):
+            if hasattr(request, "method") and hasattr(request, "path"):
                 g.request_logger.debug(f"Request: {request.method} {request.path}")
 
                 # Simple metrics without complex tags
@@ -52,7 +52,7 @@ class FlaskObservabilityMiddleware:
     def _after_request(self, response: Response) -> Response:
         """Called after each request - simplified to avoid deadlocks"""
         with contextlib.suppress(Exception):
-            if hasattr(g, 'start_time') and hasattr(g, 'request_logger'):
+            if hasattr(g, "start_time") and hasattr(g, "request_logger"):
                 duration_ms = (time.time() - g.start_time) * 1000
 
                 # Simple logging without complex context
@@ -66,25 +66,26 @@ class FlaskObservabilityMiddleware:
 
     def _teardown_request(self, exception: BaseException | None) -> None:
         """Called when request context is torn down"""
-        if exception and hasattr(g, 'request_logger'):
+        if exception and hasattr(g, "request_logger"):
             g.request_logger.error(
                 f"Request failed with exception: {exception}",
                 operation="http_request",
                 error_code=type(exception).__name__,
-                context={"exception_str": str(exception)}
+                context={"exception_str": str(exception)},
             )
 
             # Record error metric - only if we're in a request context
             try:
                 from flask import has_request_context
+
                 if has_request_context():
                     self.metrics.record_counter(
                         "http.errors.total",
                         tags={
                             "method": request.method,
                             "endpoint": request.endpoint or "unknown",
-                            "error_type": type(exception).__name__
-                        }
+                            "error_type": type(exception).__name__,
+                        },
                     )
                 else:
                     # Log error without request context
@@ -93,22 +94,24 @@ class FlaskObservabilityMiddleware:
                         tags={
                             "method": "unknown",
                             "endpoint": "unknown",
-                            "error_type": type(exception).__name__
-                        }
+                            "error_type": type(exception).__name__,
+                        },
                     )
             except Exception as e:
                 # Fallback if request context check fails
-                g.request_logger.debug(f"Could not record error metric: {e}") if hasattr(g, 'request_logger') else None
+                g.request_logger.debug(f"Could not record error metric: {e}") if hasattr(
+                    g, "request_logger"
+                ) else None
 
     def _get_response_size(self, response: Response) -> int:
         """Safely get response size without triggering passthrough mode errors"""
         try:
             # Try to get content length from headers first
-            if content_length := response.headers.get('Content-Length'):
+            if content_length := response.headers.get("Content-Length"):
                 return int(content_length)
 
             # For non-file responses, try to get data
-            if hasattr(response, 'get_data'):
+            if hasattr(response, "get_data"):
                 data = response.get_data()
                 return len(data) if data else 0
 
@@ -120,7 +123,7 @@ class FlaskObservabilityMiddleware:
     def _register_observability_endpoints(self):
         """Register observability endpoints"""
 
-        @self.app.route('/api/observability/health')
+        @self.app.route("/api/observability/health")
         def observability_health_check():
             """Health check endpoint"""
             system_monitor = get_system_monitor()
@@ -128,13 +131,17 @@ class FlaskObservabilityMiddleware:
 
             # Get start time from config instead of private attribute
             config: dict[str, Any] = self.app.config  # type: ignore[assignment]
-            start_time = float(config['OBSERVABILITY_START_TIME']) if 'OBSERVABILITY_START_TIME' in config else float(time.time())
+            start_time = (
+                float(config["OBSERVABILITY_START_TIME"])
+                if "OBSERVABILITY_START_TIME" in config
+                else float(time.time())
+            )
 
             health_status: dict[str, Any] = {
                 "status": "healthy",
                 "timestamp": time.time(),
                 "component": self.component_name,
-                "uptime_seconds": time.time() - start_time
+                "uptime_seconds": time.time() - start_time,
             }
 
             if latest_metrics:
@@ -142,7 +149,7 @@ class FlaskObservabilityMiddleware:
                     "cpu_percent": latest_metrics.cpu_percent,
                     "memory_percent": latest_metrics.memory_percent,
                     "disk_free_gb": latest_metrics.disk_free_gb,
-                    "active_connections": latest_metrics.active_connections
+                    "active_connections": latest_metrics.active_connections,
                 }
 
                 # Simple health checks
@@ -160,36 +167,35 @@ class FlaskObservabilityMiddleware:
 
             return jsonify(health_status)
 
-        @self.app.route('/api/observability/metrics')
+        @self.app.route("/api/observability/metrics")
         def metrics_summary():
             """Metrics summary endpoint"""
-            window_seconds = request.args.get('window', 300, type=int)
+            window_seconds = request.args.get("window", 300, type=int)
             summaries = self.metrics.get_all_summaries(window_seconds)
 
-            return jsonify({
-                "window_seconds": window_seconds,
-                "timestamp": time.time(),
-                "metrics": summaries
-            })
+            return jsonify({"window_seconds": window_seconds, "timestamp": time.time(), "metrics": summaries})
 
-        @self.app.route('/api/observability/system')
+        @self.app.route("/api/observability/system")
         def system_metrics():
             """System metrics endpoint"""
             system_monitor = get_system_monitor()
-            window_seconds = request.args.get('window', 300, type=int)
+            window_seconds = request.args.get("window", 300, type=int)
             metrics_history = system_monitor.get_metrics_history(window_seconds)
 
-            return jsonify({
-                "window_seconds": window_seconds,
-                "timestamp": time.time(),
-                "metrics_count": len(metrics_history),
-                "latest": metrics_history[-1].__dict__ if metrics_history else None,
-                "history": [m.__dict__ for m in metrics_history[-10:]]  # Last 10 samples
-            })
+            return jsonify(
+                {
+                    "window_seconds": window_seconds,
+                    "timestamp": time.time(),
+                    "metrics_count": len(metrics_history),
+                    "latest": metrics_history[-1].__dict__ if metrics_history else None,
+                    "history": [m.__dict__ for m in metrics_history[-10:]],  # Last 10 samples
+                }
+            )
 
 
 def observe_operation(operation_name: str, component: str = "unknown"):
     """Decorator for observing function operations"""
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -202,19 +208,24 @@ def observe_operation(operation_name: str, component: str = "unknown"):
                     metrics.record_counter(f"operation.{operation_name}.success")
                     return result
                 except Exception as e:
-                    metrics.record_counter(f"operation.{operation_name}.failure",
-                                         tags={"error_type": type(e).__name__})
-                    logger.error(f"Operation {operation_name} failed: {e}",
-                               operation=operation_name,
-                               error_code=type(e).__name__)
+                    metrics.record_counter(
+                        f"operation.{operation_name}.failure", tags={"error_type": type(e).__name__}
+                    )
+                    logger.error(
+                        f"Operation {operation_name} failed: {e}",
+                        operation=operation_name,
+                        error_code=type(e).__name__,
+                    )
                     raise
 
         return wrapper
+
     return decorator
 
 
 def observe_async_operation(operation_name: str, component: str = "unknown"):
     """Decorator for observing async function operations"""
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -231,26 +242,31 @@ def observe_async_operation(operation_name: str, component: str = "unknown"):
                 metrics.record_timer(f"operation.{operation_name}.duration", duration_ms)
                 metrics.record_counter(f"operation.{operation_name}.success")
 
-                logger.info(f"Completed async {operation_name}",
-                          operation=operation_name,
-                          duration_ms=duration_ms)
+                logger.info(
+                    f"Completed async {operation_name}", operation=operation_name, duration_ms=duration_ms
+                )
                 return result
 
             except Exception as e:
                 duration_ms = (time.time() - start_time) * 1000
 
-                metrics.record_timer(f"operation.{operation_name}.duration", duration_ms,
-                                   tags={"success": "false"})
-                metrics.record_counter(f"operation.{operation_name}.failure",
-                                     tags={"error_type": type(e).__name__})
+                metrics.record_timer(
+                    f"operation.{operation_name}.duration", duration_ms, tags={"success": "false"}
+                )
+                metrics.record_counter(
+                    f"operation.{operation_name}.failure", tags={"error_type": type(e).__name__}
+                )
 
-                logger.error(f"Async operation {operation_name} failed: {e}",
-                           operation=operation_name,
-                           duration_ms=duration_ms,
-                           error_code=type(e).__name__)
+                logger.error(
+                    f"Async operation {operation_name} failed: {e}",
+                    operation=operation_name,
+                    duration_ms=duration_ms,
+                    error_code=type(e).__name__,
+                )
                 raise
 
         return wrapper
+
     return decorator
 
 
@@ -308,18 +324,20 @@ class BackgroundMetricsReporter:
                 "metric_types": len(metric_summaries),
                 "system_cpu": system_metrics.cpu_percent if system_metrics else None,
                 "system_memory": system_metrics.memory_percent if system_metrics else None,
-                "interval_seconds": self.interval_seconds
-            }
+                "interval_seconds": self.interval_seconds,
+            },
         )
 
         # Record reporting metric
         metrics.record_counter("metrics.reports.generated")
 
 
-def setup_observability_for_flask(app: Flask, component_name: str = "api-server") -> FlaskObservabilityMiddleware:
+def setup_observability_for_flask(
+    app: Flask, component_name: str = "api-server"
+) -> FlaskObservabilityMiddleware:
     """Setup complete observability for a Flask application"""
     # Store start time in Flask config instead of as attribute
-    app.config['OBSERVABILITY_START_TIME'] = time.time()
+    app.config["OBSERVABILITY_START_TIME"] = time.time()
 
     # Setup middleware
     middleware = FlaskObservabilityMiddleware(app, component_name)
@@ -334,9 +352,9 @@ def setup_observability_for_flask(app: Flask, component_name: str = "api-server"
     reporter.start()
 
     # Store references for cleanup using Flask's extensions dictionary
-    if not hasattr(app, 'extensions'):
+    if not hasattr(app, "extensions"):
         app.extensions = {}
-    app.extensions['observability_middleware'] = middleware
-    app.extensions['metrics_reporter'] = reporter
+    app.extensions["observability_middleware"] = middleware
+    app.extensions["metrics_reporter"] = reporter
 
     return middleware

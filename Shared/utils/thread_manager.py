@@ -20,17 +20,21 @@ from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
+
 class ThreadState(Enum):
     """Thread lifecycle states for monitoring."""
+
     CREATED = "created"
     RUNNING = "running"
     STOPPING = "stopping"
     STOPPED = "stopped"
     ERROR = "error"
 
+
 @dataclass
 class ThreadInfo:
     """Information about a managed thread."""
+
     thread_id: int
     name: str
     thread_obj: threading.Thread
@@ -40,6 +44,7 @@ class ThreadInfo:
     component: str = "unknown"
     daemon: bool = True
     cleanup_callback: Callable[[], None] | None = None
+
 
 class ThreadManager:
     """
@@ -68,9 +73,14 @@ class ThreadManager:
 
         logger.info("ThreadManager initialized with signal handlers")
 
-    def register_thread(self, name: str, thread_obj: threading.Thread,
-                       component: str = "unknown", daemon: bool = True,
-                       cleanup_callback: Callable[[], None] | None = None) -> str:
+    def register_thread(
+        self,
+        name: str,
+        thread_obj: threading.Thread,
+        component: str = "unknown",
+        daemon: bool = True,
+        cleanup_callback: Callable[[], None] | None = None,
+    ) -> str:
         """
         Register a thread for management.
 
@@ -95,7 +105,7 @@ class ThreadManager:
                 component=component,
                 daemon=daemon,
                 cleanup_callback=cleanup_callback,
-                stop_event=stop_event
+                stop_event=stop_event,
             )
 
             # Add stop_event to thread object for easy access
@@ -225,7 +235,9 @@ class ThreadManager:
                 remaining_timeout = max(0, shutdown_timeout - elapsed)
 
                 if remaining_timeout > 0:
-                    logger.info(f"Waiting for thread '{name}' to shutdown (timeout: {remaining_timeout:.1f}s)")
+                    logger.info(
+                        f"Waiting for thread '{name}' to shutdown (timeout: {remaining_timeout:.1f}s)"
+                    )
                     thread_info.thread_obj.join(timeout=remaining_timeout)
 
                 if thread_info.thread_obj.is_alive():
@@ -247,7 +259,9 @@ class ThreadManager:
         successful_stops = sum(success for success in results.values() if success)
         total_threads = len(results)
 
-        logger.info(f"Thread shutdown completed: {successful_stops}/{total_threads} threads stopped gracefully")
+        logger.info(
+            f"Thread shutdown completed: {successful_stops}/{total_threads} threads stopped gracefully"
+        )
 
         return results
 
@@ -260,11 +274,11 @@ class ThreadManager:
         """
         with self.lock:
             status: dict[str, Any] = {
-                'total_threads': len(self.threads),
-                'threads': {},
-                'by_state': {},
-                'by_component': {},
-                'shutdown_in_progress': self.shutdown_event.is_set()
+                "total_threads": len(self.threads),
+                "threads": {},
+                "by_state": {},
+                "by_component": {},
+                "shutdown_in_progress": self.shutdown_event.is_set(),
             }
 
             for name, thread_info in self.threads.items():
@@ -275,23 +289,23 @@ class ThreadManager:
                 elif thread_info.state in [ThreadState.RUNNING, ThreadState.STOPPING]:
                     thread_info.state = ThreadState.STOPPED
 
-                status['threads'][name] = {
-                    'thread_id': thread_info.thread_id,
-                    'component': thread_info.component,
-                    'state': thread_info.state.value,
-                    'daemon': thread_info.daemon,
-                    'is_alive': thread_info.thread_obj.is_alive(),
-                    'created_at': thread_info.created_at.isoformat(),
-                    'has_cleanup_callback': thread_info.cleanup_callback is not None
+                status["threads"][name] = {
+                    "thread_id": thread_info.thread_id,
+                    "component": thread_info.component,
+                    "state": thread_info.state.value,
+                    "daemon": thread_info.daemon,
+                    "is_alive": thread_info.thread_obj.is_alive(),
+                    "created_at": thread_info.created_at.isoformat(),
+                    "has_cleanup_callback": thread_info.cleanup_callback is not None,
                 }
 
                 # Count by state
                 state_key = thread_info.state.value
-                status['by_state'][state_key] = status['by_state'].get(state_key, 0) + 1
+                status["by_state"][state_key] = status["by_state"].get(state_key, 0) + 1
 
                 # Count by component
                 comp_key = thread_info.component
-                status['by_component'][comp_key] = status['by_component'].get(comp_key, 0) + 1
+                status["by_component"][comp_key] = status["by_component"].get(comp_key, 0) + 1
 
             return status
 
@@ -316,11 +330,17 @@ class ThreadManager:
         """
         return self.shutdown_event.wait(timeout)
 
-    def create_managed_thread(self, target: Callable, name: str,
-                            component: str = "unknown", daemon: bool = True,
-                            cleanup_callback: Callable[[], None] | None = None,
-                            args: tuple = (), kwargs: dict[str, Any] | None = None,
-                            auto_start: bool = True) -> str | None:
+    def create_managed_thread(
+        self,
+        target: Callable,
+        name: str,
+        component: str = "unknown",
+        daemon: bool = True,
+        cleanup_callback: Callable[[], None] | None = None,
+        args: tuple = (),
+        kwargs: dict[str, Any] | None = None,
+        auto_start: bool = True,
+    ) -> str | None:
         """
         Create and register a managed thread.
 
@@ -340,17 +360,21 @@ class ThreadManager:
         try:
             # Create wrapper that checks for shutdown signals
             def managed_target(*args, **kwargs):
-                thread_name = getattr(threading.current_thread(), 'thread_manager_name', name)
+                thread_name = getattr(threading.current_thread(), "thread_manager_name", name)
                 logger.debug(f"Managed thread '{thread_name}' started")
 
                 try:
                     # Check if we have a stop event
-                    stop_event = getattr(threading.current_thread(), 'stop_event', None)
+                    stop_event = getattr(threading.current_thread(), "stop_event", None)
 
                     # Call original target with stop_event awareness if needed
-                    if stop_event and hasattr(target, '__code__') and 'stop_event' in target.__code__.co_varnames:
+                    if (
+                        stop_event
+                        and hasattr(target, "__code__")
+                        and "stop_event" in target.__code__.co_varnames
+                    ):
                         kwargs = kwargs or {}
-                        kwargs['stop_event'] = stop_event
+                        kwargs["stop_event"] = stop_event
 
                     return target(*args, **kwargs)
 
@@ -362,11 +386,7 @@ class ThreadManager:
 
             # Create thread
             thread_obj = threading.Thread(
-                target=managed_target,
-                name=name,
-                daemon=daemon,
-                args=args,
-                kwargs=kwargs or {}
+                target=managed_target, name=name, daemon=daemon, args=args, kwargs=kwargs or {}
             )
 
             # Register thread
@@ -375,7 +395,7 @@ class ThreadManager:
                 thread_obj=thread_obj,
                 component=component,
                 daemon=daemon,
-                cleanup_callback=cleanup_callback
+                cleanup_callback=cleanup_callback,
             )
 
             # Start if requested
@@ -419,8 +439,8 @@ class ThreadManager:
 
     def _signal_handler(self, signum: int, frame: Any) -> None:
         """Handle system signals for graceful shutdown."""
-        signal_names: dict[int, str] = {signal.SIGINT: 'SIGINT', signal.SIGTERM: 'SIGTERM'}
-        signal_name = signal_names.get(signum, f'Signal {signum}')
+        signal_names: dict[int, str] = {signal.SIGINT: "SIGINT", signal.SIGTERM: "SIGTERM"}
+        signal_name = signal_names.get(signum, f"Signal {signum}")
 
         logger.info(f"Received {signal_name} - initiating graceful shutdown")
 
@@ -428,7 +448,7 @@ class ThreadManager:
         shutdown_thread = threading.Thread(
             target=self.shutdown_all,
             name="SignalShutdownHandler",
-            daemon=False  # Don't make this daemon so it can complete shutdown
+            daemon=False,  # Don't make this daemon so it can complete shutdown
         )
         shutdown_thread.start()
 
@@ -436,6 +456,7 @@ class ThreadManager:
 # Global thread manager instance
 _global_thread_manager = None
 _thread_manager_lock = threading.Lock()
+
 
 def get_thread_manager() -> ThreadManager:
     """Get the global thread manager instance (singleton pattern)."""
@@ -445,35 +466,54 @@ def get_thread_manager() -> ThreadManager:
             _global_thread_manager = ThreadManager()
         return _global_thread_manager
 
+
 # Convenience functions for easy integration
 
-def register_thread(name: str, thread_obj: threading.Thread, component: str = "unknown",
-                   daemon: bool = True, cleanup_callback: Callable[[], None] | None = None) -> str:
+
+def register_thread(
+    name: str,
+    thread_obj: threading.Thread,
+    component: str = "unknown",
+    daemon: bool = True,
+    cleanup_callback: Callable[[], None] | None = None,
+) -> str:
     """Register a thread with the global thread manager."""
     return get_thread_manager().register_thread(name, thread_obj, component, daemon, cleanup_callback)
 
-def create_managed_thread(target: Callable, name: str, component: str = "unknown",
-                         daemon: bool = True, cleanup_callback: Callable[[], None] | None = None,
-                         args: tuple = (), kwargs: dict[str, Any] | None = None,
-                         auto_start: bool = True) -> str | None:
+
+def create_managed_thread(
+    target: Callable,
+    name: str,
+    component: str = "unknown",
+    daemon: bool = True,
+    cleanup_callback: Callable[[], None] | None = None,
+    args: tuple = (),
+    kwargs: dict[str, Any] | None = None,
+    auto_start: bool = True,
+) -> str | None:
     """Create a managed thread with the global thread manager."""
     return get_thread_manager().create_managed_thread(  # type: ignore
         target, name, component, daemon, cleanup_callback, args, kwargs, auto_start
     )
 
+
 def shutdown_all_threads(timeout: float | None = None) -> dict[str, bool]:
     """Shutdown all threads managed by the global thread manager."""
     return get_thread_manager().shutdown_all(timeout)
+
 
 def get_thread_status() -> dict[str, Any]:
     """Get status of all managed threads."""
     return get_thread_manager().get_thread_status()
 
+
 def is_shutdown_requested() -> bool:
     """Check if shutdown has been requested."""
     return get_thread_manager().is_shutdown_requested()
 
+
 # Example integration patterns
+
 
 def example_managed_background_task(stop_event: threading.Event):
     """Example of how to write a background task that respects shutdown signals."""
@@ -495,18 +535,17 @@ def example_managed_background_task(stop_event: threading.Event):
 
     logger.info("Background task finished")
 
+
 def cleanup_example():
     """Example cleanup function."""
     logger.info("Performing cleanup operations...")
     # Clean up resources here
 
+
 # Test and demonstration
 if __name__ == "__main__":
     # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     print("Testing Thread Management System...")
 
@@ -516,7 +555,7 @@ if __name__ == "__main__":
         name="test_background_task",
         component="test_component",
         cleanup_callback=cleanup_example,
-        auto_start=True
+        auto_start=True,
     ):
         print(f"Created managed thread: {thread_name}")
 

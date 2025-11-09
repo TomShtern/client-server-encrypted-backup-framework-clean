@@ -12,18 +12,20 @@ Precedence (highest to lowest):
 This replaces the fragmented configuration approach with a single source of truth.
 """
 
-import os
 import json
 import logging
-from pathlib import Path
-from typing import Any, Dict, Optional, Union
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ServerConfig:
     """Server configuration with defaults from config.json"""
+
     host: str = "127.0.0.1"
     port: int = 1256
     max_connections: int = 10
@@ -35,9 +37,11 @@ class ServerConfig:
     received_files_dir: str = "received_files"
     keys_dir: str = "data/keys"
 
+
 @dataclass
 class ApiServerConfig:
     """API server configuration with defaults from config.json"""
+
     host: str = "127.0.0.1"
     port: int = 9090
     debug: bool = False
@@ -45,9 +49,11 @@ class ApiServerConfig:
     upload_timeout: int = 300
     enable_cors: bool = True
 
+
 @dataclass
 class CryptoConfig:
     """Cryptography configuration with defaults from config.json"""
+
     rsa_key_size: int = 2048
     aes_key_size: int = 256
     private_key_file: str = "priv.key"
@@ -55,9 +61,11 @@ class CryptoConfig:
     keys_dir: str = "data/keys"
     enable_compression: bool = True
 
+
 @dataclass
 class ProtocolConfig:
     """Protocol configuration with defaults from config.json"""
+
     version: int = 3
     max_filename_length: int = 200
     max_payload_size: int = 1048576
@@ -65,9 +73,11 @@ class ProtocolConfig:
     header_timeout: int = 10
     chunk_size: int = 65536
 
+
 @dataclass
 class DevelopmentConfig:
     """Development configuration from .env files"""
+
     flet_development: bool = False
     flet_debug: bool = False
     disable_integrated_gui: bool = False
@@ -75,16 +85,20 @@ class DevelopmentConfig:
     pythonioencoding: str = "utf-8"
     pythonpath: str = "..;../Shared"
 
+
 @dataclass
 class SecurityConfig:
     """Security configuration (secrets) from environment variables"""
-    github_personal_access_token: Optional[str] = None
-    server_api_key: Optional[str] = None
-    database_password: Optional[str] = None
+
+    github_personal_access_token: str | None = None
+    server_api_key: str | None = None
+    database_password: str | None = None
+
 
 @dataclass
 class CyberBackupConfig:
     """Main configuration container"""
+
     server: ServerConfig = field(default_factory=ServerConfig)
     api_server: ApiServerConfig = field(default_factory=ApiServerConfig)
     crypto: CryptoConfig = field(default_factory=CryptoConfig)
@@ -92,9 +106,12 @@ class CyberBackupConfig:
     development: DevelopmentConfig = field(default_factory=DevelopmentConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
 
+
 class ConfigurationError(Exception):
     """Configuration-related errors"""
+
     pass
+
 
 class UnifiedConfigurationManager:
     """
@@ -104,7 +121,7 @@ class UnifiedConfigurationManager:
     being split across 4 different files with overlapping concerns.
     """
 
-    def __init__(self, base_dir: Optional[str] = None):
+    def __init__(self, base_dir: str | None = None):
         """
         Initialize unified configuration manager
 
@@ -119,8 +136,8 @@ class UnifiedConfigurationManager:
         self.env_file = self.base_dir / ".env"
         self.flet_env_file = self.base_dir / "FletV2" / ".env"
 
-        self._config: Optional[CyberBackupConfig] = None
-        self._config_hash: Optional[str] = None
+        self._config: CyberBackupConfig | None = None
+        self._config_hash: str | None = None
 
         logger.debug(f"Unified configuration manager initialized with base directory: {self.base_dir}")
 
@@ -165,7 +182,7 @@ class UnifiedConfigurationManager:
 
         except Exception as e:
             logger.error(f"Failed to load unified configuration: {e}")
-            raise ConfigurationError(f"Failed to load unified configuration: {e}")
+            raise ConfigurationError(f"Failed to load unified configuration: {e}") from e
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """
@@ -211,13 +228,13 @@ class UnifiedConfigurationManager:
         """Force reload configuration"""
         return self.load(force_reload=True)
 
-    def get_config_sources(self) -> Dict[str, bool]:
+    def get_config_sources(self) -> dict[str, bool]:
         """Get status of all configuration sources"""
         return {
             "config.json": self.config_file.exists(),
             "config.local.json": self.local_config_file.exists(),
             ".env": self.env_file.exists(),
-            "FletV2/.env": self.flet_env_file.exists()
+            "FletV2/.env": self.flet_env_file.exists(),
         }
 
     def validate_configuration(self) -> list[str]:
@@ -238,7 +255,9 @@ class UnifiedConfigurationManager:
 
         # Validate crypto configuration
         if config.crypto.rsa_key_size not in [1024, 2048, 4096]:
-            errors.append(f"Invalid RSA key size: {config.crypto.rsa_key_size} (should be 1024, 2048, or 4096)")
+            errors.append(
+                f"Invalid RSA key size: {config.crypto.rsa_key_size} (should be 1024, 2048, or 4096)"
+            )
 
         if config.crypto.aes_key_size not in [128, 192, 256]:
             errors.append(f"Invalid AES key size: {config.crypto.aes_key_size} (should be 128, 192, or 256)")
@@ -252,31 +271,31 @@ class UnifiedConfigurationManager:
 
         return errors
 
-    def _load_base_config(self) -> Dict[str, Any]:
+    def _load_base_config(self) -> dict[str, Any]:
         """Load base configuration from config.json"""
         if not self.config_file.exists():
             logger.warning(f"Base config file not found: {self.config_file}")
             return {}
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, encoding="utf-8") as f:
                 config = json.load(f)
-            logger.debug(f"Loaded base configuration from config.json")
+            logger.debug("Loaded base configuration from config.json")
             return config
         except json.JSONDecodeError as e:
-            raise ConfigurationError(f"Invalid JSON in config.json: {e}")
+            raise ConfigurationError(f"Invalid JSON in config.json: {e}") from e
         except Exception as e:
-            raise ConfigurationError(f"Failed to read config.json: {e}")
+            raise ConfigurationError(f"Failed to read config.json: {e}") from e
 
-    def _load_local_config(self) -> Dict[str, Any]:
+    def _load_local_config(self) -> dict[str, Any]:
         """Load local configuration overrides from config.local.json"""
         if not self.local_config_file.exists():
             return {}
 
         try:
-            with open(self.local_config_file, 'r', encoding='utf-8') as f:
+            with open(self.local_config_file, encoding="utf-8") as f:
                 config = json.load(f)
-            logger.debug(f"Loaded local configuration from config.local.json")
+            logger.debug("Loaded local configuration from config.local.json")
             return config
         except json.JSONDecodeError as e:
             logger.warning(f"Invalid JSON in config.local.json, ignoring: {e}")
@@ -292,17 +311,18 @@ class UnifiedConfigurationManager:
         for env_file in env_files:
             if env_file.exists():
                 try:
-                    with open(env_file, 'r', encoding='utf-8') as f:
+                    with open(env_file, encoding="utf-8") as f:
                         for line in f:
                             line = line.strip()
-                            if line and not line.startswith('#') and '=' in line:
-                                key, value = line.split('=', 1)
+                            if line and not line.startswith("#") and "=" in line:
+                                key, value = line.split("=", 1)
                                 key = key.strip()
                                 value = value.strip()
 
                                 # Remove quotes if present
-                                if (value.startswith('"') and value.endswith('"')) or \
-                                   (value.startswith("'") and value.endswith("'")):
+                                if (value.startswith('"') and value.endswith('"')) or (
+                                    value.startswith("'") and value.endswith("'")
+                                ):
                                     value = value[1:-1]
 
                                 os.environ[key] = value
@@ -311,55 +331,65 @@ class UnifiedConfigurationManager:
                 except Exception as e:
                     logger.warning(f"Failed to load {env_file}: {e}")
 
-    def _load_env_overrides(self) -> Dict[str, Any]:
+    def _load_env_overrides(self) -> dict[str, Any]:
         """Load configuration overrides from environment variables"""
         overrides = {}
 
         # Server configuration overrides
-        if 'SERVER_HOST' in os.environ:
-            overrides.setdefault('server', {})['host'] = os.environ['SERVER_HOST']
-        if 'SERVER_PORT' in os.environ:
-            overrides.setdefault('server', {})['port'] = int(os.environ['SERVER_PORT'])
-        if 'MAX_CONNECTIONS' in os.environ:
-            overrides.setdefault('server', {})['max_connections'] = int(os.environ['MAX_CONNECTIONS'])
-        if 'DATABASE_PATH' in os.environ:
-            overrides.setdefault('server', {})['database_path'] = os.environ['DATABASE_PATH']
+        if "SERVER_HOST" in os.environ:
+            overrides.setdefault("server", {})["host"] = os.environ["SERVER_HOST"]
+        if "SERVER_PORT" in os.environ:
+            overrides.setdefault("server", {})["port"] = int(os.environ["SERVER_PORT"])
+        if "MAX_CONNECTIONS" in os.environ:
+            overrides.setdefault("server", {})["max_connections"] = int(os.environ["MAX_CONNECTIONS"])
+        if "DATABASE_PATH" in os.environ:
+            overrides.setdefault("server", {})["database_path"] = os.environ["DATABASE_PATH"]
 
         # API server configuration overrides
-        if 'API_HOST' in os.environ:
-            overrides.setdefault('api_server', {})['host'] = os.environ['API_HOST']
-        if 'API_PORT' in os.environ:
-            overrides.setdefault('api_server', {})['port'] = int(os.environ['API_PORT'])
-        if 'API_DEBUG' in os.environ:
-            overrides.setdefault('api_server', {})['debug'] = os.environ['API_DEBUG'].lower() == 'true'
+        if "API_HOST" in os.environ:
+            overrides.setdefault("api_server", {})["host"] = os.environ["API_HOST"]
+        if "API_PORT" in os.environ:
+            overrides.setdefault("api_server", {})["port"] = int(os.environ["API_PORT"])
+        if "API_DEBUG" in os.environ:
+            overrides.setdefault("api_server", {})["debug"] = os.environ["API_DEBUG"].lower() == "true"
 
         # Development configuration overrides
-        if 'FLET_DEVELOPMENT' in os.environ:
-            overrides.setdefault('development', {})['flet_development'] = os.environ['FLET_DEVELOPMENT'].lower() == 'true'
-        if 'FLET_DEBUG' in os.environ:
-            overrides.setdefault('development', {})['flet_debug'] = os.environ['FLET_DEBUG'].lower() == 'true'
-        if 'FLET_V2_DEBUG' in os.environ:
-            overrides.setdefault('development', {})['flet_debug'] = os.environ['FLET_V2_DEBUG'].lower() == 'true'
-        if 'CYBERBACKUP_DISABLE_INTEGRATED_GUI' in os.environ:
-            overrides.setdefault('development', {})['disable_integrated_gui'] = os.environ['CYBERBACKUP_DISABLE_INTEGRATED_GUI'].lower() == 'true'
-        if 'FLET_GUI_ONLY_MODE' in os.environ:
-            overrides.setdefault('development', {})['gui_only_mode'] = os.environ['FLET_GUI_ONLY_MODE'].lower() == 'true'
-        if 'PYTHONIOENCODING' in os.environ:
-            overrides.setdefault('development', {})['pythonioencoding'] = os.environ['PYTHONIOENCODING']
-        if 'PYTHONPATH' in os.environ:
-            overrides.setdefault('development', {})['pythonpath'] = os.environ['PYTHONPATH']
+        if "FLET_DEVELOPMENT" in os.environ:
+            overrides.setdefault("development", {})["flet_development"] = (
+                os.environ["FLET_DEVELOPMENT"].lower() == "true"
+            )
+        if "FLET_DEBUG" in os.environ:
+            overrides.setdefault("development", {})["flet_debug"] = os.environ["FLET_DEBUG"].lower() == "true"
+        if "FLET_V2_DEBUG" in os.environ:
+            overrides.setdefault("development", {})["flet_debug"] = (
+                os.environ["FLET_V2_DEBUG"].lower() == "true"
+            )
+        if "CYBERBACKUP_DISABLE_INTEGRATED_GUI" in os.environ:
+            overrides.setdefault("development", {})["disable_integrated_gui"] = (
+                os.environ["CYBERBACKUP_DISABLE_INTEGRATED_GUI"].lower() == "true"
+            )
+        if "FLET_GUI_ONLY_MODE" in os.environ:
+            overrides.setdefault("development", {})["gui_only_mode"] = (
+                os.environ["FLET_GUI_ONLY_MODE"].lower() == "true"
+            )
+        if "PYTHONIOENCODING" in os.environ:
+            overrides.setdefault("development", {})["pythonioencoding"] = os.environ["PYTHONIOENCODING"]
+        if "PYTHONPATH" in os.environ:
+            overrides.setdefault("development", {})["pythonpath"] = os.environ["PYTHONPATH"]
 
         # Security configuration overrides (secrets)
-        if 'GITHUB_PERSONAL_ACCESS_TOKEN' in os.environ:
-            overrides.setdefault('security', {})['github_personal_access_token'] = os.environ['GITHUB_PERSONAL_ACCESS_TOKEN']
-        if 'SERVER_API_KEY' in os.environ:
-            overrides.setdefault('security', {})['server_api_key'] = os.environ['SERVER_API_KEY']
-        if 'DATABASE_PASSWORD' in os.environ:
-            overrides.setdefault('security', {})['database_password'] = os.environ['DATABASE_PASSWORD']
+        if "GITHUB_PERSONAL_ACCESS_TOKEN" in os.environ:
+            overrides.setdefault("security", {})["github_personal_access_token"] = os.environ[
+                "GITHUB_PERSONAL_ACCESS_TOKEN"
+            ]
+        if "SERVER_API_KEY" in os.environ:
+            overrides.setdefault("security", {})["server_api_key"] = os.environ["SERVER_API_KEY"]
+        if "DATABASE_PASSWORD" in os.environ:
+            overrides.setdefault("security", {})["database_password"] = os.environ["DATABASE_PASSWORD"]
 
         return overrides
 
-    def _merge_configs(self, base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    def _merge_configs(self, base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
         """Deep merge two configuration dictionaries"""
         result = base.copy()
 
@@ -371,78 +401,78 @@ class UnifiedConfigurationManager:
 
         return result
 
-    def _create_config_from_dict(self, config_data: Dict[str, Any]) -> CyberBackupConfig:
+    def _create_config_from_dict(self, config_data: dict[str, Any]) -> CyberBackupConfig:
         """Create configuration object from dictionary"""
         try:
             return CyberBackupConfig(
-                server=ServerConfig(**config_data.get('server', {})),
-                api_server=ApiServerConfig(**config_data.get('api_server', {})),
-                crypto=CryptoConfig(**config_data.get('crypto', {})),
-                protocol=ProtocolConfig(**config_data.get('protocol', {})),
-                development=DevelopmentConfig(**config_data.get('development', {})),
-                security=SecurityConfig(**config_data.get('security', {}))
+                server=ServerConfig(**config_data.get("server", {})),
+                api_server=ApiServerConfig(**config_data.get("api_server", {})),
+                crypto=CryptoConfig(**config_data.get("crypto", {})),
+                protocol=ProtocolConfig(**config_data.get("protocol", {})),
+                development=DevelopmentConfig(**config_data.get("development", {})),
+                security=SecurityConfig(**config_data.get("security", {})),
             )
         except TypeError as e:
-            raise ConfigurationError(f"Invalid configuration structure: {e}")
+            raise ConfigurationError(f"Invalid configuration structure: {e}") from e
 
     def _save_local_config(self, config: CyberBackupConfig) -> None:
         """Save configuration to config.local.json (excluding secrets)"""
         try:
             config_dict = {
-                'server': {
-                    'host': config.server.host,
-                    'port': config.server.port,
-                    'max_connections': config.server.max_connections,
-                    'buffer_size': config.server.buffer_size,
-                    'timeout': config.server.timeout,
-                    'enable_logging': config.server.enable_logging,
-                    'log_level': config.server.log_level,
-                    'database_path': config.server.database_path,
-                    'received_files_dir': config.server.received_files_dir,
-                    'keys_dir': config.server.keys_dir
+                "server": {
+                    "host": config.server.host,
+                    "port": config.server.port,
+                    "max_connections": config.server.max_connections,
+                    "buffer_size": config.server.buffer_size,
+                    "timeout": config.server.timeout,
+                    "enable_logging": config.server.enable_logging,
+                    "log_level": config.server.log_level,
+                    "database_path": config.server.database_path,
+                    "received_files_dir": config.server.received_files_dir,
+                    "keys_dir": config.server.keys_dir,
                 },
-                'api_server': {
-                    'host': config.api_server.host,
-                    'port': config.api_server.port,
-                    'debug': config.api_server.debug,
-                    'max_content_length': config.api_server.max_content_length,
-                    'upload_timeout': config.api_server.upload_timeout,
-                    'enable_cors': config.api_server.enable_cors
+                "api_server": {
+                    "host": config.api_server.host,
+                    "port": config.api_server.port,
+                    "debug": config.api_server.debug,
+                    "max_content_length": config.api_server.max_content_length,
+                    "upload_timeout": config.api_server.upload_timeout,
+                    "enable_cors": config.api_server.enable_cors,
                 },
-                'crypto': {
-                    'rsa_key_size': config.crypto.rsa_key_size,
-                    'aes_key_size': config.crypto.aes_key_size,
-                    'private_key_file': config.crypto.private_key_file,
-                    'public_key_file': config.crypto.public_key_file,
-                    'keys_dir': config.crypto.keys_dir,
-                    'enable_compression': config.crypto.enable_compression
+                "crypto": {
+                    "rsa_key_size": config.crypto.rsa_key_size,
+                    "aes_key_size": config.crypto.aes_key_size,
+                    "private_key_file": config.crypto.private_key_file,
+                    "public_key_file": config.crypto.public_key_file,
+                    "keys_dir": config.crypto.keys_dir,
+                    "enable_compression": config.crypto.enable_compression,
                 },
-                'protocol': {
-                    'version': config.protocol.version,
-                    'max_filename_length': config.protocol.max_filename_length,
-                    'max_payload_size': config.protocol.max_payload_size,
-                    'crc_polynomial': config.protocol.crc_polynomial,
-                    'header_timeout': config.protocol.header_timeout,
-                    'chunk_size': config.protocol.chunk_size
+                "protocol": {
+                    "version": config.protocol.version,
+                    "max_filename_length": config.protocol.max_filename_length,
+                    "max_payload_size": config.protocol.max_payload_size,
+                    "crc_polynomial": config.protocol.crc_polynomial,
+                    "header_timeout": config.protocol.header_timeout,
+                    "chunk_size": config.protocol.chunk_size,
                 },
-                'development': {
-                    'flet_development': config.development.flet_development,
-                    'flet_debug': config.development.flet_debug,
-                    'disable_integrated_gui': config.development.disable_integrated_gui,
-                    'gui_only_mode': config.development.gui_only_mode,
-                    'pythonioencoding': config.development.pythonioencoding,
-                    'pythonpath': config.development.pythonpath
-                }
+                "development": {
+                    "flet_development": config.development.flet_development,
+                    "flet_debug": config.development.flet_debug,
+                    "disable_integrated_gui": config.development.disable_integrated_gui,
+                    "gui_only_mode": config.development.gui_only_mode,
+                    "pythonioencoding": config.development.pythonioencoding,
+                    "pythonpath": config.development.pythonpath,
+                },
                 # Note: Security section (secrets) is NOT saved to config file
             }
 
-            with open(self.local_config_file, 'w', encoding='utf-8') as f:
+            with open(self.local_config_file, "w", encoding="utf-8") as f:
                 json.dump(config_dict, f, indent=2, ensure_ascii=False)
 
-            logger.info(f"Saved configuration to config.local.json")
+            logger.info("Saved configuration to config.local.json")
 
         except Exception as e:
-            raise ConfigurationError(f"Failed to save local configuration: {e}")
+            raise ConfigurationError(f"Failed to save local configuration: {e}") from e
 
     def _is_config_unchanged(self) -> bool:
         """Check if configuration files have changed since last load"""
@@ -452,14 +482,15 @@ class UnifiedConfigurationManager:
         try:
             current_hash = self._calculate_config_hash(self._load_base_config())
             return current_hash == self._config_hash
-        except:
+        except Exception:
             return False
 
-    def _calculate_config_hash(self, config_data: Dict[str, Any]) -> str:
+    def _calculate_config_hash(self, config_data: dict[str, Any]) -> str:
         """Calculate hash of configuration data"""
         import hashlib
+
         config_str = json.dumps(config_data, sort_keys=True, ensure_ascii=False)
-        return hashlib.md5(config_str.encode('utf-8')).hexdigest()
+        return hashlib.md5(config_str.encode("utf-8")).hexdigest()
 
     def get_server_url(self) -> str:
         """Get complete server URL"""
@@ -491,44 +522,54 @@ class UnifiedConfigurationManager:
         config = self.load()
         return self.base_dir / config.server.received_files_dir
 
-# Global unified configuration manager instance
-_unified_config_manager: Optional[UnifiedConfigurationManager] = None
 
-def get_unified_config_manager(base_dir: Optional[str] = None) -> UnifiedConfigurationManager:
+# Global unified configuration manager instance
+_unified_config_manager: UnifiedConfigurationManager | None = None
+
+
+def get_unified_config_manager(base_dir: str | None = None) -> UnifiedConfigurationManager:
     """Get global unified configuration manager instance"""
     global _unified_config_manager
     if _unified_config_manager is None:
         _unified_config_manager = UnifiedConfigurationManager(base_dir)
     return _unified_config_manager
 
-def load_unified_config(base_dir: Optional[str] = None) -> CyberBackupConfig:
+
+def load_unified_config(base_dir: str | None = None) -> CyberBackupConfig:
     """Load unified configuration using global manager"""
     return get_unified_config_manager(base_dir).load()
+
 
 def get_unified_config(section: str, key: str, default: Any = None) -> Any:
     """Get unified configuration value using global manager"""
     return get_unified_config_manager().get(section, key, default)
+
 
 # Convenience functions for common configuration values
 def get_server_config() -> ServerConfig:
     """Get server configuration"""
     return load_unified_config().server
 
+
 def get_api_server_config() -> ApiServerConfig:
     """Get API server configuration"""
     return load_unified_config().api_server
+
 
 def get_crypto_config() -> CryptoConfig:
     """Get crypto configuration"""
     return load_unified_config().crypto
 
+
 def get_protocol_config() -> ProtocolConfig:
     """Get protocol configuration"""
     return load_unified_config().protocol
 
+
 def is_development() -> bool:
     """Check if in development mode"""
     return load_unified_config().development.flet_development
+
 
 if __name__ == "__main__":
     # Example usage

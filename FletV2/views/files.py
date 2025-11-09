@@ -11,15 +11,12 @@ Clean file management with server integration and graceful fallbacks.
 import asyncio
 import concurrent.futures
 import contextlib
-import os
-import sys
 from typing import Any
 
 # Third-party imports
 import flet as ft
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # noqa: F401
 
 try:
     from FletV2.utils.debug_setup import get_logger
@@ -32,10 +29,11 @@ except ImportError:  # pragma: no cover - fallback logging
         logger = logging.getLogger(name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
             logger.addHandler(handler)
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
+
 
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
@@ -79,7 +77,7 @@ def create_files_view(
     files_data = []
 
     # Create async fetch function using proven pattern from async_helpers
-    _fetch_files_async = create_async_fetch_function('get_files', empty_default=[])
+    _fetch_files_async = create_async_fetch_function("get_files", empty_default=[])
 
     async def load_files_data() -> None:
         """Load file data with loading indicator and proper error handling."""
@@ -106,10 +104,10 @@ def create_files_view(
         """Format file size in human readable format."""
         if size_bytes < 1024:
             return f"{size_bytes} B"
-        elif size_bytes < 1024*1024:
-            return f"{size_bytes/1024:.1f} KB"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
         else:
-            return f"{size_bytes/(1024*1024):.1f} MB"
+            return f"{size_bytes / (1024 * 1024):.1f} MB"
 
     def get_file_type_icon(file_type: str) -> str:
         """Get file type icon."""
@@ -125,13 +123,13 @@ def create_files_view(
     def get_status_type(status: str) -> str:
         """Map file status to status pill type."""
         status_mapping = {
-            "complete": "success",     # Green for completed files
-            "verified": "info",        # Blue for verified files
-            "uploading": "warning",    # Orange for files in progress
-            "queued": "queued",        # Amber for queued files
-            "failed": "error",         # Red for failed files
-            "pending": "queued",       # Amber for pending files
-            "unknown": "unknown"       # Light Blue Grey for unknown states
+            "complete": "success",  # Green for completed files
+            "verified": "info",  # Blue for verified files
+            "uploading": "warning",  # Orange for files in progress
+            "queued": "queued",  # Amber for queued files
+            "failed": "error",  # Red for failed files
+            "pending": "queued",  # Amber for pending files
+            "unknown": "unknown",  # Light Blue Grey for unknown states
         }
         return status_mapping.get(status.lower(), "default")
 
@@ -148,7 +146,7 @@ def create_files_view(
         rows=[],
         heading_row_color="#212121",  # Enhanced darker header as specified in document
         border_radius=12,
-        expand=True
+        expand=True,
     )
 
     total_files_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
@@ -163,24 +161,15 @@ def create_files_view(
         # Apply search filter
         if search_query.strip():
             query = search_query.lower()
-            filtered = [
-                file for file in filtered
-                if query in file.get("name", "").lower()
-            ]
+            filtered = [file for file in filtered if query in file.get("name", "").lower()]
 
         # Apply status filter
         if status_filter != "all":
-            filtered = [
-                file for file in filtered
-                if file.get("status", "") == status_filter
-            ]
+            filtered = [file for file in filtered if file.get("status", "") == status_filter]
 
         # Apply type filter
         if type_filter != "all":
-            filtered = [
-                file for file in filtered
-                if file.get("type", "") == type_filter
-            ]
+            filtered = [file for file in filtered if file.get("type", "") == type_filter]
 
         return filtered
 
@@ -197,10 +186,13 @@ def create_files_view(
                 ft.DataRow(
                     cells=[
                         ft.DataCell(
-                            ft.Row([
-                                ft.Icon(get_file_type_icon(file_type), size=16),
-                                ft.Text(file.get("name", ""), size=13)
-                            ], spacing=8)
+                            ft.Row(
+                                [
+                                    ft.Icon(get_file_type_icon(file_type), size=16),
+                                    ft.Text(file.get("name", ""), size=13),
+                                ],
+                                spacing=8,
+                            )
                         ),
                         ft.DataCell(ft.Text(format_file_size(file.get("size", 0)))),
                         ft.DataCell(ft.Text(file_type.title())),
@@ -210,15 +202,24 @@ def create_files_view(
                             ft.PopupMenuButton(
                                 icon=ft.Icons.MORE_VERT,
                                 items=[
-                                    ft.PopupMenuItem(text="Download", icon=ft.Icons.DOWNLOAD,
-                                                   on_click=lambda _e, f=file: download_file(f)),
-                                    ft.PopupMenuItem(text="Verify", icon=ft.Icons.VERIFIED,
-                                                   on_click=lambda _e, f=file: verify_file(f)),
-                                    ft.PopupMenuItem(text="Delete", icon=ft.Icons.DELETE,
-                                                   on_click=lambda _e, f=file: delete_file(f)),
-                                ]
+                                    ft.PopupMenuItem(
+                                        text="Download",
+                                        icon=ft.Icons.DOWNLOAD,
+                                        on_click=lambda _e, f=file: download_file(f),
+                                    ),
+                                    ft.PopupMenuItem(
+                                        text="Verify",
+                                        icon=ft.Icons.VERIFIED,
+                                        on_click=lambda _e, f=file: verify_file(f),
+                                    ),
+                                    ft.PopupMenuItem(
+                                        text="Delete",
+                                        icon=ft.Icons.DELETE,
+                                        on_click=lambda _e, f=file: delete_file(f),
+                                    ),
+                                ],
                             )
-                        )
+                        ),
                     ]
                 )
             )
@@ -250,9 +251,9 @@ def create_files_view(
     def update_stats_display() -> None:
         """Update the stats display with current file data."""
         total_files = len(files_data)
-        complete_files = len([f for f in files_data if f.get('status') == 'complete'])
-        total_size = sum(f.get('size', 0) for f in files_data)
-        failed_files = len([f for f in files_data if f.get('status') == 'failed'])
+        complete_files = len([f for f in files_data if f.get("status") == "complete"])
+        total_size = sum(f.get("size", 0) for f in files_data)
+        failed_files = len([f for f in files_data if f.get("status") == "failed"])
 
         total_files_value.value = str(total_files)
         complete_files_value.value = str(complete_files)
@@ -271,6 +272,7 @@ def create_files_view(
     # File action handlers
     def download_file(file: dict[str, Any]) -> None:
         """Download file using FilePicker."""
+
         async def save_file(e: ft.FilePickerResultEvent) -> None:
             if not e.path:
                 return
@@ -280,12 +282,14 @@ def create_files_view(
                 loading_ring.update()
 
                 if server_bridge:
-                    file_id = file.get('id')
+                    file_id = file.get("id")
                     if not file_id or not isinstance(file_id, str):
                         show_error_message(page, INVALID_FILE_ID_MSG)
                         return
-                    result = await run_sync_in_executor(safe_server_call, server_bridge, 'download_file', file_id, e.path)
-                    if result.get('success'):
+                    result = await run_sync_in_executor(
+                        safe_server_call, server_bridge, "download_file", file_id, e.path
+                    )
+                    if result.get("success"):
                         show_success_message(page, f"Downloaded {file.get('name')} to {e.path}")
                     else:
                         show_error_message(page, f"Download failed: {result.get('error', 'Unknown error')}")
@@ -308,28 +312,25 @@ def create_files_view(
         file_picker = ft.FilePicker(on_result=handle_picker_result)
         page.overlay.append(file_picker)
         page.update()
-        file_picker.save_file(
-            dialog_title="Save File",
-            file_name=file.get('name', 'file.txt')
-        )
+        file_picker.save_file(dialog_title="Save File", file_name=file.get("name", "file.txt"))
 
     async def _verify_file_async(file_data: dict[str, Any]) -> None:
-        file_name = file_data.get('name', 'Unknown')
-        file_id = file_data.get('id')
+        file_name = file_data.get("name", "Unknown")
+        file_id = file_data.get("id")
 
         if not file_id or not isinstance(file_id, str):
             show_error_message(page, "Invalid file ID")
             return
 
         try:
-            result = await run_sync_in_executor(safe_server_call, server_bridge, 'verify_file', file_id)
+            result = await run_sync_in_executor(safe_server_call, server_bridge, "verify_file", file_id)
         except Exception as exc:  # pragma: no cover - UI feedback path
             show_error_message(page, f"Verification error: {exc}")
             return
 
         if isinstance(result, dict):
-            if result.get('success'):
-                verification_data = result.get('data', {})
+            if result.get("success"):
+                verification_data = result.get("data", {})
                 show_verification_dialog(file_name, verification_data, "Server")
                 return
 
@@ -339,9 +340,9 @@ def create_files_view(
         if isinstance(result, bool):
             if result:
                 verification_data = {
-                    'size': file_data.get('size', 0),
-                    'modified': file_data.get('modified', 'Unknown'),
-                    'status': 'verified'
+                    "size": file_data.get("size", 0),
+                    "modified": file_data.get("modified", "Unknown"),
+                    "status": "verified",
                 }
                 show_verification_dialog(file_name, verification_data, "Server")
             else:
@@ -365,37 +366,46 @@ def create_files_view(
         """Show verification results dialog."""
         verification_dialog = ft.AlertDialog(
             title=ft.Text(f"Verification Results - {mode}"),
-            content=ft.Column([
-                ft.Text(f"File: {file_name}"),
-                ft.Text(f"Size: {format_file_size(data.get('size', 0))}"),
-                ft.Text(f"Modified: {data.get('modified', 'Unknown')}"),
-                ft.Row([
-                    ft.Text("Status: "),
-                    create_status_pill(data.get('status', 'Unknown'), get_status_type(data.get('status', 'Unknown')))
-                ], spacing=8),
-                ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
-                ft.Container(
-                    content=ft.Text(data.get('hash', 'N/A'), selectable=True, size=12),
-                    bgcolor=ft.Colors.SURFACE_TINT,
-                    padding=8,
-                    border_radius=4
-                ),
-            ], spacing=10, height=250, scroll=ft.ScrollMode.AUTO),
-            actions=[
-                ft.TextButton("Close", on_click=lambda _e: page.close(verification_dialog))
-            ],
+            content=ft.Column(
+                [
+                    ft.Text(f"File: {file_name}"),
+                    ft.Text(f"Size: {format_file_size(data.get('size', 0))}"),
+                    ft.Text(f"Modified: {data.get('modified', 'Unknown')}"),
+                    ft.Row(
+                        [
+                            ft.Text("Status: "),
+                            create_status_pill(
+                                data.get("status", "Unknown"), get_status_type(data.get("status", "Unknown"))
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                    ft.Text("SHA256 Hash:", weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        content=ft.Text(data.get("hash", "N/A"), selectable=True, size=12),
+                        bgcolor=ft.Colors.SURFACE_TINT,
+                        padding=8,
+                        border_radius=4,
+                    ),
+                ],
+                spacing=10,
+                height=250,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+            actions=[ft.TextButton("Close", on_click=lambda _e: page.close(verification_dialog))],
         )
         page.open(verification_dialog)
 
     def delete_file(file: dict[str, Any]) -> None:
         """Delete file with confirmation."""
+
         async def confirm_delete(_e: ft.ControlEvent) -> None:
             if not server_bridge:
                 show_error_message(page, SERVER_NOT_CONNECTED_MSG)
                 page.close(delete_dialog)
                 return
 
-            file_id = file.get('id')
+            file_id = file.get("id")
             if not file_id or not isinstance(file_id, str):
                 show_error_message(page, INVALID_FILE_ID_MSG)
                 page.close(delete_dialog)
@@ -406,9 +416,9 @@ def create_files_view(
                 loading_ring.visible = True
                 loading_ring.update()
 
-                result = await run_sync_in_executor(safe_server_call, server_bridge, 'delete_file', file_id)
+                result = await run_sync_in_executor(safe_server_call, server_bridge, "delete_file", file_id)
 
-                if result.get('success'):
+                if result.get("success"):
                     show_success_message(page, f"File {file.get('name')} deleted")
                     await load_files_data()
                 else:
@@ -425,10 +435,14 @@ def create_files_view(
 
         delete_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Delete"),
-            content=ft.Text(f"Are you sure you want to delete {file.get('name', 'this file')}?\n\nThis action cannot be undone."),
+            content=ft.Text(
+                f"Are you sure you want to delete {file.get('name', 'this file')}?\n\nThis action cannot be undone."
+            ),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: page.close(delete_dialog)),
-                ft.FilledButton("Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)),
+                ft.FilledButton(
+                    "Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)
+                ),
             ],
         )
         page.open(delete_dialog)
@@ -470,7 +484,7 @@ def create_files_view(
             loading_ring.visible = False
             loading_ring.update()
 
-  # Loading indicators
+    # Loading indicators
     loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
 
     # Create UI components
@@ -533,24 +547,28 @@ def create_files_view(
         alignment=ft.MainAxisAlignment.START,
     )
 
-    stats_row = ft.ResponsiveRow([
-        ft.Container(
-            content=create_metric_card("Total files", total_files_value, ft.Icons.FOLDER),
-            col={"sm": 12, "md": 6, "lg": 3},
-        ),
-        ft.Container(
-            content=create_metric_card("Complete", complete_files_value, ft.Icons.CHECK_CIRCLE),
-            col={"sm": 12, "md": 6, "lg": 3},
-        ),
-        ft.Container(
-            content=create_metric_card("Total size", total_size_value, ft.Icons.STORAGE),
-            col={"sm": 12, "md": 6, "lg": 3},
-        ),
-        ft.Container(
-            content=create_metric_card("Failed", failed_files_value, ft.Icons.ERROR),
-            col={"sm": 12, "md": 6, "lg": 3},
-        ),
-    ], spacing=16, run_spacing=16)
+    stats_row = ft.ResponsiveRow(
+        [
+            ft.Container(
+                content=create_metric_card("Total files", total_files_value, ft.Icons.FOLDER),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_metric_card("Complete", complete_files_value, ft.Icons.CHECK_CIRCLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_metric_card("Total size", total_size_value, ft.Icons.STORAGE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            ft.Container(
+                content=create_metric_card("Failed", failed_files_value, ft.Icons.ERROR),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+        ],
+        spacing=16,
+        run_spacing=16,
+    )
 
     stats_section = AppCard(stats_row, title="At a glance")
     filters_section = AppCard(filters_row, title="Filters")

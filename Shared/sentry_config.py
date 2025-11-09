@@ -31,7 +31,7 @@ def init_sentry(
     environment: str | None = None,
     debug: bool = False,
     sample_rate: float = 1.0,
-    traces_sample_rate: float = 0.1
+    traces_sample_rate: float = 0.1,
 ) -> bool:
     """
     Initialize Sentry error monitoring for a component.
@@ -57,8 +57,8 @@ def init_sentry(
 
         # Configure logging integration
         logging_integration = LoggingIntegration(
-            level=logging.INFO,        # Capture info and above as breadcrumbs
-            event_level=logging.ERROR  # Send errors and above as events
+            level=logging.INFO,  # Capture info and above as breadcrumbs
+            event_level=logging.ERROR,  # Send errors and above as events
         )
 
         # Initialize Sentry
@@ -74,7 +74,7 @@ def init_sentry(
                 ThreadingIntegration(propagate_hub=True),
             ],
             before_send=_before_send_filter,
-            release=_get_release_version()
+            release=_get_release_version(),
         )
 
         # Set component context
@@ -83,6 +83,7 @@ def init_sentry(
 
         # Add system context
         import platform
+
         sentry_sdk.set_tag("os", platform.system())
         sentry_sdk.set_tag("python_version", platform.python_version())
 
@@ -103,8 +104,8 @@ def _before_send_filter(event: Any, hint: Any) -> Any | None:
     Can be used to sanitize sensitive data or filter noise.
     """
     # Filter out common non-critical errors
-    if 'exc_info' in hint:
-        _, exc_value, _ = hint['exc_info']
+    if "exc_info" in hint:
+        _, exc_value, _ = hint["exc_info"]
 
         # Filter out expected network timeouts
         if isinstance(exc_value, (ConnectionResetError, BrokenPipeError)):
@@ -113,7 +114,7 @@ def _before_send_filter(event: Any, hint: Any) -> Any | None:
         # Filter out file not found errors for optional files
         if isinstance(exc_value, FileNotFoundError):
             filename = str(exc_value).lower()
-            if any(optional in filename for optional in ['optional', 'cache', 'temp']):
+            if any(optional in filename for optional in ["optional", "cache", "temp"]):
                 return None
 
     return event
@@ -124,12 +125,13 @@ def _get_release_version() -> str:
     try:
         # Try to get git commit hash
         import subprocess
+
         result = subprocess.run(
-            ['git', 'rev-parse', '--short', 'HEAD'],
+            ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            timeout=5
+            encoding="utf-8",
+            timeout=5,
         )
         if result.returncode == 0:
             return f"cyberbackup@{result.stdout.strip()}"
@@ -167,7 +169,9 @@ def capture_error(error: Exception, component: str, extra_context: dict[str, Any
         logger.error(f"[{component}] Failed to capture error in Sentry: {e}")
 
 
-def capture_message(message: str, level: str = "info", component: str = "unknown", extra_context: dict[str, Any] | None = None) -> None:
+def capture_message(
+    message: str, level: str = "info", component: str = "unknown", extra_context: dict[str, Any] | None = None
+) -> None:
     """
     Capture a message with additional context.
 
@@ -189,12 +193,12 @@ def capture_message(message: str, level: str = "info", component: str = "unknown
 
             # Map string level to Sentry level
             level_lower = level.lower()
-            if level_lower == 'critical':
-                sentry_level = 'fatal'
-            elif level_lower in ('error', 'warning', 'info', 'debug'):
+            if level_lower == "critical":
+                sentry_level = "fatal"
+            elif level_lower in ("error", "warning", "info", "debug"):
                 sentry_level = level_lower  # type: ignore
             else:
-                sentry_level = 'info'
+                sentry_level = "info"
             sentry_sdk.capture_message(message, level=sentry_level)
 
     except ImportError:
@@ -207,11 +211,8 @@ def set_user_context(user_id: str, username: str | None = None, ip_address: str 
     """Set user context for Sentry events."""
     try:
         import sentry_sdk
-        sentry_sdk.set_user({
-            "id": user_id,
-            "username": username,
-            "ip_address": ip_address
-        })
+
+        sentry_sdk.set_user({"id": user_id, "username": username, "ip_address": ip_address})
     except ImportError:
         pass
 
@@ -224,7 +225,7 @@ def test_sentry_integration(component_name: str) -> bool:
             f"Sentry integration test from {component_name}",
             level="info",
             component=component_name,
-            extra_context={"test": True}
+            extra_context={"test": True},
         )
         logger.info(f"[SENTRY] Test message sent from {component_name}")
         return True

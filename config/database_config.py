@@ -9,11 +9,10 @@ Date: 2025-11-07
 Version: 1.0
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +162,7 @@ class DatabaseConfig:
             logger.error(f"Failed to create database directories: {e}")
             raise
 
-    def validate_database_access(self, db_path: str = None) -> Dict[str, Any]:
+    def validate_database_access(self, db_path: str = None) -> dict[str, Any]:
         """
         Validate database file access and permissions.
 
@@ -257,7 +256,7 @@ class DatabaseConfig:
 
         return f"sqlite3.connect({', '.join(connection_params)})"
 
-    def export_config(self) -> Dict[str, Any]:
+    def export_config(self) -> dict[str, Any]:
         """
         Export configuration as dictionary for logging/debugging.
 
@@ -294,7 +293,7 @@ def get_canonical_database_path() -> str:
     """Get canonical database path."""
     return DatabaseConfig.get_canonical_database_path()
 
-def validate_database_environment() -> Dict[str, Any]:
+def validate_database_environment() -> dict[str, Any]:
     """Validate database environment and return status."""
     config = get_database_config()
     validation = config.validate_database_access()

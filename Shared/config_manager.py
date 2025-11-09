@@ -32,7 +32,7 @@ class ConfigurationManager:
         config_files = [
             "default.json",  # Base configuration
             f"{self.environment}.json",  # Environment-specific
-            "local.json"  # Local overrides (not in version control)
+            "local.json",  # Local overrides (not in version control)
         ]
 
         for config_file in config_files:
@@ -59,7 +59,7 @@ class ConfigurationManager:
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value using dot notation (e.g., 'server.port')"""
-        keys = key.split('.')
+        keys = key.split(".")
         value: Any = self.config_data
 
         try:
@@ -71,7 +71,7 @@ class ConfigurationManager:
 
     def set(self, key: str, value: Any) -> None:
         """Set configuration value using dot notation"""
-        keys = key.split('.')
+        keys = key.split(".")
         target: Any = self.config_data
 
         for k in keys[:-1]:
@@ -87,16 +87,16 @@ class ConfigurationManager:
 
         # Define required configuration keys and their types
         required_configs = {
-            'server.port': int,
-            'server.host': str,
-            'server.max_clients': int,
-            'server.timeout': int,
-            'client.retry_attempts': int,
-            'client.timeout': int,
-            'encryption.rsa_key_size': int,
-            'encryption.aes_key_size': int,
-            'logging.level': str,
-            'logging.file': str
+            "server.port": int,
+            "server.host": str,
+            "server.max_clients": int,
+            "server.timeout": int,
+            "client.retry_attempts": int,
+            "client.timeout": int,
+            "encryption.rsa_key_size": int,
+            "encryption.aes_key_size": int,
+            "logging.level": str,
+            "logging.file": str,
         }
 
         for key, expected_type in required_configs.items():
@@ -104,16 +104,16 @@ class ConfigurationManager:
             if value is None:
                 errors.append(f"Missing required configuration: {key}")
             elif not isinstance(value, expected_type):
-                type_name = getattr(expected_type, '__name__', str(expected_type))
-                actual_type_name = getattr(type(value), '__name__', str(type(value)))
+                type_name = getattr(expected_type, "__name__", str(expected_type))
+                actual_type_name = getattr(type(value), "__name__", str(type(value)))
                 errors.append(f"Invalid type for {key}: expected {type_name}, got {actual_type_name}")
 
         # Additional validation
-        port = self.get('server.port', 0)
+        port = self.get("server.port", 0)
         if isinstance(port, int) and (port <= 0 or port > 65535):
             errors.append(f"Invalid server port: {port} (must be 1-65535)")
 
-        max_clients = self.get('server.max_clients', 0)
+        max_clients = self.get("server.max_clients", 0)
         if isinstance(max_clients, int) and max_clients <= 0:
             errors.append(f"Invalid max_clients: {max_clients} (must be > 0)")
 
@@ -126,7 +126,7 @@ class ConfigurationManager:
 
         config_path = self.config_dir / filename
         try:
-            with open(config_path, 'w') as f:
+            with open(config_path, "w") as f:
                 json.dump(self.config_data, f, indent=2)
             self.logger.info(f"Configuration saved to {filename}")
         except Exception as e:
@@ -143,64 +143,39 @@ class ConfigurationManager:
                 "max_clients": 50,
                 "timeout": 60,
                 "file_storage_dir": "received_files",
-                "database_name": "defensive.db"
+                "database_name": "defensive.db",
             },
-            "client": {
-                "retry_attempts": 3,
-                "timeout": 30,
-                "reconnect_delay": 5,
-                "chunk_size": 65536
-            },
-            "encryption": {
-                "rsa_key_size": 1024,
-                "aes_key_size": 256
-            },
+            "client": {"retry_attempts": 3, "timeout": 30, "reconnect_delay": 5, "chunk_size": 65536},
+            "encryption": {"rsa_key_size": 1024, "aes_key_size": 256},
             "logging": {
                 "level": "INFO",
                 "file": "application.log",
                 "max_file_size": "10MB",
-                "backup_count": 5
+                "backup_count": 5,
             },
-            "performance": {
-                "maintenance_interval": 60,
-                "cleanup_old_files": True,
-                "max_file_age_days": 30
-            }
+            "performance": {"maintenance_interval": 60, "cleanup_old_files": True, "max_file_age_days": 30},
         }
 
         # Production configuration
-        production_config = {
-            "logging": {
-                "level": "WARNING"
-            },
-            "server": {
-                "timeout": 120
-            }
-        }
+        production_config = {"logging": {"level": "WARNING"}, "server": {"timeout": 120}}
 
         # Development configuration
-        development_config = {
-            "logging": {
-                "level": "DEBUG"
-            },
-            "server": {
-                "max_clients": 10
-            }
-        }
+        development_config = {"logging": {"level": "DEBUG"}, "server": {"max_clients": 10}}
 
         # Save configuration files
         configs = [
             ("default.json", default_config),
             ("production.json", production_config),
-            ("development.json", development_config)
+            ("development.json", development_config),
         ]
 
         for filename, config in configs:
             config_path = self.config_dir / filename
             if not config_path.exists():
-                with open(config_path, 'w') as f:
+                with open(config_path, "w") as f:
                     json.dump(config, f, indent=2)
                 print(f"Created {filename}")
+
 
 def create_production_configs():
     """Create production-ready configuration files"""
@@ -220,6 +195,7 @@ def create_production_configs():
         print("Configuration validation passed!")
 
     return config_manager
+
 
 if __name__ == "__main__":
     print("Creating production configuration files...")

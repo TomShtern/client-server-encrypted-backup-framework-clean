@@ -22,12 +22,12 @@ def create_loading_indicator(message="Loading..."):
         Container with loading indicator and message
     """
     return ft.Container(
-        content=ft.Column([
-            ft.ProgressRing(),
-            ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT)
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        content=ft.Column(
+            [ft.ProgressRing(), ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT)],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
         alignment=ft.alignment.center,
-        padding=20
+        padding=20,
     )
 
 
@@ -42,13 +42,19 @@ def create_error_display(error_message):
         Container with error icon and message
     """
     return ft.Container(
-        content=ft.Column([
-            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.ERROR, size=48),
-            ft.Text("Error", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
-            ft.Text(error_message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+        content=ft.Column(
+            [
+                ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.ERROR, size=48),
+                ft.Text("Error", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
+                ft.Text(
+                    error_message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER
+                ),
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=10,
+        ),
         alignment=ft.alignment.center,
-        padding=20
+        padding=20,
     )
 
 
@@ -67,13 +73,17 @@ def create_empty_state(title, message, icon=None):
     resolved_icon = icon or ft.Icons.INBOX_OUTLINED
 
     return ft.Container(
-        content=ft.Column([
-            ft.Icon(resolved_icon, color=ft.Colors.ON_SURFACE_VARIANT, size=64),
-            ft.Text(title, size=20, weight=ft.FontWeight.BOLD),
-            ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER)
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+        content=ft.Column(
+            [
+                ft.Icon(resolved_icon, color=ft.Colors.ON_SURFACE_VARIANT, size=64),
+                ft.Text(title, size=20, weight=ft.FontWeight.BOLD),
+                ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER),
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=10,
+        ),
         alignment=ft.alignment.center,
-        padding=40
+        padding=40,
     )
 
 
@@ -96,7 +106,8 @@ into a single 5-8 line pattern.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
+
 from FletV2.utils.debug_setup import get_logger
 
 logger = get_logger(__name__)
@@ -114,11 +125,12 @@ class LoadingStateConfig:
         success_banner: Optional banner for success messages
         page: Flet Page instance for updates (optional if auto_update is enabled)
     """
+
     loading_indicator: Any  # ft.ProgressRing | ft.ProgressBar
     loading_text: Any  # ft.Text
     error_banner: Any  # ft.Banner
-    success_banner: Optional[Any] = None  # ft.Banner
-    page: Optional[Any] = None  # ft.Page
+    success_banner: Any | None = None  # ft.Banner
+    page: Any | None = None  # ft.Page
 
 
 class LoadingStateManager:
@@ -214,7 +226,7 @@ class LoadingStateManager:
         self.config.loading_text.visible = False
         self._update_page()
 
-    def show_error(self, error_message: str, _duration: Optional[int] = None) -> None:
+    def show_error(self, error_message: str, _duration: int | None = None) -> None:
         """
         Show error banner with message.
 
@@ -234,7 +246,7 @@ class LoadingStateManager:
         self._update_page()
         logger.error(f"UI Error: {error_message}")
 
-    def show_success(self, message: str, _duration: Optional[int] = None) -> None:
+    def show_success(self, message: str, _duration: int | None = None) -> None:
         """
         Show success banner with message.
 

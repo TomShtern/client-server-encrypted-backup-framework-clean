@@ -19,15 +19,19 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class ErrorSeverity(Enum):
     """Error severity levels for classification."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
+
 class ErrorCategory(Enum):
     """Error categories for systematic classification."""
+
     # Layer-specific errors
     WEB_UI = "web_ui"
     FLASK_API = "flask_api"
@@ -47,8 +51,10 @@ class ErrorCategory(Enum):
     SYSTEM = "system"
     UNKNOWN = "unknown"
 
+
 class ErrorCode(Enum):
     """Structured error codes for systematic error identification."""
+
     # Generic errors (1000-1099)
     UNKNOWN_ERROR = 1000
     INVALID_INPUT = 1001
@@ -107,9 +113,11 @@ class ErrorCode(Enum):
     CONFIG_INVALID = 1801
     CONFIG_PERMISSION_DENIED = 1802
 
+
 @dataclass
 class ErrorInfo:
     """Structured error information container."""
+
     code: ErrorCode
     category: ErrorCategory
     severity: ErrorSeverity
@@ -123,10 +131,11 @@ class ErrorInfo:
     propagation_chain: list[str] = field(default_factory=list)
     error_id: str = field(default_factory=lambda: f"err_{int(time.time())}_{threading.get_ident()}")
 
+
 class ErrorHandler:
     """
     Centralized error handling and propagation system.
-    
+
     Features:
     - Structured error classification and tracking
     - Error propagation across architectural layers
@@ -148,7 +157,7 @@ class ErrorHandler:
     def register_error_callback(self, callback: Callable[[ErrorInfo], None]):
         """
         Register a callback function to be called when errors occur.
-        
+
         Args:
             callback: Function that takes ErrorInfo as parameter
         """
@@ -162,15 +171,21 @@ class ErrorHandler:
             if callback in self.error_callbacks:
                 self.error_callbacks.remove(callback)
 
-    def create_error(self, code: ErrorCode, message: str,
-                    category: ErrorCategory = ErrorCategory.UNKNOWN,
-                    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-                    details: str = "", layer: str = "", component: str = "",
-                    context: dict[str, Any] | None = None,
-                    include_stack_trace: bool = True) -> ErrorInfo:
+    def create_error(
+        self,
+        code: ErrorCode,
+        message: str,
+        category: ErrorCategory = ErrorCategory.UNKNOWN,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        details: str = "",
+        layer: str = "",
+        component: str = "",
+        context: dict[str, Any] | None = None,
+        include_stack_trace: bool = True,
+    ) -> ErrorInfo:
         """
         Create a new structured error.
-        
+
         Args:
             code: Error code from ErrorCode enum
             message: Human-readable error message
@@ -181,7 +196,7 @@ class ErrorHandler:
             component: Specific component where error occurred
             context: Additional context information
             include_stack_trace: Whether to include stack trace
-            
+
         Returns:
             ErrorInfo object with structured error information
         """
@@ -199,7 +214,7 @@ class ErrorHandler:
             component=component,
             stack_trace=stack_trace,
             context=context or {},
-            propagation_chain=[f"{layer}::{component}" if layer and component else "unknown"]
+            propagation_chain=[f"{layer}::{component}" if layer and component else "unknown"],
         )
 
         with self.lock:
@@ -225,19 +240,24 @@ class ErrorHandler:
 
         return error_info
 
-    def propagate_error(self, error_info: ErrorInfo, new_layer: str,
-                       new_component: str, additional_message: str = "",
-                       new_severity: ErrorSeverity | None = None) -> ErrorInfo:
+    def propagate_error(
+        self,
+        error_info: ErrorInfo,
+        new_layer: str,
+        new_component: str,
+        additional_message: str = "",
+        new_severity: ErrorSeverity | None = None,
+    ) -> ErrorInfo:
         """
         Propagate an error to a new layer/component.
-        
+
         Args:
             error_info: Original error information
             new_layer: New layer where error is being handled
             new_component: New component where error is being handled
             additional_message: Additional message for this layer
             new_severity: Optional new severity level
-            
+
         Returns:
             New ErrorInfo object with propagation information
         """
@@ -253,14 +273,16 @@ class ErrorHandler:
                 component=new_component,
                 stack_trace=error_info.stack_trace,
                 context=error_info.context.copy(),
-                propagation_chain=error_info.propagation_chain + [f"{new_layer}::{new_component}"]
+                propagation_chain=[*error_info.propagation_chain, f"{new_layer}::{new_component}"],
             )
 
             # Store propagated error
             self.errors[propagated_error.error_id] = propagated_error
 
             # Log propagation
-            logger.warning(f"Error {error_info.error_id} propagated to {new_layer}::{new_component} as {propagated_error.error_id}")
+            logger.warning(
+                f"Error {error_info.error_id} propagated to {new_layer}::{new_component} as {propagated_error.error_id}"
+            )
 
             # Call callbacks for propagated error
             for callback in self.error_callbacks:
@@ -274,10 +296,10 @@ class ErrorHandler:
     def get_error(self, error_id: str) -> ErrorInfo | None:
         """
         Get error information by ID.
-        
+
         Args:
             error_id: Error ID to look up
-            
+
         Returns:
             ErrorInfo object or None if not found
         """
@@ -287,10 +309,10 @@ class ErrorHandler:
     def get_errors_by_category(self, category: ErrorCategory) -> list[ErrorInfo]:
         """
         Get all errors of a specific category.
-        
+
         Args:
             category: Error category to filter by
-            
+
         Returns:
             List of ErrorInfo objects
         """
@@ -300,10 +322,10 @@ class ErrorHandler:
     def get_errors_by_severity(self, severity: ErrorSeverity) -> list[ErrorInfo]:
         """
         Get all errors of a specific severity.
-        
+
         Args:
             severity: Error severity to filter by
-            
+
         Returns:
             List of ErrorInfo objects
         """
@@ -313,22 +335,21 @@ class ErrorHandler:
     def get_recent_errors(self, hours: int = 1) -> list[ErrorInfo]:
         """
         Get errors from the last N hours.
-        
+
         Args:
             hours: Number of hours to look back
-            
+
         Returns:
             List of recent ErrorInfo objects
         """
         with self.lock:
             cutoff_time = datetime.now().timestamp() - (hours * 3600)
-            return [error for error in self.errors.values()
-                   if error.timestamp.timestamp() > cutoff_time]
+            return [error for error in self.errors.values() if error.timestamp.timestamp() > cutoff_time]
 
     def get_error_statistics(self) -> dict[str, Any]:
         """
         Get error statistics and analysis.
-        
+
         Returns:
             Dictionary with error statistics
         """
@@ -336,28 +357,32 @@ class ErrorHandler:
             recent_errors = self.get_recent_errors(24)  # Last 24 hours
 
             return {
-                'total_errors': len(self.errors),
-                'recent_errors_24h': len(recent_errors),
-                'by_category': dict(self.error_count_by_category),
-                'by_severity': dict(self.error_count_by_severity),
-                'most_common_category': max(self.error_count_by_category.items(),
-                                          key=lambda x: x[1], default=(None, 0)),
-                'most_severe_recent': max(recent_errors,
-                                        key=lambda x: list(ErrorSeverity).index(x.severity),
-                                        default=None)
+                "total_errors": len(self.errors),
+                "recent_errors_24h": len(recent_errors),
+                "by_category": dict(self.error_count_by_category),
+                "by_severity": dict(self.error_count_by_severity),
+                "most_common_category": max(
+                    self.error_count_by_category.items(), key=lambda x: x[1], default=(None, 0)
+                ),
+                "most_severe_recent": max(
+                    recent_errors, key=lambda x: list(ErrorSeverity).index(x.severity), default=None
+                ),
             }
 
     def clear_old_errors(self, hours: int = 24):
         """
         Clear errors older than specified hours.
-        
+
         Args:
             hours: Age threshold in hours
         """
         with self.lock:
             cutoff_time = datetime.now().timestamp() - (hours * 3600)
-            old_error_ids = [error_id for error_id, error in self.errors.items()
-                           if error.timestamp.timestamp() < cutoff_time]
+            old_error_ids = [
+                error_id
+                for error_id, error in self.errors.items()
+                if error.timestamp.timestamp() < cutoff_time
+            ]
 
             for error_id in old_error_ids:
                 del self.errors[error_id]
@@ -367,11 +392,11 @@ class ErrorHandler:
     def format_error_for_display(self, error_info: ErrorInfo, include_stack: bool = False) -> str:
         """
         Format error for user-friendly display.
-        
+
         Args:
             error_info: Error to format
             include_stack: Whether to include stack trace
-            
+
         Returns:
             Formatted error string
         """
@@ -397,7 +422,7 @@ class ErrorHandler:
             ErrorSeverity.LOW: logging.DEBUG,
             ErrorSeverity.MEDIUM: logging.WARNING,
             ErrorSeverity.HIGH: logging.ERROR,
-            ErrorSeverity.CRITICAL: logging.CRITICAL
+            ErrorSeverity.CRITICAL: logging.CRITICAL,
         }
         return severity_to_log_level.get(severity, logging.WARNING)
 
@@ -405,6 +430,7 @@ class ErrorHandler:
 # Global error handler instance
 _global_error_handler = None
 _error_handler_lock = threading.Lock()
+
 
 def get_error_handler() -> ErrorHandler:
     """Get the global error handler instance (singleton pattern)."""
@@ -414,10 +440,13 @@ def get_error_handler() -> ErrorHandler:
             _global_error_handler = ErrorHandler()
         return _global_error_handler
 
+
 # Convenience functions for common error scenarios
 
-def handle_network_error(message: str, details: str = "", component: str = "",
-                        severity: ErrorSeverity = ErrorSeverity.HIGH) -> ErrorInfo:
+
+def handle_network_error(
+    message: str, details: str = "", component: str = "", severity: ErrorSeverity = ErrorSeverity.HIGH
+) -> ErrorInfo:
     """Create a network-related error."""
     return get_error_handler().create_error(
         code=ErrorCode.CONNECTION_FAILED,
@@ -426,11 +455,13 @@ def handle_network_error(message: str, details: str = "", component: str = "",
         message=message,
         details=details,
         layer="network",
-        component=component
+        component=component,
     )
 
-def handle_protocol_error(message: str, details: str = "", component: str = "",
-                         severity: ErrorSeverity = ErrorSeverity.HIGH) -> ErrorInfo:
+
+def handle_protocol_error(
+    message: str, details: str = "", component: str = "", severity: ErrorSeverity = ErrorSeverity.HIGH
+) -> ErrorInfo:
     """Create a protocol-related error."""
     return get_error_handler().create_error(
         code=ErrorCode.PROTOCOL_VIOLATION,
@@ -439,11 +470,13 @@ def handle_protocol_error(message: str, details: str = "", component: str = "",
         message=message,
         details=details,
         layer="protocol",
-        component=component
+        component=component,
     )
 
-def handle_file_transfer_error(message: str, details: str = "", component: str = "",
-                              severity: ErrorSeverity = ErrorSeverity.HIGH) -> ErrorInfo:
+
+def handle_file_transfer_error(
+    message: str, details: str = "", component: str = "", severity: ErrorSeverity = ErrorSeverity.HIGH
+) -> ErrorInfo:
     """Create a file transfer-related error."""
     return get_error_handler().create_error(
         code=ErrorCode.TRANSFER_FAILED,
@@ -452,11 +485,13 @@ def handle_file_transfer_error(message: str, details: str = "", component: str =
         message=message,
         details=details,
         layer="file_transfer",
-        component=component
+        component=component,
     )
 
-def handle_subprocess_error(message: str, details: str = "", component: str = "",
-                           severity: ErrorSeverity = ErrorSeverity.HIGH) -> ErrorInfo:
+
+def handle_subprocess_error(
+    message: str, details: str = "", component: str = "", severity: ErrorSeverity = ErrorSeverity.HIGH
+) -> ErrorInfo:
     """Create a subprocess-related error."""
     return get_error_handler().create_error(
         code=ErrorCode.SUBPROCESS_FAILED,
@@ -465,11 +500,13 @@ def handle_subprocess_error(message: str, details: str = "", component: str = ""
         message=message,
         details=details,
         layer="subprocess",
-        component=component
+        component=component,
     )
 
-def handle_flask_api_error(message: str, details: str = "", component: str = "",
-                          severity: ErrorSeverity = ErrorSeverity.MEDIUM) -> ErrorInfo:
+
+def handle_flask_api_error(
+    message: str, details: str = "", component: str = "", severity: ErrorSeverity = ErrorSeverity.MEDIUM
+) -> ErrorInfo:
     """Create a Flask API-related error."""
     return get_error_handler().create_error(
         code=ErrorCode.API_HANDLER_FAILED,
@@ -478,10 +515,12 @@ def handle_flask_api_error(message: str, details: str = "", component: str = "",
         message=message,
         details=details,
         layer="flask_api",
-        component=component
+        component=component,
     )
 
+
 # Example usage and testing
+
 
 def test_error_propagation():
     """Test the error propagation framework."""
@@ -504,7 +543,7 @@ def test_error_propagation():
         details="Invalid key length provided",
         layer="cpp_client",
         component="AESWrapper",
-        context={"file_size": 1024, "key_length": 16}
+        context={"file_size": 1024, "key_length": 16},
     )
 
     print(f"Created error: {cpp_error.error_id}")
@@ -514,7 +553,7 @@ def test_error_propagation():
         cpp_error,
         new_layer="flask_api",
         new_component="backup_executor",
-        additional_message="Subprocess encryption failed"
+        additional_message="Subprocess encryption failed",
     )
 
     print(f"Propagated to Flask: {flask_error.error_id}")
@@ -525,7 +564,7 @@ def test_error_propagation():
         new_layer="web_ui",
         new_component="upload_handler",
         additional_message="File upload failed",
-        new_severity=ErrorSeverity.MEDIUM
+        new_severity=ErrorSeverity.MEDIUM,
     )
 
     print(f"Propagated to UI: {ui_error.error_id}")
@@ -540,7 +579,8 @@ def test_error_propagation():
 
     print("Error propagation framework test completed!")
 
+
 if __name__ == "__main__":
     # Configure logging for testing
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     test_error_propagation()

@@ -3,14 +3,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
+
+import flet as ft
 
 # Project requirement – must be first import for reliable UTF-8 I/O on Windows.
 import Shared.utils.utf8_solution as _  # noqa: F401
-
-import flet as ft
 
 if not hasattr(ft, "colors"):
     class _LegacyColorsProxy:
@@ -189,12 +188,12 @@ async def fetch_system_status_async(server_bridge: Any | None) -> dict[str, Any]
 
 
 __all__ = [
-    "create_dashboard_view",
     "calculate_metrics_summary",
-    "format_storage_value",
-    "format_duration",
-    "get_status_color",
-    "process_activity_logs",
+    "create_dashboard_view",
     "fetch_dashboard_summary_async",
     "fetch_system_status_async",
+    "format_duration",
+    "format_storage_value",
+    "get_status_color",
+    "process_activity_logs",
 ]

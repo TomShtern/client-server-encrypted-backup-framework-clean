@@ -21,11 +21,11 @@ Usage:
     app_logs = capture.get_app_logs()
 """
 
-import logging
 import contextlib
-from datetime import datetime
-from typing import List, Dict, Any
+import logging
 from collections import deque
+from datetime import datetime
+from typing import Any
 
 
 class FletLogCapture(logging.Handler):
@@ -52,7 +52,7 @@ class FletLogCapture(logging.Handler):
 
         # Separate buffers for different log sources
         self.flet_logs: deque = deque(maxlen=max_logs)  # flet.* loggers
-        self.app_logs: deque = deque(maxlen=max_logs)   # FletV2.* loggers
+        self.app_logs: deque = deque(maxlen=max_logs)  # FletV2.* loggers
         self.all_logs: deque = deque(maxlen=max_logs * 2)  # Combined buffer
 
         # Statistics
@@ -102,7 +102,7 @@ class FletLogCapture(logging.Handler):
             self.all_logs.append(log_entry)
             self.total_captured += 1
 
-    def get_flet_logs(self) -> List[Dict[str, Any]]:
+    def get_flet_logs(self) -> list[dict[str, Any]]:
         """
         Get all captured Flet framework logs.
 
@@ -111,7 +111,7 @@ class FletLogCapture(logging.Handler):
         """
         return list(reversed(self.flet_logs))
 
-    def get_app_logs(self) -> List[Dict[str, Any]]:
+    def get_app_logs(self) -> list[dict[str, Any]]:
         """
         Get all captured application logs.
 
@@ -120,7 +120,7 @@ class FletLogCapture(logging.Handler):
         """
         return list(reversed(self.app_logs))
 
-    def get_all_logs(self) -> List[Dict[str, Any]]:
+    def get_all_logs(self) -> list[dict[str, Any]]:
         """
         Get all captured logs (combined).
 
@@ -143,7 +143,7 @@ class FletLogCapture(logging.Handler):
         self.app_logs.clear()
         self.all_logs.clear()
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """
         Get capture statistics.
 
@@ -183,7 +183,7 @@ def get_flet_log_capture() -> FletLogCapture:
     if _flet_log_capture_instance is None:
         # Create singleton instance
         _flet_log_capture_instance = FletLogCapture(max_logs=500)
-        _flet_log_capture_instance.setFormatter(logging.Formatter('%(message)s'))
+        _flet_log_capture_instance.setFormatter(logging.Formatter("%(message)s"))
 
         # Attach to root logger (only once)
         if not _is_attached:

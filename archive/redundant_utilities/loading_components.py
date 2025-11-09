@@ -8,13 +8,12 @@ progressive enhancement patterns.
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 import flet as ft
 
 try:  # pragma: no cover - UTF-8 bootstrap required by project
-    import Shared.utils.utf8_solution as _
+    pass
 except Exception:  # pragma: no cover - allow running in isolation
     pass
 

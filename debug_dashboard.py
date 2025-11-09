@@ -3,15 +3,15 @@
 Debug script to test dashboard view loading.
 """
 import sys
-import os
 
 # Setup paths
 sys.path.insert(0, 'FletV2')
 sys.path.insert(0, '.')
 
 import flet as ft
-from views.dashboard import create_dashboard_view
 from utils.server_bridge import create_server_bridge
+from views.dashboard import create_dashboard_view
+
 
 def test_dashboard():
     """Test dashboard creation with different configurations."""
@@ -24,7 +24,7 @@ def test_dashboard():
     print("\n1. Testing with None server_bridge and state_manager...")
     try:
         result = create_dashboard_view(None, page, None)
-        print(f"✓ SUCCESS: Dashboard created with None values")
+        print("✓ SUCCESS: Dashboard created with None values")
         print(f"  Result type: {type(result)}")
         if isinstance(result, tuple):
             print(f"  Tuple length: {len(result)}")
@@ -52,7 +52,7 @@ def test_dashboard():
 
         # Now test dashboard creation
         result = create_dashboard_view(server_bridge, page, None)
-        print(f"✓ SUCCESS: Dashboard created with real server")
+        print("✓ SUCCESS: Dashboard created with real server")
         print(f"  Result type: {type(result)}")
 
     except Exception as e:

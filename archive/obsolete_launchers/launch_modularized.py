@@ -6,9 +6,10 @@ This script launches the FletV2 application using the modularized experimental v
 that implement the improved architecture patterns.
 """
 
-import flet as ft
-import sys
 import os
+import sys
+
+import flet as ft
 
 # Add the FletV2 directory to the path
 flet_v2_root = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +18,7 @@ if flet_v2_root not in sys.path:
 
 # Import the modularized main application (the experimental version)
 from main_exp import main as modularized_main
+
 
 def main(page: ft.Page) -> None:
     """Main entry point that uses the modularized experimental views."""

@@ -1,6 +1,7 @@
 """Functional test for CyberBackup web GUI - tests actual backup operations"""
+
 from playwright.sync_api import sync_playwright
-import time
+
 
 def main():
     console_errors = []

@@ -7,7 +7,6 @@ import asyncio
 import contextlib
 import inspect
 import logging
-import math
 import os
 import sys
 from collections.abc import Callable, Coroutine
@@ -31,7 +30,6 @@ for _path in (_flet_v2_root, _repo_root):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.theme import create_skeleton_loader
 from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
 from FletV2.utils.data_export import export_to_csv, generate_export_filename
@@ -56,6 +54,7 @@ except Exception:  # pragma: no cover - fallback for dev mode
 # ============================================================================
 # SECTION 1: DATA FETCHING HELPERS
 # ============================================================================
+
 
 @dataclass(slots=True)
 class AnalyticsData:
@@ -89,56 +88,62 @@ async def fetch_analytics_data(bridge: Any | None) -> AnalyticsData:
     )
 
 
-
-
 # ============================================================================
 # SECTION 3: UI BUILDERS
 # ============================================================================
 
+
 def _metric_card(title: str, value: str, subtitle: str, icon: str, color: str) -> ft.Control:
     """Create enhanced metric card with gradient accent and hover effects."""
     card_content = ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Container(
-                    content=ft.Icon(icon, size=22, color=ft.Colors.WHITE),
-                    bgcolor=color,
-                    padding=12,
-                    border_radius=14,
-                    shadow=[
-                        ft.BoxShadow(
-                            blur_radius=12,
-                            spread_radius=0,
-                            color=ft.Colors.with_opacity(0.3, color),
-                            offset=ft.Offset(0, 2),
-                        )
+        content=ft.Column(
+            [
+                ft.Row(
+                    [
+                        ft.Container(
+                            content=ft.Icon(icon, size=22, color=ft.Colors.WHITE),
+                            bgcolor=color,
+                            padding=12,
+                            border_radius=14,
+                            shadow=[
+                                ft.BoxShadow(
+                                    blur_radius=12,
+                                    spread_radius=0,
+                                    color=ft.Colors.with_opacity(0.3, color),
+                                    offset=ft.Offset(0, 2),
+                                )
+                            ],
+                        ),
+                        ft.Text(
+                            title,
+                            size=12,
+                            weight=ft.FontWeight.W_600,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            text_align=ft.TextAlign.LEFT,
+                        ),
                     ],
+                    spacing=14,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        value,
+                        size=34,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
+                    ),
+                    padding=ft.padding.only(top=8, bottom=4),
                 ),
                 ft.Text(
-                    title,
-                    size=12,
-                    weight=ft.FontWeight.W_600,
+                    subtitle,
+                    size=11,
+                    weight=ft.FontWeight.W_500,
                     color=ft.Colors.ON_SURFACE_VARIANT,
-                    text_align=ft.TextAlign.LEFT,
+                    opacity=0.8,
                 ),
-            ], spacing=14, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Container(
-                content=ft.Text(
-                    value,
-                    size=34,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.ON_SURFACE,
-                ),
-                padding=ft.padding.only(top=8, bottom=4),
-            ),
-            ft.Text(
-                subtitle,
-                size=11,
-                weight=ft.FontWeight.W_500,
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                opacity=0.8,
-            ),
-        ], spacing=10),
+            ],
+            spacing=10,
+        ),
         padding=20,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
@@ -170,7 +175,9 @@ def _metric_card(title: str, value: str, subtitle: str, icon: str, color: str) -
     return card_content
 
 
-def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str) -> ft.Control:
+def _create_bar_chart(
+    data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str
+) -> ft.Control:
     """Create beautiful bar chart with gradients and animations."""
     if not data:
         return create_empty_state(NO_DATA_TITLE, NO_CHART_DATA_MSG)
@@ -193,7 +200,7 @@ def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title:
     for idx, item in enumerate(data):
         value_gb = float(item.get(y_key, 0))
         value_mb = value_gb * 1024  # Convert to MB for display
-        label_text = str(item.get(x_key, ''))
+        label_text = str(item.get(x_key, ""))
 
         # If all data is zero, show equal-height bars at 80% for visual consistency
         # If real data exists, show proportional bars with 10% minimum
@@ -231,7 +238,8 @@ def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title:
         """Create clean, short labels for x-axis."""
         # Try to extract number from client name (e.g., "TestNumber5" -> "C5")
         import re
-        match = re.search(r'\d+$', text)
+
+        match = re.search(r"\d+$", text)
         if match:
             return f"C{match.group()}"
         # Otherwise use short abbreviation
@@ -252,7 +260,7 @@ def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title:
                 ft.ChartAxisLabel(
                     value=idx,
                     label=ft.Text(
-                        create_clean_label(str(item.get(x_key, ''))),
+                        create_clean_label(str(item.get(x_key, ""))),
                         size=11,
                         weight=ft.FontWeight.W_600,
                         color=ft.Colors.ON_SURFACE_VARIANT,
@@ -275,10 +283,13 @@ def _create_bar_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title:
     )
 
     return ft.Container(
-        content=ft.Column([
-            ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-            ft.Container(content=chart, height=220, expand=True),
-        ], spacing=12),
+        content=ft.Column(
+            [
+                ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Container(content=chart, height=220, expand=True),
+            ],
+            spacing=12,
+        ),
         padding=20,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
@@ -294,8 +305,14 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
 
     # Enhanced color palette for pie sections
     colors = [
-        ft.Colors.BLUE_400, ft.Colors.GREEN_400, ft.Colors.PURPLE_400, ft.Colors.ORANGE_400,
-        ft.Colors.PINK_400, ft.Colors.CYAN_400, ft.Colors.TEAL_400, ft.Colors.AMBER_400,
+        ft.Colors.BLUE_400,
+        ft.Colors.GREEN_400,
+        ft.Colors.PURPLE_400,
+        ft.Colors.ORANGE_400,
+        ft.Colors.PINK_400,
+        ft.Colors.CYAN_400,
+        ft.Colors.TEAL_400,
+        ft.Colors.AMBER_400,
     ]
 
     total = sum(float(item.get(value_key, 0)) for item in data)
@@ -338,25 +355,37 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
     # Create enhanced legend with file extension formatting
     legend_items = []
     for idx, item in enumerate(data[:8]):
-        raw_label = str(item.get(label_key, 'Unknown'))
+        raw_label = str(item.get(label_key, "Unknown"))
         # Format file extensions nicely (e.g., ".txt" -> "TXT")
-        label = raw_label.upper().replace('.', '') if raw_label.startswith('.') else raw_label[:12]
+        label = raw_label.upper().replace(".", "") if raw_label.startswith(".") else raw_label[:12]
         value = item.get(value_key, 0)
         percentage = (float(value) / total) * 100
 
         legend_item = ft.Container(
-            content=ft.Row([
-                ft.Container(
-                    width=16,
-                    height=16,
-                    bgcolor=colors[idx % len(colors)],
-                    border_radius=4,
-                ),
-                ft.Column([
-                    ft.Text(label, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-                    ft.Text(f"{value} files ({percentage:.1f}%)", size=10, color=ft.Colors.ON_SURFACE_VARIANT),
-                ], spacing=2, tight=True),
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            content=ft.Row(
+                [
+                    ft.Container(
+                        width=16,
+                        height=16,
+                        bgcolor=colors[idx % len(colors)],
+                        border_radius=4,
+                    ),
+                    ft.Column(
+                        [
+                            ft.Text(label, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                            ft.Text(
+                                f"{value} files ({percentage:.1f}%)",
+                                size=10,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        tight=True,
+                    ),
+                ],
+                spacing=12,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
             padding=ft.padding.symmetric(vertical=6, horizontal=10),
             border_radius=10,
             ink=True,
@@ -372,21 +401,28 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
         legend_items.append(legend_item)
 
     return ft.Container(
-        content=ft.Column([
-            ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-            ft.Row([
-                ft.Container(
-                    content=chart,
-                    height=200,
-                    width=200,
-                    padding=10,
+        content=ft.Column(
+            [
+                ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Row(
+                    [
+                        ft.Container(
+                            content=chart,
+                            height=200,
+                            width=200,
+                            padding=10,
+                        ),
+                        ft.Container(
+                            content=ft.Column(legend_items, spacing=6, scroll=ft.ScrollMode.AUTO),
+                            expand=True,
+                        ),
+                    ],
+                    spacing=24,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                ft.Container(
-                    content=ft.Column(legend_items, spacing=6, scroll=ft.ScrollMode.AUTO),
-                    expand=True,
-                ),
-            ], spacing=24, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-        ], spacing=16),
+            ],
+            spacing=16,
+        ),
         padding=20,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
@@ -395,15 +431,14 @@ def _create_pie_chart(data: list[dict[str, Any]], label_key: str, value_key: str
     )
 
 
-def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str) -> ft.Control:
+def _create_line_chart(
+    data: list[dict[str, Any]], x_key: str, y_key: str, title: str, color: str
+) -> ft.Control:
     """Create smooth line chart with gradient fills and animations."""
     if not data:
         return create_empty_state(NO_DATA_TITLE, NO_TREND_DATA_MSG)
 
-    data_points = [
-        ft.LineChartDataPoint(idx, float(item.get(y_key, 0)))
-        for idx, item in enumerate(data)
-    ]
+    data_points = [ft.LineChartDataPoint(idx, float(item.get(y_key, 0))) for idx, item in enumerate(data)]
 
     max_y = max((p.y for p in data_points), default=1)
 
@@ -418,8 +453,8 @@ def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title
         """Format date string for x-axis (e.g., '10/25' -> '10/25')."""
         try:
             # Try to parse and format
-            if '/' in date_str:
-                parts = date_str.split('/')
+            if "/" in date_str:
+                parts = date_str.split("/")
                 if len(parts) >= 2:
                     return f"{parts[0]}/{parts[1]}"
             return date_str[:5]  # Truncate to reasonable length
@@ -459,7 +494,7 @@ def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title
                 ft.ChartAxisLabel(
                     value=idx,
                     label=ft.Text(
-                        format_date_label(str(item.get(x_key, ''))),
+                        format_date_label(str(item.get(x_key, ""))),
                         size=10,
                         weight=ft.FontWeight.W_500,
                         color=ft.Colors.ON_SURFACE_VARIANT,
@@ -478,10 +513,13 @@ def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title
     )
 
     return ft.Container(
-        content=ft.Column([
-            ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
-            ft.Container(content=chart, height=220, expand=True),
-        ], spacing=12),
+        content=ft.Column(
+            [
+                ft.Text(title, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE),
+                ft.Container(content=chart, height=220, expand=True),
+            ],
+            spacing=12,
+        ),
         padding=20,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
@@ -493,6 +531,7 @@ def _create_line_chart(data: list[dict[str, Any]], x_key: str, y_key: str, title
 # ============================================================================
 # SECTION 4: MAIN VIEW
 # ============================================================================
+
 
 def create_analytics_view(
     server_bridge: Any | None,
@@ -514,11 +553,14 @@ def create_analytics_view(
     # Initial skeleton loaders for metrics
     skeleton_metrics = [
         ft.Container(
-            content=ft.Column([
-                create_skeleton_loader(height=20, width=120),
-                create_skeleton_loader(height=40, width=100),
-                create_skeleton_loader(height=16, width=80),
-            ], spacing=12),
+            content=ft.Column(
+                [
+                    create_skeleton_loader(height=20, width=120),
+                    create_skeleton_loader(height=40, width=100),
+                    create_skeleton_loader(height=16, width=80),
+                ],
+                spacing=12,
+            ),
             padding=24,
             bgcolor=ft.Colors.SURFACE,
             border_radius=16,
@@ -548,19 +590,43 @@ def create_analytics_view(
         # Update enhanced metric cards
         metrics_row.controls = [
             ft.Container(
-                _metric_card("Total Backups", f"{data.total_backups:,}", "Files secured", ft.Icons.BACKUP_TABLE, ft.Colors.BLUE),
+                _metric_card(
+                    "Total Backups",
+                    f"{data.total_backups:,}",
+                    "Files secured",
+                    ft.Icons.BACKUP_TABLE,
+                    ft.Colors.BLUE,
+                ),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
             ),
             ft.Container(
-                _metric_card("Total Storage", f"{data.total_storage_gb:.2f} GB", "Encrypted data", ft.Icons.STORAGE, ft.Colors.GREEN),
+                _metric_card(
+                    "Total Storage",
+                    f"{data.total_storage_gb:.2f} GB",
+                    "Encrypted data",
+                    ft.Icons.STORAGE,
+                    ft.Colors.GREEN,
+                ),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
             ),
             ft.Container(
-                _metric_card("Success Rate", f"{data.success_rate:.1f}%", "Verified backups", ft.Icons.CHECK_CIRCLE_OUTLINE, ft.Colors.PURPLE),
+                _metric_card(
+                    "Success Rate",
+                    f"{data.success_rate:.1f}%",
+                    "Verified backups",
+                    ft.Icons.CHECK_CIRCLE_OUTLINE,
+                    ft.Colors.PURPLE,
+                ),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
             ),
             ft.Container(
-                _metric_card("Avg Size", f"{data.avg_backup_size_gb:.3f} GB", "Per backup", ft.Icons.PIE_CHART_OUTLINE, ft.Colors.TEAL),
+                _metric_card(
+                    "Avg Size",
+                    f"{data.avg_backup_size_gb:.3f} GB",
+                    "Per backup",
+                    ft.Icons.PIE_CHART_OUTLINE,
+                    ft.Colors.TEAL,
+                ),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
             ),
         ]
@@ -568,26 +634,19 @@ def create_analytics_view(
 
         # Update charts with real data visualizations
         trend_panel.content = _create_line_chart(
-            data.backup_trend or [],
-            'date',
-            'count',
-            "7-Day Backup Trend",
-            ft.Colors.BLUE_400
+            data.backup_trend or [], "date", "count", "7-Day Backup Trend", ft.Colors.BLUE_400
         )
 
         storage_panel.content = _create_bar_chart(
             data.client_storage or [],
-            'client',
-            'storage_gb',
+            "client",
+            "storage_gb",
             "Top Clients by Storage (MB)",
-            ft.Colors.GREEN_400
+            ft.Colors.GREEN_400,
         )
 
         file_type_panel.content = _create_pie_chart(
-            data.file_type_distribution or [],
-            'type',
-            'count',
-            "File Type Distribution"
+            data.file_type_distribution or [], "type", "count", "File Type Distribution"
         )
 
         for panel in (trend_panel, storage_panel, file_type_panel):
@@ -609,18 +668,22 @@ def create_analytics_view(
             logger.exception("Analytics refresh failed")
 
             # Create error display with retry button
-            error_content = ft.Column([
-                create_error_display(str(exc)),
-                ft.Container(
-                    content=ft.ElevatedButton(
-                        "Retry",
-                        icon=ft.Icons.REFRESH,
-                        on_click=lambda _: schedule_task(lambda: refresh_data(toast=False)),
+            error_content = ft.Column(
+                [
+                    create_error_display(str(exc)),
+                    ft.Container(
+                        content=ft.ElevatedButton(
+                            "Retry",
+                            icon=ft.Icons.REFRESH,
+                            on_click=lambda _: schedule_task(lambda: refresh_data(toast=False)),
+                        ),
+                        padding=ft.padding.only(top=12),
+                        alignment=ft.alignment.center,
                     ),
-                    padding=ft.padding.only(top=12),
-                    alignment=ft.alignment.center,
-                ),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8)
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
+            )
 
             error_panel.content = AppCard(error_content, title="Error")
             error_panel.visible = True
@@ -660,60 +723,74 @@ def create_analytics_view(
             export_rows = []
 
             # Add summary metrics
-            export_rows.append({
-                "Category": "Summary",
-                "Metric": "Total Backups",
-                "Value": f"{data.total_backups:,}",
-                "Unit": "files"
-            })
-            export_rows.append({
-                "Category": "Summary",
-                "Metric": "Total Storage",
-                "Value": f"{data.total_storage_gb:.2f}",
-                "Unit": "GB"
-            })
-            export_rows.append({
-                "Category": "Summary",
-                "Metric": "Success Rate",
-                "Value": f"{data.success_rate:.1f}",
-                "Unit": "%"
-            })
-            export_rows.append({
-                "Category": "Summary",
-                "Metric": "Average Backup Size",
-                "Value": f"{data.avg_backup_size_gb:.3f}",
-                "Unit": "GB"
-            })
+            export_rows.append(
+                {
+                    "Category": "Summary",
+                    "Metric": "Total Backups",
+                    "Value": f"{data.total_backups:,}",
+                    "Unit": "files",
+                }
+            )
+            export_rows.append(
+                {
+                    "Category": "Summary",
+                    "Metric": "Total Storage",
+                    "Value": f"{data.total_storage_gb:.2f}",
+                    "Unit": "GB",
+                }
+            )
+            export_rows.append(
+                {
+                    "Category": "Summary",
+                    "Metric": "Success Rate",
+                    "Value": f"{data.success_rate:.1f}",
+                    "Unit": "%",
+                }
+            )
+            export_rows.append(
+                {
+                    "Category": "Summary",
+                    "Metric": "Average Backup Size",
+                    "Value": f"{data.avg_backup_size_gb:.3f}",
+                    "Unit": "GB",
+                }
+            )
 
             # Add trend data
             if data.backup_trend:
                 for item in data.backup_trend:
-                    export_rows.append({
-                        "Category": "Backup Trend",
-                        "Metric": item.get('date', 'Unknown'),
-                        "Value": str(item.get('count', 0)),
-                        "Unit": "backups"
-                    })
+                    export_rows.append(
+                        {
+                            "Category": "Backup Trend",
+                            "Metric": item.get("date", "Unknown"),
+                            "Value": str(item.get("count", 0)),
+                            "Unit": "backups",
+                        }
+                    )
 
             # Add client storage data
             if data.client_storage:
                 for item in data.client_storage:
-                    export_rows.append({
-                        "Category": "Client Storage",
-                        "Metric": item.get('client', 'Unknown'),
-                        "Value": f"{item.get('storage_gb', 0):.2f}",
-                        "Unit": "GB"
-                    })
+                    export_rows.append(
+                        {
+                            "Category": "Client Storage",
+                            "Metric": item.get("client", "Unknown"),
+                            "Value": f"{item.get('storage_gb', 0):.2f}",
+                            "Unit": "GB",
+                        }
+                    )
 
             # Add file type distribution
             if data.file_type_distribution:
                 for item in data.file_type_distribution:
-                    export_rows.append({
-                        "Category": "File Types",
-                        "Metric": item.get('type', 'Unknown'),
-                        "Value": str(item.get('count', 0)),
-                        "Unit": "files"
-                    })
+                    export_rows.append(
+                        {
+                            "Category": "File Types",
+                            "Metric": item.get("type", "Unknown"),
+                            "Value": str(item.get("count", 0)),
+                            "Unit": "files",
+                        }
+                    )
 
             # Export to CSV
             filename = generate_export_filename("analytics", "csv")
@@ -761,15 +838,18 @@ def create_analytics_view(
         expand=True,
     )
 
-    stack = ft.Stack([
-        main_layout,
-        ft.Container(
-            content=loading_overlay,
-            alignment=ft.alignment.center,
-            expand=True,
-            visible=False,
-        ),
-    ], expand=True)
+    stack = ft.Stack(
+        [
+            main_layout,
+            ft.Container(
+                content=loading_overlay,
+                alignment=ft.alignment.center,
+                expand=True,
+                visible=False,
+            ),
+        ],
+        expand=True,
+    )
     overlay_container = stack.controls[1]
 
     # Auto-refresh state
@@ -783,7 +863,7 @@ def create_analytics_view(
             while not stop_event.is_set() and not disposed:
                 try:
                     await asyncio.wait_for(stop_event.wait(), timeout=60)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Double-check disposal state before attempting refresh
                     if disposed or stop_event.is_set():
                         logger.debug("Analytics view disposed during refresh cycle - stopping auto-refresh")

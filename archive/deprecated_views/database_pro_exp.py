@@ -3,15 +3,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 # Project requirement – must be first import for reliable UTF-8 I/O on Windows.
 import Shared.utils.utf8_solution as _  # noqa: F401
-
 from FletV2.utils.async_helpers import run_sync_in_executor, safe_server_call
 from FletV2.views.database_pro import (
     MAX_DISPLAY_LENGTH,
     SENSITIVE_FIELDS,
+)
+from FletV2.views.database_pro import (
     create_database_view as _create_database_view,
 )
 
@@ -133,13 +135,13 @@ async def fetch_table_data_async(server_bridge: Any | None, table_name: str) -> 
 
 __all__ = [
     "create_database_view",
-    "filter_records_by_query",
-    "sanitize_sensitive_fields",
-    "transform_for_display",
-    "prepare_records_for_export",
-    "get_record_id_field",
-    "validate_record_data",
-    "sort_records",
     "fetch_database_info_async",
     "fetch_table_data_async",
+    "filter_records_by_query",
+    "get_record_id_field",
+    "prepare_records_for_export",
+    "sanitize_sensitive_fields",
+    "sort_records",
+    "transform_for_display",
+    "validate_record_data",
 ]

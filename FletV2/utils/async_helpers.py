@@ -52,8 +52,10 @@ async def run_sync_in_executor(func: Callable[..., T], *args: Any, **kwargs: Any
 
     try:
         if kwargs:
+
             def _wrapper() -> T:
                 return func(*args, **kwargs)
+
             return await loop.run_in_executor(None, _wrapper)
 
         return await loop.run_in_executor(None, func, *args)
@@ -89,12 +91,12 @@ def safe_server_call(server_bridge, method_name: str, *args, **kwargs) -> dict:
             error = result.get('error', 'Unknown error')
     """
     if not server_bridge:
-        return {'success': False, 'error': 'No server bridge available', 'data': None}
+        return {"success": False, "error": "No server bridge available", "data": None}
 
     try:
         method = getattr(server_bridge, method_name, None)
         if not method:
-            return {'success': False, 'error': f'Method {method_name} not found', 'data': None}
+            return {"success": False, "error": f"Method {method_name} not found", "data": None}
 
         result = method(*args, **kwargs)
 
@@ -102,11 +104,11 @@ def safe_server_call(server_bridge, method_name: str, *args, **kwargs) -> dict:
         if isinstance(result, dict):
             return result
         else:
-            return {'success': bool(result), 'data': result, 'error': None}
+            return {"success": bool(result), "data": result, "error": None}
 
     except Exception as e:
         logger.debug(f"Server call {method_name} failed: {e}")
-        return {'success': False, 'error': str(e), 'data': None}
+        return {"success": False, "error": str(e), "data": None}
 
 
 def debounce(wait: float):
@@ -132,6 +134,7 @@ def debounce(wait: float):
         await autosave_settings()  # Cancelled
         await autosave_settings()  # Executes after 1.5s
     """
+
     def decorator(func: Callable[..., Awaitable[Any]]):
         # Store the pending task for cancellation
         pending_task: asyncio.Task | None = None
@@ -155,13 +158,12 @@ def debounce(wait: float):
             return await pending_task
 
         return wrapper
+
     return decorator
 
 
 def create_async_fetch_function(
-    method_name: str,
-    normalizer: Callable[[Any], Any] | None = None,
-    empty_default: Any = None
+    method_name: str, normalizer: Callable[[Any], Any] | None = None, empty_default: Any = None
 ) -> Callable[[Any], Awaitable[Any]]:
     """
     Create an async fetch function following the proven pattern from working views.
@@ -195,6 +197,7 @@ def create_async_fetch_function(
         )
         analytics = await fetch_analytics(server_bridge)
     """
+
     async def fetch_async(bridge: Any) -> Any:
         if not bridge:
             logger.debug(f"{method_name}: No server bridge available")
@@ -202,12 +205,12 @@ def create_async_fetch_function(
 
         result = await run_sync_in_executor(safe_server_call, bridge, method_name)
 
-        if not result.get('success'):
-            error = result.get('error', 'Unknown error')
+        if not result.get("success"):
+            error = result.get("error", "Unknown error")
             logger.debug(f"{method_name} fetch failed: {error}")
             return empty_default if empty_default is not None else None
 
-        data = result.get('data')
+        data = result.get("data")
 
         if normalizer:
             try:

@@ -14,7 +14,7 @@ from pathlib import Path
 def get_project_root() -> Path:
     """
     Get the project root directory reliably from any location in the codebase.
-    
+
     Returns:
         Path object pointing to the project root directory
     """
@@ -23,12 +23,12 @@ def get_project_root() -> Path:
 
     # Look for project markers that indicate the root directory
     project_markers = [
-        'CLAUDE.md',           # Project instructions file
-        'requirements.txt',    # Python dependencies
-        'build',              # C++ build directory
-        'vcpkg',              # C++ package manager
-        'Client',             # C++ client source
-        'python_server'       # Python server directory
+        "CLAUDE.md",  # Project instructions file
+        "requirements.txt",  # Python dependencies
+        "build",  # C++ build directory
+        "vcpkg",  # C++ package manager
+        "Client",  # C++ client source
+        "python_server",  # Python server directory
     ]
 
     # Search upward from current directory
@@ -42,24 +42,25 @@ def get_project_root() -> Path:
     fallback = Path(__file__).resolve().parent.parent
     return fallback
 
+
 def ensure_imports() -> None:
     """
     Ensure all critical import paths are available.
     Call this at the top of any module that needs framework imports.
-    
+
     This replaces all scattered sys.path.insert() calls with a single standardized approach.
     """
     project_root = get_project_root()
 
     # Critical paths that need to be in sys.path for imports
     critical_paths = [
-        project_root,                           # Project root for Shared, etc.
-        project_root / 'python_server' / 'server',  # Server modules
-        project_root / 'api_server',            # API server modules
-        project_root / 'Shared',                # Shared utilities
-        project_root / 'Database',              # Database modules
-        project_root / 'src' / 'api',          # API implementation
-        project_root / 'Client' / 'wrappers',  # C++ wrapper modules
+        project_root,  # Project root for Shared, etc.
+        project_root / "python_server" / "server",  # Server modules
+        project_root / "api_server",  # API server modules
+        project_root / "Shared",  # Shared utilities
+        project_root / "Database",  # Database modules
+        project_root / "src" / "api",  # API implementation
+        project_root / "Client" / "wrappers",  # C++ wrapper modules
     ]
 
     # Add paths to sys.path if not already present
@@ -68,34 +69,41 @@ def ensure_imports() -> None:
         if path.exists() and path_str not in sys.path:
             sys.path.insert(0, path_str)
 
+
 def get_server_directory() -> Path:
     """Get the python_server/server directory path."""
-    return get_project_root() / 'python_server' / 'server'
+    return get_project_root() / "python_server" / "server"
+
 
 def get_api_directory() -> Path:
     """Get the api_server directory path."""
-    return get_project_root() / 'api_server'
+    return get_project_root() / "api_server"
+
 
 def get_shared_directory() -> Path:
     """Get the Shared directory path."""
-    return get_project_root() / 'Shared'
+    return get_project_root() / "Shared"
+
 
 def get_database_directory() -> Path:
     """Get the Database directory path."""
-    return get_project_root() / 'Database'
+    return get_project_root() / "Database"
+
 
 def get_received_files_directory() -> Path:
     """Get the received_files directory path."""
-    return get_project_root() / 'received_files'
+    return get_project_root() / "received_files"
+
 
 def get_config_directory() -> Path:
     """Get the config directory path."""
-    return get_project_root() / 'config'
+    return get_project_root() / "config"
+
 
 def validate_project_structure() -> list[str]:
     """
     Validate that the project structure is intact.
-    
+
     Returns:
         List of validation errors (empty if all good)
     """
@@ -103,13 +111,7 @@ def validate_project_structure() -> list[str]:
     project_root = get_project_root()
 
     # Check for essential directories
-    essential_dirs = [
-        'python_server/server',
-        'api_server',
-        'Shared',
-        'Client',
-        'scripts'
-    ]
+    essential_dirs = ["python_server/server", "api_server", "Shared", "Client", "scripts"]
 
     for dir_path in essential_dirs:
         full_path = project_root / dir_path
@@ -118,10 +120,10 @@ def validate_project_structure() -> list[str]:
 
     # Check for essential files
     essential_files = [
-        'CLAUDE.md',
-        'requirements.txt',
-        'python_server/server/server.py',
-        'api_server/cyberbackup_api_server.py'
+        "CLAUDE.md",
+        "requirements.txt",
+        "python_server/server/server.py",
+        "api_server/cyberbackup_api_server.py",
     ]
 
     for file_path in essential_files:
@@ -131,20 +133,22 @@ def validate_project_structure() -> list[str]:
 
     return errors
 
+
 # Convenience function for quick setup at module import
 def setup_imports():
     """
     Quick setup function to call at the top of any module.
-    
+
     Usage:
         from Shared.path_utils import setup_imports
         setup_imports()
-        
+
         # Now all imports work reliably
         from server import ServerManager
         from database import DatabaseManager
     """
     ensure_imports()
+
 
 if __name__ == "__main__":
     # Test the path utilities

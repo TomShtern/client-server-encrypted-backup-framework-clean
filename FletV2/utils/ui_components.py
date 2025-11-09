@@ -9,15 +9,15 @@ import flet as ft
 from theme import get_design_tokens
 
 __all__ = [
-    "AppCard",
     "AppButton",
-    "SectionHeader",
-    "StatusPill",
-    "create_status_pill",
-    "create_pulsing_status_indicator",
-    "create_progress_indicator",
+    "AppCard",
     "DataTableWrapper",
     "FilterBar",
+    "SectionHeader",
+    "StatusPill",
+    "create_progress_indicator",
+    "create_pulsing_status_indicator",
+    "create_status_pill",
     "safe_update_control",
     "safe_update_controls",
 ]

@@ -51,7 +51,7 @@ class DialogManager:
         confirm_text: str = "Confirm",
         cancel_text: str = "Cancel",
         confirm_color: str = ft.Colors.PRIMARY,
-        is_destructive: bool = False
+        is_destructive: bool = False,
     ) -> ft.AlertDialog:
         """
         Create standardized confirmation dialog.
@@ -67,6 +67,7 @@ class DialogManager:
             confirm_color: Color for confirm button
             is_destructive: If True, uses error styling for confirm button
         """
+
         def close_dialog():
             dialog.open = False
             dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
@@ -107,10 +108,8 @@ class DialogManager:
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
             ft.FilledButton(
-                confirm_text,
-                on_click=handle_confirm,
-                style=ft.ButtonStyle(bgcolor=confirm_color)
-            )
+                confirm_text, on_click=handle_confirm, style=ft.ButtonStyle(bgcolor=confirm_color)
+            ),
         ]
 
         dialog = ft.AlertDialog(
@@ -118,7 +117,7 @@ class DialogManager:
             title=ft.Text(title, weight=ft.FontWeight.BOLD),
             content=ft.Text(content, size=14),
             actions=actions,
-            actions_alignment=ft.MainAxisAlignment.END
+            actions_alignment=ft.MainAxisAlignment.END,
         )
 
         # Auto-manage dialog lifecycle
@@ -135,7 +134,7 @@ class DialogManager:
         content: str | ft.Control,
         ok_text: str = "OK",
         width: float | None = None,
-        height: float | None = None
+        height: float | None = None,
     ) -> ft.AlertDialog:
         """
         Create standardized information dialog.
@@ -148,6 +147,7 @@ class DialogManager:
             width: Optional dialog width
             height: Optional dialog height
         """
+
         def close_dialog():
             dialog.open = False
             dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
@@ -168,10 +168,10 @@ class DialogManager:
                 content=content_control,
                 width=width,
                 height=height,
-                padding=ft.Padding(10, 10, 10, 10) if width or height else None
+                padding=ft.Padding(10, 10, 10, 10) if width or height else None,
             ),
             actions=[ft.FilledButton(ok_text, on_click=handle_ok)],
-            actions_alignment=ft.MainAxisAlignment.END
+            actions_alignment=ft.MainAxisAlignment.END,
         )
 
         page.overlay.append(dialog)
@@ -211,6 +211,7 @@ class DialogManager:
             input_type: Input type ('text', 'password', 'number')
             multiline: Whether input should be multiline
         """
+
         def close_dialog():
             dialog.open = False
             dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
@@ -262,7 +263,7 @@ class DialogManager:
             "label": input_label,
             "value": initial_value,
             "multiline": multiline,
-            "on_submit": handle_submit  # Enter key submits
+            "on_submit": handle_submit,  # Enter key submits
         }
 
         if input_type == "password":
@@ -272,14 +273,11 @@ class DialogManager:
 
         input_field = ft.TextField(**input_kwargs)
 
-        dialog_content = ft.Column([
-            ft.Text(content, size=14),
-            input_field
-        ], spacing=16, tight=True)
+        dialog_content = ft.Column([ft.Text(content, size=14), input_field], spacing=16, tight=True)
 
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
-            ft.FilledButton(submit_text, on_click=handle_submit)
+            ft.FilledButton(submit_text, on_click=handle_submit),
         ]
 
         dialog = ft.AlertDialog(
@@ -287,7 +285,7 @@ class DialogManager:
             title=ft.Text(title, weight=ft.FontWeight.BOLD),
             content=dialog_content,
             actions=actions,
-            actions_alignment=ft.MainAxisAlignment.END
+            actions_alignment=ft.MainAxisAlignment.END,
         )
 
         page.overlay.append(dialog)
@@ -401,7 +399,7 @@ def show_confirmation(
     message: str,
     on_confirm: Callable,
     confirm_text: str = "Confirm",
-    is_destructive: bool = False
+    is_destructive: bool = False,
 ) -> ft.AlertDialog:
     """
     Quick confirmation dialog factory function.
@@ -420,16 +418,12 @@ def show_confirmation(
         )
     """
     return DialogManager.create_confirmation_dialog(
-        page, title, message, on_confirm,
-        confirm_text=confirm_text, is_destructive=is_destructive
+        page, title, message, on_confirm, confirm_text=confirm_text, is_destructive=is_destructive
     )
 
 
 def show_info(
-    page: ft.Page,
-    title: str,
-    message: str | ft.Control,
-    width: float | None = None
+    page: ft.Page, title: str, message: str | ft.Control, width: float | None = None
 ) -> ft.AlertDialog:
     """
     Quick info dialog factory function.
@@ -514,7 +508,9 @@ def show_multi_input(
 
 
 # User Feedback Functions (migrated from user_feedback.py)
-def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, action_label: str | None = None) -> None:
+def show_user_feedback(
+    page: ft.Page, message: str, is_error: bool = False, action_label: str | None = None
+) -> None:
     """
     Show centralized user feedback using Flet's SnackBar.
 
@@ -541,21 +537,23 @@ def show_user_feedback(page: ft.Page, message: str, is_error: bool = False, acti
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_success_message(page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None) -> None:
+def show_success_message(
+    page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None
+) -> None:
     """Show success message to user with optional mode indicator."""
     try:
         # Add mode prefix if specified
         display_message = message
-        if mode == 'mock':
+        if mode == "mock":
             display_message = f"{MOCK_PREFIX}{message}"
-        elif mode == 'real':
+        elif mode == "real":
             display_message = f"{REAL_PREFIX}{message}"
 
         snack_bar = _ensure_snack_bar(page)
         snack_bar.content = ft.Text(display_message)
-        snack_bar.bgcolor = ft.Colors.ORANGE if mode == 'mock' else ft.Colors.GREEN
+        snack_bar.bgcolor = ft.Colors.ORANGE if mode == "mock" else ft.Colors.GREEN
         snack_bar.action = action_label or "DISMISS"
-        snack_bar.duration = 5000 if mode == 'mock' else 4000
+        snack_bar.duration = 5000 if mode == "mock" else 4000
         _open_snack_bar(page)
 
         logger.info(f"User feedback shown: SUCCESS - {message}")
@@ -569,21 +567,23 @@ def show_error_message(page: ft.Page, message: str, action_label: str | None = N
     show_user_feedback(page, message, is_error=True, action_label=action_label)
 
 
-def show_info_message(page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None) -> None:
+def show_info_message(
+    page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None
+) -> None:
     """Show info message to user with optional mode indicator."""
     # Add mode prefix if specified
     display_message = message
-    if mode == 'mock':
+    if mode == "mock":
         display_message = f"{MOCK_PREFIX}{message}"
-    elif mode == 'real':
+    elif mode == "real":
         display_message = f"{REAL_PREFIX}{message}"
 
     try:
         snack_bar = _ensure_snack_bar(page)
         snack_bar.content = ft.Text(display_message)
-        snack_bar.bgcolor = ft.Colors.ORANGE if mode == 'mock' else ft.Colors.BLUE
+        snack_bar.bgcolor = ft.Colors.ORANGE if mode == "mock" else ft.Colors.BLUE
         snack_bar.action = action_label or "DISMISS"
-        snack_bar.duration = 5000 if mode == 'mock' else 4000
+        snack_bar.duration = 5000 if mode == "mock" else 4000
         _open_snack_bar(page)
 
         logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")

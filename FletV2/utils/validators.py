@@ -80,6 +80,7 @@ def validate_timeout(value: str) -> tuple[bool, str]:
     except ValueError:
         return False, "Please enter a valid number"
 
+
 # Registry for validator lookup by name
 VALIDATORS: dict[str, Callable[[str], tuple[bool, str]]] = {
     "validate_port": validate_port,

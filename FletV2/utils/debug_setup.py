@@ -21,7 +21,7 @@ def _resolve_debug_mode() -> bool:
             flet_config = None
 
     if flet_config and hasattr(flet_config, "DEBUG_MODE"):
-        return bool(getattr(flet_config, "DEBUG_MODE"))
+        return bool(flet_config.DEBUG_MODE)
 
     try:
         root_config = importlib.import_module("config")
@@ -29,9 +29,10 @@ def _resolve_debug_mode() -> bool:
         root_config = None
 
     if root_config and hasattr(root_config, "DEBUG_MODE"):
-        return bool(getattr(root_config, "DEBUG_MODE"))
+        return bool(root_config.DEBUG_MODE)
 
     return False
+
 
 # Enhanced formatter with more context
 class EnhancedFormatter(logging.Formatter):
@@ -39,25 +40,30 @@ class EnhancedFormatter(logging.Formatter):
 
     def format(self, record) -> str:
         # Add timestamp with microseconds
-        record.asctime = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        record.asctime = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # Add module and line number for better tracing
-        if hasattr(record, 'module') and hasattr(record, 'lineno'):
+        if hasattr(record, "module") and hasattr(record, "lineno"):
             record.location = f"{record.module}:{record.lineno}"
         else:
             record.location = "unknown"
 
         # Add function name if available
-        record.function = record.funcName if hasattr(record, 'funcName') else "unknown"
+        record.function = record.funcName if hasattr(record, "funcName") else "unknown"
 
         # Format the message with enhanced context
         log_message = super().format(record)
 
         # Add stack trace for errors and warnings
-        if record.levelno >= logging.WARNING and hasattr(record, 'exc_info') and record.exc_info and record.exc_info != (None, None, None):
+        if (
+            record.levelno >= logging.WARNING
+            and hasattr(record, "exc_info")
+            and record.exc_info
+            and record.exc_info != (None, None, None)
+        ):
             # Add stack trace for better debugging
             tb_lines = traceback.format_exception(record.exc_info[0], record.exc_info[1], record.exc_info[2])
-            tb_text = ''.join(tb_lines)
+            tb_text = "".join(tb_lines)
             log_message += f"\nStack Trace:\n{tb_text}"
 
         return log_message
@@ -83,7 +89,7 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
     if not _debug_setup_done:
         # Create enhanced formatter
         formatter = EnhancedFormatter(
-            '%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s'
+            "%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s"
         )
 
         # Configure Python's logging module with enhanced formatting
@@ -97,46 +103,56 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
 
         # Configure third-party library loggers to reduce noise (applied regardless of DEBUG_MODE)
         # matplotlib produces hundreds of font scanning debug logs
-        logging.getLogger('matplotlib').setLevel(logging.ERROR)
-        logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+        logging.getLogger("matplotlib").setLevel(logging.ERROR)
+        logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
         # PIL produces debug logs for every plugin import
-        logging.getLogger('PIL').setLevel(logging.ERROR)
-        logging.getLogger('PIL.Image').setLevel(logging.ERROR)
+        logging.getLogger("PIL").setLevel(logging.ERROR)
+        logging.getLogger("PIL.Image").setLevel(logging.ERROR)
 
         # Flet produces many internal debug events, keep at INFO for useful logs
-        logging.getLogger('flet').setLevel(logging.WARNING)
+        logging.getLogger("flet").setLevel(logging.WARNING)
 
         # Python server components - reduce database connection spam
-        logging.getLogger('python_server.server.database').setLevel(logging.ERROR)  # Only show errors
-        logging.getLogger('python_server.server.database').propagate = False  # Prevent duplication
-        logging.getLogger('python_server.server.server').setLevel(logging.WARNING)  # Reduce server debug logs
-        logging.getLogger('python_server.server.server').propagate = False
-        logging.getLogger('observability').setLevel(logging.ERROR)  # Reduce structured logging noise
-        logging.getLogger('Shared.utils.thread_manager').setLevel(logging.ERROR)  # Reduce thread management logs
-        logging.getLogger('Shared.utils.process_monitor').setLevel(logging.WARNING)  # Reduce process monitor logs
-        logging.getLogger('Shared.utils.process_monitor_gui').setLevel(logging.WARNING)
+        logging.getLogger("python_server.server.database").setLevel(logging.ERROR)  # Only show errors
+        logging.getLogger("python_server.server.database").propagate = False  # Prevent duplication
+        logging.getLogger("python_server.server.server").setLevel(logging.WARNING)  # Reduce server debug logs
+        logging.getLogger("python_server.server.server").propagate = False
+        logging.getLogger("observability").setLevel(logging.ERROR)  # Reduce structured logging noise
+        logging.getLogger("Shared.utils.thread_manager").setLevel(
+            logging.ERROR
+        )  # Reduce thread management logs
+        logging.getLogger("Shared.utils.process_monitor").setLevel(
+            logging.WARNING
+        )  # Reduce process monitor logs
+        logging.getLogger("Shared.utils.process_monitor_gui").setLevel(logging.WARNING)
 
         # Application-specific loggers - reduce verbosity for cleaner output (allow override below)
-        logging.getLogger('views.dashboard').setLevel(logging.ERROR)  # Suppress dashboard logs unless explicitly overridden
-        logging.getLogger('views').setLevel(logging.WARNING)  # Suppress all view debug logs
-        logging.getLogger('FletV2.main').setLevel(logging.WARNING)  # Reduce main app logs to warnings only
-        logging.getLogger('utils.server_bridge').setLevel(logging.WARNING)  # Reduce bridge logs
-        logging.getLogger('FletV2.state_manager').setLevel(logging.ERROR)  # Suppress state manager debug logs
+        logging.getLogger("views.dashboard").setLevel(
+            logging.ERROR
+        )  # Suppress dashboard logs unless explicitly overridden
+        logging.getLogger("views").setLevel(logging.WARNING)  # Suppress all view debug logs
+        logging.getLogger("FletV2.main").setLevel(logging.WARNING)  # Reduce main app logs to warnings only
+        logging.getLogger("utils.server_bridge").setLevel(logging.WARNING)  # Reduce bridge logs
+        logging.getLogger("FletV2.state_manager").setLevel(logging.ERROR)  # Suppress state manager debug logs
 
         # Suppress verbose server initialization logs
-        logging.getLogger('python_server.server.database_migrations').setLevel(logging.WARNING)
-        logging.getLogger('python_server.server.file_transfer').setLevel(logging.WARNING)
-        logging.getLogger('python_server.server.gui_integration').setLevel(logging.WARNING)
-        logging.getLogger('Shared.sentry_config').setLevel(logging.WARNING)
+        logging.getLogger("python_server.server.database_migrations").setLevel(logging.WARNING)
+        logging.getLogger("python_server.server.file_transfer").setLevel(logging.WARNING)
+        logging.getLogger("python_server.server.gui_integration").setLevel(logging.WARNING)
+        logging.getLogger("Shared.sentry_config").setLevel(logging.WARNING)
 
         # Suppress code map and verbose initialization output from server components
-        logging.getLogger('Shared.logging_utils').setLevel(logging.ERROR)  # Suppress code map output
-        logging.getLogger('api_server.cyberbackup_api_server').setLevel(logging.WARNING)  # Reduce API server logs
-        logging.getLogger('python_server.server.server').setLevel(logging.WARNING)  # Reduce backup server logs
+        logging.getLogger("Shared.logging_utils").setLevel(logging.ERROR)  # Suppress code map output
+        logging.getLogger("api_server.cyberbackup_api_server").setLevel(
+            logging.WARNING
+        )  # Reduce API server logs
+        logging.getLogger("python_server.server.server").setLevel(
+            logging.WARNING
+        )  # Reduce backup server logs
 
         # Suppress GUI thread initialization details
-        logging.getLogger('MainThread').setLevel(logging.WARNING)  # Suppress thread-related logs
+        logging.getLogger("MainThread").setLevel(logging.WARNING)  # Suppress thread-related logs
 
         # Implement global exception hook with enhanced context
         def custom_exception_hook(exc_type, exc_value, exc_traceback):
@@ -160,12 +176,11 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
                 # Log with enhanced context
                 logger.critical(
                     f"Uncaught exception in {filename}:{line_number} in function '{function_name}': {exc_value}",
-                    exc_info=(exc_type, exc_value, exc_traceback)
+                    exc_info=(exc_type, exc_value, exc_traceback),
                 )
             else:
                 logger.critical(
-                    f"Uncaught exception: {exc_value}",
-                    exc_info=(exc_type, exc_value, exc_traceback)
+                    f"Uncaught exception: {exc_value}", exc_info=(exc_type, exc_value, exc_traceback)
                 )
 
         # Set the custom exception hook
@@ -174,8 +189,8 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
 
         # Conditional override: allow targeted dashboard diagnostics without increasing global verbosity
         if os.environ.get("FLET_DASHBOARD_DEBUG") == "1":  # pragma: no cover - diagnostic mode
-            logging.getLogger('views.dashboard').setLevel(logging.WARNING)
-            logging.getLogger('views.dashboard').warning(
+            logging.getLogger("views.dashboard").setLevel(logging.WARNING)
+            logging.getLogger("views.dashboard").warning(
                 "[DASHBOARD_DEBUG] FLET_DASHBOARD_DEBUG=1 -> elevating dashboard logger to WARNING"
             )
 
@@ -214,7 +229,7 @@ def get_logger(name: str) -> logging.Logger:
             if not isinstance(handler.formatter, EnhancedFormatter):
                 handler.setFormatter(
                     EnhancedFormatter(
-                        '%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s'
+                        "%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s"
                     )
                 )
     else:
@@ -222,7 +237,7 @@ def get_logger(name: str) -> logging.Logger:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(
             EnhancedFormatter(
-                '%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s'
+                "%(asctime)s - %(name)s - %(levelname)s - [%(location)s:%(function)s] - %(message)s"
             )
         )
         logger.addHandler(handler)
@@ -249,7 +264,7 @@ def log_function_entry(logger: logging.Logger, function_name: str, *args, **kwar
 
     safe_kwargs = {}
     for key, value in list(kwargs.items())[:3]:  # Only log first few kwargs
-        if all(sensitive not in key.lower() for sensitive in ['password', 'secret', 'key', 'token']):
+        if all(sensitive not in key.lower() for sensitive in ["password", "secret", "key", "token"]):
             value_str = f"{str(value)[:50]}..." if len(str(value)) > 50 else str(value)
             safe_kwargs[key] = value_str
 
@@ -273,7 +288,9 @@ def log_function_exit(logger: logging.Logger, function_name: str, result=None) -
         logger.debug(f"Exiting {function_name}")
 
 
-def log_performance_timing(logger: logging.Logger, operation_name: str, start_time: float, end_time: float) -> None:
+def log_performance_timing(
+    logger: logging.Logger, operation_name: str, start_time: float, end_time: float
+) -> None:
     """
     Log performance timing for operations.
 

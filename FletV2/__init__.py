@@ -3,6 +3,7 @@
 FletV2 Package Init
 Main package init file for FletV2.
 """
+
 import os
 import sys
 
@@ -33,5 +34,5 @@ __all__ = [
     "themed_button",
     "toggle_theme_mode",
     "utils",
-    "views"
+    "views",
 ]

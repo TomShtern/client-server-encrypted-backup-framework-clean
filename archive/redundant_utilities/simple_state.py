@@ -7,7 +7,8 @@ Follows Flet Simplicity Principle - use framework, don't fight it.
 """
 
 import logging
-from typing import Any, Dict, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 try:
     import flet as ft
@@ -17,8 +18,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Simple module-level state storage - no complex reactive system needed
-_simple_state: Dict[str, Any] = {}
-_simple_callbacks: Dict[str, list[Callable]] = {}
+_simple_state: dict[str, Any] = {}
+_simple_callbacks: dict[str, list[Callable]] = {}
 
 def get_simple(key: str, default: Any = None) -> Any:
     """
@@ -84,7 +85,7 @@ def cleanup_simple() -> None:
     logger.info("Simple state patterns cleaned up")
 
 # Flet-native UI update helpers - the most important replacement
-def update_control_safely(control, update_func: Optional[Callable] = None) -> None:
+def update_control_safely(control, update_func: Callable | None = None) -> None:
     """
     Safely update a Flet control with error handling.
 
@@ -110,7 +111,7 @@ def create_loading_state(control, loading: bool) -> None:
         control.update()
 
 # Load states tracking - simple dict, no complex system
-_loading_states: Dict[str, bool] = {}
+_loading_states: dict[str, bool] = {}
 
 def set_loading_simple(operation: str, loading: bool) -> None:
     """
@@ -135,8 +136,7 @@ def clear_loading_simple(operation: str) -> None:
 
     Replaces: complex progress tracking systems
     """
-    if operation in _loading_states:
-        del _loading_states[operation]
+    _loading_states.pop(operation, None)
     logger.debug(f"Cleared loading state: {operation}")
 
 # Simple notification system - no complex auto-dismiss needed
@@ -173,17 +173,17 @@ def validate_simple_data(data: dict, required_fields: list[str]) -> tuple[bool, 
 
 # Export the simple interface
 __all__ = [
+    'cleanup_simple',
+    'clear_loading_simple',
+    'create_loading_state',
     'get_simple',
+    'is_loading_simple',
+    'set_loading_simple',
     'set_simple',
+    'show_simple_notification',
     'subscribe_simple',
     'unsubscribe_simple',
-    'cleanup_simple',
     'update_control_safely',
-    'create_loading_state',
-    'set_loading_simple',
-    'is_loading_simple',
-    'clear_loading_simple',
-    'show_simple_notification',
     'validate_simple_data'
 ]
 

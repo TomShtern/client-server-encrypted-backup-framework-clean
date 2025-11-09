@@ -33,6 +33,7 @@ def demo_basic_functionality():
     utf8.rtl_print("בדיקה test ✅")
     utf8.rtl_print("Hello שלום World עולם")
 
+
 def demo_enhanced_features():
     """Demonstrate enhanced features with optional libraries."""
     utf8.safe_print("\n" + "=" * 60)
@@ -61,6 +62,7 @@ def demo_enhanced_features():
     utf8.safe_print(f"Center:   '{utf8.pad_text(test_word, 20, align='center')}'")
     utf8.safe_print(f"Right:    '{utf8.pad_text(test_word, 20, align='right')}'")
 
+
 def demo_table_formatting():
     """Demonstrate table formatting."""
     utf8.safe_print("\n" + "=" * 60)
@@ -83,7 +85,7 @@ def demo_table_formatting():
         ["config.txt", "1.2 KB", "✅ Ready", "Basic config"],
         ["שלום.doc", "0.8 MB", "🔄 Processing", "Hebrew document"],
         ["emoji_🎉_test.png", "2.1 MB", "❌ Failed", "Image with emoji"],
-        ["very_long_filename_that_needs_truncation.xlsx", "15.7 MB", "⏳ Queued", "Will be shortened"]
+        ["very_long_filename_that_needs_truncation.xlsx", "15.7 MB", "⏳ Queued", "Will be shortened"],
     ]
 
     for row_data in test_data:
@@ -91,6 +93,7 @@ def demo_table_formatting():
         row_data[0] = utf8.truncate_text(row_data[0], widths[0] - 2)
         row = utf8.format_table_row(row_data, widths)
         utf8.safe_print(row)
+
 
 def demo_framework_integration():
     """Show how this integrates with the framework."""
@@ -111,7 +114,7 @@ def demo_framework_integration():
         ("document.pdf", "2.3 MB", 100, "✅"),
         ("photos_🎉.zip", "15.7 MB", 75, "🔄"),
         ("הקבצים_שלי.docx", "0.9 MB", 45, "🔄"),
-        ("backup_final.tar.gz", "127 MB", 0, "⏳")
+        ("backup_final.tar.gz", "127 MB", 0, "⏳"),
     ]
 
     # Progress header
@@ -129,6 +132,7 @@ def demo_framework_integration():
         row_data = [display_name, size, progress_text, status]
         utf8.safe_print(utf8.format_table_row(row_data, progress_widths))
 
+
 def test_library_status():
     """Test and display library availability."""
     utf8.safe_print("\n" + "=" * 60)
@@ -145,30 +149,31 @@ def test_library_status():
 
     # Display library status
     utf8.safe_print("\n📚 Optional Libraries:")
-    libraries = diagnosis['optional_libraries']
+    libraries = diagnosis["optional_libraries"]
     for lib, available in libraries.items():
         status = "✅ Available" if available else "❌ Not installed"
         utf8.safe_print(f"   {lib}: {status}")
 
     # Display active enhancements
     utf8.safe_print("\n🚀 Active Enhancements:")
-    enhancements = diagnosis['enhancements_active']
+    enhancements = diagnosis["enhancements_active"]
     for feature, active in enhancements.items():
         status = "✅ Enhanced" if active else "📦 Basic"
         utf8.safe_print(f"   {feature.replace('_', ' ').title()}: {status}")
 
     # Test specific features if available
-    if 'bidi_test' in diagnosis:
-        result = diagnosis['bidi_test']
+    if "bidi_test" in diagnosis:
+        result = diagnosis["bidi_test"]
         utf8.safe_print(f"\n🔤 BiDi Test: {'✅ Pass' if result['success'] else '❌ Fail'}")
-        if result['success']:
+        if result["success"]:
             utf8.safe_print(f"   Result: '{result['result']}'")
 
-    if 'wcwidth_test' in diagnosis:
-        result = diagnosis['wcwidth_test']
+    if "wcwidth_test" in diagnosis:
+        result = diagnosis["wcwidth_test"]
         utf8.safe_print(f"📏 Width Test: {'✅ Pass' if result['success'] else '❌ Fail'}")
-        if result['success']:
+        if result["success"]:
             utf8.safe_print(f"   Width calculation: {result['width']}")
+
 
 def test_text_processing():
     """Test various text processing features."""
@@ -178,12 +183,7 @@ def test_text_processing():
 
     # Test BiDi processing
     utf8.safe_print("🔤 Bidirectional Text Processing:")
-    test_texts = [
-        "שלום עולם",
-        "Hello שלום World",
-        "בדיקה test 123 ✅",
-        "English and זה עברית mixed"
-    ]
+    test_texts = ["שלום עולם", "Hello שלום World", "בדיקה test 123 ✅", "English and זה עברית mixed"]
 
     for text in test_texts:
         processed = utf8.process_bidirectional_text(text)
@@ -200,6 +200,7 @@ def test_text_processing():
     for line in wrapped_lines:
         utf8.safe_print(f"'{line}'")
 
+
 def installation_guide():
     """Show installation guidance."""
     utf8.safe_print("\n" + "=" * 60)
@@ -207,7 +208,7 @@ def installation_guide():
     utf8.safe_print("=" * 60)
 
     diagnosis = utf8.diagnose_utf8_environment()
-    libraries = diagnosis['optional_libraries']
+    libraries = diagnosis["optional_libraries"]
     missing = [lib for lib, available in libraries.items() if not available]
 
     if not missing:
@@ -225,6 +226,7 @@ def installation_guide():
             utf8.safe_print(f"   pip install {lib}")
 
     utf8.safe_print(f"\n📊 Enhancement Status: {sum(libraries.values())}/{len(libraries)} active")
+
 
 def main():
     """Run all demonstrations and tests."""
@@ -252,6 +254,7 @@ def main():
     utf8.safe_print("🎯 To use: import Shared.utils.utf8_solution as utf8")
     utf8.safe_print("📚 Docs: Shared/utils/UTF8_SOLUTION.md")
     utf8.safe_print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

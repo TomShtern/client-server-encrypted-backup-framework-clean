@@ -27,6 +27,7 @@ try:
     from api_server.real_backup_executor import RealBackupExecutor
     from python_server.server.config import DATABASE_NAME, FILE_STORAGE_DIR
     from python_server.server.database import DatabaseManager
+
     _REAL_SERVER_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import server modules: {e}")
@@ -35,12 +36,18 @@ except ImportError as e:
 
     # Basic fallback classes if imports fail - use different names to avoid conflicts
     class _FallbackDatabaseManager:
-        def __init__(self, *args, **kwargs): pass
-        def init_database(self): pass
-        def get_database_health(self): return {"status": "fallback"}
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def init_database(self):
+            pass
+
+        def get_database_health(self):
+            return {"status": "fallback"}
 
     class _FallbackBackupExecutor:
-        def __init__(self, *args, **kwargs): pass
+        def __init__(self, *args, **kwargs):
+            pass
 
     # Assign fallback classes to expected names
     DatabaseManager = _FallbackDatabaseManager  # type: ignore
@@ -50,6 +57,7 @@ except ImportError as e:
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 class FletV2ServerAdapter:
     """
@@ -102,7 +110,7 @@ class FletV2ServerAdapter:
         try:
             # Quick database health check
             health = self.db_manager.get_database_health()
-            integrity_check = health.get('integrity_check', False)
+            integrity_check = health.get("integrity_check", False)
             return bool(integrity_check)
         except Exception:
             return False
@@ -118,17 +126,13 @@ class FletV2ServerAdapter:
                 conn.row_factory = sqlite3.Row
 
                 # Count connected clients (use legacy schema - no status column)
-                clients_connected = conn.execute(
-                    "SELECT COUNT(*) FROM clients"
-                ).fetchone()[0]
+                clients_connected = conn.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
 
                 # Count total files
                 total_files = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
 
                 # Calculate total storage used (use correct column name)
-                total_size = conn.execute(
-                    "SELECT COALESCE(SUM(FileSize), 0) FROM files"
-                ).fetchone()[0]
+                total_size = conn.execute("SELECT COALESCE(SUM(FileSize), 0) FROM files").fetchone()[0]
 
                 # Count active transfers (if transfers table exists)
                 try:
@@ -146,7 +150,7 @@ class FletV2ServerAdapter:
                     "total_files": total_files,
                     "total_transfers": active_transfers,
                     "storage_used_gb": round(total_size / (1024**3), 2),
-                    "uptime_seconds": uptime_seconds
+                    "uptime_seconds": uptime_seconds,
                 }
 
         except Exception as e:
@@ -161,7 +165,7 @@ class FletV2ServerAdapter:
             "total_files": 0,
             "total_transfers": 0,
             "storage_used_gb": 0.0,
-            "uptime_seconds": 0
+            "uptime_seconds": 0,
         }
 
     # ============================================================================
@@ -200,7 +204,7 @@ class FletV2ServerAdapter:
                             "files_count": row["files_count"] or 0,
                             "total_size": row["total_size"] or 0,
                             "ip_address": row["ip_address"] or "",
-                            "created_at": row["created_at"] or row["last_seen"]
+                            "created_at": row["created_at"] or row["last_seen"],
                         }
                         for row in rows
                     ]
@@ -227,17 +231,19 @@ class FletV2ServerAdapter:
                 # Convert BLOB ID to string
                 client_id = str(uuid.UUID(bytes=row[0])) if len(row[0]) == 16 else str(row[0])
 
-                clients.append({
-                    "id": client_id,
-                    "client_id": client_id,
-                    "name": row[1],
-                    "status": "Registered",  # Default status
-                    "last_seen": row[2],
-                    "files_count": 0,  # Will be updated separately
-                    "total_size": 0,   # Will be updated separately
-                    "ip_address": "",
-                    "created_at": row[2]
-                })
+                clients.append(
+                    {
+                        "id": client_id,
+                        "client_id": client_id,
+                        "name": row[1],
+                        "status": "Registered",  # Default status
+                        "last_seen": row[2],
+                        "files_count": 0,  # Will be updated separately
+                        "total_size": 0,  # Will be updated separately
+                        "ip_address": "",
+                        "created_at": row[2],
+                    }
+                )
 
             return clients
 
@@ -259,21 +265,27 @@ class FletV2ServerAdapter:
                 conn.row_factory = sqlite3.Row
 
                 # Get client info
-                client_row = conn.execute("""
+                client_row = conn.execute(
+                    """
                     SELECT * FROM clients WHERE id = ? OR name = ?
-                """, (client_id, client_id)).fetchone()
+                """,
+                    (client_id, client_id),
+                ).fetchone()
 
                 if not client_row:
                     return {}
 
                 # Get recent files for this client
-                recent_files = conn.execute("""
+                recent_files = conn.execute(
+                    """
                     SELECT id, filename, size, uploaded_at, verified
                     FROM files
                     WHERE client_id = ?
                     ORDER BY uploaded_at DESC
                     LIMIT 10
-                """, (client_row["id"],)).fetchall()
+                """,
+                    (client_row["id"],),
+                ).fetchall()
 
                 return {
                     "id": client_row["id"],
@@ -285,7 +297,7 @@ class FletV2ServerAdapter:
                     "total_size": client_row["total_size"] or 0,
                     "files_count": client_row["files_count"] or 0,
                     "ip_address": client_row["ip_address"],
-                    "recent_files": [dict(f) for f in recent_files]
+                    "recent_files": [dict(f) for f in recent_files],
                 }
 
         except Exception as e:
@@ -301,16 +313,19 @@ class FletV2ServerAdapter:
             client_id = client_data.get("client_id") or str(uuid.uuid4())
 
             with sqlite3.connect(self.db_path) as conn:
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO clients (id, name, ip_address, status, created_at, last_seen)
                     VALUES (?, ?, ?, 'Registered', ?, ?)
-                """, (
-                    client_id,
-                    client_data.get("name", "Unknown Client"),
-                    client_data.get("ip_address"),
-                    datetime.now().isoformat(),
-                    datetime.now().isoformat()
-                ))
+                """,
+                    (
+                        client_id,
+                        client_data.get("name", "Unknown Client"),
+                        client_data.get("ip_address"),
+                        datetime.now().isoformat(),
+                        datetime.now().isoformat(),
+                    ),
+                )
                 conn.commit()
 
             logger.info(f"Client added: {client_data.get('name', client_id)}")
@@ -336,18 +351,14 @@ class FletV2ServerAdapter:
 
                 # Get client name for logging
                 client = conn.execute(
-                    "SELECT name FROM clients WHERE id = ? OR name = ?",
-                    (client_id, client_id)
+                    "SELECT name FROM clients WHERE id = ? OR name = ?", (client_id, client_id)
                 ).fetchone()
 
                 if not client:
                     return False
 
                 # Delete client (CASCADE will handle files)
-                conn.execute(
-                    "DELETE FROM clients WHERE id = ? OR name = ?",
-                    (client_id, client_id)
-                )
+                conn.execute("DELETE FROM clients WHERE id = ? OR name = ?", (client_id, client_id))
                 conn.commit()
 
             logger.info(f"Client deleted: {client[0]}")
@@ -368,11 +379,14 @@ class FletV2ServerAdapter:
                 return False
 
             with sqlite3.connect(self.db_path) as conn:
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE clients
                     SET status = 'Offline', last_seen = ?
                     WHERE (id = ? OR name = ?) AND status = 'Connected'
-                """, (datetime.now().isoformat(), client_id, client_id))
+                """,
+                    (datetime.now().isoformat(), client_id, client_id),
+                )
                 conn.commit()
 
             logger.info(f"Client disconnected: {client_id}")
@@ -416,7 +430,7 @@ class FletV2ServerAdapter:
                         "client_name": row["client_name"] or "Unknown",
                         "uploaded_at": row["uploaded_at"],
                         "verified": bool(row["verified"]),
-                        "checksum": row["checksum"]
+                        "checksum": row["checksum"],
                     }
                     for row in rows
                 ]
@@ -438,12 +452,15 @@ class FletV2ServerAdapter:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
 
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT id, filename, size, uploaded_at, verified, checksum
                     FROM files
                     WHERE client_id = ?
                     ORDER BY uploaded_at DESC
-                """, (client_id,)).fetchall()
+                """,
+                    (client_id,),
+                ).fetchall()
 
                 return [dict(row) for row in rows]
 
@@ -463,10 +480,13 @@ class FletV2ServerAdapter:
 
             with sqlite3.connect(self.db_path) as conn:
                 # Get file info for cleanup
-                file_info = conn.execute("""
+                file_info = conn.execute(
+                    """
                     SELECT filename, storage_path, client_id
                     FROM files WHERE id = ?
-                """, (file_id,)).fetchone()
+                """,
+                    (file_id,),
+                ).fetchone()
 
                 if not file_info:
                     return False
@@ -502,10 +522,13 @@ class FletV2ServerAdapter:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
 
-                file_info = conn.execute("""
+                file_info = conn.execute(
+                    """
                     SELECT filename, storage_path, size
                     FROM files WHERE id = ?
-                """, (file_id,)).fetchone()
+                """,
+                    (file_id,),
+                ).fetchone()
 
                 if not file_info or not os.path.exists(file_info["storage_path"]):
                     return {}
@@ -513,7 +536,7 @@ class FletV2ServerAdapter:
                 return {
                     "path": file_info["storage_path"],
                     "filename": file_info["filename"],
-                    "size": file_info["size"]
+                    "size": file_info["size"],
                 }
 
         except Exception as e:
@@ -527,25 +550,27 @@ class FletV2ServerAdapter:
                 return {"verified": False, "error": "Database unavailable"}
 
             with sqlite3.connect(self.db_path) as conn:
-                file_info = conn.execute("""
+                file_info = conn.execute(
+                    """
                     SELECT storage_path, checksum, size
                     FROM files WHERE id = ?
-                """, (file_id,)).fetchone()
+                """,
+                    (file_id,),
+                ).fetchone()
 
                 if not file_info or not os.path.exists(file_info[0]):
                     return {"verified": False, "error": "File not found"}
 
                 # For now, just mark as verified (implement actual checksum verification if needed)
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE files SET verified = 1 WHERE id = ?
-                """, (file_id,))
+                """,
+                    (file_id,),
+                )
                 conn.commit()
 
-                return {
-                    "verified": True,
-                    "checksum": file_info[1],
-                    "size": file_info[2]
-                }
+                return {"verified": True, "checksum": file_info[1], "size": file_info[2]}
 
         except Exception as e:
             logger.error(f"Error verifying file {file_id}: {e}")
@@ -583,7 +608,7 @@ class FletV2ServerAdapter:
                     "tables": table_names,
                     "total_size": f"{size_mb} MB",
                     "version": sqlite3.sqlite_version,
-                    "path": self.db_path
+                    "path": self.db_path,
                 }
 
         except Exception as e:
@@ -604,10 +629,13 @@ class FletV2ServerAdapter:
                 conn.row_factory = sqlite3.Row
 
                 # Validate table name to prevent SQL injection
-                valid_tables = [t[0] for t in conn.execute("""
+                valid_tables = [
+                    t[0]
+                    for t in conn.execute("""
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                """).fetchall()]
+                """).fetchall()
+                ]
 
                 if table_name not in valid_tables:
                     return []
@@ -631,10 +659,13 @@ class FletV2ServerAdapter:
 
             with sqlite3.connect(self.db_path) as conn:
                 # Validate table name
-                valid_tables = [t[0] for t in conn.execute("""
+                valid_tables = [
+                    t[0]
+                    for t in conn.execute("""
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                """).fetchall()]
+                """).fetchall()
+                ]
 
                 if table_name not in valid_tables:
                     return False
@@ -643,11 +674,14 @@ class FletV2ServerAdapter:
                 set_clause = ", ".join([f"{k} = ?" for k in data])
                 values = [*list(data.values()), row_id]
 
-                conn.execute(f"""
+                conn.execute(
+                    f"""
                     UPDATE {table_name}
                     SET {set_clause}
                     WHERE id = ?
-                """, values)
+                """,
+                    values,
+                )
                 conn.commit()
 
             logger.info(f"Updated row in {table_name}: {row_id}")
@@ -665,10 +699,13 @@ class FletV2ServerAdapter:
 
             with sqlite3.connect(self.db_path) as conn:
                 # Validate table name
-                valid_tables = [t[0] for t in conn.execute("""
+                valid_tables = [
+                    t[0]
+                    for t in conn.execute("""
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                """).fetchall()]
+                """).fetchall()
+                ]
 
                 if table_name not in valid_tables:
                     return False
@@ -713,11 +750,11 @@ class FletV2ServerAdapter:
                     return [
                         {
                             "id": i,
-                            "timestamp": (now - timedelta(minutes=i*5)).isoformat(),
+                            "timestamp": (now - timedelta(minutes=i * 5)).isoformat(),
                             "level": ["info", "warning", "error"][i % 3],
                             "message": f"Server log entry {i}",
                             "source": "server",
-                            "client_id": None
+                            "client_id": None,
                         }
                         for i in range(10)
                     ]
@@ -749,7 +786,9 @@ class FletV2ServerAdapter:
             logger.error(f"Error clearing logs: {e}")
             return False
 
-    async def export_logs_async(self, export_format: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def export_logs_async(
+        self, export_format: str, filters: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Export logs in specified format."""
         try:
             logs = await self.get_logs_async()
@@ -770,10 +809,12 @@ class FletV2ServerAdapter:
 
             if export_format.lower() == "json":
                 import json
+
                 with open(export_path, "w") as f:
                     json.dump(logs, f, indent=2, default=str)
             elif export_format.lower() == "csv":
                 import csv
+
                 with open(export_path, "w", newline="") as f:
                     if logs:
                         writer = csv.DictWriter(f, fieldnames=logs[0].keys())
@@ -782,11 +823,7 @@ class FletV2ServerAdapter:
             else:
                 return {}
 
-            return {
-                "path": export_path,
-                "format": export_format,
-                "count": len(logs)
-            }
+            return {"path": export_path, "format": export_format, "count": len(logs)}
 
         except Exception as e:
             logger.error(f"Error exporting logs: {e}")

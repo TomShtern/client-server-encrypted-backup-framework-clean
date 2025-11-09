@@ -117,6 +117,7 @@ DEFAULT_SETTINGS: dict[str, dict[str, Any]] = {
 # Validators, parsers, and utility functions for settings management
 # ==============================================================================
 
+
 def _merge_settings(data: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     merged = copy.deepcopy(DEFAULT_SETTINGS)
     if isinstance(data, dict):
@@ -160,7 +161,7 @@ def _row(label: str, control: ft.Control, desc: str | None = None) -> ft.Contain
     is_switch = isinstance(control, ft.Switch)
 
     # Set tooltip if description provided
-    if desc and hasattr(control, 'tooltip'):
+    if desc and hasattr(control, "tooltip"):
         control.tooltip = desc
 
     # Horizontal layout for all field types: label left, control right
@@ -188,6 +189,7 @@ def _row(label: str, control: ft.Control, desc: str | None = None) -> ft.Contain
 # SECTION 2: SETTINGS VIEW CLASS
 # Main settings management with embedded state and UI logic
 # ==============================================================================
+
 
 class _SettingsView:
     def __init__(
@@ -270,7 +272,9 @@ class _SettingsView:
             [
                 header,
                 status_bar,
-                ft.Container(content=self.status_text, padding=ft.padding.symmetric(vertical=2, horizontal=16)),
+                ft.Container(
+                    content=self.status_text, padding=ft.padding.symmetric(vertical=2, horizontal=16)
+                ),
                 tabs_container,
             ],
             expand=True,
@@ -303,7 +307,11 @@ class _SettingsView:
         # Calculate validation errors dynamically
         validation_errors = self._collect_validation_errors()
         validation_count = len(validation_errors)
-        validation_str = f"{validation_count} issue{'s' if validation_count != 1 else ''}" if validation_count > 0 else "All valid"
+        validation_str = (
+            f"{validation_count} issue{'s' if validation_count != 1 else ''}"
+            if validation_count > 0
+            else "All valid"
+        )
         validation_color = ft.Colors.RED if validation_count > 0 else ft.Colors.GREEN
 
         return ft.Container(
@@ -312,7 +320,11 @@ class _SettingsView:
                     ft.Icon(ft.Icons.CABLE, size=14, color=mode_color),
                     ft.Text(bridge_label, size=11, color=mode_color, weight=ft.FontWeight.W_500),
                     ft.Container(width=10),  # Spacer
-                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE if validation_count == 0 else ft.Icons.ERROR_OUTLINE, size=14, color=validation_color),
+                    ft.Icon(
+                        ft.Icons.CHECK_CIRCLE_OUTLINE if validation_count == 0 else ft.Icons.ERROR_OUTLINE,
+                        size=14,
+                        color=validation_color,
+                    ),
                     ft.Text(validation_str, size=11, color=validation_color, weight=ft.FontWeight.W_500),
                     ft.Container(expand=True),  # Push autosave to right
                     ft.Text("Autosave", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
@@ -370,18 +382,36 @@ class _SettingsView:
 
     def _server_tab(self) -> ft.Control:
         # Network
-        host = self._text("server", "host", "Host", width=260, validator=_require("Host"), hint_text="IPv4/IPv6 or hostname")
+        host = self._text(
+            "server", "host", "Host", width=260, validator=_require("Host"), hint_text="IPv4/IPv6 or hostname"
+        )
         port = self._text(
-            "server", "port", "Port", width=180, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1024, 65535, "Port")
+            "server",
+            "port",
+            "Port",
+            width=180,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1024, 65535, "Port"),
         )
         max_clients = self._text(
-            "server", "max_clients", LABEL_MAX_CLIENTS, width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 1000, "Max clients")
+            "server",
+            "max_clients",
+            LABEL_MAX_CLIENTS,
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 1000, "Max clients"),
         )
         timeout = self._text(
-            "server", "timeout", "Timeout", width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(5, 600, "Timeout"), suffix_text="s"
+            "server",
+            "timeout",
+            "Timeout",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(5, 600, "Timeout"),
+            suffix_text="s",
         )
         network_rows = [
             _row("Host", host, "Server interface"),
@@ -392,8 +422,22 @@ class _SettingsView:
 
         # TLS
         enable_ssl = self._switch("server", "enable_ssl", "Enable TLS")
-        cert = self._text("server", "ssl_cert_path", LABEL_CERT_PATH, expand=True, validator=_require(LABEL_CERT_PATH), hint_text=".crt or .pem")
-        key = self._text("server", "ssl_key_path", LABEL_KEY_PATH, expand=True, validator=_require(LABEL_KEY_PATH), hint_text=".key private key")
+        cert = self._text(
+            "server",
+            "ssl_cert_path",
+            LABEL_CERT_PATH,
+            expand=True,
+            validator=_require(LABEL_CERT_PATH),
+            hint_text=".crt or .pem",
+        )
+        key = self._text(
+            "server",
+            "ssl_key_path",
+            LABEL_KEY_PATH,
+            expand=True,
+            validator=_require(LABEL_KEY_PATH),
+            hint_text=".key private key",
+        )
         tls_rows = [
             _row("Enable TLS", enable_ssl, "Encrypt client connections"),
             _row(LABEL_CERT_PATH, cert, "Public certificate file path"),
@@ -412,8 +456,16 @@ class _SettingsView:
 
     def _interface_tab(self) -> ft.Control:
         # Theme
-        theme = self._dropdown("gui", "theme_mode", "Theme mode", [("light", "Light"), ("dark", "Dark"), ("system", "System")], width=220)
-        color = self._dropdown("gui", "color_scheme", "Color seed", [(k, k.title()) for k in COLOR_SEEDS], width=220)
+        theme = self._dropdown(
+            "gui",
+            "theme_mode",
+            "Theme mode",
+            [("light", "Light"), ("dark", "Dark"), ("system", "System")],
+            width=220,
+        )
+        color = self._dropdown(
+            "gui", "color_scheme", "Color seed", [(k, k.title()) for k in COLOR_SEEDS], width=220
+        )
         theme_rows = [
             _row("Theme mode", theme, "Light, Dark or follow System"),
             _row("Color seed", color, "Primary color accent"),
@@ -422,8 +474,14 @@ class _SettingsView:
         # Behavior
         auto_refresh = self._switch("gui", "auto_refresh", "Auto refresh")
         refresh_int = self._text(
-            "gui", "refresh_interval", LABEL_REFRESH_INTERVAL, width=220, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 300, LABEL_REFRESH_INTERVAL), suffix_text="s"
+            "gui",
+            "refresh_interval",
+            LABEL_REFRESH_INTERVAL,
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 300, LABEL_REFRESH_INTERVAL),
+            suffix_text="s",
         )
         auto_resize = self._switch("gui", "auto_resize", "Responsive layout")
         behavior_rows = [
@@ -445,20 +503,44 @@ class _SettingsView:
     def _monitoring_tab(self) -> ft.Control:
         enabled = self._switch("monitoring", "enabled", "Enable monitoring")
         refresh = self._text(
-            "monitoring", "refresh_interval", LABEL_REFRESH_INTERVAL, width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(5, 600, "Monitoring interval"), suffix_text="s"
+            "monitoring",
+            "refresh_interval",
+            LABEL_REFRESH_INTERVAL,
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(5, 600, "Monitoring interval"),
+            suffix_text="s",
         )
         cpu = self._text(
-            "monitoring", "cpu_threshold", LABEL_CPU_THRESHOLD, width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 100, "CPU threshold"), suffix_text="%"
+            "monitoring",
+            "cpu_threshold",
+            LABEL_CPU_THRESHOLD,
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "CPU threshold"),
+            suffix_text="%",
         )
         mem = self._text(
-            "monitoring", "memory_threshold", LABEL_MEMORY_THRESHOLD, width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 100, "Memory threshold"), suffix_text="%"
+            "monitoring",
+            "memory_threshold",
+            LABEL_MEMORY_THRESHOLD,
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "Memory threshold"),
+            suffix_text="%",
         )
         disk = self._text(
-            "monitoring", "disk_threshold", LABEL_DISK_THRESHOLD, width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 100, "Disk threshold"), suffix_text="%"
+            "monitoring",
+            "disk_threshold",
+            LABEL_DISK_THRESHOLD,
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 100, "Disk threshold"),
+            suffix_text="%",
         )
         rows = [
             _row("Enable monitoring", enabled, "Collect and display system metrics"),
@@ -467,19 +549,44 @@ class _SettingsView:
             _row(LABEL_MEMORY_THRESHOLD, mem),
             _row(LABEL_DISK_THRESHOLD, disk),
         ]
-        return ft.ListView(expand=True, spacing=0, padding=ft.padding.all(10), controls=[self._section_card("Monitoring", ft.Icons.ASSESSMENT, rows)])
+        return ft.ListView(
+            expand=True,
+            spacing=0,
+            padding=ft.padding.all(10),
+            controls=[self._section_card("Monitoring", ft.Icons.ASSESSMENT, rows)],
+        )
 
     def _logging_tab(self) -> ft.Control:
         enabled = self._switch("logging", "enabled", "Enable logging")
-        level = self._dropdown("logging", "level", "Log level", ["DEBUG", "INFO", "WARNING", "ERROR"], width=220)
-        path = self._text("logging", "file_path", LABEL_LOG_FILE_PATH, expand=True, validator=_require(LABEL_LOG_FILE_PATH), hint_text="logs/server.log")
+        level = self._dropdown(
+            "logging", "level", "Log level", ["DEBUG", "INFO", "WARNING", "ERROR"], width=220
+        )
+        path = self._text(
+            "logging",
+            "file_path",
+            LABEL_LOG_FILE_PATH,
+            expand=True,
+            validator=_require(LABEL_LOG_FILE_PATH),
+            hint_text="logs/server.log",
+        )
         size = self._text(
-            "logging", "max_size_mb", "Max size", width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 10240, "Max file size"), suffix_text="MB"
+            "logging",
+            "max_size_mb",
+            "Max size",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 10240, "Max file size"),
+            suffix_text="MB",
         )
         files = self._text(
-            "logging", "max_files", "Max files", width=200, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 50, "Rotation count")
+            "logging",
+            "max_files",
+            "Max files",
+            width=200,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 50, "Rotation count"),
         )
         rows = [
             _row("Enable logging", enabled, "Write structured logs to a rotating file"),
@@ -488,18 +595,42 @@ class _SettingsView:
             _row("Max size", size),
             _row("Max files", files),
         ]
-        return ft.ListView(expand=True, spacing=0, padding=ft.padding.all(10), controls=[self._section_card("Logging", ft.Icons.ARTICLE, rows)])
+        return ft.ListView(
+            expand=True,
+            spacing=0,
+            padding=ft.padding.all(10),
+            controls=[self._section_card("Logging", ft.Icons.ARTICLE, rows)],
+        )
 
     def _security_tab(self) -> ft.Control:
         require = self._switch("security", "require_auth", "Require authentication")
-        api_key = self._text("security", "api_key", LABEL_API_KEY, expand=True, validator=_require(LABEL_API_KEY), password=True, hint_text="Paste API key")
+        api_key = self._text(
+            "security",
+            "api_key",
+            LABEL_API_KEY,
+            expand=True,
+            validator=_require(LABEL_API_KEY),
+            password=True,
+            hint_text="Paste API key",
+        )
         attempts = self._text(
-            "security", "max_login_attempts", LABEL_MAX_LOGIN_ATTEMPTS, width=220, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 10, "Max login attempts")
+            "security",
+            "max_login_attempts",
+            LABEL_MAX_LOGIN_ATTEMPTS,
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 10, "Max login attempts"),
         )
         timeout = self._text(
-            "security", "session_timeout", LABEL_SESSION_TIMEOUT, width=220, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(60, 86400, "Session timeout"), suffix_text="s"
+            "security",
+            "session_timeout",
+            LABEL_SESSION_TIMEOUT,
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(60, 86400, "Session timeout"),
+            suffix_text="s",
         )
         rows = [
             _row("Require authentication", require, "Protect admin features"),
@@ -507,18 +638,42 @@ class _SettingsView:
             _row(LABEL_MAX_LOGIN_ATTEMPTS, attempts),
             _row(LABEL_SESSION_TIMEOUT, timeout),
         ]
-        return ft.ListView(expand=True, spacing=0, padding=ft.padding.all(10), controls=[self._section_card("Security", ft.Icons.SECURITY, rows)])
+        return ft.ListView(
+            expand=True,
+            spacing=0,
+            padding=ft.padding.all(10),
+            controls=[self._section_card("Security", ft.Icons.SECURITY, rows)],
+        )
 
     def _backup_tab(self) -> ft.Control:
         auto = self._switch("backup", "auto_backup", "Auto backups")
-        path = self._text("backup", "backup_path", LABEL_BACKUP_PATH, expand=True, validator=_require(LABEL_BACKUP_PATH), hint_text="backups/")
+        path = self._text(
+            "backup",
+            "backup_path",
+            LABEL_BACKUP_PATH,
+            expand=True,
+            validator=_require(LABEL_BACKUP_PATH),
+            hint_text="backups/",
+        )
         interval = self._text(
-            "backup", "backup_interval_hours", LABEL_BACKUP_INTERVAL, width=220, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 168, "Backup interval"), suffix_text="h"
+            "backup",
+            "backup_interval_hours",
+            LABEL_BACKUP_INTERVAL,
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 168, "Backup interval"),
+            suffix_text="h",
         )
         retention = self._text(
-            "backup", "retention_days", "Retention", width=220, keyboard=ft.KeyboardType.NUMBER, parser=_safe_int,
-            validator=_numeric_range(1, 365, "Retention"), suffix_text="days"
+            "backup",
+            "retention_days",
+            "Retention",
+            width=220,
+            keyboard=ft.KeyboardType.NUMBER,
+            parser=_safe_int,
+            validator=_numeric_range(1, 365, "Retention"),
+            suffix_text="days",
         )
         compress = self._switch("backup", "compress_backups", "Compress backups")
         rows = [
@@ -528,7 +683,12 @@ class _SettingsView:
             _row("Retention", retention),
             _row("Compress backups", compress),
         ]
-        return ft.ListView(expand=True, spacing=0, padding=ft.padding.all(10), controls=[self._section_card("Backup", ft.Icons.BACKUP, rows)])
+        return ft.ListView(
+            expand=True,
+            spacing=0,
+            padding=ft.padding.all(10),
+            controls=[self._section_card("Backup", ft.Icons.BACKUP, rows)],
+        )
 
     # Control factories -------------------------------------------------
     def _text(
@@ -587,7 +747,15 @@ class _SettingsView:
         sw.on_change = _on_change
         return sw
 
-    def _dropdown(self, section: str, key: str, label: str, options: list[str] | list[tuple[str, str]], *, width: int | None = None) -> ft.Dropdown:
+    def _dropdown(
+        self,
+        section: str,
+        key: str,
+        label: str,
+        options: list[str] | list[tuple[str, str]],
+        *,
+        width: int | None = None,
+    ) -> ft.Dropdown:
         dd_options: list[ft.dropdown.Option] = []
         for opt in options:
             if isinstance(opt, tuple):
@@ -716,7 +884,9 @@ class _SettingsView:
 
         payload = copy.deepcopy(self.data)
         if self.server_bridge:
-            result = await run_sync_in_executor(safe_server_call, self.server_bridge, "save_settings", payload)
+            result = await run_sync_in_executor(
+                safe_server_call, self.server_bridge, "save_settings", payload
+            )
             if not result.get("success"):
                 self._update_status(f"Save failed: {result.get('error', 'Unknown error')}")
                 return
@@ -756,14 +926,23 @@ class _SettingsView:
 
     # Events ------------------------------------------------------------
     def _on_export_clicked(self, _: ft.ControlEvent) -> None:
-        self._export_picker.save_file(dialog_title="Export settings", file_name="settings.json", file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["json"])
+        self._export_picker.save_file(
+            dialog_title="Export settings",
+            file_name="settings.json",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
 
     def _handle_export_result(self, e: ft.FilePickerResultEvent) -> None:
         if e.path:
             self.page.run_task(self._export_to_path, e.path)
 
     def _on_import_clicked(self, _: ft.ControlEvent) -> None:
-        self._import_picker.pick_files(dialog_title="Import settings", file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["json"])
+        self._import_picker.pick_files(
+            dialog_title="Import settings",
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["json"],
+        )
 
     def _handle_import_result(self, e: ft.FilePickerResultEvent) -> None:
         if e.files and e.files[0] and getattr(e.files[0], "path", None):
@@ -801,6 +980,7 @@ class _SettingsView:
 # SECTION 3: VIEW FACTORY
 # Creates and initializes the settings view with proper lifecycle management
 # ==============================================================================
+
 
 def create_settings_view(
     server_bridge: ServerBridge | None,

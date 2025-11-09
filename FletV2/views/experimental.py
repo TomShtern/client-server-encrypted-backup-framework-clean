@@ -4,14 +4,10 @@ Experimental View - Testing and Development Playground
 For experimental features, UI prototypes, and development testing.
 """
 
-import os
-import sys
 from collections.abc import Callable
 from typing import Any
 
 import flet as ft
-
-import Shared.utils.utf8_solution as _  # noqa: F401
 
 # Import neumorphic shadows
 try:
@@ -60,21 +56,30 @@ def create_experimental_view(
     def create_experimental_card(card_data: dict) -> ft.Container:
         """Create a card for experimental feature."""
         return ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(card_data["icon"], size=32, color=card_data["color"]),
-                    ft.Text(card_data["title"], size=18, weight=ft.FontWeight.BOLD),
-                ], spacing=12),
-                ft.Text(
-                    card_data["description"],
-                    size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                ),
-                ft.Row([
-                    ft.FilledTonalButton("Test", icon=ft.Icons.PLAY_ARROW),
-                    ft.OutlinedButton("Configure", icon=ft.Icons.SETTINGS),
-                ], spacing=8),
-            ], spacing=16),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(card_data["icon"], size=32, color=card_data["color"]),
+                            ft.Text(card_data["title"], size=18, weight=ft.FontWeight.BOLD),
+                        ],
+                        spacing=12,
+                    ),
+                    ft.Text(
+                        card_data["description"],
+                        size=14,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    ft.Row(
+                        [
+                            ft.FilledTonalButton("Test", icon=ft.Icons.PLAY_ARROW),
+                            ft.OutlinedButton("Configure", icon=ft.Icons.SETTINGS),
+                        ],
+                        spacing=8,
+                    ),
+                ],
+                spacing=16,
+            ),
             padding=24,
             border_radius=16,
             bgcolor=ft.Colors.SURFACE,
@@ -82,25 +87,36 @@ def create_experimental_view(
         )
 
     # Create responsive grid of experimental cards
-    cards_grid = ft.ResponsiveRow([
-        ft.Container(
-            content=create_experimental_card(card),
-            col={"sm": 12, "md": 6, "lg": 6},
-        )
-        for card in experimental_cards
-    ], spacing=20, run_spacing=20)
+    cards_grid = ft.ResponsiveRow(
+        [
+            ft.Container(
+                content=create_experimental_card(card),
+                col={"sm": 12, "md": 6, "lg": 6},
+            )
+            for card in experimental_cards
+        ],
+        spacing=20,
+        run_spacing=20,
+    )
 
     # Experimental tools section
     tools_section = ft.Container(
-        content=ft.Column([
-            ft.Text("Development Tools", size=20, weight=ft.FontWeight.BOLD),
-            ft.Row([
-                ft.FilledButton("Generate Sample Data", icon=ft.Icons.DATA_ARRAY),
-                ft.FilledTonalButton("Clear Cache", icon=ft.Icons.DELETE_SWEEP),
-                ft.OutlinedButton("Export State", icon=ft.Icons.DOWNLOAD),
-                ft.OutlinedButton("Import State", icon=ft.Icons.UPLOAD),
-            ], spacing=12, wrap=True),
-        ], spacing=16),
+        content=ft.Column(
+            [
+                ft.Text("Development Tools", size=20, weight=ft.FontWeight.BOLD),
+                ft.Row(
+                    [
+                        ft.FilledButton("Generate Sample Data", icon=ft.Icons.DATA_ARRAY),
+                        ft.FilledTonalButton("Clear Cache", icon=ft.Icons.DELETE_SWEEP),
+                        ft.OutlinedButton("Export State", icon=ft.Icons.DOWNLOAD),
+                        ft.OutlinedButton("Import State", icon=ft.Icons.UPLOAD),
+                    ],
+                    spacing=12,
+                    wrap=True,
+                ),
+            ],
+            spacing=16,
+        ),
         padding=24,
         border_radius=16,
         bgcolor=ft.Colors.SURFACE,
@@ -123,26 +139,25 @@ def create_experimental_view(
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
 
-    content = ft.Column([
-        header_bar,
-
-        ft.Text(
-            "This is a safe space for testing new features, UI experiments, and development workflows.",
-            size=16,
-            color=ft.Colors.ON_SURFACE_VARIANT,
-        ),
-
-        ft.Divider(height=32),
-
-        # Experimental cards grid
-        cards_grid,
-
-        ft.Divider(height=32),
-
-        # Tools section
-        tools_section,
-
-    ], spacing=24, expand=True, scroll=ft.ScrollMode.AUTO)
+    content = ft.Column(
+        [
+            header_bar,
+            ft.Text(
+                "This is a safe space for testing new features, UI experiments, and development workflows.",
+                size=16,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Divider(height=32),
+            # Experimental cards grid
+            cards_grid,
+            ft.Divider(height=32),
+            # Tools section
+            tools_section,
+        ],
+        spacing=24,
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+    )
 
     main_container = ft.Container(
         content=content,

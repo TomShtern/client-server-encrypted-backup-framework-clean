@@ -12,7 +12,7 @@ Performance Optimizations:
 - GPU-accelerated animations (scale, opacity only)
 """
 
-from typing import cast, Literal
+from typing import Literal, cast
 
 import flet as ft
 

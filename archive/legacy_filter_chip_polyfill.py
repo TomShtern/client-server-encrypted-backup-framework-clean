@@ -12,10 +12,10 @@ This polyfill is only kept for reference/rollback purposes.
 from __future__ import annotations
 
 import contextlib
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import flet as ft
-from typing_extensions import cast
 
 
 class FilterChip(ft.Container):  # sourcery skip: remove-unnecessary-cast, remove-unnecessary-try-except

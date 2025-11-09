@@ -16,7 +16,7 @@ class LogColorSystem:
     # Color definitions optimized for both dark and light themes
     COLORS = {
         "DEBUG": {
-            "primary": "#94A3B8",      # Slate gray - neutral, technical
+            "primary": "#94A3B8",  # Slate gray - neutral, technical
             "secondary": "#CBD5E1",
             "bg_light": "#F8FAFC",
             "bg_dark": "#1E293B",
@@ -25,7 +25,7 @@ class LogColorSystem:
             "description": "Debug information",
         },
         "INFO": {
-            "primary": "#3B82F6",      # Bright blue - informational, clear
+            "primary": "#3B82F6",  # Bright blue - informational, clear
             "secondary": "#60A5FA",
             "bg_light": "#EFF6FF",
             "bg_dark": "#1E3A8A",
@@ -34,7 +34,7 @@ class LogColorSystem:
             "description": "General information",
         },
         "SUCCESS": {
-            "primary": "#10B981",      # Emerald green - positive, successful
+            "primary": "#10B981",  # Emerald green - positive, successful
             "secondary": "#34D399",
             "bg_light": "#ECFDF5",
             "bg_dark": "#064E3B",
@@ -43,7 +43,7 @@ class LogColorSystem:
             "description": "Successful operation",
         },
         "WARNING": {
-            "primary": "#EAB308",      # Yellow - caution, attention needed
+            "primary": "#EAB308",  # Yellow - caution, attention needed
             "secondary": "#FDE047",
             "bg_light": "#FEFCE8",
             "bg_dark": "#713F12",
@@ -52,7 +52,7 @@ class LogColorSystem:
             "description": "Warning - review needed",
         },
         "IMPORTANT": {
-            "primary": "#F97316",      # Orange - important warning, urgent
+            "primary": "#F97316",  # Orange - important warning, urgent
             "secondary": "#FB923C",
             "bg_light": "#FFF7ED",
             "bg_dark": "#7C2D12",
@@ -61,7 +61,7 @@ class LogColorSystem:
             "description": "Important warning",
         },
         "ERROR": {
-            "primary": "#EF4444",      # Red - error, failure
+            "primary": "#EF4444",  # Red - error, failure
             "secondary": "#F87171",
             "bg_light": "#FEF2F2",
             "bg_dark": "#7F1D1D",
@@ -70,7 +70,7 @@ class LogColorSystem:
             "description": "Error occurred",
         },
         "CRITICAL": {
-            "primary": "#DC2626",      # Deep red - critical, severe
+            "primary": "#DC2626",  # Deep red - critical, severe
             "secondary": "#EF4444",
             "bg_light": "#FEE2E2",
             "bg_dark": "#991B1B",
@@ -79,7 +79,7 @@ class LogColorSystem:
             "description": "Critical failure",
         },
         "SPECIAL": {
-            "primary": "#A855F7",      # Purple - special events, unique
+            "primary": "#A855F7",  # Purple - special events, unique
             "secondary": "#C084FC",
             "bg_light": "#FAF5FF",
             "bg_dark": "#581C87",

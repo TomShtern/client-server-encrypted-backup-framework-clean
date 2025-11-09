@@ -17,6 +17,7 @@ import flet as ft
 
 class ShortcutCategory(Enum):
     """Categories of keyboard shortcuts"""
+
     NAVIGATION = "navigation"
     EDITING = "editing"
     VIEW = "view"
@@ -27,6 +28,7 @@ class ShortcutCategory(Enum):
 @dataclass
 class GlobalShortcut:
     """Global shortcut configuration"""
+
     id: str
     key: str  # Flet key name (e.g., "s", "f5", "delete")
     ctrl: bool = False
@@ -74,7 +76,7 @@ class GlobalShortcutManager:
         description: str = "",
         category: ShortcutCategory = ShortcutCategory.ACTIONS,
         context: str | None = None,
-        enabled: bool = True
+        enabled: bool = True,
     ) -> str:
         """
         Register a global shortcut using Flet native key names.
@@ -106,7 +108,7 @@ class GlobalShortcutManager:
             description=description,
             category=category,
             context=context,
-            enabled=enabled
+            enabled=enabled,
         )
 
         self.shortcuts[shortcut_id] = shortcut
@@ -154,10 +156,12 @@ class GlobalShortcutManager:
                 continue
 
             # Check if modifiers match (Flet provides these built-in!)
-            if (shortcut.ctrl != e.ctrl or
-                shortcut.shift != e.shift or
-                shortcut.alt != e.alt or
-                shortcut.meta != e.meta):
+            if (
+                shortcut.ctrl != e.ctrl
+                or shortcut.shift != e.shift
+                or shortcut.alt != e.alt
+                or shortcut.meta != e.meta
+            ):
                 continue
 
             # Check if key matches
@@ -202,12 +206,14 @@ class GlobalShortcutManager:
                 # Add the key name (capitalized for display)
                 key_parts.append(shortcut.key.upper() if len(shortcut.key) == 1 else shortcut.key.title())
 
-                help_list.append({
-                    "shortcut": "+".join(key_parts),
-                    "description": shortcut.description,
-                    "category": shortcut.category.value,
-                    "context": shortcut.context or "global"
-                })
+                help_list.append(
+                    {
+                        "shortcut": "+".join(key_parts),
+                        "description": shortcut.description,
+                        "category": shortcut.category.value,
+                        "context": shortcut.context or "global",
+                    }
+                )
 
         return sorted(help_list, key=lambda x: (x["category"], x["shortcut"]))
 
@@ -225,62 +231,78 @@ class GlobalShortcutManager:
                 ft.Tab(
                     text="Navigation",
                     content=ft.Column(
-                        [ft.Text("Navigation Shortcuts", weight=ft.FontWeight.BOLD, size=16)] +
-                        [
-                            ft.Row([
-                                ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                ft.Text(s["description"], expand=True)
-                            ])
+                        [ft.Text("Navigation Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
+                        + [
+                            ft.Row(
+                                [
+                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
+                                    ft.Text(s["description"], expand=True),
+                                ]
+                            )
                             for s in nav_shortcuts
-                        ] if nav_shortcuts else [ft.Text("No navigation shortcuts available")],
+                        ]
+                        if nav_shortcuts
+                        else [ft.Text("No navigation shortcuts available")],
                         spacing=8,
-                        scroll=ft.ScrollMode.AUTO
-                    )
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                 ),
                 ft.Tab(
                     text="Editing",
                     content=ft.Column(
-                        [ft.Text("Editing Shortcuts", weight=ft.FontWeight.BOLD, size=16)] +
-                        [
-                            ft.Row([
-                                ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                ft.Text(s["description"], expand=True)
-                            ])
+                        [ft.Text("Editing Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
+                        + [
+                            ft.Row(
+                                [
+                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
+                                    ft.Text(s["description"], expand=True),
+                                ]
+                            )
                             for s in edit_shortcuts
-                        ] if edit_shortcuts else [ft.Text("No editing shortcuts available")],
+                        ]
+                        if edit_shortcuts
+                        else [ft.Text("No editing shortcuts available")],
                         spacing=8,
-                        scroll=ft.ScrollMode.AUTO
-                    )
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                 ),
                 ft.Tab(
                     text="View",
                     content=ft.Column(
-                        [ft.Text("View Shortcuts", weight=ft.FontWeight.BOLD, size=16)] +
-                        [
-                            ft.Row([
-                                ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                ft.Text(s["description"], expand=True)
-                            ])
+                        [ft.Text("View Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
+                        + [
+                            ft.Row(
+                                [
+                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
+                                    ft.Text(s["description"], expand=True),
+                                ]
+                            )
                             for s in view_shortcuts
-                        ] if view_shortcuts else [ft.Text("No view shortcuts available")],
+                        ]
+                        if view_shortcuts
+                        else [ft.Text("No view shortcuts available")],
                         spacing=8,
-                        scroll=ft.ScrollMode.AUTO
-                    )
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                 ),
                 ft.Tab(
                     text="Actions",
                     content=ft.Column(
-                        [ft.Text("Action Shortcuts", weight=ft.FontWeight.BOLD, size=16)] +
-                        [
-                            ft.Row([
-                                ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                ft.Text(s["description"], expand=True)
-                            ])
+                        [ft.Text("Action Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
+                        + [
+                            ft.Row(
+                                [
+                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
+                                    ft.Text(s["description"], expand=True),
+                                ]
+                            )
                             for s in action_shortcuts
-                        ] if action_shortcuts else [ft.Text("No action shortcuts available")],
+                        ]
+                        if action_shortcuts
+                        else [ft.Text("No action shortcuts available")],
                         spacing=8,
-                        scroll=ft.ScrollMode.AUTO
-                    )
+                        scroll=ft.ScrollMode.AUTO,
+                    ),
                 ),
             ],
             expand=True,
@@ -288,20 +310,14 @@ class GlobalShortcutManager:
 
         return ft.AlertDialog(
             title=ft.Text("Keyboard Shortcuts"),
-            content=ft.Container(
-                content=tabs,
-                width=600,
-                height=500
-            ),
-            actions=[
-                ft.TextButton("Close", on_click=lambda e: self._close_shortcuts_dialog())
-            ],
+            content=ft.Container(content=tabs, width=600, height=500),
+            actions=[ft.TextButton("Close", on_click=lambda e: self._close_shortcuts_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
     def _close_shortcuts_dialog(self):
         """Close the shortcuts dialog"""
-        if hasattr(self.page, 'dialog') and self.page.dialog:
+        if hasattr(self.page, "dialog") and self.page.dialog:
             self.page.dialog.open = False
             self.page.update()
 
@@ -340,7 +356,7 @@ def create_standard_application_shortcuts(
         ctrl=True,
         action=lambda e: print("Quit application"),
         description="Quit application",
-        category=ShortcutCategory.ACTIONS
+        category=ShortcutCategory.ACTIONS,
     )
 
     # Help shortcuts
@@ -349,7 +365,7 @@ def create_standard_application_shortcuts(
         key="f1",
         action=lambda e: shortcut_manager.show_shortcuts_dialog(),
         description="Show keyboard shortcuts",
-        category=ShortcutCategory.HELP
+        category=ShortcutCategory.HELP,
     )
 
     # View shortcuts (if navigator provided)
@@ -360,7 +376,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: view_navigator("dashboard"),
             description="Go to Dashboard",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         shortcut_ids["database"] = shortcut_manager.register_shortcut(
@@ -369,7 +385,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: view_navigator("database"),
             description="Go to Database",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         shortcut_ids["clients"] = shortcut_manager.register_shortcut(
@@ -379,7 +395,7 @@ def create_standard_application_shortcuts(
             shift=True,
             action=lambda e: view_navigator("clients"),
             description="Go to Clients",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         shortcut_ids["files"] = shortcut_manager.register_shortcut(
@@ -389,7 +405,7 @@ def create_standard_application_shortcuts(
             shift=True,
             action=lambda e: view_navigator("files"),
             description="Go to Files",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         shortcut_ids["logs"] = shortcut_manager.register_shortcut(
@@ -399,7 +415,7 @@ def create_standard_application_shortcuts(
             shift=True,
             action=lambda e: view_navigator("logs"),
             description="Go to Logs",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         shortcut_ids["settings"] = shortcut_manager.register_shortcut(
@@ -408,7 +424,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: view_navigator("settings"),
             description="Go to Settings",
-            category=ShortcutCategory.NAVIGATION
+            category=ShortcutCategory.NAVIGATION,
         )
 
         # Numeric view navigation (Ctrl+1 through Ctrl+7)
@@ -419,7 +435,7 @@ def create_standard_application_shortcuts(
             "4": "database",
             "5": "logs",
             "6": "analytics",
-            "7": "settings"
+            "7": "settings",
         }
 
         for key, view_name in view_mapping.items():
@@ -429,7 +445,7 @@ def create_standard_application_shortcuts(
                 ctrl=True,
                 action=lambda e, v=view_name: view_navigator(v),
                 description=f"Go to {view_name.title()}",
-                category=ShortcutCategory.NAVIGATION
+                category=ShortcutCategory.NAVIGATION,
             )
 
     # Refresh shortcut
@@ -438,7 +454,7 @@ def create_standard_application_shortcuts(
         key="f5",
         action=lambda e: print("Refresh current view"),
         description="Refresh current view",
-        category=ShortcutCategory.VIEW
+        category=ShortcutCategory.VIEW,
     )
 
     # Global search
@@ -449,7 +465,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: open_search_callback(e),
             description="Open global search",
-            category=ShortcutCategory.VIEW
+            category=ShortcutCategory.VIEW,
         )
 
         shortcut_ids["search_alt"] = shortcut_manager.register_shortcut(
@@ -458,7 +474,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: open_search_callback(e),
             description="Open global search",
-            category=ShortcutCategory.VIEW
+            category=ShortcutCategory.VIEW,
         )
     else:
         shortcut_ids["search"] = shortcut_manager.register_shortcut(
@@ -467,7 +483,7 @@ def create_standard_application_shortcuts(
             ctrl=True,
             action=lambda e: print("Activate global search"),
             description="Global search",
-            category=ShortcutCategory.VIEW
+            category=ShortcutCategory.VIEW,
         )
 
     if close_search_callback:
@@ -476,16 +492,14 @@ def create_standard_application_shortcuts(
             key="escape",
             action=lambda e: close_search_callback(e),
             description="Close global search",
-            category=ShortcutCategory.VIEW
+            category=ShortcutCategory.VIEW,
         )
 
     return shortcut_ids
 
 
 def create_view_specific_shortcuts(
-    shortcut_manager: GlobalShortcutManager,
-    view_context: str,
-    view_actions: dict[str, Callable]
+    shortcut_manager: GlobalShortcutManager, view_context: str, view_actions: dict[str, Callable]
 ) -> dict[str, str]:
     """
     Create shortcuts specific to a particular view using Flet native events.
@@ -509,7 +523,7 @@ def create_view_specific_shortcuts(
             action=view_actions["new"],
             description="Create new item",
             category=ShortcutCategory.ACTIONS,
-            context=view_context
+            context=view_context,
         )
 
     if "edit" in view_actions:
@@ -520,7 +534,7 @@ def create_view_specific_shortcuts(
             action=view_actions["edit"],
             description="Edit selected item",
             category=ShortcutCategory.EDITING,
-            context=view_context
+            context=view_context,
         )
 
     if "delete" in view_actions:
@@ -530,7 +544,7 @@ def create_view_specific_shortcuts(
             action=view_actions["delete"],
             description="Delete selected item",
             category=ShortcutCategory.EDITING,
-            context=view_context
+            context=view_context,
         )
 
     if "export" in view_actions:
@@ -542,7 +556,7 @@ def create_view_specific_shortcuts(
             action=view_actions["export"],
             description="Export data",
             category=ShortcutCategory.ACTIONS,
-            context=view_context
+            context=view_context,
         )
 
     return shortcut_ids

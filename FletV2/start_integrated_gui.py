@@ -26,11 +26,12 @@ import flet as ft
 # Import our path fix module to ensure proper imports
 try:
     import fletv2_import_fix
+
     print("Successfully imported fletv2_import_fix")
 except ImportError:
     # If the fix module is not available, manually add the paths
     fletv2_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-    utils_dir = os.path.join(fletv2_dir, 'utils')
+    utils_dir = os.path.join(fletv2_dir, "utils")
     if fletv2_dir not in sys.path:
         sys.path.insert(0, fletv2_dir)
     if utils_dir not in sys.path:
@@ -47,24 +48,25 @@ for path in paths_to_add:
         sys.path.insert(0, path)
 
 # CRITICAL: Update PYTHONPATH environment variable for subprocess imports
-current_pythonpath = os.environ.get('PYTHONPATH', '')
+current_pythonpath = os.environ.get("PYTHONPATH", "")
 new_pythonpath = os.pathsep.join(paths_to_add + ([current_pythonpath] if current_pythonpath else []))
-os.environ['PYTHONPATH'] = new_pythonpath
-os.environ['PYTHONUTF8'] = '1'
-os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ["PYTHONPATH"] = new_pythonpath
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # CRITICAL: Disable embedded GUI and signal handlers BEFORE any BackupServer imports
-os.environ['DISABLE_EMBEDDED_GUI'] = 'true'
-os.environ['GUI_DISABLED'] = 'true'
-os.environ['CYBERBACKUP_DISABLE_GUI'] = 'true'
-os.environ['NO_GUI'] = '1'
-os.environ['HEADLESS'] = '1'
-os.environ['DISABLE_SIGNAL_HANDLERS'] = 'true'
-os.environ['NO_SIGNAL_HANDLERS'] = '1'
+os.environ["DISABLE_EMBEDDED_GUI"] = "true"
+os.environ["GUI_DISABLED"] = "true"
+os.environ["CYBERBACKUP_DISABLE_GUI"] = "true"
+os.environ["NO_GUI"] = "1"
+os.environ["HEADLESS"] = "1"
+os.environ["DISABLE_SIGNAL_HANDLERS"] = "true"
+os.environ["NO_SIGNAL_HANDLERS"] = "1"
 
 # Import the production BackupServer
 try:
     from python_server.server.server import BackupServer
+
     BACKUP_SERVER_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import BackupServer: {e}")
@@ -74,7 +76,7 @@ except ImportError as e:
 
 # Import FletV2 components (absolute imports after path setup)
 try:
-    from FletV2.main import FletV2App, main as flet_main
+    from FletV2.main import main as flet_main
 except ImportError as e:
     print(f"Error: Could not import main module: {e}")
     print("Ensure FletV2 directory is in Python path")
@@ -86,6 +88,7 @@ debug_setup_imported = False
 
 try:
     from FletV2.utils.server_bridge import create_server_bridge
+
     server_bridge_imported = True
     print("Successfully imported server_bridge")
 except ImportError as e:
@@ -103,6 +106,7 @@ except ImportError as e:
 
 try:
     from FletV2.utils.debug_setup import setup_terminal_debugging
+
     debug_setup_imported = True
     print("Successfully imported debug_setup")
 except ImportError as e:
@@ -111,19 +115,20 @@ except ImportError as e:
     # Silent fallback - path should be configured by now
     import logging
 
-        def _setup_terminal_debugging_fallback(logger_name=None):
-            logger = logging.getLogger(logger_name or __name__)
-            if not logger.handlers:
-                handler = logging.StreamHandler()
-                handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-                logger.addHandler(handler)
-                logger.setLevel(logging.INFO)
-            return logger
+    def _setup_terminal_debugging_fallback(logger_name=None):
+        logger = logging.getLogger(logger_name or __name__)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+        return logger
 
-        setup_terminal_debugging = _setup_terminal_debugging_fallback
+    setup_terminal_debugging = _setup_terminal_debugging_fallback
 
 # Set up logging
 logger = setup_terminal_debugging(logger_name="IntegratedStartup")
+
 
 class IntegratedServerManager:
     """
@@ -166,7 +171,7 @@ class IntegratedServerManager:
             backup_server = BackupServer()
 
             # Verify server is ready
-            if hasattr(backup_server, 'is_connected') and backup_server.is_connected():
+            if hasattr(backup_server, "is_connected") and backup_server.is_connected():
                 logger.info("✅ BackupServer initialized successfully in background")
                 return backup_server
             else:
@@ -226,7 +231,7 @@ class IntegratedServerManager:
                 server_bridge = create_server_bridge(real_server=backup_server)
 
                 # Verify integration is working
-                if hasattr(server_bridge, 'is_connected') and server_bridge.is_connected():
+                if hasattr(server_bridge, "is_connected") and server_bridge.is_connected():
                     logger.info("✅ ServerBridge integration successful")
                     return server_bridge
                 else:
@@ -317,10 +322,12 @@ class IntegratedServerManager:
 
     def _create_window_event_handler(self, page: ft.Page):
         """Create window event handler for shutdown coordination."""
+
         def on_window_event(e: ft.ControlEvent) -> None:
-            if hasattr(e, 'data') and e.data == "close":
+            if hasattr(e, "data") and e.data == "close":
                 logger.info("🛑 Window close event received, initiating shutdown...")
                 self.shutdown_event.set()
+
         return on_window_event
 
     async def shutdown(self) -> None:
@@ -334,9 +341,9 @@ class IntegratedServerManager:
             if self.backup_server:
                 logger.info("🔌 Shutting down BackupServer...")
                 try:
-                    if hasattr(self.backup_server, 'shutdown'):
+                    if hasattr(self.backup_server, "shutdown"):
                         await self.backup_server.shutdown()
-                    elif hasattr(self.backup_server, 'stop'):
+                    elif hasattr(self.backup_server, "stop"):
                         await self.backup_server.stop()
                     logger.info("✅ BackupServer shutdown complete")
                 except Exception as e:
@@ -346,7 +353,7 @@ class IntegratedServerManager:
             if self.server_bridge:
                 logger.info("🧹 Cleaning up ServerBridge...")
                 try:
-                    if hasattr(self.server_bridge, 'cleanup'):
+                    if hasattr(self.server_bridge, "cleanup"):
                         self.server_bridge.cleanup()
                     logger.info("✅ ServerBridge cleanup complete")
                 except Exception as e:
@@ -356,6 +363,7 @@ class IntegratedServerManager:
 
         except Exception as e:
             logger.error(f"❌ Shutdown error: {e}")
+
 
 def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
     """
@@ -374,11 +382,12 @@ def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
     for port in range(start_port, start_port + max_attempts):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.bind(('127.0.0.1', port))
+                sock.bind(("127.0.0.1", port))
                 return port
         except OSError:
             continue
     raise RuntimeError(f"No available port found starting from {start_port}")
+
 
 async def main_integrated(development_mode: bool = False, force_mock: bool = False, port: int = 8000) -> None:
     """
@@ -403,7 +412,11 @@ async def main_integrated(development_mode: bool = False, force_mock: bool = Fal
         await manager.start_integrated_gui(development_mode=development_mode, port=port)
     except OSError as e:
         error_msg = str(e).lower()
-        if development_mode and ("address already in use" in error_msg or "[errno 10048]" in error_msg or "only one usage of each socket address" in error_msg):
+        if development_mode and (
+            "address already in use" in error_msg
+            or "[errno 10048]" in error_msg
+            or "only one usage of each socket address" in error_msg
+        ):
             logger.warning(f"⚠️ Port {port} is already in use. Finding alternative port...")
             try:
                 start_port = (port + 1) if port is not None else 8000
@@ -425,27 +438,30 @@ async def main_integrated(development_mode: bool = False, force_mock: bool = Fal
     finally:
         await manager.shutdown()
 
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Integrated BackupServer + FletV2 GUI")
     parser.add_argument("--dev", action="store_true", help="Run in development mode (web browser)")
     parser.add_argument("--mock", action="store_true", help="Force mock mode for testing")
-    parser.add_argument("--port", type=int, default=8000, help="Port to run the development server on (default: 8000)")
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to run the development server on (default: 8000)"
+    )
     args = parser.parse_args()
 
     # Configure environment
     os.environ.setdefault("PYTHONUTF8", "1")
 
-# Integration Architecture: This startup script implements a clean 3-layer integration model:
-# BackupServer -> ServerBridge -> FletV2App. The IntegratedServerManager handles lifecycle
-# coordination, ensuring both components start and stop together gracefully. The key
-# innovation is direct server injection into the existing FletV2App constructor,
-# eliminating the need for the 836-line adapter layer.
-#
-# Error Resilience: The system maintains full fallback capability - if BackupServer
-# initialization fails for any reason, it automatically falls back to mock mode,
-# ensuring the GUI remains functional for development and testing.
+    # Integration Architecture: This startup script implements a clean 3-layer integration model:
+    # BackupServer -> ServerBridge -> FletV2App. The IntegratedServerManager handles lifecycle
+    # coordination, ensuring both components start and stop together gracefully. The key
+    # innovation is direct server injection into the existing FletV2App constructor,
+    # eliminating the need for the 836-line adapter layer.
+    #
+    # Error Resilience: The system maintains full fallback capability - if BackupServer
+    # initialization fails for any reason, it automatically falls back to mock mode,
+    # ensuring the GUI remains functional for development and testing.
 
     print("🚀 Starting Integrated BackupServer + FletV2 GUI...")
     print(f"📊 Mode: {'Development (Web)' if args.dev else 'Production (Desktop)'}")

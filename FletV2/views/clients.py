@@ -10,17 +10,14 @@ Clean client management with server integration and graceful fallbacks.
 import asyncio
 import concurrent.futures
 import contextlib
-import os
-import sys
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Awaitable
+from typing import Any
 
 import flet as ft
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
-import Shared.utils.utf8_solution as _  # noqa: F401
 
 try:
     from FletV2.utils.debug_setup import get_logger
@@ -33,10 +30,11 @@ except ImportError:  # pragma: no cover - fallback logging
         logger = logging.getLogger(name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
             logger.addHandler(handler)
         logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
         return logger
+
 
 from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
 from FletV2.utils.server_bridge import ServerBridge
@@ -212,19 +210,44 @@ class _ClientsViewController:
         return ft.ResponsiveRow(
             [
                 ft.Column(
-                    [create_metric_card("Total Clients", self.total_clients_value, ft.Icons.PEOPLE, "Total clients metric")],
+                    [
+                        create_metric_card(
+                            "Total Clients", self.total_clients_value, ft.Icons.PEOPLE, "Total clients metric"
+                        )
+                    ],
                     col={"sm": 12, "md": 6, "lg": 3},
                 ),
                 ft.Column(
-                    [create_metric_card("Connected", self.connected_clients_value, ft.Icons.WIFI, "Connected clients metric")],
+                    [
+                        create_metric_card(
+                            "Connected",
+                            self.connected_clients_value,
+                            ft.Icons.WIFI,
+                            "Connected clients metric",
+                        )
+                    ],
                     col={"sm": 12, "md": 6, "lg": 3},
                 ),
                 ft.Column(
-                    [create_metric_card("Disconnected", self.disconnected_clients_value, ft.Icons.WIFI_OFF, "Disconnected clients metric")],
+                    [
+                        create_metric_card(
+                            "Disconnected",
+                            self.disconnected_clients_value,
+                            ft.Icons.WIFI_OFF,
+                            "Disconnected clients metric",
+                        )
+                    ],
                     col={"sm": 12, "md": 6, "lg": 3},
                 ),
                 ft.Column(
-                    [create_metric_card("Total Files", self.total_files_value, ft.Icons.FOLDER, "Total client files metric")],
+                    [
+                        create_metric_card(
+                            "Total Files",
+                            self.total_files_value,
+                            ft.Icons.FOLDER,
+                            "Total client files metric",
+                        )
+                    ],
                     col={"sm": 12, "md": 6, "lg": 3},
                 ),
             ]
@@ -262,7 +285,7 @@ class _ClientsViewController:
             should_broadcast = self.state_manager is not None if broadcast is None else broadcast
             new_clients = await self._fetch_clients_async(self.server_bridge)
             self.apply_clients_data(new_clients, broadcast=should_broadcast)
-        except Exception as exc:  # noqa: BLE001 - UI feedback requires broad catch
+        except Exception as exc:
             logger.error(f"Error loading clients: {exc}")
             show_error_message(self.page, f"Failed to load clients: {exc}")
         finally:
@@ -277,10 +300,7 @@ class _ClientsViewController:
     ) -> None:
         normalized: list[dict[str, Any]] = []
         if new_clients:
-            normalized = [
-                dict(item) if isinstance(item, dict) else item
-                for item in new_clients
-            ]
+            normalized = [dict(item) if isinstance(item, dict) else item for item in new_clients]
 
         self.clients_data = normalized
         self.update_stats()
@@ -296,9 +316,17 @@ class _ClientsViewController:
 
     def update_stats(self) -> None:
         totals = len(self.clients_data)
-        connected = len([client for client in self.clients_data if str(client.get('status', '')).lower() == 'connected'])
-        disconnected = len([client for client in self.clients_data if str(client.get('status', '')).lower() == 'disconnected'])
-        files_total = sum(int(client.get('files_count', 0) or 0) for client in self.clients_data)
+        connected = len(
+            [client for client in self.clients_data if str(client.get("status", "")).lower() == "connected"]
+        )
+        disconnected = len(
+            [
+                client
+                for client in self.clients_data
+                if str(client.get("status", "")).lower() == "disconnected"
+            ]
+        )
+        files_total = sum(int(client.get("files_count", 0) or 0) for client in self.clients_data)
 
         self.total_clients_value.value = str(totals)
         self.connected_clients_value.value = str(connected)
@@ -381,7 +409,10 @@ class _ClientsViewController:
                     ft.Row(
                         [
                             ft.Text("Status: "),
-                            create_status_pill(client.get('status', 'Unknown'), self.get_status_type(client.get('status', 'Unknown'))),
+                            create_status_pill(
+                                client.get("status", "Unknown"),
+                                self.get_status_type(client.get("status", "Unknown")),
+                            ),
                         ],
                         spacing=8,
                     ),
@@ -403,15 +434,17 @@ class _ClientsViewController:
                 self.page.close(confirm_dialog)
                 return
 
-            client_id = client.get('id')
+            client_id = client.get("id")
             if not client_id or not isinstance(client_id, str):
                 show_error_message(self.page, "Invalid client ID")
                 self.page.close(confirm_dialog)
                 return
 
-            result = await run_sync_in_executor(safe_server_call, self.server_bridge, 'disconnect_client', client_id)
+            result = await run_sync_in_executor(
+                safe_server_call, self.server_bridge, "disconnect_client", client_id
+            )
 
-            if result.get('success'):
+            if result.get("success"):
                 show_success_message(self.page, f"Client {client.get('name')} disconnected")
                 await self.load_clients_data()
             else:
@@ -439,15 +472,17 @@ class _ClientsViewController:
                 self.page.close(delete_dialog)
                 return
 
-            client_id = client.get('id')
+            client_id = client.get("id")
             if not client_id or not isinstance(client_id, str):
                 show_error_message(self.page, "Invalid client ID")
                 self.page.close(delete_dialog)
                 return
 
-            result = await run_sync_in_executor(safe_server_call, self.server_bridge, 'delete_client', client_id)
+            result = await run_sync_in_executor(
+                safe_server_call, self.server_bridge, "delete_client", client_id
+            )
 
-            if result.get('success'):
+            if result.get("success"):
                 show_success_message(self.page, f"Client {client.get('name')} deleted")
                 await self.load_clients_data()
             else:
@@ -465,7 +500,9 @@ class _ClientsViewController:
             ),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda _e: self.page.close(delete_dialog)),
-                ft.FilledButton("Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)),
+                ft.FilledButton(
+                    "Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)
+                ),
             ],
         )
         self.page.open(delete_dialog)
@@ -501,9 +538,11 @@ class _ClientsViewController:
                 show_error_message(self.page, SERVER_NOT_CONNECTED_MESSAGE)
                 return
 
-            result = await run_sync_in_executor(safe_server_call, self.server_bridge, 'add_client', new_client)
+            result = await run_sync_in_executor(
+                safe_server_call, self.server_bridge, "add_client", new_client
+            )
 
-            if result.get('success'):
+            if result.get("success"):
                 show_success_message(self.page, f"Client {new_client['name']} added")
                 await self.load_clients_data()
                 self.page.close(add_dialog)
@@ -524,11 +563,15 @@ class _ClientsViewController:
         self.page.open(add_dialog)
 
     def edit_client(self, client: dict[str, Any]) -> None:
-        name_field = ft.TextField(label="Client Name", value=client.get('name', ''), hint_text="Enter client name")
-        ip_field = ft.TextField(label="IP Address", value=client.get('ip_address', ''), hint_text="Enter IP address")
+        name_field = ft.TextField(
+            label="Client Name", value=client.get("name", ""), hint_text="Enter client name"
+        )
+        ip_field = ft.TextField(
+            label="IP Address", value=client.get("ip_address", ""), hint_text="Enter IP address"
+        )
         status_dropdown = ft.Dropdown(
             label="Status",
-            value=client.get('status', 'Disconnected'),
+            value=client.get("status", "Disconnected"),
             options=[
                 ft.dropdown.Option("Connected"),
                 ft.dropdown.Option("Disconnected"),
@@ -544,7 +587,9 @@ class _ClientsViewController:
             updated_client = {
                 **client,
                 "name": name_field.value.strip(),
-                "ip_address": ip_field.value.strip() if ip_field.value else client.get('ip_address', 'Unknown'),
+                "ip_address": ip_field.value.strip()
+                if ip_field.value
+                else client.get("ip_address", "Unknown"),
                 "status": status_dropdown.value,
                 "last_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -553,7 +598,7 @@ class _ClientsViewController:
                 show_error_message(self.page, SERVER_NOT_CONNECTED_MESSAGE)
                 return
 
-            client_id = updated_client.get('id') or client.get('id')
+            client_id = updated_client.get("id") or client.get("id")
             if client_id is None:
                 show_error_message(self.page, "Selected client has no ID; cannot update.")
                 return
@@ -561,17 +606,19 @@ class _ClientsViewController:
             result = await run_sync_in_executor(
                 safe_server_call,
                 self.server_bridge,
-                'update_client',
+                "update_client",
                 str(client_id),
                 {"name": updated_client["name"]},
             )
 
-            if result.get('success'):
+            if result.get("success"):
                 show_success_message(self.page, f"Client {updated_client['name']} updated")
                 await self.load_clients_data()
                 self.page.close(edit_dialog)
             else:
-                show_error_message(self.page, f"Failed to update client: {result.get('error', 'Unknown error')}")
+                show_error_message(
+                    self.page, f"Failed to update client: {result.get('error', 'Unknown error')}"
+                )
 
         async def save_changes(event: ft.ControlEvent) -> None:
             await self._run_with_loading(save_changes_async, event)
@@ -683,6 +730,7 @@ class _ClientsViewController:
         awaitable = getattr(maybe_awaitable, "__await__", None)
         if callable(awaitable):
             await maybe_awaitable
+
 
 # ==============================================================================
 # MAIN VIEW

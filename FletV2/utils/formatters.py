@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Union
+from typing import Any
 
 
 def as_float(value: Any) -> float:
@@ -43,7 +43,7 @@ def as_int(value: Any) -> int:
         return 0
 
 
-def format_timestamp(timestamp: Union[str, datetime, None]) -> str:
+def format_timestamp(timestamp: str | datetime | None) -> str:
     """
     Format a timestamp into a readable string format.
 
@@ -86,7 +86,7 @@ def format_timestamp(timestamp: Union[str, datetime, None]) -> str:
     return "N/A"
 
 
-def format_uptime(seconds: Union[float, int, str, None]) -> str:
+def format_uptime(seconds: float | int | str | None) -> str:
     """
     Format uptime seconds into a human-readable format.
 
@@ -169,8 +169,18 @@ def normalize_text(text: Any) -> str:
 
     # Handle common placeholder values that should be treated as missing
     placeholder_values = {
-        "", " ", "-", "--", "null", "NULL", "none", "NONE",
-        "undefined", "UNDEFINED", "n/a", "N/A"
+        "",
+        " ",
+        "-",
+        "--",
+        "null",
+        "NULL",
+        "none",
+        "NONE",
+        "undefined",
+        "UNDEFINED",
+        "n/a",
+        "N/A",
     }
 
     if cleaned in placeholder_values:
@@ -179,7 +189,7 @@ def normalize_text(text: Any) -> str:
     return cleaned
 
 
-def format_bytes(bytes_value: Union[int, float, str, None]) -> str:
+def format_bytes(bytes_value: int | float | str | None) -> str:
     """
     Format bytes into human-readable file sizes.
 
@@ -219,7 +229,7 @@ def format_bytes(bytes_value: Union[int, float, str, None]) -> str:
         return "N/A"
 
 
-def format_percentage(value: Union[float, int, str, None], decimals: int = 1) -> str:
+def format_percentage(value: float | int | str | None, decimals: int = 1) -> str:
     """
     Format a decimal value as a percentage.
 

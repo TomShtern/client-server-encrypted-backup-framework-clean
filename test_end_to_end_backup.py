@@ -1,9 +1,9 @@
 """End-to-end backup test - verifies the full backup flow works"""
-import requests
-import time
-import json
 import os
 import tempfile
+import time
+
+import requests
 
 print("=" * 70)
 print("END-TO-END BACKUP TEST")
@@ -58,7 +58,7 @@ try:
                 result = response.json()
                 if result.get('success'):
                     job_id = result.get('job_id')
-                    print(f"   ✓ Backup started successfully")
+                    print("   ✓ Backup started successfully")
                     print(f"   Job ID: {job_id}")
                     print(f"   Username: {USERNAME}")
                 else:
@@ -87,12 +87,12 @@ try:
                 result = response.json()
                 if result.get('received'):
                     print(f"   ✓ Backup completed after {i+1} seconds!")
-                    print(f"   Server confirmed receipt of file")
+                    print("   Server confirmed receipt of file")
 
                     # Check if receipt details are available
                     if 'receipt' in result:
                         receipt = result['receipt']
-                        print(f"   Receipt details:")
+                        print("   Receipt details:")
                         print(f"     - Filename: {receipt.get('filename', 'N/A')}")
                         print(f"     - Size: {receipt.get('size', 'N/A')} bytes")
                         print(f"     - Verified: {receipt.get('verified', False)}")
@@ -100,7 +100,7 @@ try:
                     break
                 elif i == max_wait - 1:
                     print(f"   ⚠ Timeout after {max_wait} seconds")
-                    print(f"   Backup may still be in progress")
+                    print("   Backup may still be in progress")
                 else:
                     time.sleep(1)
             else:
@@ -120,13 +120,13 @@ try:
     print(f"  • Test file: {filename}")
     print(f"  • Username: {USERNAME}")
     print(f"  • Server: {SERVER_ADDRESS}")
-    print(f"  • Status: SUCCESS")
+    print("  • Status: SUCCESS")
     print("\n✅ The backup system is fully operational!")
 
 finally:
     # Cleanup
     try:
         os.unlink(test_file_path)
-        print(f"\n🗑️  Cleaned up test file")
+        print("\n🗑️  Cleaned up test file")
     except:
         pass

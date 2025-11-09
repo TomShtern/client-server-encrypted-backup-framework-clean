@@ -34,12 +34,12 @@ class LogCard(ft.Container):
         on_click: Callable[[Any], None] | None = None,
         page: ft.Page | None = None,  # Add page reference for theme awareness
         *args,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
         # Store page reference
-        self.page = page        # Extract log data safely
+        self.page = page  # Extract log data safely
         time_s = str(log.get("time", ""))
         level = self.map_level(log.get("level"))
         comp = str(log.get("component", ""))
@@ -58,7 +58,9 @@ class LogCard(ft.Container):
             width=5,
             height=None,  # Full height of card
             bgcolor=primary_color,
-            border_radius=ft.border_radius.only(top_left=8 if is_compact else 10, bottom_left=8 if is_compact else 10),
+            border_radius=ft.border_radius.only(
+                top_left=8 if is_compact else 10, bottom_left=8 if is_compact else 10
+            ),
         )
 
         # ===== ICON CONTAINER =====
@@ -74,7 +76,7 @@ class LogCard(ft.Container):
             width=icon_circle_size,
             height=icon_circle_size,
             bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.12),
-            border_radius=icon_circle_size/2,
+            border_radius=icon_circle_size / 2,
             alignment=ft.alignment.center,
             # Subtle neomorphic shadow on icon container
             shadow=[
@@ -97,15 +99,9 @@ class LogCard(ft.Container):
                 color=primary_color,
             ),
             bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.15),
-            padding=ft.padding.symmetric(
-                horizontal=8 if is_compact else 10,
-                vertical=3 if is_compact else 4
-            ),
+            padding=ft.padding.symmetric(horizontal=8 if is_compact else 10, vertical=3 if is_compact else 4),
             border_radius=10 if is_compact else 12,
-            border=ft.border.all(
-                1,
-                LogColorSystem.get_border_color(primary_color, 0.2)
-            ),
+            border=ft.border.all(1, LogColorSystem.get_border_color(primary_color, 0.2)),
         )
 
         # ===== MESSAGE TEXT =====
@@ -120,23 +116,26 @@ class LogCard(ft.Container):
             # Component pill with subtle background
             metadata_items.append(
                 ft.Container(
-                    content=ft.Row([
-                        ft.Icon(
-                            ft.Icons.WIDGETS_ROUNDED,
-                            size=10 if is_compact else 11,
-                            color=ft.Colors.ON_SURFACE_VARIANT
-                        ),
-                        ft.Text(
-                            comp,
-                            size=10 if is_compact else 11,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            weight=ft.FontWeight.W_500,
-                        ),
-                    ], spacing=3 if is_compact else 4, tight=True),
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.WIDGETS_ROUNDED,
+                                size=10 if is_compact else 11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                            ft.Text(
+                                comp,
+                                size=10 if is_compact else 11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                        ],
+                        spacing=3 if is_compact else 4,
+                        tight=True,
+                    ),
                     bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE_VARIANT),
                     padding=ft.padding.symmetric(
-                        horizontal=6 if is_compact else 8,
-                        vertical=2 if is_compact else 3
+                        horizontal=6 if is_compact else 8, vertical=2 if is_compact else 3
                     ),
                     border_radius=5 if is_compact else 6,
                 )
@@ -148,19 +147,23 @@ class LogCard(ft.Container):
             time_text_size = 10 if is_compact else 11
             time_spacing = 3 if is_compact else 4
             metadata_items.append(
-                ft.Row([
-                    ft.Icon(
-                        ft.Icons.ACCESS_TIME_ROUNDED,
-                        size=time_icon_size,
-                        color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
-                    ft.Text(
-                        time_s,
-                        size=time_text_size,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        weight=ft.FontWeight.W_400,
-                    ),
-                ], spacing=time_spacing, tight=True)
+                ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.ACCESS_TIME_ROUNDED,
+                            size=time_icon_size,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(
+                            time_s,
+                            size=time_text_size,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            weight=ft.FontWeight.W_400,
+                        ),
+                    ],
+                    spacing=time_spacing,
+                    tight=True,
+                )
             )
 
         # ===== CARD CONTENT LAYOUT =====
@@ -168,31 +171,39 @@ class LogCard(ft.Container):
         vertical_spacing = 4 if is_compact else 8
         icon_spacing = 10 if is_compact else 14
 
-        card_content = ft.Row([
-            accent_strip,
-            ft.Container(width=horizontal_spacing),  # Spacing
-            icon_circle,
-            ft.Container(width=icon_spacing),  # Spacing
-            # Main content column
-            ft.Column([
-                message_text,
-                ft.Container(height=vertical_spacing),  # Vertical spacing
-                ft.Row([
-                    *metadata_items,
-                    ft.Container(expand=True),  # Push badge to right
-                    level_badge,
-                ], spacing=4 if is_compact else 8),
-            ], spacing=0, expand=True),
-            ft.Container(width=horizontal_spacing),  # Right padding
-        ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        card_content = ft.Row(
+            [
+                accent_strip,
+                ft.Container(width=horizontal_spacing),  # Spacing
+                icon_circle,
+                ft.Container(width=icon_spacing),  # Spacing
+                # Main content column
+                ft.Column(
+                    [
+                        message_text,
+                        ft.Container(height=vertical_spacing),  # Vertical spacing
+                        ft.Row(
+                            [
+                                *metadata_items,
+                                ft.Container(expand=True),  # Push badge to right
+                                level_badge,
+                            ],
+                            spacing=4 if is_compact else 8,
+                        ),
+                    ],
+                    spacing=0,
+                    expand=True,
+                ),
+                ft.Container(width=horizontal_spacing),  # Right padding
+            ],
+            spacing=0,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
 
         # ===== MAIN CARD CONTAINER =====
         # Neomorphic container with dual shadows and subtle background tint
         card_padding = ft.padding.only(
-            top=10 if is_compact else 14,
-            bottom=10 if is_compact else 14,
-            right=0,
-            left=0
+            top=10 if is_compact else 14, bottom=10 if is_compact else 14, right=0, left=0
         )
 
         # Set container properties
@@ -202,10 +213,7 @@ class LogCard(ft.Container):
         # Subtle background tint based on log level
         self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
         # Soft border for definition
-        self.border = ft.border.all(
-            1,
-            LogColorSystem.get_border_color(primary_color, 0.08)
-        )
+        self.border = ft.border.all(1, LogColorSystem.get_border_color(primary_color, 0.08))
 
         # Neomorphic shadows - the key to the soft UI effect
         # Use page reference if available for theme-aware shadows
@@ -240,7 +248,9 @@ class LogCard(ft.Container):
                 self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.04)
             else:
                 if self.page:
-                    self.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low", self.page)
+                    self.shadow = NeomorphicShadows.get_card_shadows(
+                        "medium" if index < 3 else "low", self.page
+                    )
                 else:
                     self.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low")
                 self.scale = 1.0
@@ -314,7 +324,7 @@ class LogCard(ft.Container):
             if pos > last_end:
                 parts.append(text[last_end:pos])
             # Add matched text
-            parts.append(text[pos:pos+len(search_query)])
+            parts.append(text[pos : pos + len(search_query)])
             last_end = pos + len(search_query)
             start = pos + 1
 
@@ -331,10 +341,8 @@ class LogCard(ft.Container):
                     ft.TextSpan(
                         part,
                         ft.TextStyle(
-                            bgcolor=ft.Colors.YELLOW_200,
-                            color=ft.Colors.BLACK,
-                            weight=ft.FontWeight.BOLD
-                        )
+                            bgcolor=ft.Colors.YELLOW_200, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD
+                        ),
                     )
                 )
             else:

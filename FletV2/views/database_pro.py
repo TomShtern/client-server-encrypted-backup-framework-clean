@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 import flet as ft
 
 # UTF-8 solution for subprocess/console I/O
-import Shared.utils.utf8_solution as _  # noqa: F401
 from FletV2.components.context_menu import StandardContextMenu, setup_context_menu_target
 
 # Import DataTable-related helpers from ui_builders instead of EnhancedDataTable
@@ -93,7 +92,7 @@ def handle_selection_change(
     selected_data: list[dict],
     selected_count_text: ft.Control,
     btn_clear_selection: ft.Control,
-    btn_bulk_delete: ft.Control
+    btn_bulk_delete: ft.Control,
 ):
     """Handle selection change in enhanced DataTable"""
     count = len(selected_data)
@@ -114,10 +113,7 @@ def handle_selection_change(
 
 
 def handle_context_menu_action(
-    action: str,
-    data: Iterable[dict[str, Any]],
-    page: ft.Page,
-    server_bridge: ServerBridge | None
+    action: str, data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
 ):
     """Handle context menu actions for enhanced DataTable"""
     if not server_bridge:
@@ -236,14 +232,18 @@ def copy_selected_to_clipboard(selected_data: Iterable[dict[str, Any]], page: ft
         show_error_message(page, f"Failed to copy to clipboard: {e}")
 
 
-def export_selected_records(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None):
+def export_selected_records(
+    selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
+):
     """Export selected records"""
     # Implementation would export the selected records
     records = list(selected_data)
     show_success_message(page, f"Exporting {len(records)} records")
 
 
-def confirm_bulk_delete(selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None):
+def confirm_bulk_delete(
+    selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
+):
     """Confirm and execute bulk delete"""
     records = list(selected_data)
     count = len(records)
@@ -299,7 +299,6 @@ def _diagnostic_print(*args: Any, **kwargs: Any) -> None:
         logger.debug(message)
 
 
-
 # Configuration Constants
 DEFAULT_TABLE = "clients"
 DEFAULT_TABLES = ["clients", "files", "logs", "backups", "settings"]
@@ -324,6 +323,7 @@ def stringify_value(value: Any) -> str:
     if len(str_value) > MAX_DISPLAY_LENGTH:
         return f"{str_value[:MAX_DISPLAY_LENGTH]}..."
     return str_value
+
 
 # UI Message Constants
 MSG_SERVER_NOT_CONNECTED = "Server not connected"
@@ -360,13 +360,13 @@ def _format_table_cell_value(value: Any, col_name: str) -> str:
     col_lower = col_name.lower()
 
     # Context-aware truncation based on column name
-    if any(key in col_lower for key in ['id', 'uuid', 'guid']):
+    if any(key in col_lower for key in ["id", "uuid", "guid"]):
         # IDs: show start and end
         return f"{str_value[:10]}...{str_value[-8:]}" if len(str_value) > 20 else str_value
-    elif any(key in col_lower for key in ['key', 'hash', 'token']):
+    elif any(key in col_lower for key in ["key", "hash", "token"]):
         # Keys/hashes: show first 12 chars
         return f"{str_value[:12]}..." if len(str_value) > 16 else str_value
-    elif any(key in col_lower for key in ['name', 'description']):
+    elif any(key in col_lower for key in ["name", "description"]):
         # Names: standard truncation
         return f"{str_value[:30]}..." if len(str_value) > 30 else str_value
     else:
@@ -382,17 +382,20 @@ def _load_database_stats_async(
     get_active_bridge_fn: Callable[[], ServerBridge | None],
 ) -> asyncio.Task:
     """Load database statistics from server."""
+
     async def load_stats():
         nonlocal current_db_stats
 
         if not is_server_connected_fn():
             current_db_stats.clear()
-            current_db_stats.update({
-                "status": "Disconnected",
-                "tables": 0,
-                "total_records": 0,
-                "size": "0 MB",
-            })
+            current_db_stats.update(
+                {
+                    "status": "Disconnected",
+                    "tables": 0,
+                    "total_records": 0,
+                    "size": "0 MB",
+                }
+            )
             update_db_stats_ui_fn()
             return
 
@@ -401,12 +404,14 @@ def _load_database_stats_async(
             bridge = get_active_bridge_fn()
             if bridge is None:
                 current_db_stats.clear()
-                current_db_stats.update({
-                    "status": "Disconnected",
-                    "tables": 0,
-                    "total_records": 0,
-                    "size": "0 MB",
-                })
+                current_db_stats.update(
+                    {
+                        "status": "Disconnected",
+                        "tables": 0,
+                        "total_records": 0,
+                        "size": "0 MB",
+                    }
+                )
                 return
 
             # SIMPLIFIED: Use basic client/file counts instead of complex database health checks
@@ -425,12 +430,14 @@ def _load_database_stats_async(
             file_count = len(files_result) if files_result else 0
 
             current_db_stats.clear()
-            current_db_stats.update({
-                "status": "Connected",
-                "tables": 2,  # clients and files
-                "total_records": client_count + file_count,
-                "size": "N/A",  # Skip size calculation to avoid database locks
-            })
+            current_db_stats.update(
+                {
+                    "status": "Connected",
+                    "tables": 2,  # clients and files
+                    "total_records": client_count + file_count,
+                    "size": "N/A",  # Skip size calculation to avoid database locks
+                }
+            )
             logger.info(f"Database stats loaded: {current_db_stats}")
 
         except Exception as e:
@@ -454,6 +461,7 @@ def _load_table_names_async(
     update_status_fn: Callable[[str, str | None, bool], None],
 ) -> asyncio.Task:
     """Load available table names from server."""
+
     async def load_tables():
         await asyncio.sleep(0)
         nonlocal current_available_tables
@@ -496,6 +504,7 @@ def _load_table_data_async(
     async_manager: AsyncManager | None = None,
 ) -> asyncio.Task:
     """Load data for currently selected table."""
+
     async def load_data():
         # Check for cancellation before starting operation
         if async_manager and async_manager.is_cancelled():
@@ -545,7 +554,9 @@ def _load_table_data_async(
                 all_records.clear()
                 all_records.extend(data.get("rows", []))
                 if _VERBOSE_DB_DIAGNOSTICS:
-                    print(f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns")
+                    print(
+                        f"🟧 [LOAD_TABLE] SUCCESS! Loaded {len(all_records)} records, {len(table_columns)} columns"
+                    )
                 logger.info(f"Loaded {len(all_records)} records from {current_table}")
             else:
                 error = result.get("error", MSG_UNKNOWN_ERROR)
@@ -565,10 +576,14 @@ def _load_table_data_async(
         finally:
             if _VERBOSE_DB_DIAGNOSTICS:
                 print("🟧 [LOAD_TABLE] Finally block - applying search filter")
-                print(f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}")
+                print(
+                    f"🟧 [LOAD_TABLE] all_records count: {len(all_records)}, filtered_records count: {len(filtered_records)}"
+                )
             apply_search_filter_fn()
             if _VERBOSE_DB_DIAGNOSTICS:
-                print(f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}")
+                print(
+                    f"🟧 [LOAD_TABLE] After apply_search_filter - filtered_records count: {len(filtered_records)}"
+                )
             update_status_fn("Ready", ft.Colors.GREY_400, False)
             force_records_area_update_fn()
 
@@ -705,8 +720,6 @@ def create_database_view(
     search_query = ""
 
     # Table interaction state
-    sort_column_index: int | None = None
-    sort_ascending = True
     selected_row_ids: set[Any] = set()  # Track selected rows for bulk operations
     current_page = 0
     records_per_page = 25  # Pagination size
@@ -842,16 +855,11 @@ def create_database_view(
         show_checkbox_column=True,
         sort_column_index=None,
         sort_ascending=True,
-        expand=True
+        expand=True,
     )
 
     # State for native DataTable
-    table_state = {
-        "sort_column": None,
-        "sort_ascending": True,
-        "selected_rows": set(),
-        "search_query": ""
-    }
+    table_state = {"sort_column": None, "sort_ascending": True, "selected_rows": set(), "search_query": ""}
 
     def _refresh_table_display():
         """Refresh the DataTable display with current data and sorting"""
@@ -862,7 +870,9 @@ def create_database_view(
 
         if _VERBOSE_DB_DIAGNOSTICS:
             print(f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records")
-            print(f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}")
+            print(
+                f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}"
+            )
 
         # Apply sorting
         sorted_data = all_records.copy()
@@ -870,8 +880,7 @@ def create_database_view(
             try:
                 reverse = not table_state["sort_ascending"]
                 sorted_data.sort(
-                    key=lambda row: str(row.get(table_state["sort_column"], "")),
-                    reverse=reverse
+                    key=lambda row: str(row.get(table_state["sort_column"], "")), reverse=reverse
                 )
             except Exception as e:
                 if _VERBOSE_DB_DIAGNOSTICS:
@@ -882,8 +891,7 @@ def create_database_view(
         if table_state.get("search_query"):
             search_term = table_state["search_query"].lower()
             sorted_data = [
-                row for row in sorted_data
-                if any(search_term in str(value).lower() for value in row.values())
+                row for row in sorted_data if any(search_term in str(value).lower() for value in row.values())
             ]
 
         # Dynamic DataTable creation based on actual data structure
@@ -902,8 +910,10 @@ def create_database_view(
         for col in actual_columns[:10]:  # Limit to first 10 columns for display
             data_table.columns.append(
                 ft.DataColumn(
-                    label=ft.Text(col.replace("_", " ").title(), weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                    on_sort=lambda _, col_name=col: _sort_by_column_name(col_name)
+                    label=ft.Text(
+                        col.replace("_", " ").title(), weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE
+                    ),
+                    on_sort=lambda _, col_name=col: _sort_by_column_name(col_name),
                 )
             )
 
@@ -933,14 +943,14 @@ def create_database_view(
                 cells.append(ft.DataCell(ft.Text(display_value, size=12)))
 
             data_row = ft.DataRow(
-                selected=False,
-                on_select_changed=lambda e, idx=i: _handle_row_selection(e, idx),
-                cells=cells
+                selected=False, on_select_changed=lambda e, idx=i: _handle_row_selection(e, idx), cells=cells
             )
             data_table.rows.append(data_row)
 
         if _VERBOSE_DB_DIAGNOSTICS:
-            print(f"🟧 [REFRESH_TABLE] Created {len(data_table.rows)} rows with {len(data_table.columns)} columns")
+            print(
+                f"🟧 [REFRESH_TABLE] Created {len(data_table.rows)} rows with {len(data_table.columns)} columns"
+            )
         data_table.update()
 
     def _sort_by_column_name(column_name: str):
@@ -951,7 +961,6 @@ def create_database_view(
             table_state["sort_column"] = column_name
             table_state["sort_ascending"] = True
         _refresh_table_display()
-
 
     def _handle_row_selection(e: ft.ControlEvent, row_idx: int):
         """Handle row selection for native DataTable"""
@@ -974,11 +983,14 @@ def create_database_view(
             # Move focus to previous row (simplified for native DataTable)
             pass
 
-
     def _delete_selected_rows():
         """Delete selected rows"""
         if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
-            selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
+            selected_data = [
+                table_state["current_data"][i]
+                for i in table_state["selected_rows"]
+                if i < len(table_state["current_data"])
+            ]
             confirm_bulk_delete(selected_data, page, server_bridge)
 
     def _clear_selection():
@@ -996,7 +1008,7 @@ def create_database_view(
         action=lambda e: print("Activate selected row"),
         description="Activate selected row",
         category=ShortcutCategory.NAVIGATION,
-        context="database_table"
+        context="database_table",
     )
 
     shortcuts_manager.register_shortcut(
@@ -1005,7 +1017,7 @@ def create_database_view(
         action=lambda e: _delete_selected_rows(),
         description="Delete selected rows",
         category=ShortcutCategory.ACTIONS,
-        context="database_table"
+        context="database_table",
     )
 
     shortcuts_manager.register_shortcut(
@@ -1014,7 +1026,7 @@ def create_database_view(
         action=lambda e: _clear_selection(),
         description="Clear selection",
         category=ShortcutCategory.NAVIGATION,
-        context="database_table"
+        context="database_table",
     )
 
     shortcuts_manager.register_shortcut(
@@ -1024,7 +1036,7 @@ def create_database_view(
         action=lambda e: print("Select all rows"),
         description="Select all rows",
         category=ShortcutCategory.EDITING,
-        context="database_table"
+        context="database_table",
     )
 
     shortcuts_manager.register_shortcut(
@@ -1033,7 +1045,7 @@ def create_database_view(
         action=lambda e: _navigate_table("down"),
         description="Navigate down",
         category=ShortcutCategory.NAVIGATION,
-        context="database_table"
+        context="database_table",
     )
 
     shortcuts_manager.register_shortcut(
@@ -1042,7 +1054,7 @@ def create_database_view(
         action=lambda e: _navigate_table("up"),
         description="Navigate up",
         category=ShortcutCategory.NAVIGATION,
-        context="database_table"
+        context="database_table",
     )
 
     # Activate the context when DataTable is focused
@@ -1055,7 +1067,7 @@ def create_database_view(
         on_copy=lambda: _handle_context_copy(),
         on_export=lambda format_type: _handle_context_export(format_type),
         on_delete=lambda: _handle_context_delete(),
-        has_selection=True
+        has_selection=True,
     )
 
     def _handle_context_view_details():
@@ -1077,19 +1089,31 @@ def create_database_view(
     def _handle_context_copy():
         """Handle copy from context menu"""
         if table_state["selected_rows"] and table_state["current_data"]:
-            selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
+            selected_data = [
+                table_state["current_data"][i]
+                for i in table_state["selected_rows"]
+                if i < len(table_state["current_data"])
+            ]
             copy_selected_to_clipboard(selected_data, page)
 
     def _handle_context_export(format_type: str):
         """Handle export from context menu"""
         if table_state["selected_rows"] and table_state["current_data"]:
-            selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
+            selected_data = [
+                table_state["current_data"][i]
+                for i in table_state["selected_rows"]
+                if i < len(table_state["current_data"])
+            ]
             export_records(selected_data, format_type, page)
 
     def _handle_context_delete():
         """Handle delete from context menu"""
         if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
-            selected_data = [table_state["current_data"][i] for i in table_state["selected_rows"] if i < len(table_state["current_data"])]
+            selected_data = [
+                table_state["current_data"][i]
+                for i in table_state["selected_rows"]
+                if i < len(table_state["current_data"])
+            ]
             confirm_bulk_delete(selected_data, page, server_bridge)
 
     # Add context menu to page overlay
@@ -1187,7 +1211,10 @@ def create_database_view(
         tooltip="Card View",
         selected=False,
         style=ft.ButtonStyle(
-            color={ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT, ft.ControlState.SELECTED: ft.Colors.PRIMARY}
+            color={
+                ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT,
+                ft.ControlState.SELECTED: ft.Colors.PRIMARY,
+            }
         ),
     )
     btn_view_table = ft.IconButton(
@@ -1195,7 +1222,10 @@ def create_database_view(
         tooltip="Table View",
         selected=True,
         style=ft.ButtonStyle(
-            color={ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT, ft.ControlState.SELECTED: ft.Colors.PRIMARY}
+            color={
+                ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT,
+                ft.ControlState.SELECTED: ft.Colors.PRIMARY,
+            }
         ),
     )
 
@@ -1278,13 +1308,10 @@ def create_database_view(
             logger.debug("Table dropdown not attached, skipping update")
             return
 
-        table_dropdown.options = [
-            ft.dropdown.Option(text=t.title(), key=t) for t in available_tables
-        ]
+        table_dropdown.options = [ft.dropdown.Option(text=t.title(), key=t) for t in available_tables]
         table_dropdown.value = current_table if current_table in available_tables else available_tables[0]
         table_dropdown.disabled = not is_server_connected()
         table_dropdown.update()
-
 
     def refresh_records_display() -> None:
         """Refresh the records list (Column with cards) and DataTable."""
@@ -1373,7 +1400,9 @@ def create_database_view(
                 )
             )
 
-        print(f"🟩 [REFRESH_DISPLAY] About to call records_listview.update() - controls count: {len(records_listview.controls)}")
+        print(
+            f"🟩 [REFRESH_DISPLAY] About to call records_listview.update() - controls count: {len(records_listview.controls)}"
+        )
         records_listview.update()
         print("🟩 [REFRESH_DISPLAY] records_listview.update() COMPLETED")
         _force_records_area_update()
@@ -1462,12 +1491,15 @@ def create_database_view(
 
                 # Show result
                 if failed_count == 0:
-                    show_success_message(page, f"Successfully deleted {deleted_count} record{'s' if deleted_count != 1 else ''}")
+                    show_success_message(
+                        page,
+                        f"Successfully deleted {deleted_count} record{'s' if deleted_count != 1 else ''}",
+                    )
                 else:
                     show_error_message(
                         page,
                         f"Deleted {deleted_count} record{'s' if deleted_count != 1 else ''}, "
-                        f"failed to delete {failed_count}"
+                        f"failed to delete {failed_count}",
                     )
 
                 # Reload data
@@ -1506,8 +1538,8 @@ def create_database_view(
             pagination_info.value = f"Page {current_page + 1} of {total_pages}"
 
             # Update button states
-            btn_prev_page.disabled = (current_page == 0)
-            btn_next_page.disabled = (current_page >= total_pages - 1)
+            btn_prev_page.disabled = current_page == 0
+            btn_next_page.disabled = current_page >= total_pages - 1
 
         # Update controls if attached
         if is_control_attached(pagination_info):
@@ -1562,11 +1594,11 @@ def create_database_view(
         view_mode = new_mode
 
         # Update button states
-        btn_view_cards.selected = (new_mode == "cards")
-        btn_view_table.selected = (new_mode == "table")
+        btn_view_cards.selected = new_mode == "cards"
+        btn_view_table.selected = new_mode == "table"
 
         # CRITICAL FIX: Update visibility properties before swapping content
-        is_cards = (new_mode == "cards")
+        is_cards = new_mode == "cards"
         cards_view_container.visible = is_cards
         table_view_container.visible = not is_cards
 
@@ -1598,7 +1630,9 @@ def create_database_view(
         nonlocal filtered_records, current_page
 
         if _VERBOSE_DB_DIAGNOSTICS:
-            print(f"🟨 [SEARCH_FILTER] ENTERED - all_records: {len(all_records)}, search_query: '{search_query}'")
+            print(
+                f"🟨 [SEARCH_FILTER] ENTERED - all_records: {len(all_records)}, search_query: '{search_query}'"
+            )
 
         # Reset to first page when filtering
         current_page = 0
@@ -2201,10 +2235,7 @@ def create_database_view(
             # Execute all three database queries concurrently instead of sequentially
             # Performance improvement: ~3x faster (3 queries x 100ms = 300ms → 100ms)
             await asyncio.gather(
-                load_database_stats(),
-                load_table_names(),
-                load_table_data(),
-                return_exceptions=False
+                load_database_stats(), load_table_names(), load_table_data(), return_exceptions=False
             )
 
             # THEN update UI with loaded data

@@ -18,11 +18,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class SynchronizedFileManager:
     """
     Thread-safe file lifecycle manager that prevents race conditions
     between file creation, usage by subprocesses, and cleanup.
-    
+
     Key features:
     - Coordinates file lifecycle with subprocess execution
     - Prevents premature deletion of files in use
@@ -33,7 +34,7 @@ class SynchronizedFileManager:
     def __init__(self, base_temp_dir: str | None = None):
         """
         Initialize the SynchronizedFileManager.
-        
+
         Args:
             base_temp_dir: Base directory for temporary files. If None, uses system temp.
         """
@@ -44,19 +45,18 @@ class SynchronizedFileManager:
 
         logger.info(f"SynchronizedFileManager initialized with base_temp_dir: {self.base_temp_dir}")
 
-    def create_managed_file(self, filename: str, content: str,
-                          file_id: str | None = None) -> str:
+    def create_managed_file(self, filename: str, content: str, file_id: str | None = None) -> str:
         """
         Create a managed temporary file with synchronized cleanup.
-        
+
         Args:
             filename: Name of the file to create
             content: Content to write to the file
             file_id: Optional unique identifier for the file. If None, generates one.
-            
+
         Returns:
             Path to the created file
-            
+
         Raises:
             OSError: If file creation fails
         """
@@ -70,19 +70,19 @@ class SynchronizedFileManager:
 
             try:
                 # Write content to file
-                with open(file_path, 'w', encoding='utf-8') as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
 
                 # Register the file for management
                 cleanup_event = threading.Event()
                 self.managed_files[file_id] = {
-                    'file_path': file_path,
-                    'temp_dir': temp_dir,
-                    'filename': filename,
-                    'created_at': time.monotonic(),
-                    'in_use': True,
-                    'subprocess_refs': 0,
-                    'cleanup_event': cleanup_event
+                    "file_path": file_path,
+                    "temp_dir": temp_dir,
+                    "filename": filename,
+                    "created_at": time.monotonic(),
+                    "in_use": True,
+                    "subprocess_refs": 0,
+                    "cleanup_event": cleanup_event,
                 }
                 self.cleanup_events[file_id] = cleanup_event
 
@@ -94,20 +94,21 @@ class SynchronizedFileManager:
                 with suppress(Exception):
                     if os.path.exists(temp_dir):
                         import shutil
+
                         shutil.rmtree(temp_dir)
                 raise OSError(f"Failed to create managed file {filename}: {e}") from e
 
     def copy_to_locations(self, file_id: str, target_locations: list[str]) -> list[str]:
         """
         Copy managed file to multiple target locations safely.
-        
+
         Args:
             file_id: ID of the managed file
             target_locations: List of target file paths
-            
+
         Returns:
             List of successfully created target paths
-            
+
         Raises:
             ValueError: If file_id is not found
         """
@@ -116,7 +117,7 @@ class SynchronizedFileManager:
                 raise ValueError(f"File ID {file_id} not found in managed files")
 
             file_info = self.managed_files[file_id]
-            source_path = file_info['file_path']
+            source_path = file_info["file_path"]
             successful_copies: list[str] = []
 
             try:
@@ -126,10 +127,10 @@ class SynchronizedFileManager:
                         os.makedirs(target_dir, exist_ok=True)
 
                     # Copy file content
-                    with open(source_path, encoding='utf-8') as src:
+                    with open(source_path, encoding="utf-8") as src:
                         content = src.read()
 
-                    with open(target_path, 'w', encoding='utf-8') as dst:
+                    with open(target_path, "w", encoding="utf-8") as dst:
                         dst.write(content)
 
                     successful_copies.append(target_path)
@@ -137,7 +138,7 @@ class SynchronizedFileManager:
 
                 # Update managed file info with copy locations
                 if isinstance(file_info, dict):
-                    file_info['copy_locations'] = successful_copies
+                    file_info["copy_locations"] = successful_copies
 
                 return successful_copies
 
@@ -152,10 +153,10 @@ class SynchronizedFileManager:
     def mark_in_subprocess_use(self, file_id: str) -> bool:
         """
         Mark file as being used by a subprocess to prevent premature cleanup.
-        
+
         Args:
             file_id: ID of the managed file
-            
+
         Returns:
             True if successfully marked, False if file not found
         """
@@ -165,17 +166,17 @@ class SynchronizedFileManager:
                 return False
 
             file_info = self.managed_files[file_id]
-            file_info['subprocess_refs'] += 1
+            file_info["subprocess_refs"] += 1
             logger.debug(f"File {file_id} marked for subprocess use (refs: {file_info['subprocess_refs']})")
             return True
 
     def release_subprocess_use(self, file_id: str) -> bool:
         """
         Release subprocess reference to file, allowing cleanup if no other refs exist.
-        
+
         Args:
             file_id: ID of the managed file
-            
+
         Returns:
             True if successfully released, False if file not found
         """
@@ -185,13 +186,15 @@ class SynchronizedFileManager:
                 return False
 
             file_info = self.managed_files[file_id]
-            if file_info['subprocess_refs'] > 0:
-                file_info['subprocess_refs'] -= 1
-                logger.debug(f"File {file_id} released from subprocess use (refs: {file_info['subprocess_refs']})")
+            if file_info["subprocess_refs"] > 0:
+                file_info["subprocess_refs"] -= 1
+                logger.debug(
+                    f"File {file_id} released from subprocess use (refs: {file_info['subprocess_refs']})"
+                )
 
                 # Signal cleanup event if no more subprocess references
-                if file_info['subprocess_refs'] == 0:
-                    cleanup_event = file_info['cleanup_event']
+                if file_info["subprocess_refs"] == 0:
+                    cleanup_event = file_info["cleanup_event"]
                     cleanup_event.set()
                     logger.debug(f"Cleanup event signaled for file {file_id}")
 
@@ -200,11 +203,11 @@ class SynchronizedFileManager:
     def wait_for_subprocess_completion(self, file_id: str, timeout: float = 30.0) -> bool:
         """
         Wait for all subprocesses to finish using the file before cleanup.
-        
+
         Args:
             file_id: ID of the managed file
             timeout: Maximum time to wait in seconds
-            
+
         Returns:
             True if all subprocesses completed, False if timeout occurred
         """
@@ -229,11 +232,11 @@ class SynchronizedFileManager:
     def safe_cleanup(self, file_id: str, wait_timeout: float = 30.0) -> bool:
         """
         Safely cleanup managed file after ensuring subprocesses are done.
-        
+
         Args:
             file_id: ID of the managed file
             wait_timeout: Maximum time to wait for subprocess completion
-            
+
         Returns:
             True if cleanup successful, False otherwise
         """
@@ -246,13 +249,13 @@ class SynchronizedFileManager:
             logger.info(f"Starting safe cleanup for file {file_id}: {file_info['file_path']}")
 
             # Wait for subprocess completion
-            if file_info['subprocess_refs'] > 0:
+            if file_info["subprocess_refs"] > 0:
                 logger.info(f"File {file_id} has {file_info['subprocess_refs']} active subprocess references")
                 self.wait_for_subprocess_completion(file_id, wait_timeout)
 
             try:
                 # Cleanup copy locations first
-                copy_locations = file_info.get('copy_locations', [])
+                copy_locations = file_info.get("copy_locations", [])
                 for copy_path in copy_locations:
                     try:
                         if os.path.exists(copy_path):
@@ -262,9 +265,10 @@ class SynchronizedFileManager:
                         logger.warning(f"Failed to remove copy location {copy_path}: {e}")
 
                 # Cleanup original temp directory
-                temp_dir = file_info['temp_dir']
+                temp_dir = file_info["temp_dir"]
                 if os.path.exists(temp_dir):
                     import shutil
+
                     shutil.rmtree(temp_dir)
                     logger.debug(f"Removed temp directory: {temp_dir}")
 
@@ -283,10 +287,10 @@ class SynchronizedFileManager:
     def cleanup_all(self, wait_timeout: float = 30.0) -> int:
         """
         Cleanup all managed files.
-        
+
         Args:
             wait_timeout: Maximum time to wait for each file's subprocess completion
-            
+
         Returns:
             Number of files successfully cleaned up
         """
@@ -301,16 +305,15 @@ class SynchronizedFileManager:
             return cleaned_count
 
     @contextmanager
-    def managed_file_context(self, filename: str, content: str,
-                           target_locations: list[str] | None = None):
+    def managed_file_context(self, filename: str, content: str, target_locations: list[str] | None = None):
         """
         Context manager for automatic file lifecycle management.
-        
+
         Args:
             filename: Name of the file to create
             content: Content to write to the file
             target_locations: Optional list of locations to copy the file to
-            
+
         Yields:
             Tuple of (file_id, file_path, copy_locations)
         """
@@ -332,10 +335,10 @@ class SynchronizedFileManager:
     def get_file_info(self, file_id: str) -> dict[str, Any] | None:
         """
         Get information about a managed file.
-        
+
         Args:
             file_id: ID of the managed file
-            
+
         Returns:
             Dictionary with file information or None if not found
         """
@@ -347,7 +350,7 @@ class SynchronizedFileManager:
     def list_managed_files(self) -> list[str]:
         """
         Get list of all managed file IDs.
-        
+
         Returns:
             List of file IDs currently being managed
         """
@@ -357,19 +360,24 @@ class SynchronizedFileManager:
 
 # Convenience functions for common usage patterns
 
-def create_transfer_info_managed(server_ip: str, server_port: int,
-                               username: str, file_path: str,
-                               manager: SynchronizedFileManager | None = None) -> tuple:
+
+def create_transfer_info_managed(
+    server_ip: str,
+    server_port: int,
+    username: str,
+    file_path: str,
+    manager: SynchronizedFileManager | None = None,
+) -> tuple:
     """
     Create a managed transfer.info file for C++ client usage.
-    
+
     Args:
         server_ip: Server IP address
         server_port: Server port number
         username: Username for the backup
         file_path: Path to the file being backed up
         manager: Optional SynchronizedFileManager instance
-        
+
     Returns:
         Tuple of (file_manager, file_id, transfer_info_path)
     """
@@ -387,6 +395,7 @@ def create_transfer_info_managed(server_ip: str, server_port: int,
 
 
 # Example usage and testing functions
+
 
 def test_synchronized_file_manager():
     """Test function to verify SynchronizedFileManager functionality."""
@@ -406,13 +415,13 @@ def test_synchronized_file_manager():
         # Test copy to locations
         target_locations = [
             os.path.join(tempfile.gettempdir(), "copy1.txt"),
-            os.path.join(tempfile.gettempdir(), "copy2.txt")
+            os.path.join(tempfile.gettempdir(), "copy2.txt"),
         ]
 
         copy_locations = manager.copy_to_locations(file_id, target_locations)
         print(f"Copied to: {copy_locations}")
 
-# sourcery skip: no-loop-in-tests
+        # sourcery skip: no-loop-in-tests
         for copy_path in copy_locations:
             assert os.path.exists(copy_path)
 
@@ -441,5 +450,5 @@ def test_synchronized_file_manager():
 
 if __name__ == "__main__":
     # Configure logging for testing
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     test_synchronized_file_manager()

@@ -19,7 +19,12 @@ logger = logging.getLogger(__name__)
 class ProcessMonitorWidget:
     """Widget for displaying process monitoring information"""
 
-    def __init__(self, parent: tk.Widget | tk.Tk | tk.Toplevel, title: str = "Process Monitor", update_interval: float = 2.0) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget | tk.Tk | tk.Toplevel,
+        title: str = "Process Monitor",
+        update_interval: float = 2.0,
+    ) -> None:
         self.parent = parent
         self.title = title
         self.update_interval = update_interval
@@ -116,7 +121,7 @@ class ProcessMonitorWidget:
         while self.running:
             try:
                 # Schedule GUI update on main thread
-                if hasattr(self.parent, 'after'):
+                if hasattr(self.parent, "after"):
                     self.parent.after(0, self._update_display)
                 time.sleep(self.update_interval)
             except Exception as e:
@@ -158,9 +163,9 @@ class ProcessMonitorWidget:
                     warnings = "No metrics"
 
                 # Add to tree
-                item_id = self.process_tree.insert("", "end", values=(
-                    name, state, pid, cpu_percent, memory_mb, threads, warnings
-                ))
+                item_id = self.process_tree.insert(
+                    "", "end", values=(name, state, pid, cpu_percent, memory_mb, threads, warnings)
+                )
 
                 # Color code by state
                 if process_info.state == ProcessState.RUNNING:
@@ -214,7 +219,9 @@ class ProcessMonitorWidget:
 class ProcessMetricsChart:
     """Chart widget for displaying process metrics over time"""
 
-    def __init__(self, parent: tk.Widget | tk.Tk | tk.Toplevel, process_id: str, title: str = "Process Metrics") -> None:
+    def __init__(
+        self, parent: tk.Widget | tk.Tk | tk.Toplevel, process_id: str, title: str = "Process Metrics"
+    ) -> None:
         self.parent = parent
         self.process_id = process_id
         self.title = title
@@ -224,10 +231,10 @@ class ProcessMetricsChart:
 
         # Metrics data storage
         self.metrics_data: dict[str, list[Any]] = {
-            'timestamps': [],
-            'cpu_percent': [],
-            'memory_mb': [],
-            'threads': []
+            "timestamps": [],
+            "cpu_percent": [],
+            "memory_mb": [],
+            "threads": [],
         }
 
         # Create the UI
@@ -309,10 +316,10 @@ class ProcessMetricsChart:
     def _update_chart_data(self, metrics: ProcessMetrics) -> None:
         """Update the chart with new metrics data"""
         # Add new data point
-        self.metrics_data['timestamps'].append(metrics.timestamp)
-        self.metrics_data['cpu_percent'].append(metrics.cpu_percent)
-        self.metrics_data['memory_mb'].append(metrics.memory_mb)
-        self.metrics_data['threads'].append(metrics.num_threads)
+        self.metrics_data["timestamps"].append(metrics.timestamp)
+        self.metrics_data["cpu_percent"].append(metrics.cpu_percent)
+        self.metrics_data["memory_mb"].append(metrics.memory_mb)
+        self.metrics_data["threads"].append(metrics.num_threads)
 
         # Keep only last 50 data points
         max_points = 50
@@ -327,7 +334,7 @@ class ProcessMetricsChart:
         """Render a simple text-based chart"""
         self.chart_text.delete(1.0, tk.END)
 
-        if not self.metrics_data['timestamps']:
+        if not self.metrics_data["timestamps"]:
             self.chart_text.insert(tk.END, "No data available")
             return
 
@@ -336,11 +343,11 @@ class ProcessMetricsChart:
         lines.append("Time        CPU%   Memory(MB)  Threads")
         lines.append("-" * 40)
 
-        for i in range(len(self.metrics_data['timestamps'])):
-            timestamp = self.metrics_data['timestamps'][i]
-            cpu = self.metrics_data['cpu_percent'][i]
-            memory = self.metrics_data['memory_mb'][i]
-            threads = self.metrics_data['threads'][i]
+        for i in range(len(self.metrics_data["timestamps"])):
+            timestamp = self.metrics_data["timestamps"][i]
+            cpu = self.metrics_data["cpu_percent"][i]
+            memory = self.metrics_data["memory_mb"][i]
+            threads = self.metrics_data["threads"][i]
 
             time_str = timestamp.strftime("%H:%M:%S")
             line = f"{time_str}  {cpu:5.1f}  {memory:8.1f}  {threads:7d}"
@@ -366,7 +373,9 @@ class ProcessMetricsChart:
         self.frame.destroy()
 
 
-def create_process_monitor_tab(notebook: ttk.Notebook | tk.Widget, title: str = "Process Monitor") -> tuple[ttk.Frame, ProcessMonitorWidget]:
+def create_process_monitor_tab(
+    notebook: ttk.Notebook | tk.Widget, title: str = "Process Monitor"
+) -> tuple[ttk.Frame, ProcessMonitorWidget]:
     """Create a process monitor tab for a notebook widget"""
     # Create tab frame
     tab_frame = ttk.Frame(notebook)

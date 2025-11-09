@@ -21,6 +21,7 @@ try:
     from .utils.enhanced_output import Colors as EnhancedColors
     from .utils.enhanced_output import Emojis as EnhancedEmojis
     from .utils.enhanced_output import enhance_existing_logger
+
     ENHANCED_OUTPUT_AVAILABLE = True
 except ImportError:
     ENHANCED_OUTPUT_AVAILABLE = False
@@ -41,18 +42,20 @@ else:
         ROCKET = "🚀"
         GEAR = "⚙️"
 
+
 # Fallback Colors implementation (no-op colorization) when enhanced colors are not available
 if ENHANCED_OUTPUT_AVAILABLE and EnhancedColors is not None:
     Colors = EnhancedColors  # type: ignore
 else:
+
     class Colors:
         _SUPPORTS_COLOR = False
 
         # Provide attributes expected by callers (no-op strings)
-        BOLD = ''
-        DIM = ''
-        UNDERLINE = ''
-        RESET = ''
+        BOLD = ""
+        DIM = ""
+        UNDERLINE = ""
+        RESET = ""
 
         @classmethod
         def colorize(cls, text: str, color: str, bold: bool = False) -> str:
@@ -82,41 +85,66 @@ else:
 # Centralized CODE MAPS for maintainability and UI consumption.
 # Each entry is either a section (has 'section') or an entry with code/text/emoji/level.
 CODE_MAPS: dict[str, list[dict[str, str]]] = {
-    'api': [
-        {'section': 'HTTP STATUS CODES'},
-        {'code': '1xx', 'text': 'Informational (100 Continue, 101 Switching Protocols)', 'emoji': Emojis.INFO, 'level': 'info'},
-        {'code': '200', 'text': 'OK (Success)', 'emoji': Emojis.SUCCESS, 'level': 'success'},
-        {'code': '201', 'text': 'Created', 'emoji': Emojis.SUCCESS, 'level': 'success'},
-        {'code': '202', 'text': 'Accepted', 'emoji': Emojis.INFO, 'level': 'info'},
-        {'code': '204', 'text': 'No Content', 'emoji': Emojis.INFO, 'level': 'info'},
-        {'code': '3xx', 'text': 'Redirection (301/302)', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'code': '400', 'text': 'Bad Request', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '401', 'text': 'Unauthorized', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '403', 'text': 'Forbidden', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '404', 'text': 'Not Found', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': '408', 'text': 'Request Timeout', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '409', 'text': 'Conflict', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '413', 'text': 'Payload Too Large', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '415', 'text': 'Unsupported Media Type', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '429', 'text': 'Too Many Requests', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': '500', 'text': 'Internal Server Error', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': '502', 'text': 'Bad Gateway', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': '503', 'text': 'Service Unavailable', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': '504', 'text': 'Gateway Timeout', 'emoji': Emojis.ERROR, 'level': 'error'},
+    "api": [
+        {"section": "HTTP STATUS CODES"},
+        {
+            "code": "1xx",
+            "text": "Informational (100 Continue, 101 Switching Protocols)",
+            "emoji": Emojis.INFO,
+            "level": "info",
+        },
+        {"code": "200", "text": "OK (Success)", "emoji": Emojis.SUCCESS, "level": "success"},
+        {"code": "201", "text": "Created", "emoji": Emojis.SUCCESS, "level": "success"},
+        {"code": "202", "text": "Accepted", "emoji": Emojis.INFO, "level": "info"},
+        {"code": "204", "text": "No Content", "emoji": Emojis.INFO, "level": "info"},
+        {"code": "3xx", "text": "Redirection (301/302)", "emoji": Emojis.ROCKET, "level": "info"},
+        {"code": "400", "text": "Bad Request", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "401", "text": "Unauthorized", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "403", "text": "Forbidden", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "404", "text": "Not Found", "emoji": Emojis.ERROR, "level": "error"},
+        {"code": "408", "text": "Request Timeout", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "409", "text": "Conflict", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "413", "text": "Payload Too Large", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "415", "text": "Unsupported Media Type", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "429", "text": "Too Many Requests", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "500", "text": "Internal Server Error", "emoji": Emojis.ERROR, "level": "error"},
+        {"code": "502", "text": "Bad Gateway", "emoji": Emojis.ERROR, "level": "error"},
+        {"code": "503", "text": "Service Unavailable", "emoji": Emojis.ERROR, "level": "error"},
+        {"code": "504", "text": "Gateway Timeout", "emoji": Emojis.ERROR, "level": "error"},
     ],
-    'backup': [
-        {'section': 'PROTOCOL CODES'},
-        {'code': 'PROTOCOL', 'text': 'Version 3', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'code': 'REQ_REGISTER (1025)', 'text': 'Client registration', 'emoji': Emojis.ROCKET, 'level': 'info'},
-        {'code': 'REQ_SEND_FILE (1028)', 'text': 'File transfer start', 'emoji': Emojis.SUCCESS, 'level': 'success'},
-        {'code': 'RESP_REG_OK (1600)', 'text': 'Registration success', 'emoji': Emojis.SUCCESS, 'level': 'success'},
-        {'code': 'RESP_FILE_CRC (1603)', 'text': 'Transfer verification', 'emoji': Emojis.INFO, 'level': 'info'},
-        {'section': 'ERROR CODES'},
-        {'code': 'CRC_MISMATCH', 'text': 'File integrity error', 'emoji': Emojis.ERROR, 'level': 'error'},
-        {'code': 'AUTH_FAIL', 'text': 'Authentication failed', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'code': 'DISK_FULL', 'text': 'Storage full', 'emoji': Emojis.WARNING, 'level': 'warning'},
-        {'section': 'SECURITY'},
-        {'note': 'RSA-1024 + AES-256 encryption'},
+    "backup": [
+        {"section": "PROTOCOL CODES"},
+        {"code": "PROTOCOL", "text": "Version 3", "emoji": Emojis.ROCKET, "level": "info"},
+        {
+            "code": "REQ_REGISTER (1025)",
+            "text": "Client registration",
+            "emoji": Emojis.ROCKET,
+            "level": "info",
+        },
+        {
+            "code": "REQ_SEND_FILE (1028)",
+            "text": "File transfer start",
+            "emoji": Emojis.SUCCESS,
+            "level": "success",
+        },
+        {
+            "code": "RESP_REG_OK (1600)",
+            "text": "Registration success",
+            "emoji": Emojis.SUCCESS,
+            "level": "success",
+        },
+        {
+            "code": "RESP_FILE_CRC (1603)",
+            "text": "Transfer verification",
+            "emoji": Emojis.INFO,
+            "level": "info",
+        },
+        {"section": "ERROR CODES"},
+        {"code": "CRC_MISMATCH", "text": "File integrity error", "emoji": Emojis.ERROR, "level": "error"},
+        {"code": "AUTH_FAIL", "text": "Authentication failed", "emoji": Emojis.WARNING, "level": "warning"},
+        {"code": "DISK_FULL", "text": "Storage full", "emoji": Emojis.WARNING, "level": "warning"},
+        {"section": "SECURITY"},
+        {"note": "RSA-1024 + AES-256 encryption"},
     ],
 }
 
@@ -127,7 +155,7 @@ def get_code_map(server_type: str) -> list[dict[str, str]]:
     This makes the data easy to consume from UIs or other tools.
     """
     st = server_type.lower()
-    return CODE_MAPS['api'] if 'api' in st else CODE_MAPS['backup']
+    return CODE_MAPS["api"] if "api" in st else CODE_MAPS["backup"]
 
 
 def setup_dual_logging(
@@ -135,10 +163,10 @@ def setup_dual_logging(
     server_type: str,
     console_level: int = logging.INFO,
     file_level: int = logging.DEBUG,
-    console_format: str = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
+    console_format: str = "%(asctime)s - %(threadName)s - %(levelname)s - %(message)s",
     file_format: str | None = None,
     log_dir: str = "logs",
-    enable_enhanced_output: bool = True
+    enable_enhanced_output: bool = True,
 ) -> tuple[logging.Logger, str]:
     """
     Set up dual logging: console and file output with different levels.
@@ -161,8 +189,8 @@ def setup_dual_logging(
         file_format = console_format
 
     # Check environment variable to disable enhanced output for cleaner terminal output
-    disable_code_map = os.environ.get('DISABLE_CODE_MAP', '').lower() in ('true', '1', 'yes')
-    fletv2_context = 'FletV2' in os.getcwd() or os.path.basename(os.getcwd()) == 'FletV2'
+    disable_code_map = os.environ.get("DISABLE_CODE_MAP", "").lower() in ("true", "1", "yes")
+    fletv2_context = "FletV2" in os.getcwd() or os.path.basename(os.getcwd()) == "FletV2"
 
     if disable_code_map or fletv2_context:
         enable_enhanced_output = False
@@ -193,11 +221,11 @@ def setup_dual_logging(
     if enable_enhanced_output and ENHANCED_OUTPUT_AVAILABLE and enhance_existing_logger is not None:
         with contextlib.suppress(Exception):
             # Disable emojis on Windows to prevent Unicode encoding errors with cp1255
-            use_emojis = sys.platform != 'win32'
+            use_emojis = sys.platform != "win32"
             enhance_existing_logger(logger, use_colors=True, use_emojis=use_emojis)
 
     # File handler
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
     file_handler.setLevel(file_level)
     file_formatter = logging.Formatter(file_format)
     file_handler.setFormatter(file_formatter)
@@ -210,7 +238,7 @@ def setup_dual_logging(
         f"File Level: {logging.getLevelName(file_level)}",
         f"Log File: {log_file_path}",
         "=" * 60,
-        f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50"
+        f"Live Monitoring: Get-Content {log_file_path} -Wait -Tail 50",
     ]
 
     # Console-only colored/emoji CODE-MAP (printed to stdout only so file logs remain plain)
@@ -220,7 +248,9 @@ def setup_dual_logging(
     console_lines.append(Colors.info(f"File Level: {logging.getLevelName(file_level)}"))
     console_lines.append(Colors.debug(f"Log File: {log_file_path}"))
     console_lines.append("")
-    console_lines.append(Colors.BOLD + Colors.UNDERLINE + "CODE MAP: Common status / progress codes" + Colors.RESET)
+    console_lines.append(
+        Colors.BOLD + Colors.UNDERLINE + "CODE MAP: Common status / progress codes" + Colors.RESET
+    )
 
     # Helper to build colored code lines with emoji
     def codeline(code: str, text: str, emoji: str, color_fn: Callable[..., str]) -> str:
@@ -229,22 +259,22 @@ def setup_dual_logging(
 
     # Render structured CODE_MAP for this server type
     for entry in get_code_map(server_type):
-        if 'section' in entry:
-            console_lines.append(Colors.BOLD + entry['section'] + Colors.RESET)
+        if "section" in entry:
+            console_lines.append(Colors.BOLD + entry["section"] + Colors.RESET)
             continue
-        if 'note' in entry:
-            level = entry.get('level')
-            note_text = entry['note']
-            if level == 'warning':
+        if "note" in entry:
+            level = entry.get("level")
+            note_text = entry["note"]
+            if level == "warning":
                 console_lines.append(Colors.warning(note_text, bold=True))
             else:
                 console_lines.append(Colors.info(note_text))
             continue
         # Standard code entry (code/text/emoji/level)
-        code = entry.get('code', '')
-        text = entry.get('text', '')
-        emoji = entry.get('emoji', '')
-        lvl = entry.get('level', 'info')
+        code = entry.get("code", "")
+        text = entry.get("text", "")
+        emoji = entry.get("emoji", "")
+        lvl = entry.get("level", "info")
         color_fn = getattr(Colors, lvl, Colors.info)
         console_lines.append(codeline(code, text, emoji, color_fn))
 
@@ -287,8 +317,8 @@ def create_log_monitor_info(server_type: str, log_file_path: str) -> dict[str, A
         "monitor_commands": {
             "tail_logs": f"tail -f {log_file_path}",
             "grep_errors": f"grep -i error {log_file_path}",
-            "grep_warnings": f"grep -i warn {log_file_path}"
-        }
+            "grep_warnings": f"grep -i warn {log_file_path}",
+        },
     }
 
 
@@ -357,7 +387,9 @@ def create_enhanced_logger(component: str, base_logger: logging.Logger) -> Enhan
     return EnhancedLogger(component, base_logger)
 
 
-def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms: float, success: bool = True, **kwargs: Any) -> None:
+def log_performance_metrics(
+    logger: logging.Logger, operation: str, duration_ms: float, success: bool = True, **kwargs: Any
+) -> None:
     """
     Log performance metrics for operations.
 
@@ -372,7 +404,7 @@ def log_performance_metrics(logger: logging.Logger, operation: str, duration_ms:
         "operation": operation,
         "duration_ms": duration_ms,
         "success": success,
-        "performance_metric": True
+        "performance_metric": True,
     }
 
     status = "completed" if success else "failed"
@@ -401,10 +433,8 @@ def configure_root_logger(level: int = logging.INFO):
     """
     logging.basicConfig(
         level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
 
@@ -423,7 +453,7 @@ def quick_console_logger(name: str, level: int = logging.INFO) -> logging.Logger
     logger = logging.getLogger(name)
     if not logger.handlers:  # Only add handler if none exist
         handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         handler.setLevel(level)
         logger.addHandler(handler)
@@ -445,8 +475,8 @@ def quick_file_logger(name: str, filename: str, level: int = logging.DEBUG) -> l
     """
     logger = logging.getLogger(name)
     if not logger.handlers:  # Only add handler if none exist
-        handler = logging.FileHandler(filename, mode='a', encoding='utf-8')
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler = logging.FileHandler(filename, mode="a", encoding="utf-8")
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         handler.setLevel(level)
         logger.addHandler(handler)
@@ -463,7 +493,7 @@ if __name__ == "__main__":
         logger_name="test_logger",
         server_type="test-server",
         console_level=logging.INFO,
-        file_level=logging.DEBUG
+        file_level=logging.DEBUG,
     )
 
     # Test enhanced logger

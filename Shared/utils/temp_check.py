@@ -160,9 +160,9 @@ class ProcessMonitorWidget:
                     warnings = "No metrics"
 
                 # Add to tree
-                item_id = self.process_tree.insert("", "end", values=(
-                    name, state, pid, cpu_percent, memory_mb, threads, warnings
-                ))
+                item_id = self.process_tree.insert(
+                    "", "end", values=(name, state, pid, cpu_percent, memory_mb, threads, warnings)
+                )
 
                 # Color code by state
                 if process_info.state == ProcessState.RUNNING:
@@ -231,10 +231,10 @@ class ProcessMetricsChart:
         self.threads: list[int] = []
 
         self.metrics_data: dict[str, Any] = {
-            'timestamps': self.timestamps,
-            'cpu_percent': self.cpu_percent,
-            'memory_mb': self.memory_mb,
-            'threads': self.threads
+            "timestamps": self.timestamps,
+            "cpu_percent": self.cpu_percent,
+            "memory_mb": self.memory_mb,
+            "threads": self.threads,
         }
 
         # Create the UI
@@ -374,7 +374,9 @@ class ProcessMetricsChart:
         self.frame.destroy()
 
 
-def create_process_monitor_tab(notebook: Any, title: str = "Process Monitor") -> tuple[Any, ProcessMonitorWidget]:
+def create_process_monitor_tab(
+    notebook: Any, title: str = "Process Monitor"
+) -> tuple[Any, ProcessMonitorWidget]:
     """Create a process monitor tab for a notebook widget"""
     # Create tab frame
     tab_frame = ttk.Frame(notebook)
@@ -385,10 +387,7 @@ def create_process_monitor_tab(notebook: Any, title: str = "Process Monitor") ->
     scrollbar = ttk.Scrollbar(tab_frame, orient="vertical", command=canvas.yview)  # type: ignore
     scrollable_frame = ttk.Frame(canvas)
 
-    scrollable_frame.bind(
-        "<Configure>",
-        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)

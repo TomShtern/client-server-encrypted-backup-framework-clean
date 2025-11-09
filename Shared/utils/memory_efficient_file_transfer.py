@@ -29,9 +29,9 @@ import logging
 import threading
 import time
 import weakref
-from typing import Dict, Any, Optional, List
 from collections import OrderedDict
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TransferConfig:
     """Configuration for memory-efficient file transfers."""
+
     max_concurrent_transfers: int = 10
     max_chunks_per_file: int = 10000
     max_chunk_memory_mb: int = 100  # Maximum memory for chunks per transfer
@@ -50,19 +51,20 @@ class TransferConfig:
 @dataclass
 class TransferState:
     """Memory-bounded transfer state for a single file."""
+
     filename: str
     total_packets: int
     original_size: int
     timestamp: float
-    received_chunks: Dict[int, bytes]
-    client_ref: Optional[weakref.ReferenceType[Any]]  # Weak reference to prevent cycles
+    received_chunks: dict[int, bytes]
+    client_ref: weakref.ReferenceType[Any] | None  # Weak reference to prevent cycles
 
     def __post_init__(self):
         # Validate memory constraints
         if self.total_packets > 100000:  # Arbitrary large number
             raise ValueError(f"Too many packets for transfer: {self.total_packets}")
 
-    def add_chunk(self, packet_number: int, chunk_data: bytes, config: Optional[TransferConfig] = None) -> bool:
+    def add_chunk(self, packet_number: int, chunk_data: bytes, config: TransferConfig | None = None) -> bool:
         """
         Add a chunk to the transfer state with memory bounds checking.
 
@@ -90,16 +92,20 @@ class TransferState:
         max_memory_bytes = config.max_chunk_memory_mb * 1024 * 1024
 
         if estimated_memory > max_memory_bytes:
-            logger.warning(f"Memory limit exceeded for transfer {self.filename}: "
-                         f"current={current_memory:,}, chunk={chunk_size:,}, "
-                         f"limit={max_memory_bytes:,}")
+            logger.warning(
+                f"Memory limit exceeded for transfer {self.filename}: "
+                f"current={current_memory:,}, chunk={chunk_size:,}, "
+                f"limit={max_memory_bytes:,}"
+            )
             return False
 
         # Check packet count limits
         if len(self.received_chunks) >= config.max_chunks_per_file:
-            logger.warning(f"Chunk count limit exceeded for transfer {self.filename}: "
-                         f"current={len(self.received_chunks)}, "
-                         f"limit={config.max_chunks_per_file}")
+            logger.warning(
+                f"Chunk count limit exceeded for transfer {self.filename}: "
+                f"current={len(self.received_chunks)}, "
+                f"limit={config.max_chunks_per_file}"
+            )
             return False
 
         self.received_chunks[packet_number] = chunk_data
@@ -116,7 +122,7 @@ class TransferState:
         received_packets = set(self.received_chunks.keys())
         return received_packets == expected_packets
 
-    def get_missing_packets(self) -> List[int]:
+    def get_missing_packets(self) -> list[int]:
         """Get list of missing packet numbers."""
         expected_packets = set(range(1, self.total_packets + 1))
         received_packets = set(self.received_chunks.keys())
@@ -134,33 +140,34 @@ class MemoryEfficientTransferManager:
     - Memory pressure monitoring
     """
 
-    def __init__(self, config: Optional[TransferConfig] = None):
+    def __init__(self, config: TransferConfig | None = None):
         self.config = config or TransferConfig()
         self._transfers: OrderedDict[str, TransferState] = OrderedDict()  # LRU cache
         self._lock = threading.RLock()
         self._last_cleanup = time.time()
         self._stats: dict[str, int | float] = {
-            'total_transfers': 0,
-            'completed_transfers': 0,
-            'abandoned_transfers': 0,
-            'memory_cleanups': 0,
-            'current_memory_mb': 0
+            "total_transfers": 0,
+            "completed_transfers": 0,
+            "abandoned_transfers": 0,
+            "memory_cleanups": 0,
+            "current_memory_mb": 0,
         }
 
-        logger.info(f"MemoryEfficientTransferManager initialized: "
-                   f"max_concurrent={self.config.max_concurrent_transfers}, "
-                   f"max_memory_mb={self.config.max_chunk_memory_mb}")
+        logger.info(
+            f"MemoryEfficientTransferManager initialized: "
+            f"max_concurrent={self.config.max_concurrent_transfers}, "
+            f"max_memory_mb={self.config.max_chunk_memory_mb}"
+        )
 
         # Start cleanup daemon thread
         self._cleanup_thread = threading.Thread(
-            target=self._cleanup_worker,
-            name="TransferCleanup",
-            daemon=True
+            target=self._cleanup_worker, name="TransferCleanup", daemon=True
         )
         self._cleanup_thread.start()
 
-    def create_transfer(self, client_id: bytes, filename: str,
-                       total_packets: int, original_size: int) -> bool:
+    def create_transfer(
+        self, client_id: bytes, filename: str, total_packets: int, original_size: int
+    ) -> bool:
         """
         Create a new transfer state with memory bounds checking.
 
@@ -177,7 +184,10 @@ class MemoryEfficientTransferManager:
             transfer_key = f"{client_id.hex()}:{filename}"
 
             # Check concurrent transfer limits, evict oldest incomplete transfer if needed
-            if len(self._transfers) >= self.config.max_concurrent_transfers and not self._evict_oldest_incomplete():
+            if (
+                len(self._transfers) >= self.config.max_concurrent_transfers
+                and not self._evict_oldest_incomplete()
+            ):
                 logger.warning(
                     f"Concurrent transfer limit exceeded: current={len(self._transfers)}, "
                     f"limit={self.config.max_concurrent_transfers}"
@@ -215,10 +225,12 @@ class MemoryEfficientTransferManager:
             original_size=original_size,
             timestamp=time.time(),
             received_chunks={},
-            client_ref=client_ref
+            client_ref=client_ref,
         )
 
-    def _store_transfer_state(self, transfer_key: str, filename: str, total_packets: int, original_size: int) -> None:
+    def _store_transfer_state(
+        self, transfer_key: str, filename: str, total_packets: int, original_size: int
+    ) -> None:
         """
         Store transfer state in the transfers dictionary with LRU tracking.
 
@@ -236,12 +248,10 @@ class MemoryEfficientTransferManager:
         self._transfers[transfer_key] = transfer_state
         self._transfers.move_to_end(transfer_key)  # Mark as recently used
 
-        self._stats['total_transfers'] += 1
-        logger.debug(f"Created transfer: {transfer_key} "
-                   f"({total_packets} packets, {original_size:,} bytes)")
+        self._stats["total_transfers"] += 1
+        logger.debug(f"Created transfer: {transfer_key} ({total_packets} packets, {original_size:,} bytes)")
 
-    def add_packet(self, client_id: bytes, filename: str,
-                   packet_number: int, chunk_data: bytes) -> bool:
+    def add_packet(self, client_id: bytes, filename: str, packet_number: int, chunk_data: bytes) -> bool:
         """
         Add a packet to an existing transfer with memory bounds checking.
 
@@ -272,12 +282,12 @@ class MemoryEfficientTransferManager:
 
             # Check if transfer is complete
             if transfer_state.is_complete():
-                self._stats['completed_transfers'] += 1
+                self._stats["completed_transfers"] += 1
                 logger.info(f"Transfer completed: {transfer_key}")
 
             return True
 
-    def get_transfer_state(self, client_id: bytes, filename: str) -> Optional[TransferState]:
+    def get_transfer_state(self, client_id: bytes, filename: str) -> TransferState | None:
         """
         Get transfer state without modifying LRU order.
 
@@ -292,8 +302,7 @@ class MemoryEfficientTransferManager:
             transfer_key = f"{client_id.hex()}:{filename}"
             return self._transfers.get(transfer_key)
 
-    def remove_transfer(self, client_id: bytes, filename: str,
-                       reason: str = "completed") -> bool:
+    def remove_transfer(self, client_id: bytes, filename: str, reason: str = "completed") -> bool:
         """
         Remove a transfer state and clean up memory.
 
@@ -329,10 +338,9 @@ class MemoryEfficientTransferManager:
         del self._transfers[transfer_key]
 
         if reason == "abandoned":
-            self._stats['abandoned_transfers'] += 1
+            self._stats["abandoned_transfers"] += 1
 
-        logger.debug(f"Cleaned up transfer {transfer_key} "
-                    f"({memory_freed:,} bytes, reason: {reason})")
+        logger.debug(f"Cleaned up transfer {transfer_key} ({memory_freed:,} bytes, reason: {reason})")
 
         return True
 
@@ -373,16 +381,18 @@ class MemoryEfficientTransferManager:
             for transfer_key, transfer_state in list(self._transfers.items()):
                 age = current_time - transfer_state.timestamp
 
-                if age > self.config.abandoned_transfer_timeout and self._cleanup_transfer(transfer_key, "timeout_abandoned"):
+                if age > self.config.abandoned_transfer_timeout and self._cleanup_transfer(
+                    transfer_key, "timeout_abandoned"
+                ):
                     abandoned_count += 1
 
             if abandoned_count > 0:
-                self._stats['memory_cleanups'] += 1
+                self._stats["memory_cleanups"] += 1
                 logger.info(f"Cleaned up {abandoned_count} abandoned transfers")
 
             # Update memory usage statistics
             total_memory = sum(ts.get_memory_usage() for ts in self._transfers.values())
-            self._stats['current_memory_mb'] = total_memory // (1024 * 1024)
+            self._stats["current_memory_mb"] = total_memory // (1024 * 1024)
 
             # Check memory pressure
             if total_memory > self.config.memory_pressure_threshold_mb * 1024 * 1024:
@@ -400,8 +410,7 @@ class MemoryEfficientTransferManager:
         for transfer_key, transfer_state in list(self._transfers.items()):
             # Merge nested conditions: only attempt cleanup for incomplete transfers,
             # and count eviction only if cleanup succeeded.
-            if (not transfer_state.is_complete()
-                    and self._cleanup_transfer(transfer_key, "memory_pressure")):
+            if not transfer_state.is_complete() and self._cleanup_transfer(transfer_key, "memory_pressure"):
                 evicted_count += 1
 
                 # Stop when memory is manageable
@@ -412,7 +421,7 @@ class MemoryEfficientTransferManager:
         if evicted_count > 0:
             logger.warning(f"Aggressive cleanup evicted {evicted_count} transfers due to memory pressure")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get transfer manager statistics.
 
@@ -421,9 +430,9 @@ class MemoryEfficientTransferManager:
         """
         with self._lock:
             stats = self._stats.copy()
-            stats['active_transfers'] = len(self._transfers)
-            stats['max_memory_mb'] = self.config.max_chunk_memory_mb
-            stats['last_cleanup'] = self._last_cleanup
+            stats["active_transfers"] = len(self._transfers)
+            stats["max_memory_mb"] = self.config.max_chunk_memory_mb
+            stats["last_cleanup"] = self._last_cleanup
             return stats
 
     def set_client_reference(self, client_id: bytes, filename: str, client_obj):
@@ -458,7 +467,7 @@ class MemoryEfficientTransferManager:
 
 
 # Global instance for use by the file transfer system
-_transfer_manager: Optional[MemoryEfficientTransferManager] = None
+_transfer_manager: MemoryEfficientTransferManager | None = None
 
 
 def get_transfer_manager() -> MemoryEfficientTransferManager:

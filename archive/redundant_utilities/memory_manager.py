@@ -7,12 +7,13 @@ and provides proper cleanup for view transitions.
 Priority: CRITICAL - Prevents gradual memory exhaustion and crashes
 """
 
-import weakref
 import gc
 import logging
 import threading
-from typing import Dict, Set, List, Any, Callable, Optional
+import weakref
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ class MemoryManager:
     """
 
     def __init__(self):
-        self._active_handlers: Dict[str, List[Dict[str, Any]]] = {}
-        self._control_references: Dict[str, weakref.ref] = {}
-        self._cleanup_callbacks: List[Callable] = []
+        self._active_handlers: dict[str, list[dict[str, Any]]] = {}
+        self._control_references: dict[str, weakref.ref] = {}
+        self._cleanup_callbacks: list[Callable] = []
         self._disposed = False
         self._lock = threading.Lock()
         self._gc_stats = {
@@ -188,7 +189,7 @@ class MemoryManager:
         """
         self._cleanup_callbacks.append(callback)
 
-    def detect_memory_growth(self) -> Dict[str, Any]:
+    def detect_memory_growth(self) -> dict[str, Any]:
         """
         Detect potential memory leaks through analysis of registered objects.
 
@@ -233,7 +234,7 @@ class MemoryManager:
 
         return stats
 
-    def get_debug_info(self) -> Dict[str, Any]:
+    def get_debug_info(self) -> dict[str, Any]:
         """
         Get comprehensive debugging information.
         """

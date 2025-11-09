@@ -42,7 +42,7 @@ def analyze_file_for_state_manager(file_path: Path) -> list[tuple[str, int, str]
     Returns list of (pattern_found, line_number, replacement_suggestion)
     """
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             lines = f.readlines()
 
         migrations = []

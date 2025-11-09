@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 try:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
+
     WATCHDOG_AVAILABLE = True
     ObserverType = Observer
     EventHandlerType = FileSystemEventHandler
@@ -41,6 +42,7 @@ except ImportError:
     EventHandlerType = None
 
 logger = logging.getLogger(__name__)
+
 
 class UnifiedFileMonitor:
     """
@@ -58,7 +60,7 @@ class UnifiedFileMonitor:
         self.jobs: dict[str, dict[str, Any]] = {}
         self.jobs_lock = threading.Lock()
 
-        self.executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix='FileCheck')
+        self.executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="FileCheck")
 
         # Ensure watched directory exists
         self.watched_directory.mkdir(parents=True, exist_ok=True)
@@ -70,7 +72,9 @@ class UnifiedFileMonitor:
             return
 
         if not WATCHDOG_AVAILABLE:
-            logger.warning("Cannot start file monitoring: 'watchdog' library is not installed. File monitoring will be disabled.")
+            logger.warning(
+                "Cannot start file monitoring: 'watchdog' library is not installed. File monitoring will be disabled."
+            )
             return
 
         self.monitoring_active = True
@@ -104,10 +108,16 @@ class UnifiedFileMonitor:
         self.monitoring_active = False
         logger.info("UnifiedFileMonitor has stopped.")
 
-    def register_job(self, filename: str, job_id: str, expected_size: int, expected_hash: str,
-                     completion_callback: Callable[..., None] | None = None,
-                     failure_callback: Callable[..., None] | None = None,
-                     callback: Callable[..., None] | None = None) -> None:
+    def register_job(
+        self,
+        filename: str,
+        job_id: str,
+        expected_size: int,
+        expected_hash: str,
+        completion_callback: Callable[..., None] | None = None,
+        failure_callback: Callable[..., None] | None = None,
+        callback: Callable[..., None] | None = None,
+    ) -> None:
         """
         Register a new file transfer job to be monitored.
 
@@ -122,10 +132,7 @@ class UnifiedFileMonitor:
         """
         # Handle callback compatibility - prefer dual callbacks, fallback to single
         if completion_callback is not None or failure_callback is not None:
-            callbacks = {
-                "completion_callback": completion_callback,
-                "failure_callback": failure_callback
-            }
+            callbacks = {"completion_callback": completion_callback, "failure_callback": failure_callback}
         elif callback is not None:
             # Legacy single callback mode
             callbacks = {"callback": callback}
@@ -139,9 +146,11 @@ class UnifiedFileMonitor:
                 "expected_hash": expected_hash.lower(),
                 "callbacks": callbacks,
                 "start_time": time.time(),
-                "status": "registered"
+                "status": "registered",
             }
-        logger.info(f"Job '{job_id}' registered for file '{filename}' (Size: {expected_size}, Hash: {expected_hash[:8]}...).")
+        logger.info(
+            f"Job '{job_id}' registered for file '{filename}' (Size: {expected_size}, Hash: {expected_hash[:8]}...)."
+        )
         # Immediately check if the file already exists
         file_path = self.watched_directory / filename
         if file_path.exists():
@@ -156,7 +165,7 @@ class UnifiedFileMonitor:
 
         # Only define the Handler class when watchdog is available
         class Handler(FileSystemEventHandler):
-            def __init__(self, monitor_instance: 'UnifiedFileMonitor') -> None:
+            def __init__(self, monitor_instance: "UnifiedFileMonitor") -> None:
                 super().__init__()
                 self.monitor = monitor_instance
 
@@ -175,7 +184,7 @@ class UnifiedFileMonitor:
     def _invoke_callback(self, job: dict[str, Any], status: str, **kwargs: Any) -> None:
         """
         Invoke the appropriate callback based on the job's callback configuration.
-        
+
         Args:
             job (Dict): The job dictionary containing callback information.
             status (str): The status - 'complete', 'failure', 'progress', etc.
@@ -253,17 +262,21 @@ class UnifiedFileMonitor:
 
             current_size = file_path.stat().st_size
             if current_size != last_reported_size:
-                self._invoke_callback(job, "progress", bytes_transferred=current_size, total_bytes=expected_size)
+                self._invoke_callback(
+                    job, "progress", bytes_transferred=current_size, total_bytes=expected_size
+                )
                 last_reported_size = current_size
 
             if current_size > expected_size:
                 raise OSError(f"File size ({current_size}) exceeded expected size ({expected_size}).")
 
             if current_size == expected_size:
-                logger.info(f"[Job {job['job_id']}] Size match for '{file_path.name}' ({expected_size} bytes).")
+                logger.info(
+                    f"[Job {job['job_id']}] Size match for '{file_path.name}' ({expected_size} bytes)."
+                )
                 return
 
-            time.sleep(0.2) # Poll for size changes
+            time.sleep(0.2)  # Poll for size changes
 
     def _wait_for_stability(self, file_path: Path, job: dict[str, Any], stability_delay: float = 1.0) -> None:
         """Waits until the file has not been modified for a certain delay."""
@@ -307,69 +320,65 @@ class UnifiedFileMonitor:
     def check_file_receipt(self, filename: str) -> dict[str, Any]:
         """
         Check if a specific file has been received and return receipt information.
-        
+
         Args:
             filename (str): The name of the file to check.
-            
+
         Returns:
             Dict[str, Any]: Receipt information including received status, size, timestamp, etc.
         """
         file_path = self.watched_directory / filename
 
         if not file_path.exists():
-            return {
-                'received': False,
-                'error': f'File {filename} not found in {self.watched_directory}'
-            }
+            return {"received": False, "error": f"File {filename} not found in {self.watched_directory}"}
 
         try:
             stat_info = file_path.stat()
             file_info = {
-                'received': True,
-                'filename': filename,
-                'size': stat_info.st_size,
-                'timestamp': stat_info.st_mtime,
-                'modified_time': time.ctime(stat_info.st_mtime),
-                'path': str(file_path.absolute())
+                "received": True,
+                "filename": filename,
+                "size": stat_info.st_size,
+                "timestamp": stat_info.st_mtime,
+                "modified_time": time.ctime(stat_info.st_mtime),
+                "path": str(file_path.absolute()),
             }
 
             # Check if there's an active job for this file with verification info
             with self.jobs_lock:
                 if filename in self.jobs:
                     job = self.jobs[filename]
-                    file_info.update({  # type: ignore
-                        'job_id': job.get('job_id'),
-                        'status': job.get('status'),
-                        'expected_size': job.get('expected_size'),
-                        'expected_hash': job.get('expected_hash'),
-                        'verified': job.get('status') == 'completed'
-                    })
+                    file_info.update(
+                        {  # type: ignore
+                            "job_id": job.get("job_id"),
+                            "status": job.get("status"),
+                            "expected_size": job.get("expected_size"),
+                            "expected_hash": job.get("expected_hash"),
+                            "verified": job.get("status") == "completed",
+                        }
+                    )
                 else:
                     # File exists but no active job - it was received previously
-                    file_info['verified'] = None  # Unknown verification status
+                    file_info["verified"] = None  # Unknown verification status
 
             return file_info
 
         except Exception as e:
             logger.error(f"Error checking file receipt for {filename}: {e}")
-            return {
-                'received': False,
-                'error': f'Error accessing file {filename}: {e!s}'
-            }
+            return {"received": False, "error": f"Error accessing file {filename}: {e!s}"}
 
     def list_received_files(self) -> dict[str, Any]:
         """
         List all files that have been received in the monitored directory.
-        
+
         Returns:
             Dict[str, Any]: Information about all received files.
         """
         try:
             if not self.watched_directory.exists():
                 return {
-                    'success': False,
-                    'error': f'Monitored directory {self.watched_directory} does not exist',
-                    'files': []
+                    "success": False,
+                    "error": f"Monitored directory {self.watched_directory} does not exist",
+                    "files": [],
                 }
 
             files_info: list[dict[str, Any]] = []
@@ -381,26 +390,28 @@ class UnifiedFileMonitor:
                     try:
                         stat_info = file_path.stat()
                         file_info = {
-                            'filename': file_path.name,
-                            'size': stat_info.st_size,
-                            'timestamp': stat_info.st_mtime,
-                            'modified_time': time.ctime(stat_info.st_mtime),
-                            'path': str(file_path.absolute())
+                            "filename": file_path.name,
+                            "size": stat_info.st_size,
+                            "timestamp": stat_info.st_mtime,
+                            "modified_time": time.ctime(stat_info.st_mtime),
+                            "path": str(file_path.absolute()),
                         }
 
                         # Add job information if available
                         with self.jobs_lock:
                             if file_path.name in self.jobs:
                                 job = self.jobs[file_path.name]
-                                file_info.update({  # type: ignore
-                                    'job_id': job.get('job_id'),
-                                    'status': job.get('status'),
-                                    'expected_size': job.get('expected_size'),
-                                    'expected_hash': job.get('expected_hash'),
-                                    'verified': job.get('status') == 'completed'
-                                })
+                                file_info.update(
+                                    {  # type: ignore
+                                        "job_id": job.get("job_id"),
+                                        "status": job.get("status"),
+                                        "expected_size": job.get("expected_size"),
+                                        "expected_hash": job.get("expected_hash"),
+                                        "verified": job.get("status") == "completed",
+                                    }
+                                )
                             else:
-                                file_info['verified'] = None
+                                file_info["verified"] = None
 
                         files_info.append(file_info)
                         total_size += stat_info.st_size
@@ -408,35 +419,27 @@ class UnifiedFileMonitor:
                     except Exception as e:
                         logger.error(f"Error reading file {file_path.name}: {e}")
                         # Still include the file but with error info
-                        files_info.append({
-                            'filename': file_path.name,
-                            'error': str(e),
-                            'verified': False
-                        })
+                        files_info.append({"filename": file_path.name, "error": str(e), "verified": False})
 
             # Sort files by modification time (newest first)
-            files_info.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+            files_info.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
 
             return {
-                'success': True,
-                'files': files_info,
-                'total_files': len(files_info),
-                'total_size': total_size,
-                'directory': str(self.watched_directory.absolute())
+                "success": True,
+                "files": files_info,
+                "total_files": len(files_info),
+                "total_size": total_size,
+                "directory": str(self.watched_directory.absolute()),
             }
 
         except Exception as e:
             logger.error(f"Error listing received files: {e}")
-            return {
-                'success': False,
-                'error': f'Error listing files: {e!s}',
-                'files': []
-            }
+            return {"success": False, "error": f"Error listing files: {e!s}", "files": []}
 
     def get_monitoring_status(self) -> dict[str, Any]:
         """
         Get the current status of the file monitoring system.
-        
+
         Returns:
             Dict[str, Any]: Monitoring status information.
         """
@@ -445,14 +448,16 @@ class UnifiedFileMonitor:
                 active_jobs = len(self.jobs)
                 jobs_info: list[dict[str, Any]] = []
                 for filename, job in self.jobs.items():
-                    jobs_info.append({
-                        'filename': filename,
-                        'job_id': job.get('job_id'),
-                        'status': job.get('status'),
-                        'expected_size': job.get('expected_size'),
-                        'start_time': job.get('start_time'),
-                        'runtime': time.time() - job.get('start_time', time.time())
-                    })
+                    jobs_info.append(
+                        {
+                            "filename": filename,
+                            "job_id": job.get("job_id"),
+                            "status": job.get("status"),
+                            "expected_size": job.get("expected_size"),
+                            "start_time": job.get("start_time"),
+                            "runtime": time.time() - job.get("start_time", time.time()),
+                        }
+                    )
 
             # Count total files in directory
             total_files = 0
@@ -467,22 +472,20 @@ class UnifiedFileMonitor:
                     logger.warning(f"Error counting files in directory: {e}")
 
             return {
-                'monitoring_active': self.monitoring_active,
-                'watchdog_available': WATCHDOG_AVAILABLE,
-                'watched_directory': str(self.watched_directory.absolute()),
-                'directory_exists': self.watched_directory.exists(),
-                'active_jobs': active_jobs,
-                'jobs_info': jobs_info,
-                'total_files_in_directory': total_files,
-                'directory_size': directory_size,
-                'max_workers': self.max_workers,
-                'observer_running': self.observer is not None and self.observer.is_alive() if self.observer else False
+                "monitoring_active": self.monitoring_active,
+                "watchdog_available": WATCHDOG_AVAILABLE,
+                "watched_directory": str(self.watched_directory.absolute()),
+                "directory_exists": self.watched_directory.exists(),
+                "active_jobs": active_jobs,
+                "jobs_info": jobs_info,
+                "total_files_in_directory": total_files,
+                "directory_size": directory_size,
+                "max_workers": self.max_workers,
+                "observer_running": self.observer is not None and self.observer.is_alive()
+                if self.observer
+                else False,
             }
 
         except Exception as e:
             logger.error(f"Error getting monitoring status: {e}")
-            return {
-                'monitoring_active': False,
-                'error': f'Error getting status: {e!s}'
-            }
-
+            return {"monitoring_active": False, "error": f"Error getting status: {e!s}"}

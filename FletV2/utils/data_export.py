@@ -35,7 +35,7 @@ def export_to_csv(data: list[dict[str, Any]], filepath: str, fieldnames: list[st
     if fieldnames is None:
         fieldnames = list(data[0].keys()) if data else []
 
-    with open(filepath, 'w', newline='', encoding='utf-8') as f:
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(data)
@@ -53,7 +53,7 @@ def export_to_json(data: list[dict[str, Any]], filepath: str, indent: int = 2):
     Raises:
         IOError: If there's an issue writing the file
     """
-    with open(filepath, 'w', encoding='utf-8') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=indent, default=str, ensure_ascii=False)
 
 
@@ -69,13 +69,13 @@ def export_to_txt(data: list[dict[str, Any]], filepath: str, format_func: Callab
     Raises:
         IOError: If there's an issue writing the file
     """
-    with open(filepath, 'w', encoding='utf-8') as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         for item in data:
             if format_func:
                 line = format_func(item)
             else:
                 line = str(item)
-            f.write(line + '\n')
+            f.write(line + "\n")
 
 
 def generate_export_filename(prefix: str, extension: str) -> str:
@@ -97,7 +97,7 @@ async def export_with_progress(
     data: list[dict[str, Any]],
     filepath: str,
     export_func: Callable,
-    progress_callback: Callable | None = None
+    progress_callback: Callable | None = None,
 ):
     """
     Export data with progress updates.

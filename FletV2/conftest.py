@@ -6,7 +6,6 @@ Configures Python path for tests to use absolute imports (from FletV2.module imp
 without requiring manual sys.path manipulation in test files.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -18,6 +17,6 @@ for path in (str(flet_v2_root), str(repo_root)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-print(f"[pytest] Configured paths:")
+print("[pytest] Configured paths:")
 print(f"  - FletV2 root: {flet_v2_root}")
 print(f"  - Repo root: {repo_root}")

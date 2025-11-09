@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ServerConfig:
     """Server configuration parameters."""
+
     host: str = "127.0.0.1"
     port: int = 1256
     max_connections: int = 10
@@ -33,6 +34,7 @@ class ServerConfig:
 @dataclass
 class APIServerConfig:
     """API server configuration parameters."""
+
     host: str = "127.0.0.1"
     port: int = 9090
     debug: bool = False
@@ -44,6 +46,7 @@ class APIServerConfig:
 @dataclass
 class CryptoConfig:
     """Cryptographic configuration parameters."""
+
     rsa_key_size: int = 2048
     aes_key_size: int = 256
     private_key_file: str = "priv.key"
@@ -55,6 +58,7 @@ class CryptoConfig:
 @dataclass
 class ProtocolConfig:
     """Protocol configuration parameters."""
+
     version: int = 3
     max_filename_length: int = 200
     max_payload_size: int = 1024 * 1024  # 1MB
@@ -66,6 +70,7 @@ class ProtocolConfig:
 @dataclass
 class SystemConfig:
     """Complete system configuration."""
+
     server: ServerConfig
     api_server: APIServerConfig
     crypto: CryptoConfig
@@ -96,7 +101,7 @@ class ConfigManager:
     def __init__(self, config_file: str | None = None):
         """
         Initialize configuration manager.
-        
+
         Args:
             config_file: Path to configuration file (optional)
         """
@@ -125,16 +130,16 @@ class ConfigManager:
             server=ServerConfig(),
             api_server=APIServerConfig(),
             crypto=CryptoConfig(),
-            protocol=ProtocolConfig()
+            protocol=ProtocolConfig(),
         )
 
     def _dict_to_config(self, config_data: dict[str, Any]) -> SystemConfig:
         """Convert dictionary to SystemConfig object."""
         return SystemConfig(
-            server=ServerConfig(**config_data.get('server', {})),
-            api_server=APIServerConfig(**config_data.get('api_server', {})),
-            crypto=CryptoConfig(**config_data.get('crypto', {})),
-            protocol=ProtocolConfig(**config_data.get('protocol', {}))
+            server=ServerConfig(**config_data.get("server", {})),
+            api_server=APIServerConfig(**config_data.get("api_server", {})),
+            crypto=CryptoConfig(**config_data.get("crypto", {})),
+            protocol=ProtocolConfig(**config_data.get("protocol", {})),
         )
 
     def save_config(self) -> None:
@@ -142,7 +147,7 @@ class ConfigManager:
         try:
             if self._config is not None:
                 config_dict = asdict(self._config)
-                with open(self.config_file, 'w') as f:
+                with open(self.config_file, "w") as f:
                     json.dump(config_dict, f, indent=2)
                 logger.info(f"Saved configuration to {self.config_file}")
         except Exception as e:
@@ -162,9 +167,9 @@ class ConfigManager:
         config_dict = asdict(config)
 
         for key, value in kwargs.items():
-            if '.' in key:
+            if "." in key:
                 # Handle nested keys like 'server.port'
-                parts = key.split('.')
+                parts = key.split(".")
                 current = config_dict
                 for part in parts[:-1]:
                     if part not in current:
@@ -181,9 +186,9 @@ class ConfigManager:
         """Get configuration value by key."""
         try:
             config = self.config  # Use property to ensure non-None config
-            if '.' not in key:
+            if "." not in key:
                 return getattr(config, key, default)
-            parts = key.split('.')
+            parts = key.split(".")
             current = asdict(config)
             for part in parts:
                 current = current[part]
@@ -203,10 +208,10 @@ _config_manager: ConfigManager | None = None
 def get_config_manager(config_file: str | None = None) -> ConfigManager:
     """
     Get global configuration manager instance.
-    
+
     Args:
         config_file: Path to configuration file (only used on first call)
-        
+
     Returns:
         ConfigManager instance
     """
@@ -245,7 +250,7 @@ def get_protocol_config() -> ProtocolConfig:
 def load_port_from_file(filename: str = "port.info") -> int:
     """
     Legacy function to load port from file.
-    
+
     DEPRECATED: Use get_server_config().port instead.
     """
     logger.warning("load_port_from_file() is deprecated, use get_server_config().port instead")
@@ -259,6 +264,7 @@ def load_port_from_file(filename: str = "port.info") -> int:
 def get_database_path() -> str:
     """Get database file path."""
     return get_server_config().database_path
+
 
 def get_absolute_database_path() -> str:
     """Get absolute path to the database file for cross-module access."""
@@ -306,10 +312,10 @@ RESP_GENERIC_SERVER_ERROR = 1605
 def initialize_config(config_file: str | None = None) -> ConfigManager:
     """
     Initialize global configuration.
-    
+
     Args:
         config_file: Path to configuration file
-        
+
     Returns:
         ConfigManager instance
     """
@@ -326,6 +332,7 @@ def reset_config():
 
 # Database Integration Functions for FletV2 Compatibility
 
+
 def get_database_config_for_fletv2() -> dict[str, Any]:
     """
     Get database configuration optimized for FletV2 GUI integration.
@@ -334,19 +341,20 @@ def get_database_config_for_fletv2() -> dict[str, Any]:
         Dictionary with all database configuration needed by FletV2
     """
     return {
-        'database_path': get_absolute_database_path(),
-        'database_name': get_server_config().database_path,
-        'file_storage_dir': get_received_files_dir(),
-        'connection_pool_enabled': True,
-        'connection_pool_size': 5,
-        'timeout': 10.0,
-        'max_connection_age': 3600.0,
-        'cleanup_interval': 300.0,
+        "database_path": get_absolute_database_path(),
+        "database_name": get_server_config().database_path,
+        "file_storage_dir": get_received_files_dir(),
+        "connection_pool_enabled": True,
+        "connection_pool_size": 5,
+        "timeout": 10.0,
+        "max_connection_age": 3600.0,
+        "cleanup_interval": 300.0,
         # Additional compatibility settings
-        'use_blob_uuids': True,  # BackupServer uses BLOB UUIDs
-        'schema_version': 'backupserver_v3',
-        'migration_enabled': True
+        "use_blob_uuids": True,  # BackupServer uses BLOB UUIDs
+        "schema_version": "backupserver_v3",
+        "migration_enabled": True,
     }
+
 
 def is_database_compatible() -> bool:
     """
@@ -356,11 +364,13 @@ def is_database_compatible() -> bool:
         True if database file exists and is readable
     """
     import os
+
     try:
         db_path = get_absolute_database_path()
         return os.path.exists(db_path) and os.access(db_path, os.R_OK)
     except Exception:
         return False
+
 
 def get_database_schema_info() -> dict[str, Any]:
     """
@@ -370,11 +380,11 @@ def get_database_schema_info() -> dict[str, Any]:
         Dictionary with schema information
     """
     return {
-        'version': 3,
-        'tables': ['clients', 'files'],
-        'id_format': 'blob_uuid',  # BackupServer uses BLOB UUIDs
-        'client_id_column': 'ID',  # BackupServer column name
-        'file_client_ref': 'ClientID',  # BackupServer foreign key column
-        'supports_migrations': True,
-        'pool_compatible': True
+        "version": 3,
+        "tables": ["clients", "files"],
+        "id_format": "blob_uuid",  # BackupServer uses BLOB UUIDs
+        "client_id_column": "ID",  # BackupServer column name
+        "file_client_ref": "ClientID",  # BackupServer foreign key column
+        "supports_migrations": True,
+        "pool_compatible": True,
     }
