@@ -242,16 +242,23 @@ class App {
     dom.resumeBtn.addEventListener('click', () => this.#handleResume());
     dom.stopBtn.addEventListener('click', () => this.#openStopModal());
 
-    dom.modalCancelBtn.addEventListener('click', () => dom.modal.close());
+    dom.modalCancelBtn.addEventListener('click', () => this.#closeModalWithAnimation());
     dom.modalOkBtn.addEventListener('click', () => this.#confirmStop());
     dom.modal.addEventListener('close', () => this.#handleModalClosed());
     dom.modal.addEventListener('cancel', (event) => {
       event.preventDefault();
-      dom.modal.close();
+      this.#closeModalWithAnimation();
     });
 
-    dom.serverInput.addEventListener('input', () => dom.serverHint.setAttribute('hidden', 'true'));
-    dom.usernameInput.addEventListener('input', () => dom.usernameHint.setAttribute('hidden', 'true'));
+    dom.serverInput.addEventListener('input', () => {
+      dom.serverHint.setAttribute('hidden', 'true');
+      this.#validateInput(dom.serverInput, dom.serverValidIcon);
+    });
+
+    dom.usernameInput.addEventListener('input', () => {
+      dom.usernameHint.setAttribute('hidden', 'true');
+      this.#validateInput(dom.usernameInput, dom.usernameValidIcon);
+    });
 
     dom.logAutoscrollToggle.addEventListener('change', (event) => {
       const enabled = event.currentTarget.checked;
@@ -280,10 +287,15 @@ class App {
       return;
     }
 
+    let connectionAttempted = false;
+    let connectionSucceeded = false;
+
     try {
       this.actionLock = true;
       if (!connected) {
+        connectionAttempted = true;
         await this.#connect();
+        connectionSucceeded = true;
         return;
       }
 
@@ -305,7 +317,44 @@ class App {
       this.toast.show(error.message || 'Operation failed', 'error', 5000);
     } finally {
       this.actionLock = false;
-      this.state.update({ connecting: false });
+      const patch = { connecting: false };
+      // If connection was attempted but failed, ensure connected is false
+      if (connectionAttempted && !connectionSucceeded) {
+        patch.connected = false;
+      }
+      this.state.update(patch);
+    }
+  }
+
+  #validateInput(input, icon) {
+    if (!input || !icon) return;
+
+    const value = input.value.trim();
+    if (!value) {
+      input.classList.remove('error', 'success');
+      icon.classList.remove('error', 'success', 'show');
+      return;
+    }
+
+    let isValid = false;
+    if (input === dom.serverInput) {
+      isValid = Boolean(parseServerAddress(value));
+    } else if (input === dom.usernameInput) {
+      isValid = value.length > 0;
+    }
+
+    if (isValid) {
+      input.classList.remove('error');
+      input.classList.add('success');
+      icon.classList.remove('error');
+      icon.classList.add('success', 'show');
+      icon.textContent = '✓';
+    } else {
+      input.classList.remove('success');
+      input.classList.add('error');
+      icon.classList.remove('success');
+      icon.classList.add('error', 'show');
+      icon.textContent = '✕';
     }
   }
 
@@ -316,11 +365,15 @@ class App {
     const server = parseServerAddress(serverRaw);
     if (!server) {
       dom.serverHint.removeAttribute('hidden');
+      dom.serverInput.classList.add('error');
+      this.#validateInput(dom.serverInput, dom.serverValidIcon);
       dom.serverInput.focus();
       throw new Error('Enter a valid server address in host:port format');
     }
     if (!username) {
       dom.usernameHint.removeAttribute('hidden');
+      dom.usernameInput.classList.add('error');
+      this.#validateInput(dom.usernameInput, dom.usernameValidIcon);
       dom.usernameInput.focus();
       throw new Error('Username is required');
     }
@@ -429,8 +482,21 @@ class App {
     this.#setupModalFocusTrap();
   }
 
+  #closeModalWithAnimation() {
+    if (!dom.modal || !dom.modal.open) return;
+
+    // Add closing class for animation
+    dom.modal.classList.add('closing');
+
+    // Wait for animation before closing
+    setTimeout(() => {
+      dom.modal.close();
+      dom.modal.classList.remove('closing');
+    }, 250);
+  }
+
   async #confirmStop() {
-    dom.modal.close();
+    this.#closeModalWithAnimation();
     const { jobId } = this.state.snapshot;
     if (!jobId) {
       return;
@@ -574,6 +640,8 @@ class App {
 
   #onSocketDisconnect(reason) {
     this.logs.add(`Realtime channel disconnected${reason ? ` (${reason})` : ''}`, { level: 'warn', phase: 'SOCKET' });
+    // Update connection state when socket disconnects
+    this.state.update({ connected: false });
   }
 
   #onSocketError(error) {
@@ -991,11 +1059,44 @@ class App {
 
   #renderProgress(state) {
     const phaseLabel = state.jobMessage || state.jobPhase;
+
+    // Apply phase transition animation when text changes
     if (dom.phaseText.textContent !== phaseLabel) {
+      dom.phaseText.classList.add('phase-transitioning');
       dom.phaseText.textContent = phaseLabel;
+      setTimeout(() => dom.phaseText.classList.remove('phase-transitioning'), 500);
     }
 
+    // Determine progress ring state based on job state
+    const progressRing = dom.progressRing;
     const progress = Math.max(0, Math.min(100, state.progress || 0));
+    let stateClass = '';
+
+    if (state.connecting) {
+      stateClass = 'connecting';
+    } else if (state.jobStatus === 'running') {
+      if (progress >= 100) {
+        stateClass = 'completed';
+        setTimeout(() => {
+          progressRing.classList.remove('completed');
+          progressRing.classList.add('active');
+        }, 3000); // Reset after 3 seconds
+      } else if (progress > 80) {
+        stateClass = 'completing';
+      } else {
+        stateClass = 'active';
+      }
+    } else if (state.jobStatus === 'completed') {
+      stateClass = 'completed';
+    } else {
+      stateClass = '';
+    }
+
+    // Update progress ring state class (SVG elements need classList API)
+    progressRing.classList.remove('connecting', 'active', 'completing', 'completed');
+    if (stateClass) {
+      progressRing.classList.add(stateClass);
+    }
     const offset = CIRCUMFERENCE - (progress / 100) * CIRCUMFERENCE;
     const offsetStr = offset.toFixed(2);
 
@@ -1005,9 +1106,12 @@ class App {
       dom.progressArc.style.strokeDashoffset = offsetStr;
     }
 
+    // Add updating animation class for percentage pop
     const progressText = formatPercentage(progress);
     if (dom.progressPct.textContent !== progressText) {
+      dom.progressPct.classList.add('updating');
       dom.progressPct.textContent = progressText;
+      setTimeout(() => dom.progressPct.classList.remove('updating'), 400);
     }
 
     const etaText = state.etaSeconds ? formatDuration(state.etaSeconds) : 'ETA —';
@@ -1017,50 +1121,104 @@ class App {
   }
 
   #renderStats(state) {
+    // Apply transfer-active class during active transfers
+    const isTransferring = state.jobStatus === 'running' && !state.paused;
+    const statCards = document.querySelectorAll('.stat');
+    const speedCard = document.querySelector('.stat:nth-child(2)'); // Speed is typically 2nd
+
+    statCards.forEach(card => {
+      if (isTransferring) {
+        card.classList.add('transfer-active');
+      } else {
+        card.classList.remove('transfer-active');
+      }
+    });
+
+    // Highlight speed card as primary stat during transfer
+    if (speedCard) {
+      if (isTransferring) {
+        speedCard.classList.add('primary-stat');
+      } else {
+        speedCard.classList.remove('primary-stat');
+      }
+    }
+
+    // Update bytes with animation
     const bytesText = formatBytes(state.bytesTransferred);
     if (dom.stats.bytes.textContent !== bytesText) {
+      dom.stats.bytes.classList.add('updating');
       dom.stats.bytes.textContent = bytesText;
+      setTimeout(() => dom.stats.bytes.classList.remove('updating'), 400);
     }
 
+    // Update speed with animation (more frequent updates)
     const speedText = formatSpeed(state.speed);
     if (dom.stats.speed.textContent !== speedText) {
+      dom.stats.speed.classList.add('updating');
       dom.stats.speed.textContent = speedText;
+      setTimeout(() => dom.stats.speed.classList.remove('updating'), 400);
     }
 
+    // Update size with animation
     const total = state.totalBytes || state.fileSize;
     const sizeText = formatBytes(total);
     if (dom.stats.size.textContent !== sizeText) {
+      dom.stats.size.classList.add('updating');
       dom.stats.size.textContent = sizeText;
+      setTimeout(() => dom.stats.size.classList.remove('updating'), 400);
     }
 
+    // Update elapsed time with animation
     const elapsedText = state.elapsedSeconds ? formatDuration(state.elapsedSeconds) : '—';
     if (dom.stats.elapsed.textContent !== elapsedText) {
+      dom.stats.elapsed.classList.add('updating');
       dom.stats.elapsed.textContent = elapsedText;
+      setTimeout(() => dom.stats.elapsed.classList.remove('updating'), 400);
     }
   }
 
   #renderButtons(state) {
-    let btnText, btnDisabled;
+    let btnText, btnDisabled, isLoading = false;
 
     if (state.connecting) {
       btnText = 'Connecting…';
       btnDisabled = true;
+      isLoading = true;
     } else if (!state.connected) {
       btnText = 'Connect';
       btnDisabled = false;
+      isLoading = false;
     } else if (state.jobStatus === 'running') {
       btnText = 'Backup in progress';
       btnDisabled = true;
+      isLoading = true;
     } else {
       btnText = 'Start Backup';
       btnDisabled = false;
+      isLoading = false;
     }
 
-    if (dom.primaryActionBtn.textContent !== btnText) {
-      dom.primaryActionBtn.textContent = btnText;
-    }
-    if (dom.primaryActionBtn.disabled !== btnDisabled) {
-      dom.primaryActionBtn.disabled = btnDisabled;
+    // Smooth button text transition with loading state
+    const btnChanged = dom.primaryActionBtn.textContent !== btnText;
+    const loadingChanged = dom.primaryActionBtn.classList.contains('loading') !== isLoading;
+
+    if (btnChanged || loadingChanged) {
+      // Fade out
+      dom.primaryActionBtn.style.opacity = '0';
+      setTimeout(() => {
+        dom.primaryActionBtn.textContent = btnText;
+        dom.primaryActionBtn.disabled = btnDisabled;
+
+        // Toggle loading class
+        if (isLoading) {
+          dom.primaryActionBtn.classList.add('loading');
+        } else {
+          dom.primaryActionBtn.classList.remove('loading');
+        }
+
+        // Fade in
+        dom.primaryActionBtn.style.opacity = '1';
+      }, 150);
     }
 
     const pauseDisabled = !state.jobRunning || state.paused;

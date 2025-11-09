@@ -100,11 +100,25 @@ export class FileManager {
       if (this.clearButton) {
         this.clearButton.disabled = true;
       }
+      // Remove file-selected class when no file
+      this.dropZone?.classList.remove('file-selected', 'file-invalid');
       return;
     }
     const { name, size, type } = this.currentFileMeta;
+
+    // Add file-selected class with animation
+    this.dropZone?.classList.add('file-selected');
+    this.dropZone?.classList.remove('file-invalid');
+
     this.nameLabel.textContent = name;
     this.infoLabel.textContent = `${formatBytes(size)} • ${type}`;
+
+    // Add animation to file icon
+    const fileIcon = this.dropZone?.querySelector('.file-icon');
+    if (fileIcon) {
+      fileIcon.classList.add('file-selected');
+    }
+
     if (this.clearButton) {
       this.clearButton.disabled = false;
     }
