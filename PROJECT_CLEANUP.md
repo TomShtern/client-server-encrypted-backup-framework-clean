@@ -490,6 +490,118 @@ sqlite3 server/defensive.db "SELECT COUNT(*) FROM clients;"
 
 **These items block development, cause build failures, or present security risks. Must be completed first.**
 
+#### CRIT-0: Verify and Document third_party/crypto++ Setup ⚠️
+
+**CRITICAL:** The `third_party/` directory is gitignored but REQUIRED for builds to succeed.
+
+- [ ] **Target:** Build dependencies and documentation
+- [ ] **Issue:** `third_party/crypto++/` is gitignored but build.bat requires 20+ Crypto++ source files from this directory
+- [ ] **Impact:** **New repository clones will fail to build** without this setup
+- [ ] **Action:** Verify third_party exists locally, then choose setup strategy
+
+- [ ] **Diagnostic Commands:**
+```bash
+# Check if third_party exists locally:
+ls -la third_party/crypto++/ 2>/dev/null || echo "Directory missing!"
+
+# Check gitignore:
+grep "third_party" .gitignore
+
+# Check build dependencies:
+grep -c "third_party" build.bat
+# Expected: ~41 references
+```
+
+- [ ] **Option A: Add third_party to Repository (Recommended for standalone repo)**
+```bash
+# If you have third_party/crypto++/ locally:
+# Remove from gitignore:
+sed -i.bak '/^third_party\/$/d' .gitignore
+git add .gitignore
+git commit -m "fix(build): Un-gitignore third_party for build dependencies"
+
+# Add Crypto++ sources:
+git add -f third_party/crypto++/
+git commit -m "feat(deps): Add Crypto++ library sources for build"
+git push
+```
+
+- [ ] **Option B: Document as External Dependency (Industry standard)**
+```bash
+# Add to Phase 2 (HIGH-1) README.md creation:
+
+## Prerequisites
+
+### Crypto++ Library Setup
+**REQUIRED:** The build requires Crypto++ library sources in `third_party/crypto++/`.
+
+#### Quick Setup:
+\`\`\`bash
+# Download Crypto++ 8.7.0+:
+mkdir -p third_party
+cd third_party
+wget https://www.cryptopp.com/cryptopp870.zip
+unzip cryptopp870.zip -d crypto++
+cd ..
+
+# Verify setup:
+ls third_party/crypto++/base64.cpp  # Should exist
+\`\`\`
+
+#### Required Files:
+The build compiles these Crypto++ modules:
+- base64.cpp, cryptlib.cpp, files.cpp, filters.cpp
+- rsa.cpp, integer.cpp, nbtheory.cpp, asn.cpp
+- rijndael.cpp, modes.cpp, osrng.cpp
+- And 10+ more (see build.bat for full list)
+```
+
+- [ ] **Option C: Git Submodule (Best practice)**
+```bash
+# Remove from gitignore:
+sed -i.bak '/^third_party\/$/d' .gitignore
+
+# Add Crypto++ as submodule:
+git rm --cached -r third_party/ 2>/dev/null || true
+git submodule add https://github.com/weidai11/cryptopp.git third_party/crypto++
+git submodule update --init --recursive
+git commit -m "feat(deps): Add Crypto++ as git submodule"
+git push
+
+# Future clones will use:
+git clone <repo-url>
+git submodule update --init --recursive
+```
+
+- [ ] **Verification:**
+```bash
+# Verify Crypto++ files exist:
+ls third_party/crypto++/base64.cpp
+ls third_party/crypto++/rsa.cpp
+ls third_party/crypto++/integer.cpp
+
+# Test build (should complete successfully):
+.\build.bat
+
+# Verify executable created:
+ls client/EncryptedBackupClient.exe  # After Phase 3 reorganization
+# OR:
+ls build/EncryptedBackupClient.exe   # Before reorganization
+```
+
+- [ ] **Rationale:**
+  - Current .gitignore excludes `third_party/` directory
+  - build.bat references `third_party/crypto++/*.cpp` 41 times
+  - Fresh clones fail with "file not found" errors during compilation
+  - This is a **critical blocker** that must be resolved before any cleanup work
+  - **MUST be completed before Phase 1 validation**
+
+**RECOMMENDATION:** Use Option C (Git Submodule) for professional dependency management.
+
+**WARNING:** Do not proceed with cleanup phases until this is resolved and verified!
+
+---
+
 #### CRIT-1: Remove Committed Build Artifacts
 - [ ] **Target:** `tests/test_rsa_crypto_plus_plus` (ELF executable, 45KB)
 - [ ] **Action:** Delete committed binary
@@ -558,35 +670,29 @@ git commit -m "fix(config): Comprehensive .gitignore to prevent binary commits"
 ```
 - [ ] **Rationale:** Prevents accidental commits of binaries, databases, credentials
 
-#### CRIT-3: Analyze and Handle temp_complete_server.py
+#### CRIT-3: Remove Obsolete temp_complete_server.py
 - [ ] **Target:** `temp_complete_server.py` (1580 lines, 97KB)
-- [ ] **Action:** Compare with server/server.py and decide fate
+- [ ] **Action:** Delete obsolete file (near-duplicate of server/server.py)
 - [ ] **Commands:**
 ```bash
-# Check if files are identical:
+# Verify it's a near-duplicate (recommended but optional):
 diff -q server/server.py temp_complete_server.py
+# Expected: "Files differ"
 
-# If different, generate detailed diff:
-diff -u server/server.py temp_complete_server.py > temp_server_comparison.txt
-wc -l temp_server_comparison.txt  # Check diff size
+# Check line count similarity:
+wc -l server/server.py temp_complete_server.py
+# Expected: 1581 vs 1580 lines
 
-# Count actual differences (ignoring whitespace):
-diff -B -w server/server.py temp_complete_server.py | grep -c "^[<>]"
+# Generate detailed diff to confirm only whitespace differences:
+diff -u server/server.py temp_complete_server.py | head -30
+# Expected: Only whitespace/newline differences at EOF
 
-# If identical or obsolete (< 10 meaningful differences):
+# Safe to delete (functionally identical):
 git rm temp_complete_server.py
-git commit -m "chore(cleanup): Remove obsolete temp_complete_server.py snapshot"
-
-# If significantly different (>10 differences):
-mkdir -p legacy/server_variants
-git mv temp_complete_server.py legacy/server_variants/
-echo "# Temporary Server Variant" > legacy/server_variants/README.md
-echo "This is a development snapshot from [DATE]. Preserved for historical reference." >> legacy/server_variants/README.md
-git add legacy/server_variants/README.md
-git commit -m "chore(legacy): Archive temp_complete_server.py variant"
+git commit -m "chore(cleanup): Remove obsolete temp_complete_server.py (duplicate of server.py with only whitespace differences)"
 ```
-- [ ] **Verification:** `ls -la temp_complete_server.py` should fail (file moved/deleted)
-- [ ] **Rationale:** Near-duplicate files cause confusion and maintenance burden
+- [ ] **Verification:** `ls temp_complete_server.py` should fail (file deleted)
+- [ ] **Rationale:** File is a near-duplicate of server/server.py with only whitespace differences (3 spaces and newline at EOF). Appears to be an accidental commit of a development snapshot. No unique functionality to preserve.
 
 #### CRIT-4: Create server/requirements.txt
 - [ ] **Target:** `server/requirements.txt` (MISSING)
@@ -797,8 +903,8 @@ git commit -m "chore(legacy): Archive old build script variants"
 - [ ] **Rationale:** Multiple build scripts create confusion; single source of truth needed
 
 #### HIGH-3: Move Root Test Files to Legacy
-- [ ] **Target:** Root test files (simple_test.cpp, test_minimal.cpp, simple_console_test.cpp, test_simple.cpp)
-- [ ] **Action:** Archive experimental test files
+- [ ] **Target:** Root test files (simple_test.cpp, test_minimal.cpp, simple_console_test.cpp, test_simple.cpp, run_simple_test.bat, test_simple_debug.bat)
+- [ ] **Action:** Archive experimental test files and test scripts
 - [ ] **Commands:**
 ```bash
 mkdir -p legacy/old_tests
@@ -813,6 +919,10 @@ git mv test_simple.cpp legacy/old_tests/
 git mv simple_test.py legacy/old_tests/
 git mv minimal_test.py legacy/old_tests/
 
+# Move test BAT scripts (with hardcoded MSVC paths):
+git mv run_simple_test.bat legacy/old_tests/
+git mv test_simple_debug.bat legacy/old_tests/
+
 # Document:
 cat > legacy/old_tests/README.md << 'EOF'
 # Old Test Experiments
@@ -824,14 +934,17 @@ These tests were replaced by the comprehensive test suite in:
 - `server/tests/` - Python server tests
 - `tests/integration/` - Full system integration tests
 
+**WARNING:** Test BAT scripts (`run_simple_test.bat`, `test_simple_debug.bat`) contain
+hardcoded MSVC 14.44.35207 paths and may not work on other systems without modification.
+
 **Do not use these files** - they may be outdated and not reflect current protocol.
 EOF
 
 git add legacy/old_tests/README.md
-git commit -m "chore(legacy): Archive early test experiments"
+git commit -m "chore(legacy): Archive early test experiments and test scripts"
 ```
-- [ ] **Verification:** Root directory should have significantly fewer `.cpp`/`.py` files
-- [ ] **Rationale:** Root-level test clutter reduces project professionalism
+- [ ] **Verification:** Root directory should have significantly fewer `.cpp`/`.py`/`.bat` files
+- [ ] **Rationale:** Root-level test clutter reduces project professionalism; test scripts have hardcoded paths and are superseded by organized test suite
 
 #### HIGH-4: Move Root Python Test Clients to tests/integration/
 - [ ] **Target:** `test_client.py`, `test_system.py`, `binary_test_client.py`
