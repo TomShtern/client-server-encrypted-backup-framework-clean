@@ -17,17 +17,19 @@ import builtins
 import contextlib
 import inspect
 import logging
+import math
 import os
 import sys
 import time  # For optional startup profiling
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Iterator
+from typing import Any, cast
 
 # Third-party imports
 import flet as ft
 
 from FletV2.components.breadcrumb import (
     BreadcrumbFactory,
+    BreadcrumbItem,
     BreadcrumbNavigation,
     setup_breadcrumb_navigation,
 )
@@ -185,10 +187,10 @@ except ImportError as _theme_rel_err:  # pragma: no cover - fallback path
         print(f"Warning: Could not import theme module: {_theme_rel_err}; {_theme_abs_err}")
 
         # Create minimal fallbacks so the app can still start
-        def setup_sophisticated_theme(page):  # type: ignore[no-redef]
+        def setup_sophisticated_theme(_page):  # type: ignore[no-redef]
             return None
 
-        def toggle_theme_mode(page):  # type: ignore[no-redef]
+        def toggle_theme_mode(_page):  # type: ignore[no-redef]
             return None
 
 
@@ -219,7 +221,8 @@ except ImportError as _rel_err:  # pragma: no cover - fallback path
         except Exception as _path_err:
             combined_err = f"{_rel_err}; {_abs_err}; {_path_err}"
             print(f"Error: Could not import server_bridge: {combined_err}")
-            server_bridge_error = str(combined_err)
+            # combined_err is already a string; avoid unnecessary cast
+            server_bridge_error = combined_err
 
             def create_server_bridge(real_server: Any | None = None) -> Any:  # type: ignore[override]
                 if real_server is None:
@@ -326,7 +329,7 @@ class AsyncManager:
         logger.info(f"[ASYNC_MANAGER] Cancelling all tasks for view: {self._view_name}")
 
         # Cancel all tasks with explicit cleanup
-        for _task_id, task in list(self._tasks.items()):
+        for _task_id, task in self._tasks.items():
             if not task.done():
                 task.cancel()
 
@@ -432,7 +435,30 @@ class FletV2App(ft.Row):
         self._profile_mark = _mark  # type: ignore[attr-defined]
         self._profile_mark("init:start")
 
-        # Initialize server bridge - prefer real server instance
+        self._initialize_server_bridge(real_server)
+
+        # Initialize enhanced state manager for reactive updates and inter-view coordination
+        self._initialize_state_manager()
+        if _VERBOSE_DIAGNOSTICS:
+            logger.debug("State manager initialized for reactive updates")
+        self._profile_mark("state_manager:initialized")
+
+        # Comment 12: Track current view dispose function for proper StateManager cleanup
+        self._current_view_dispose: Callable[[], None] | None = None
+        self._current_view_name: str | None = None
+        self._current_setup_task: asyncio.Task | None = None  # Track setup task for cancellation
+
+        # AnimatedSwitcher animation timing constants - keep in sync with duration parameter
+        self.ANIMATION_DURATION_MS = 160  # Animation duration in milliseconds (for AnimatedSwitcher.duration)
+        self.ANIMATION_DURATION_SEC = 0.160  # Same duration in seconds (for asyncio.sleep)
+
+        self._build_initial_layout()
+        self._setup_page_handlers(page)
+
+        # Post-update adjustments handled in _post_content_update
+
+    def _initialize_server_bridge(self, real_server: Any | None) -> None:
+        """Init server bridge preferring injected BackupServer instances."""
         global bridge_type, real_server_available, real_server_instance
         try:
             if real_server is not None:
@@ -474,21 +500,8 @@ class FletV2App(ft.Row):
         logger.info(f"Final server bridge configuration: {bridge_type}")
         logger.info(f"Real server available: {real_server_available}")
 
-        # Initialize enhanced state manager for reactive updates and inter-view coordination
-        self._initialize_state_manager()
-        if _VERBOSE_DIAGNOSTICS:
-            logger.debug("State manager initialized for reactive updates")
-        self._profile_mark("state_manager:initialized")
-
-        # Comment 12: Track current view dispose function for proper StateManager cleanup
-        self._current_view_dispose: Callable[[], None] | None = None
-        self._current_view_name: str | None = None
-        self._current_setup_task: asyncio.Task | None = None  # Track setup task for cancellation
-
-        # AnimatedSwitcher animation timing constants - keep in sync with duration parameter
-        self.ANIMATION_DURATION_MS = 160  # Animation duration in milliseconds (for AnimatedSwitcher.duration)
-        self.ANIMATION_DURATION_SEC = 0.160  # Same duration in seconds (for asyncio.sleep)
-
+    def _build_initial_layout(self) -> None:
+        """Set up the animated switcher, breadcrumb header, and navigation rail."""
         # Create optimized content area with modern Material Design 3 styling and fast transitions
         self._animated_switcher = ft.AnimatedSwitcher(
             content=ft.Card(  # Modern card-based loading state
@@ -592,7 +605,8 @@ class FletV2App(ft.Row):
             self.content_area,
         ]
 
-        # Set up page connection handler to load initial view (guarded)
+    def _setup_page_handlers(self, page: ft.Page) -> None:
+        """Attach Flet page lifecycle hooks and dashboard flags."""
         logger.info("Setting up page connection handler")
 
         def _guarded_on_connect(e: ft.ControlEvent) -> None:
@@ -629,8 +643,6 @@ class FletV2App(ft.Row):
         # The page.on_connect handler will load the dashboard properly
         logger.info("Proactive dashboard loading disabled - using page.on_connect instead")
 
-        # Post-update adjustments handled in _post_content_update
-
     def _initialize_state_manager(self) -> None:
         """Initialize simplified state management using Flet-native patterns."""
         if self.state_manager is not None:
@@ -646,11 +658,14 @@ class FletV2App(ft.Row):
             logger.warning(f"Could not import simple state manager: {e}")
             self.state_manager = None
         except Exception as e:
-            print(f"🔴 [CRITICAL] Exception during state manager init: {e}")
-            import traceback
+            self._log_state_manager_exception(e)
 
-            print(f"🔴 [CRITICAL] Traceback: {traceback.format_exc()}")
-            raise
+    def _log_state_manager_exception(self, error: Exception) -> None:
+        print(f"🔴 [CRITICAL] Exception during state manager init: {error}")
+        import traceback
+
+        print(f"🔴 [CRITICAL] Traceback: {traceback.format_exc()}")
+        raise
 
     def dispose(self) -> None:
         """Clean up resources when app is disposed."""
@@ -742,7 +757,8 @@ class FletV2App(ft.Row):
         if view_name in view_names and hasattr(self, "_nav_rail_control") and self._nav_rail_control:
             new_index = view_names.index(view_name)
             self._nav_rail_control.selected_index = new_index
-            # Note: No need to call update() here - AnimatedSwitcher.update() later will update entire page tree
+            # Note: No need to call update() here.
+            # AnimatedSwitcher.update() later will refresh the entire page tree
             if _VERBOSE_NAV_LOGS:
                 logger.debug("Navigation rail index set to %s (update deferred to content update)", new_index)
         elif _VERBOSE_NAV_LOGS:
@@ -875,25 +891,15 @@ class FletV2App(ft.Row):
         try:
             # Create breadcrumb items for different views
             if view_name == "database":
-                from FletV2.components.breadcrumb import BreadcrumbItem
-
                 items = BreadcrumbFactory.create_database_breadcrumb()
             elif view_name == "files":
-                from FletV2.components.breadcrumb import BreadcrumbItem
-
                 items = BreadcrumbFactory.create_file_breadcrumb([])
             elif view_name == "logs":
-                from FletV2.components.breadcrumb import BreadcrumbItem
-
                 items = BreadcrumbFactory.create_log_breadcrumb()
             elif view_name == "settings":
-                from FletV2.components.breadcrumb import BreadcrumbItem
-
                 items = BreadcrumbFactory.create_settings_breadcrumb()
             else:
                 # Default breadcrumb for other views
-                from FletV2.components.breadcrumb import BreadcrumbItem
-
                 items = [
                     BreadcrumbItem(
                         label=view_name.title(),
@@ -1003,74 +1009,29 @@ class FletV2App(ft.Row):
                 return
             print("🔴 [DEBUG] _initialized check passed")
 
-            loop = asyncio.get_running_loop()
-            if not getattr(self, "_loop_exception_handler_installed", False):
-                previous_handler = loop.get_exception_handler()
-
-                def _loop_handler(loop_obj: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
-                    exc = context.get("exception")
-                    message = context.get("message", "")
-
-                    error_text = str(exc) if exc else message
-
-                    if "cannot schedule new futures after shutdown" in error_text:
-                        logger.debug("Suppressed executor shutdown noise during shutdown")
-                        return
-
-                    if isinstance(exc, asyncio.CancelledError):
-                        # Routine cancellation at shutdown - ignore silently
-                        return
-
-                    if isinstance(exc, RuntimeError) and "Event loop is closed" in error_text:
-                        logger.debug("Suppressed executor shutdown noise during shutdown")
-                        return
-
-                    if previous_handler is not None:
-                        previous_handler(loop_obj, context)
-                    else:
-                        loop_obj.default_exception_handler(context)
-
-                loop.set_exception_handler(_loop_handler)
-                self._loop_exception_handler_installed = True
+            self._ensure_loop_exception_handler()
 
             print("🔴 [DEBUG] About to call setup_sophisticated_theme()")
-            # Apply theme with Windows 11 integration
             setup_sophisticated_theme(self.page)
             print("🔴 [DEBUG] setup_sophisticated_theme() completed")
             logger.debug("Theme setup complete")
 
             print("🔴 [DEBUG] About to add app to page")
-            # Add the app to the page
             self.page.add(self)
             print("🔴 [DEBUG] self.page.add(self) completed")
 
             print("🔴 [DEBUG] Setting page properties")
-            # Set page properties
             self.page.title = "FletV2 - Encrypted Backup Framework"
-            self.page.auto_update = True  # Enable automatic UI updates for better performance
+            self.page.auto_update = True
             print("🔴 [DEBUG] page.title set")
             print("🔴 [DEBUG] page.auto_update enabled")
 
-            # Window properties only work in FLET_APP mode, not WEB_BROWSER
-            try:
-                if hasattr(self.page, "window") and self.page.window:
-                    self.page.window.width = 1200
-                    self.page.window.height = 800
-                    self.page.window.min_width = 800
-                    self.page.window.min_height = 600
-                    print("🔴 [DEBUG] window properties set")
-                else:
-                    print("🔴 [DEBUG] page.window not available (running in web mode)")
-            except Exception as win_err:
-                logger.debug(f"Could not set window properties (web mode?): {win_err}")
-                print(f"🔴 [DEBUG] window property error: {win_err}")
+            self._configure_window_properties()
 
             print("🔴 [DEBUG] About to call page.update()")
-            # Update the page
             self.page.update()
             print("🔴 [DEBUG] page.update() completed")
 
-            # Initialize desktop navigation features
             self._setup_desktop_navigation()
             print("🔴 [DEBUG] Desktop navigation setup completed")
 
@@ -1080,32 +1041,80 @@ class FletV2App(ft.Row):
             logger.info("✅ FletV2 application initialized successfully")
             print("🔴 [DEBUG] About to load dashboard")
 
-            # Load initial dashboard view. Mark as loaded to prevent on_connect from loading again.
-            try:
-                logger.info("📊 Loading initial dashboard view...")
-                print("🔴 [DEBUG] Calling navigate_to('dashboard')")
-                self.navigate_to("dashboard")
-                print("🔴 [DEBUG] navigate_to returned")
-                logger.info("✅ Dashboard navigation completed")
-                # Guard: mark that initial view is loaded to avoid duplicate loads via on_connect
-                self._initial_view_loaded = True
-            except Exception as dash_err:
-                print(f"🔴 [DEBUG] Dashboard navigation raised exception: {dash_err}")
-                logger.error(f"❌ Failed to load dashboard: {dash_err}")
-                import traceback
-
-                logger.error(f"Dashboard load traceback: {traceback.format_exc()}")
-                print(f"🔴 [DEBUG] Traceback: {traceback.format_exc()}")
+            self._load_initial_dashboard()
 
             print("🔴 [DEBUG] End of initialize() method reached")
 
-            # Optional internal navigation smoke test
             if os.environ.get("FLET_NAV_SMOKE") == "1":
                 with contextlib.suppress(Exception):
                     self.page.run_task(self._run_nav_smoke_test)
         except Exception as e:
             logger.error(f"❌ Application initialization failed: {e}")
             raise
+
+    def _ensure_loop_exception_handler(self) -> None:
+        """Install a custom asyncio loop exception handler once."""
+        if getattr(self, "_loop_exception_handler_installed", False):
+            return
+
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+
+        def _loop_handler(loop_obj: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+            exc = context.get("exception")
+            message = context.get("message", "")
+            error_text = str(exc) if exc else message
+
+            if "cannot schedule new futures after shutdown" in error_text:
+                logger.debug("Suppressed executor shutdown noise during shutdown")
+                return
+
+            if isinstance(exc, asyncio.CancelledError):
+                return
+
+            if isinstance(exc, RuntimeError) and "Event loop is closed" in error_text:
+                logger.debug("Suppressed executor shutdown noise during shutdown")
+                return
+
+            if previous_handler is not None:
+                previous_handler(loop_obj, context)
+            else:
+                loop_obj.default_exception_handler(context)
+
+        loop.set_exception_handler(_loop_handler)
+        self._loop_exception_handler_installed = True
+
+    def _configure_window_properties(self) -> None:
+        """Apply desktop window sizing hints when available."""
+        try:
+            if hasattr(self.page, "window") and self.page.window:
+                self.page.window.width = 1200
+                self.page.window.height = 800
+                self.page.window.min_width = 800
+                self.page.window.min_height = 600
+                print("🔴 [DEBUG] window properties set")
+            else:
+                print("🔴 [DEBUG] page.window not available (running in web mode)")
+        except Exception as win_err:
+            logger.debug(f"Could not set window properties (web mode?): {win_err}")
+            print(f"🔴 [DEBUG] window property error: {win_err}")
+
+    def _load_initial_dashboard(self) -> None:
+        """Load the dashboard view and report any failures."""
+        try:
+            logger.info("📊 Loading initial dashboard view...")
+            print("🔴 [DEBUG] Calling navigate_to('dashboard')")
+            self.navigate_to("dashboard")
+            print("🔴 [DEBUG] navigate_to returned")
+            logger.info("✅ Dashboard navigation completed")
+            self._initial_view_loaded = True
+        except Exception as dash_err:
+            print(f"🔴 [DEBUG] Dashboard navigation raised exception: {dash_err}")
+            logger.error(f"❌ Failed to load dashboard: {dash_err}")
+            import traceback
+
+            logger.error(f"Dashboard load traceback: {traceback.format_exc()}")
+            print(f"🔴 [DEBUG] Traceback: {traceback.format_exc()}")
 
     def _dispose_current_view(self, new_view_name: str) -> None:
         """Dispose of the current view before loading a new one using AsyncManager."""
@@ -1160,155 +1169,179 @@ class FletV2App(ft.Row):
         logger.debug(f"View config - module: {module_name}, function: {function_name}")
 
         # Dynamic import and view creation
+        setup_func = None
         try:
-            print(f"🔴 [IMPORT] About to import module '{module_name}' for view '{view_name}'")
-            logger.debug(f"Importing view module '{module_name}'")
-            module = __import__(module_name, fromlist=[function_name])
-            print(f"🔴 [IMPORT] Module imported successfully: {module}")
-
-            print(f"🔴 [IMPORT] Checking if module has function '{function_name}'")
-            if not hasattr(module, function_name):
-                raise AttributeError(f"Module '{module_name}' missing '{function_name}'")
-            view_function = getattr(module, function_name)
-            print(f"🔴 [IMPORT] Got view function: {view_function}")
-
-            # Call the view function directly with required arguments
-            # Dashboard needs navigate_callback for hero card clicks
-            print(f"🔴 [CALL] About to call view function for '{view_name}'")
-            signature = inspect.signature(view_function)
-            call_kwargs: dict[str, Any] = {}
-            if "server_bridge" in signature.parameters:
-                call_kwargs["server_bridge"] = self.server_bridge
-            if "page" in signature.parameters:
-                call_kwargs["page"] = self.page
-            if "_state_manager" in signature.parameters:
-                call_kwargs["_state_manager"] = self.state_manager
-            elif "state_manager" in signature.parameters:
-                call_kwargs["state_manager"] = self.state_manager
-            if "navigate_callback" in signature.parameters:
-                call_kwargs["navigate_callback"] = self.navigate_to
-            if "async_manager" in signature.parameters:
-                call_kwargs["async_manager"] = self.async_manager
-            if "global_search" in signature.parameters:
-                call_kwargs["global_search"] = self.global_search
-
-            result = view_function(**call_kwargs)
-            print(f"🔴 [CALL] View function returned: {type(result)}")
-
-            # DEBUG: Log result structure
-            is_tuple = isinstance(result, tuple)
-            length = len(result) if is_tuple else "N/A"
-            logger.info(
-                f"🔍 [{view_name.upper()}] Result type: {type(result)}, is tuple: {is_tuple}, len: {length}"
-            )
-            if isinstance(result, tuple) and len(result) >= 2:
-                result2_callable = callable(result[2]) if len(result) > 2 else "N/A"
-                logger.info(
-                    f"🔍 [{view_name.upper()}] result[0] type: {type(result[0])}, "
-                    f"result[1] callable: {callable(result[1])}, "
-                    f"result[2] exists: {len(result) > 2}, "
-                    f"result[2] callable: {result2_callable}"
-                )
-
-            # Handle different return types: tuple (content, dispose, setup) or just content
-            if isinstance(result, tuple) and len(result) >= 2:
-                content = result[0]
-                dispose_func = result[1] if len(result) > 1 else lambda: None
-                setup_func = result[2] if len(result) > 2 else None
-                # Store setup function to be called AFTER content is added to page
-                self._current_view_setup = setup_func
-                setup_callable = callable(setup_func) if setup_func else False
-                logger.info(
-                    f"🔍 [{view_name.upper()}] Stored setup_func: {setup_func}, callable: {setup_callable}"
-                )
-            else:
-                content = result
-                def dispose_func():
-                    return None
-                self._current_view_setup = None
-            logger.info(f"✅ View content created for '{view_name}'")
-            print(f"🟣 [PERFORM_VIEW] logger.info executed successfully for '{view_name}'")
+            content, dispose_func, setup_func = self._load_view_content(view_name, module_name, function_name)
         except Exception as e:
-            print(f"🔴 [ERROR] Exception caught for view '{view_name}': {e}")
-            print(f"🔴 [ERROR] Exception type: {type(e)}")
-            logger.error(f"❌ Error loading view '{view_name}': {e}")
-            import traceback
-
-            tb_str = traceback.format_exc()
-            print(f"🔴 [ERROR] Traceback:\n{tb_str}")
-            logger.error(f"Full traceback: {tb_str}")
-            # Store last error for UI diagnostics
-            self._last_view_error = f"{view_name}: {e}"
-            # Special handling: if dashboard fails, attempt stub
-            if view_name != "dashboard":
-                # Provide inline error diagnostics UI instead of raising to avoid blank screen
-                error_details = getattr(e, "args", [""])[0]
-                error_tb = traceback.format_exc(limit=5)
-                logger.warning(f"Rendering inline error panel for failed view '{view_name}'")
-                content = ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                f"❌ Failed to load view: {view_name}",
-                                size=20,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.ERROR,
-                            ),
-                            ft.Text(str(error_details), size=14, color=ft.Colors.ERROR),
-                            ft.Text("Traceback (truncated):", size=12, weight=ft.FontWeight.W_600),
-                            ft.Text(error_tb, selectable=True, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                            ft.Divider(),
-                            ft.Text(
-                                "This is a diagnostics panel. Navigate to another view to continue.",
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=8,
-                        scroll=ft.ScrollMode.ALWAYS,
-                    ),
-                    padding=20,
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
-                    border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),
-                    border_radius=12,
-                )
-                def dispose_func():
-                    return None
-            else:
-                # For dashboard keep existing stub fallback path
-                # (original logic continues below)
-                pass
-            try:
-                logger.warning("Attempting fallback stub dashboard due to failure")
-                stub_content = None
-                try:
-                    from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
-
-                    stub_content = create_dashboard_stub(self.page)
-                except ModuleNotFoundError:
-                    logger.debug("Dashboard stub module not found; using inline fallback UI")
-                    stub_content = self._create_inline_dashboard_stub()
-
-                if stub_content is None:
-                    raise RuntimeError("Dashboard stub unavailable")
-
-                content = stub_content
-                def dispose_func():
-                    return None
-                logger.info("Loaded dashboard stub successfully")
-            except Exception as stub_err:
-                logger.error(f"Dashboard stub load failed: {stub_err}")
-                raise
+            content, dispose_func = self._handle_view_loading_error(view_name, e)
+            setup_func = None
 
         # Store dispose function for cleanup (Comment 12)
         self._current_view_dispose = dispose_func
         self._current_view_name = view_name
+        self._current_view_setup = setup_func
 
         self._set_animation_for_view(actual_view_name)
 
         # Update content area using AnimatedSwitcher for smooth transitions
         animated_switcher = self._animated_switcher
         return self._update_content_area(animated_switcher, content, view_name)
+
+    def _load_view_content(
+        self,
+        view_name: str,
+        module_name: str,
+        function_name: str,
+    ) -> tuple[ft.Control, Callable[[], None], Any | None]:
+        """Import the view module, invoke the factory, and normalize the result."""
+        print(f"🔴 [IMPORT] About to import module '{module_name}' for view '{view_name}'")
+        logger.debug(f"Importing view module '{module_name}'")
+        module = __import__(module_name, fromlist=[function_name])
+        print(f"🔴 [IMPORT] Module imported successfully: {module}")
+
+        print(f"🔴 [IMPORT] Checking if module has function '{function_name}'")
+        if not hasattr(module, function_name):
+            raise AttributeError(f"Module '{module_name}' missing '{function_name}'")
+        view_function = getattr(module, function_name)
+        print(f"🔴 [IMPORT] Got view function: {view_function}")
+
+        print(f"🔴 [CALL] About to call view function for '{view_name}'")
+        call_kwargs = self._build_view_call_kwargs(view_function)
+        result = view_function(**call_kwargs)
+        print(f"🔴 [CALL] View function returned: {type(result)}")
+
+        return self._normalize_view_result(view_name, result)
+
+    def _build_view_call_kwargs(self, view_function: Callable[..., Any]) -> dict[str, Any]:
+        """Construct keyword arguments for the view factory based on its signature."""
+        signature = inspect.signature(view_function)
+        call_kwargs: dict[str, Any] = {}
+        if "server_bridge" in signature.parameters:
+            call_kwargs["server_bridge"] = self.server_bridge
+        if "page" in signature.parameters:
+            call_kwargs["page"] = self.page
+        if "_state_manager" in signature.parameters:
+            call_kwargs["_state_manager"] = self.state_manager
+        elif "state_manager" in signature.parameters:
+            call_kwargs["state_manager"] = self.state_manager
+        if "navigate_callback" in signature.parameters:
+            call_kwargs["navigate_callback"] = self.navigate_to
+        if "async_manager" in signature.parameters:
+            call_kwargs["async_manager"] = self.async_manager
+        if "global_search" in signature.parameters:
+            call_kwargs["global_search"] = self.global_search
+        return call_kwargs
+
+    def _normalize_view_result(
+        self,
+        view_name: str,
+        result: Any,
+    ) -> tuple[ft.Control, Callable[[], None], Any | None]:
+        """Normalize the view function return value into (content, dispose, setup)."""
+        is_tuple = isinstance(result, tuple)
+        length = len(result) if is_tuple else "N/A"
+        logger.info(
+            f"🔍 [{view_name.upper()}] Result type: {type(result)}, is tuple: {is_tuple}, len: {length}"
+        )
+        if is_tuple and len(result) >= 2:
+            result2_callable = callable(result[2]) if len(result) > 2 else "N/A"
+            logger.info(
+                f"🔍 [{view_name.upper()}] result[0] type: {type(result[0])}, "
+                f"result[1] callable: {callable(result[1])}, "
+                f"result[2] exists: {len(result) > 2}, "
+                f"result[2] callable: {result2_callable}"
+            )
+            content = cast(ft.Control, result[0])
+            # len(result) >= 2 is guaranteed by the surrounding condition, so index 1 exists
+            dispose_func = result[1]
+            setup_func = result[2] if len(result) > 2 else None
+            setup_callable = callable(setup_func) if setup_func else False
+            logger.info(
+                f"🔍 [{view_name.upper()}] Stored setup_func: {setup_func}, callable: {setup_callable}"
+            )
+        else:
+            content = cast(ft.Control, result)
+            dispose_func = self._noop_dispose
+            setup_func = None
+        logger.info(f"✅ View content created for '{view_name}'")
+        print(f"🟣 [PERFORM_VIEW] logger.info executed successfully for '{view_name}'")
+        return content, dispose_func, setup_func
+
+    def _noop_dispose(self) -> None:
+        """Fallback dispose function for views that do not provide one."""
+        return None
+
+    def _handle_view_loading_error(
+        self,
+        view_name: str,
+        error: Exception,
+    ) -> tuple[ft.Control, Callable[[], None]]:
+        """Log view loading failures and provide fallback UI."""
+        print(f"🔴 [ERROR] Exception caught for view '{view_name}': {error}")
+        print(f"🔴 [ERROR] Exception type: {type(error)}")
+        logger.error(f"❌ Error loading view '{view_name}': {error}")
+        import traceback
+
+        tb_str = traceback.format_exc()
+        print(f"🔴 [ERROR] Traceback:\n{tb_str}")
+        logger.error(f"Full traceback: {tb_str}")
+        self._last_view_error = f"{view_name}: {error}"
+
+        if view_name != "dashboard":
+            error_details = getattr(error, "args", [""])[0]
+            error_tb = traceback.format_exc(limit=5)
+            logger.warning(f"Rendering inline error panel for failed view '{view_name}'")
+            content = self._create_view_error_panel(view_name, error_details, error_tb)
+            return content, self._noop_dispose
+
+        logger.warning("Attempting fallback stub dashboard due to failure")
+        try:
+            stub_content = self._load_dashboard_stub()
+        except Exception as stub_err:
+            logger.error(f"Dashboard stub load failed: {stub_err}")
+            raise
+        logger.info("Loaded dashboard stub successfully")
+        return stub_content, self._noop_dispose
+
+    def _create_view_error_panel(self, view_name: str, details: str, traceback_text: str) -> ft.Container:
+        """Construct a diagnostics panel to show view loading failures."""
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        f"❌ Failed to load view: {view_name}",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ERROR,
+                    ),
+                    ft.Text(details, size=14, color=ft.Colors.ERROR),
+                    ft.Text("Traceback (truncated):", size=12, weight=ft.FontWeight.W_600),
+                    ft.Text(traceback_text, selectable=True, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Divider(),
+                    ft.Text(
+                        "This is a diagnostics panel. Navigate to another view to continue.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                spacing=8,
+                scroll=ft.ScrollMode.ALWAYS,
+            ),
+            padding=20,
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),
+            border_radius=12,
+        )
+
+    def _load_dashboard_stub(self) -> ft.Control:
+        """Attempt to import the dashboard stub module or fall back to inline stub."""
+        try:
+            from views.dashboard_stub import create_dashboard_stub  # type: ignore[import-not-found]
+
+            return create_dashboard_stub(self.page)
+        except ModuleNotFoundError:
+            logger.debug("Dashboard stub module not found; using inline fallback UI")
+            return self._create_inline_dashboard_stub()
 
     def _update_content_area(self, animated_switcher, content, view_name: str) -> bool:
         """Safely update the content area with simplified view loading"""
@@ -1355,139 +1388,120 @@ class FletV2App(ft.Row):
         if content is None:
             return
 
-        # Call setup function asynchronously (AFTER content is rendered)
-        has_setup = hasattr(self, "_current_view_setup")
         setup_value = getattr(self, "_current_view_setup", "NO_ATTR")
-        setup_callable = callable(getattr(self, "_current_view_setup", None)) if has_setup else False
+        has_setup = setup_value != "NO_ATTR" and setup_value is not None
+        setup_callable = callable(setup_value) if has_setup else False
         logger.info(
             f"[POST_UPDATE] Checking setup for {view_name}, "
             f"has attr: {has_setup}, value: {setup_value}, "
             f"callable: {setup_callable}"
         )
-        setup_check = (
-            hasattr(self, "_current_view_setup")
-            and self._current_view_setup
-            and callable(self._current_view_setup)
-        )
-        logger.info(f"[POST_UPDATE] setup_check result for {view_name}: {setup_check}")
-        if setup_check:
-            setup_func = self._current_view_setup
-            self._current_view_setup = None  # Clear immediately to prevent double-calling
-
-            task_holder: dict[str, asyncio.Task | None] = {"task": None}
-
-            async def delayed_setup():
-                """Delay setup until controls are fully attached to page tree."""
-                try:
-                    # Wait for AnimatedSwitcher transition to complete + safety margin
-                    # Matches AnimatedSwitcher duration (160ms) + 50ms buffer = 210ms total
-                    await asyncio.sleep(self.ANIMATION_DURATION_SEC + 0.05)
-
-                    # Check cancellation after sleep - prevents race conditions
-                    if self.async_manager.is_cancelled():
-                        logger.debug(f"[SETUP_TASK] Setup cancelled after sleep for '{view_name}'")
-                        return
-
-                    logger.info(f"Calling delayed setup function for {view_name}")
-
-                    # Guard against None/non-callable and handle both sync and async functions
-                    if setup_func and callable(setup_func):
-                        try:
-                            # Run setup function with cancellation support
-                            if asyncio.iscoroutinefunction(setup_func):
-                                await self.async_manager.run_cancellable(setup_func)
-                            else:
-                                # For sync functions, check cancellation before calling
-                                if not self.async_manager.is_cancelled():
-                                    setup_func()
-                        except asyncio.CancelledError:
-                            print(f"🟦 [SETUP_TASK] Setup cancelled for '{view_name}'")
-                            logger.info(f"Setup cancelled for {view_name}")
-                            raise  # Re-raise to properly cancel the task
-                        except Exception as setup_err:
-                            logger.warning(f"Setup function execution failed: {setup_err}")
-                    else:
-                        logger.debug("No setup_func to execute (None or not callable); skipping")
-                except asyncio.CancelledError:
-                    print(f"🟦 [SETUP_TASK] Delayed setup cancelled during sleep for '{view_name}'")
-                    raise  # Re-raise to properly cancel the task
-                except Exception as setup_err:
-                    logger.warning(f"Setup function failed for {view_name}: {setup_err}")
-                finally:
-                    # Clear task reference when done (successfully or cancelled)
-                    if task_holder["task"] is not None and self._current_setup_task is task_holder["task"]:
-                        print(f"🟦 [SETUP_TASK] Clearing setup task reference for '{view_name}'")
-                        self._current_setup_task = None
-
-            # Run setup asynchronously using page.run_task() and track for cancellation
-            try:
-                task = self.page.run_task(delayed_setup)
-                task_holder["task"] = task
-                self._current_setup_task = task
-                print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {task}")
-            except Exception as e:
-                logger.warning(f"Failed to schedule setup task for {view_name}: {e}")
+        logger.info(f"[POST_UPDATE] setup_check result for {view_name}: {setup_callable}")
+        if setup_callable:
+            self._schedule_setup_task(view_name, setup_value)  # type: ignore[arg-type]
 
         # Force visibility if dashboard content remains hidden
         if view_name == "dashboard":
+            self._ensure_dashboard_visible(content)
+
+    def _schedule_setup_task(self, view_name: str, setup_func: Callable[..., Any]) -> None:
+        """Schedule the view's setup function with cancellation awareness."""
+        self._current_view_setup = None
+        task_holder: dict[str, asyncio.Task | None] = {"task": None}
+
+        async def delayed_setup() -> None:
             try:
-                if getattr(content, "opacity", 1.0) == 0.0:
-                    logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
-                    content.opacity = 1.0
-                    with contextlib.suppress(Exception):
-                        content.update()
+                await asyncio.sleep(self.ANIMATION_DURATION_SEC + 0.05)
+                if self.async_manager.is_cancelled():
+                    logger.debug(f"[SETUP_TASK] Setup cancelled after sleep for '{view_name}'")
+                    return
 
-                def _force_visible_recursive(ctrl, depth: int = 0, max_depth: int = 10) -> None:
-                    if ctrl is None:
-                        return
+                logger.info(f"Calling delayed setup function for {view_name}")
 
-                    # Prefer contextlib.suppress for concise suppressed-exception blocks
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, "visible") and ctrl.visible is False:
-                            ctrl.visible = True
+                if setup_func and callable(setup_func):
+                    try:
+                        if asyncio.iscoroutinefunction(setup_func):
+                            await self.async_manager.run_cancellable(setup_func)
+                        else:
+                            if not self.async_manager.is_cancelled():
+                                setup_func()
+                    except asyncio.CancelledError:
+                        print(f"🟦 [SETUP_TASK] Setup cancelled for '{view_name}'")
+                        logger.info(f"Setup cancelled for {view_name}")
+                        raise
+                    except Exception as setup_err:
+                        logger.warning(f"Setup function execution failed: {setup_err}")
+                else:
+                    logger.debug("No setup_func to execute (None or not callable); skipping")
+            except asyncio.CancelledError:
+                print(f"🟦 [SETUP_TASK] Delayed setup cancelled during sleep for '{view_name}'")
+                raise
+            except Exception as setup_err:
+                logger.warning(f"Setup function failed for {view_name}: {setup_err}")
+            finally:
+                if task_holder["task"] is not None and self._current_setup_task is task_holder["task"]:
+                    print(f"🟦 [SETUP_TASK] Clearing setup task reference for '{view_name}'")
+                    self._current_setup_task = None
 
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, "opacity") and ctrl.opacity is not None and ctrl.opacity != 1.0:
-                            ctrl.opacity = 1.0
+        try:
+            task = self.page.run_task(delayed_setup)
+            task_holder["task"] = task
+            self._current_setup_task = task
+            print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {task}")
+        except Exception as e:
+            logger.warning(f"Failed to schedule setup task for {view_name}: {e}")
 
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, "update"):
-                            try:
-                                ctrl.update()
-                            except Exception:
-                                # Keep inner safety for update() call failures
-                                pass
+    def _ensure_dashboard_visible(self, content: Any) -> None:
+        """Force the dashboard controls to become visible after updates."""
+        try:
+            self._fix_dashboard_opacity(content)
+            self._force_visible_recursive(content, 0, 10)
+            self._refresh_page_after_visibility()
+            logger.info("[DASH_FIX] Forced nested dashboard controls visible (aggressive)")
+        except Exception as vis_err:
+            logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
 
-                    if depth >= max_depth:
-                        return
+    def _fix_dashboard_opacity(self, content: Any) -> None:
+        current_opacity = getattr(content, "opacity", 1.0)
+        if math.isclose(current_opacity, 0.0, abs_tol=1e-6):
+            logger.warning("Dashboard opacity still 0 after update; forcing to 1.0")
+            content.opacity = 1.0
+            with contextlib.suppress(Exception):
+                content.update()
 
-                    # Suppress errors across recursive descent (safer and clearer than a bare try/except)
-                    with contextlib.suppress(Exception):
-                        if hasattr(ctrl, "controls") and ctrl.controls:
-                            for child in list(ctrl.controls):
-                                _force_visible_recursive(child, depth + 1, max_depth)
+    def _refresh_page_after_visibility(self) -> None:
+        with contextlib.suppress(Exception):
+            if getattr(self, "page", None):
+                self.page.update()
 
-                        if hasattr(ctrl, "content") and ctrl.content:
-                            _force_visible_recursive(ctrl.content, depth + 1, max_depth)
+    def _force_visible_recursive(self, ctrl: Any, depth: int = 0, max_depth: int = 10) -> None:
+        if ctrl is None or depth >= max_depth:
+            return
 
-                        if hasattr(ctrl, "rows") and ctrl.rows:
-                            for child in list(ctrl.rows):
-                                _force_visible_recursive(child, depth + 1, max_depth)
+        self._apply_visibility_attributes(ctrl)
+        for child in self._iter_control_children(ctrl):
+            self._force_visible_recursive(child, depth + 1, max_depth)
 
-                        if hasattr(ctrl, "columns") and ctrl.columns:
-                            for child in list(ctrl.columns):
-                                _force_visible_recursive(child, depth + 1, max_depth)
+    def _apply_visibility_attributes(self, ctrl: Any) -> None:
+        with contextlib.suppress(Exception):
+            if hasattr(ctrl, "visible") and ctrl.visible is False:
+                ctrl.visible = True
 
-                _force_visible_recursive(content, 0, 10)
+        with contextlib.suppress(Exception):
+            current_opacity = getattr(ctrl, "opacity", None)
+            if current_opacity is not None and not math.isclose(current_opacity, 1.0, abs_tol=1e-6):
+                ctrl.opacity = 1.0
 
-                # Use contextlib.suppress for page.update safety
-                with contextlib.suppress(Exception):
-                    if hasattr(self, "page") and self.page is not None:
-                        self.page.update()
+        with contextlib.suppress(Exception):
+            updater = getattr(ctrl, "update", None)
+            if callable(updater):
+                updater()
 
-                logger.info("[DASH_FIX] Forced nested dashboard controls visible (aggressive)")
-            except Exception as vis_err:
-                logger.debug(f"Failed forcing dashboard opacity: {vis_err}")
+    def _iter_control_children(self, ctrl: Any) -> Iterator[Any]:
+        for attr in ("controls", "rows", "columns"):
+            yield from getattr(ctrl, attr, ()) or ()
+        if (content_child := getattr(ctrl, "content", None)):
+            yield content_child
 
         # Note: Subscription setup is handled by delayed_setup() above (lines 987-1005)
         # The setup_func from the view's return tuple is called after transition completes

@@ -303,3 +303,4 @@ windows-terminal-info-bar-for-ai-coding-agents/scripts/setup-statusline.ps1
 windows-terminal-info-bar-for-ai-coding-agents/scripts/windows-statusline.ps1
 .roo/mcp.json
 .roomodes
+env_freeze_before_upgrade.txt

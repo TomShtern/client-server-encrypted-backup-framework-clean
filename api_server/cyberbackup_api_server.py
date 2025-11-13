@@ -1477,9 +1477,8 @@ def api_cancel_all_jobs():
     try:
         results: dict[str, bool] = {}
         job_snapshots: dict[str, dict[str, Any]] = {}
-        # Note: list() is REQUIRED here because job_executors can be modified during iteration
-        # (executor.cancel() may trigger cleanup that pops items from the dict)
-        for jid, executor in list(job_executors.items()):
+        # Iterate directly over job_executors.items(). Removed unnecessary list() wrapper.
+        for jid, executor in job_executors.items():
             try:
                 ok = cast(Any, executor).cancel("API cancel all")
             except Exception:

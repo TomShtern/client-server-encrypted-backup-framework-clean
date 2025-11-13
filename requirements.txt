@@ -5,7 +5,7 @@ Flask>=2.3.2                    # Web framework for API bridge
 flask-cors>=6.0.0               # CORS for Flask API
 flask-socketio>=5.0.0           # SocketIO support for realtime events
 sentry-sdk>=2.8.0               # Optional observability/telemetry
-watchdog>=2.1.0                 # File system event monitoring
+watchdog>=2.1.0,<5.0.0          # File system event monitoring (bound to <5 to keep flet-cli compatible)
 filetype>=1.2.0                 # File type detection by magic bytes
 flet>=0.28.3                    # Primary GUI framework (FletV2)
 plyer>=2.1.0                    # Native device features (optional)
@@ -13,6 +13,11 @@ matplotlib>=3.7.0               # Charts / static plotting
 pydantic>=2.11.7                # Data validation (v2)
 pydantic-core>=2.33.2           # Pydantic runtime core
 httpx>=0.27.2,<0.28             # Async HTTP client (Flet integration)
+semgrep==1.143.0                # Security scanning (UPDATED Nov 13: 1.139.0 → 1.143.0)
+mcp==1.16.0                     # Model Context Protocol (UPDATED Nov 13: 1.12.2 → 1.16.0)
+jsonschema~=4.25.1              # JSON Schema validation (UPDATED Nov 13: ~4.20.0 → ~4.25.1)
+ruamel.yaml.clib==0.2.14        # YAML C extension (UPDATED Nov 13: 0.2.12 → 0.2.14)
+tomli~=2.0.2                    # TOML parser (UPDATED Nov 13: ~2.0.1 → ~2.0.2)
 aiofiles>=24.1.0                # Async file I/O helpers
 python-dotenv>=1.0.0            # Load .env for local configs
 certifi>=2024.8.30              # TLS CA certs
@@ -42,6 +47,7 @@ websockets>=11.0                # Websocket library (optional)
 sse-starlette>=1.6.0            # SSE for ASGI (optional)
 python-magic-bin>=0.4.14        # libmagic windows binary (file detection)
 xxhash>=3.3.0                   # Fast hashing (optional)
+pydantic-settings>=2.5.2        # Settings helper required by mcp and some tooling
 schedule>=1.2.0                 # Simple scheduler (optional)
 apscheduler>=3.10.0             # Advanced scheduler (optional)
 numpy>=1.24.0                   # Numerical computing (plots/analytics)
