@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Type Icon System Demo - CyberBackup Pro</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono:wght@400&display=swap" rel="stylesheet">
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="styles/theme.css">
+    <link rel="stylesheet" href="styles/components.css">
+    <link rel="stylesheet" href="styles/layout.css">
+    <link rel="stylesheet" href="styles/animations.css">
+    
+    <style>
+        body {
+            font-family: 'Orbitron', 'Share Tech Mono', monospace;
+            background: var(--bg-black);
+            color: var(--text-primary);
+            margin: 0;
+            padding: var(--space-lg);
+            min-height: 100vh;
+        }
+        
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .demo-header {
+            text-align: center;
+            margin-bottom: var(--space-2xl);
+        }
+        
+        .demo-title {
+            color: var(--neon-blue);
+            font-size: var(--font-size-h1);
+            margin-bottom: var(--space-md);
+            text-shadow: var(--glow-blue);
+        }
+        
+        .demo-subtitle {
+            color: var(--text-secondary);
+            font-size: var(--font-size-subtitle1);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-2xl);
+        }
+        
+        .demo-section {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+        }
+        
+        .section-title {
+            color: var(--neon-purple);
+            font-size: var(--font-size-h3);
+            margin-bottom: var(--space-md);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .section-description {
+            color: var(--text-secondary);
+            font-size: var(--font-size-caption);
+            margin-bottom: var(--space-lg);
+            line-height: var(--line-height-relaxed);
+        }
+        
+        .full-width-section {
+            grid-column: 1 / -1;
+        }
+        
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-dark);
+            border-top: 1px solid var(--glass-border);
+            padding: var(--space-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: var(--font-size-caption);
+            color: var(--text-secondary);
+        }
+        
+        .cyber-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 0, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+                linear-gradient(var(--neon-pink) 1px, transparent 1px),
+                linear-gradient(90deg, var(--neon-blue) 1px, transparent 1px);
+            background-size: 
+                100% 100%,
+                100% 100%,
+                100px 100px,
+                100px 100px;
+            opacity: 0.1;
+            animation: cyber-grid-flow 30s linear infinite;
+        }
+        
+        @keyframes cyber-grid-flow {
+            0% { background-position: 0 0, 0 0, 0 0, 0 0; }
+            100% { background-position: 0 0, 0 0, 100px 100px, 100px 100px; }
+        }
+        
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            color: var(--neon-blue);
+            font-size: var(--font-size-caption);
+            margin: var(--space-md) 0;
+        }
+        
+        .error-message {
+            background: rgba(255, 0, 64, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(255, 0, 64, 0.3);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin: var(--space-md) 0;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .demo-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .demo-title {
+                font-size: var(--font-size-h2);
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                gap: var(--space-sm);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cyber-grid"></div>
+    
+    <div class="demo-container">
+        <!-- Header -->
+        <header class="demo-header">
+            <h1 class="demo-title">File Type Icon System</h1>
+            <p class="demo-subtitle">Comprehensive Visual File Classification for CyberBackup Pro</p>
+            <div class="status-item">
+                <span>🚀</span>
+                <span>System Status: <span id="system-status">Initializing...</span></span>
+            </div>
+        </header>
+        
+        <!-- Main Demo Grid -->
+        <div class="demo-grid">
+            <!-- File Selector Demo -->
+            <section class="demo-section">
+                <h2 class="section-title">
+                    <span>📁</span>
+                    <span>Enhanced File Selector</span>
+                </h2>
+                <p class="section-description">
+                    Select files to see the file type icon system in action. Features include automatic file type recognition, validation badges, and risk assessment.
+                </p>
+                <div id="file-selector-demo"></div>
+                <div class="loading-indicator" id="selector-loading">Analyzing file...</div>
+                <div class="error-message" id="selector-error"></div>
+            </section>
+            
+            <!-- Icon Showcase -->
+            <section class="demo-section">
+                <h2 class="section-title">
+                    <span>🎨</span>
+                    <span>Icon Showcase</span>
+                </h2>
+                <p class="section-description">
+                    Preview of file type icons across different categories. Each icon is color-coded and represents a specific file category.
+                </p>
+                <div id="icon-showcase"></div>
+            </section>
+            
+            <!-- Validation Demo -->
+            <section class="demo-section">
+                <h2 class="section-title">
+                    <span>🛡️</span>
+                    <span>Validation System</span>
+                </h2>
+                <p class="section-description">
+                    Demonstration of the file validation badge system showing different validation states and risk levels.
+                </p>
+                <div id="validation-demo"></div>
+            </section>
+            
+            <!-- Category Filters -->
+            <section class="demo-section">
+                <h2 class="section-title">
+                    <span>🔍</span>
+                    <span>Category Filters</span>
+                </h2>
+                <p class="section-description">
+                    Interactive category filters for organizing and finding files by type. Click on categories to filter the showcase.
+                </p>
+                <div id="category-filters"></div>
+                <div id="filtered-results" style="margin-top: var(--space-md);"></div>
+            </section>
+            
+            <!-- Full-width sections -->
+            <section class="demo-section full-width-section">
+                <h2 class="section-title">
+                    <span>📊</span>
+                    <span>Complete Integration Example</span>
+                </h2>
+                <p class="section-description">
+                    Full implementation showing how the file type icon system integrates with backup operations, file selection, and status monitoring.
+                </p>
+                <div id="integration-demo"></div>
+            </section>
+            
+            <section class="demo-section full-width-section">
+                <h2 class="section-title">
+                    <span>📖</span>
+                    <span>File Type Legend</span>
+                </h2>
+                <p class="section-description">
+                    Visual guide showing all supported file categories with their corresponding icons and color schemes.
+                </p>
+                <div id="file-legend"></div>
+            </section>
+        </div>
+    </div>
+    
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-item">
+            <span>📦</span>
+            <span>File Types Supported: <span id="file-types-count">120+</span></span>
+        </div>
+        <div class="status-item">
+            <span>🎯</span>
+            <span>Categories: <span id="categories-count">12</span></span>
+        </div>
+        <div class="status-item">
+            <span>⚡</span>
+            <span>Performance: <span id="performance-status">Optimized</span></span>
+        </div>
+        <div class="status-item">
+            <span>🌐</span>
+            <span>Browser: <span id="browser-status">Compatible</span></span>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script type="module">
+        import { FileTypeIconDemo } from './scripts/demos/file-type-demo.js';
+        import { IntegrationExamples } from './scripts/examples/file-type-integration-example.js';
+        import { createFileTypeLegend } from './scripts/utils/file-type-helpers.js';
+        
+        // Initialize demo
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Update system status
+                document.getElementById('system-status').textContent = 'Loading...';
+                document.getElementById('system-status').style.color = 'var(--neon-yellow)';
+                
+                // Initialize file type demo
+                const demo = new FileTypeIconDemo();
+                
+                // Initialize individual demo sections
+                const fileSelectorContainer = document.getElementById('file-selector-demo');
+                const iconShowcaseContainer = document.getElementById('icon-showcase');
+                const validationContainer = document.getElementById('validation-demo');
+                const categoryFiltersContainer = document.getElementById('category-filters');
+                const integrationContainer = document.getElementById('integration-demo');
+                const legendContainer = document.getElementById('file-legend');
+                
+                // File selector demo
+                const fileSelector = IntegrationExamples.createBasicFileSelector(fileSelectorContainer);
+                
+                // Icon showcase (create a subset for demo)
+                createIconShowcase(iconShowcaseContainer);
+                
+                // Validation demo
+                createValidationDemo(validationContainer);
+                
+                // Category filters
+                createCategoryFiltersDemo(categoryFiltersContainer);
+                
+                // Integration demo
+                IntegrationExamples.createCompleteBackupInterface(integrationContainer);
+                
+                // File legend
+                const legend = createFileTypeLegend();
+                legendContainer.appendChild(legend);
+                
+                // Update system status
+                document.getElementById('system-status').textContent = 'Ready';
+                document.getElementById('system-status').style.color = 'var(--success)';
+                
+                // Update browser compatibility status
+                updateBrowserStatus();
+                
+                console.log('🚀 File Type Icon System Demo loaded successfully');
+                
+            } catch (error) {
+                console.error('❌ Demo initialization failed:', error);
+                document.getElementById('system-status').textContent = 'Error';
+                document.getElementById('system-status').style.color = 'var(--error)';
+                
+                // Show error message
+                const errorDiv = document.querySelector('.error-message');
+                errorDiv.textContent = `Initialization failed: ${error.message}`;
+                errorDiv.style.display = 'block';
+            }
+        });
+        
+        // Helper functions for demo sections
+        function createIconShowcase(container) {
+            const showcase = document.createElement('div');
+            showcase.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: var(--space-sm);
+            `;
+            
+            const sampleIcons = [
+                { icon: '📄', category: 'documents', name: 'PDF' },
+                { icon: '🖼️', category: 'images', name: 'Image' },
+                { icon: '📹', category: 'video', name: 'Video' },
+                { icon: '🎵', category: 'audio', name: 'Audio' },
+                { icon: '💻', category: 'code', name: 'Code' },
+                { icon: '📦', category: 'archives', name: 'Archive' },
+                { icon: '📊', category: 'spreadsheets', name: 'Excel' },
+                { icon: '📽️', category: 'presentations', name: 'PPT' }
+            ];
+            
+            sampleIcons.forEach(sample => {
+                const item = document.createElement('div');
+                item.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: var(--space-xs);
+                    padding: var(--space-sm);
+                    background: rgba(255, 255, 255, 0.02);
+                    border-radius: var(--radius-md);
+                    border: 1px solid var(--glass-border);
+                    cursor: pointer;
+                    transition: var(--transition);
+                `;
+                
+                item.innerHTML = `
+                    <div style="font-size: 2rem;">${sample.icon}</div>
+                    <div style="font-size: var(--font-size-caption); color: var(--text-secondary); text-align: center;">${sample.name}</div>
+                `;
+                
+                item.addEventListener('mouseenter', () => {
+                    item.style.transform = 'translateY(-2px)';
+                    item.style.borderColor = 'var(--neon-blue)';
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    item.style.transform = 'translateY(0)';
+                    item.style.borderColor = 'var(--glass-border)';
+                });
+                
+                showcase.appendChild(item);
+            });
+            
+            container.appendChild(showcase);
+        }
+        
+        function createValidationDemo(container) {
+            const validationGrid = document.createElement('div');
+            validationGrid.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: var(--space-sm);
+            `;
+            
+            const validationStates = [
+                { icon: '✅', label: 'Valid', color: 'var(--success)' },
+                { icon: '⚠️', label: 'Warning', color: 'var(--warning)' },
+                { icon: '⚠️', label: 'Large File', color: 'var(--neon-orange)' },
+                { icon: '❌', label: 'Error', color: 'var(--error)' }
+            ];
+            
+            validationStates.forEach(state => {
+                const badge = document.createElement('div');
+                badge.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-xs);
+                    padding: var(--space-sm);
+                    background: rgba(255, 255, 255, 0.02);
+                    border: 1px solid ${state.color};
+                    border-radius: var(--radius-sm);
+                    color: ${state.color};
+                    font-size: var(--font-size-caption);
+                    justify-content: center;
+                `;
+                badge.innerHTML = `<span>${state.icon}</span><span>${state.label}</span>`;
+                validationGrid.appendChild(badge);
+            });
+            
+            container.appendChild(validationGrid);
+        }
+        
+        function createCategoryFiltersDemo(container) {
+            const filterContainer = document.createElement('div');
+            filterContainer.style.cssText = `
+                display: flex;
+                flex-wrap: wrap;
+                gap: var(--space-sm);
+            `;
+            
+            const categories = [
+                'All', 'Documents', 'Images', 'Video', 'Audio', 'Code', 'Archives'
+            ];
+            
+            categories.forEach((category, index) => {
+                const filter = document.createElement('button');
+                filter.className = `file-category-filter ${index === 0 ? 'active' : ''}`;
+                filter.textContent = category;
+                filter.style.cssText = `
+                    border: none;
+                    background: var(--bg-glass);
+                    color: var(--text-primary);
+                    padding: var(--space-xs) var(--space-md);
+                    border-radius: var(--radius-xl);
+                    cursor: pointer;
+                    transition: var(--transition);
+                    font-size: var(--font-size-caption);
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                `;
+                
+                filter.addEventListener('click', () => {
+                    // Remove active class from all filters
+                    filterContainer.querySelectorAll('.file-category-filter').forEach(f => {
+                        f.classList.remove('active');
+                        f.style.background = 'var(--bg-glass)';
+                        f.style.color = 'var(--text-primary)';
+                    });
+                    
+                    // Add active class to clicked filter
+                    filter.classList.add('active');
+                    filter.style.background = 'var(--neon-blue)';
+                    filter.style.color = 'var(--bg-black)';
+                    
+                    // Show toast notification
+                    showToast(`Filtered by: ${category}`, 'info');
+                });
+                
+                filterContainer.appendChild(filter);
+            });
+            
+            container.appendChild(filterContainer);
+        }
+        
+        function updateBrowserStatus() {
+            const browserStatus = document.getElementById('browser-status');
+            
+            // Check for modern features
+            const hasFileSystemAccess = 'showOpenFilePicker' in window;
+            const hasBackdropFilter = CSS.supports('backdrop-filter', 'blur(10px)');
+            const hasCustomProperties = CSS.supports('color', 'var(--test)');
+            
+            if (hasFileSystemAccess && hasBackdropFilter && hasCustomProperties) {
+                browserStatus.textContent = 'Fully Compatible';
+                browserStatus.style.color = 'var(--success)';
+            } else {
+                browserStatus.textContent = 'Partially Compatible';
+                browserStatus.style.color = 'var(--warning)';
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--bg-card);
+                color: var(--text-primary);
+                padding: var(--space-md);
+                border-radius: var(--radius-md);
+                border: 1px solid var(--glass-border);
+                z-index: 10000;
+                animation: slideInRight 0.3s ease-out;
+                max-width: 300px;
+                box-shadow: var(--md-elevation-4);
+            `;
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 3000);
+        }
+        
+        // Add toast animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+    </script>
+</body>
+</html>
