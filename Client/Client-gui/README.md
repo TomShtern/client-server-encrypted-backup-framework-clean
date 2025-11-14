@@ -16,6 +16,7 @@ A modern, responsive web interface for the CyberBackup encrypted file backup sys
 
 ## Architecture
 
+- **Canonical UI**: NewGUIforClient.html is the canonical, single implementation used for development and production. All other HTML variants in this directory have been archived under `archived/` to avoid duplication and confusion.
 - **Pure Vanilla JavaScript**: No framework dependencies, modern ES6 modules
 - **Modular Design**: Clean separation of concerns with service layer architecture
 - **Error Boundaries**: Robust error handling and recovery mechanisms

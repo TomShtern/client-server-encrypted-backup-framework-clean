@@ -18,6 +18,7 @@ import { AdvancedSettings } from './services/advanced-settings.js';
 import { ConnectionMonitor } from './services/connection-monitor.js';
 import { SocketClient } from './services/socket-client.js';
 import { evaluateConnectionQuality, getQualityLabel } from './services/connection-metrics.js';
+import performanceOptimizer from './utils/performance-optimizer.js';
 
 // Error boundary utilities
 class ErrorBoundary {
@@ -961,21 +962,24 @@ class App {
       this._prevRenderState = {};
     }
 
-    // Only update changed sections
-    if (this.#hasConnectionChanged(state)) {
-      this.#renderConnection(state);
-    }
-    if (this.#hasProgressChanged(state)) {
-      this.#renderProgress(state);
-    }
-    if (this.#hasStatsChanged(state)) {
-      this.#renderStats(state);
-    }
-    if (this.#hasButtonsChanged(state)) {
-      this.#renderButtons(state);
-    }
+    // Use RAF-based batching for smooth rendering
+    performanceOptimizer.scheduleUpdate('app-render', () => {
+      // Only update changed sections
+      if (this.#hasConnectionChanged(state)) {
+        this.#renderConnection(state);
+      }
+      if (this.#hasProgressChanged(state)) {
+        this.#renderProgress(state);
+      }
+      if (this.#hasStatsChanged(state)) {
+        this.#renderStats(state);
+      }
+      if (this.#hasButtonsChanged(state)) {
+        this.#renderButtons(state);
+      }
 
-    this._prevRenderState = { ...state };
+      this._prevRenderState = { ...state };
+    });
   }
 
   #hasConnectionChanged(state) {
