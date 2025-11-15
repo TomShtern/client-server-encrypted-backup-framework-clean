@@ -35,13 +35,14 @@
 ### Current State
 The repository is a **functional but disorganized** codebase for a Client-Server Encrypted Backup Framework. The project successfully implements RSA key exchange and AES file encryption between a C++17 client and Python server. However, the repository structure reflects organic development with:
 
-- **28+ test and debug files scattered in the root directory** (simple_test.cpp, test_client.py, minimal_test.py, etc.)
+- **30 files in the root directory** (test scripts, debug files, build variants, stray artifacts)
 - **Multiple duplicate/variant build scripts** (build.bat, build_fixed.bat, build_safe.bat) with unclear purposes
 - **Inconsistent file organization**: test files in both `/tests/` and root, source files without clear separation
-- **Stray artifacts**: temp_complete_server.py (1580 lines, near-duplicate of server.py), diff_output.txt (empty), test binaries (test_rsa_crypto_plus_plus)
+- **Stray artifacts**: temp_complete_server.py (1580 lines, near-duplicate of server.py), diff_output.txt (empty), test binaries, git reflog dump file
 - **Documentation sprawl**: 26 documentation files in `/docs/` with overlapping content and unclear hierarchy
 - **No clear web GUI**: Despite project description mentioning "client-web-GUI", no HTML/CSS/JS files exist
 - **Missing standard files**: No README.md, LICENSE, requirements.txt, or proper build instructions
+- **Third-party dependency confusion**: Crypto++ library gitignored but required for builds
 
 ### Target State
 A **clean, professional, maintainable repository** with:
@@ -995,26 +996,34 @@ git commit -m "test(integration): Organize integration tests in dedicated direct
 - [ ] **Rationale:** Proper test organization enables CI/CD and developer clarity
 
 #### HIGH-5: Delete Empty/Temporary Files
-- [ ] **Target:** `diff_output.txt`, `test_file.txt` (root), `client/test_file.txt`
-- [ ] **Action:** Remove temporary/placeholder files
+- [ ] **Target:** `diff_output.txt`, `test_file.txt` (root), `client/test_file.txt`, `"-tree -r 696f585"`
+- [ ] **Action:** Remove temporary/placeholder files and stray git artifacts
 - [ ] **Commands:**
 ```bash
 # Verify files are empty or test data:
 cat diff_output.txt  # Should be empty
 cat test_file.txt    # Test content
 
+# Check stray git reflog file:
+file "./-tree -r 696f585"  # Git reflog dump (accidental)
+
 # Remove if not referenced in code:
 grep -rn "diff_output\.txt\|test_file\.txt" --include="*.cpp" --include="*.py" --include="*.bat" .
 
-# If no active references:
+# Delete temporary files:
 git rm diff_output.txt
 git rm test_file.txt
 git rm client/test_file.txt
 
-git commit -m "chore(cleanup): Remove temporary and empty test files"
+# Delete stray git reflog file (note: requires '--' or quotes for leading hyphen):
+git rm -- "-tree -r 696f585"
+# Alternative if git rm fails:
+# rm -f -- "-tree -r 696f585" && git add -u
+
+git commit -m "chore(cleanup): Remove temporary files and stray git reflog dump"
 ```
-- [ ] **Verification:** Files should not exist; tests should still pass
-- [ ] **Rationale:** Clutter reduction and repository hygiene
+- [ ] **Verification:** Files should not exist; `ls -la | grep "tree\|696f585"` returns nothing
+- [ ] **Rationale:** Clutter reduction and repository hygiene; git reflog dump file causes command-line parsing issues due to leading hyphen
 
 ---
 
@@ -1186,9 +1195,9 @@ git add scripts/README.md
 git commit -m "chore(scripts): Organize build and utility scripts"
 ```
 
-#### MED-4: Consolidate Server Tests
-- [ ] **Target:** Server test files (test_server.py, test_gui.py in `/server/`, test_connection.py in `/tests/`)
-- [ ] **Action:** Create server/tests/ subdirectory
+#### MED-4: Consolidate Server Tests and Scripts
+- [ ] **Target:** Server test files (test_server.py, test_gui.py in `/server/`, test_connection.py in `/tests/`) and `start_server.bat`
+- [ ] **Action:** Create server/tests/ subdirectory and organize server start script
 - [ ] **Commands:**
 ```bash
 mkdir -p server/tests
@@ -1199,6 +1208,11 @@ git mv server/test_gui.py server/tests/
 
 # Move connection test (server-focused):
 git mv tests/test_connection.py server/tests/
+
+# Move server start script for consistency with client organization:
+git mv start_server.bat server/
+# Note: After this, run with: cd server && .\start_server.bat
+# Or: .\server\start_server.bat from root
 
 # Create test runner:
 cat > server/tests/run_tests.sh << 'EOF'
@@ -1219,9 +1233,10 @@ EOF
 chmod +x server/tests/run_tests.sh
 
 git add server/tests/run_tests.sh
-git commit -m "test(server): Organize server tests with dedicated test runner"
+git commit -m "refactor(server): Organize server tests and move start_server.bat for consistency"
 ```
 - [ ] **Verification:** `pytest server/tests/` should discover and run tests
+- [ ] **Note:** `start_server.bat` moved to `server/` for consistency with client script organization (client scripts in `client/`, server scripts in `server/`)
 
 #### MED-5: Organize Documentation Structure
 - [ ] **Target:** 26 files in `/docs/` (flat structure)
@@ -3315,7 +3330,7 @@ After completing all phases, you should observe:
 
 ### Quantitative Improvements
 
-- **Root directory files**: Reduced from ~28 to <10 files
+- **Root directory files**: Reduced from 30 to <10 files
 - **Documentation organization**: 26 flat files → ~15 files in 5 categories
 - **Test organization**: 14 scattered tests → Organized in unit/integration/fixtures
 - **Build script clarity**: 3 duplicate scripts → 1 canonical + 2 archived
