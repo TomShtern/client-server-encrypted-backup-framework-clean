@@ -6,17 +6,17 @@
    DISTINCTIVE FONT PAIRING
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&family=Orbitron:wght@400;500;600;700;900&display=swap');
 
 :root {
   /* Display Typography - Bold, characterful, futuristic */
-  --font-display: 'Syne', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Orbitron', 'Syne', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Body Typography - Clean, refined, excellent readability */
-  --font-body: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Mono Typography - Technical, precise */
-  --font-mono: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
 
   /* Fluid Typography Scale */
   --text-fluid-xs: clamp(0.6875rem, 0.125rem + 1vw, 0.75rem);     /* 11-12px */
@@ -335,7 +335,7 @@ input[type="text"] {
     transform: translate(2px, 2px);
   }
   80% {
-    transform: transform: 2px, -2px);
+    transform: translate(2px, -2px);
   }
 }
 

@@ -51,9 +51,11 @@ body::after {
   border-radius: 50%;
   pointer-events: none;
   z-index: -1;
-  opacity: 0.6;
+  opacity: 0.4;
   filter: blur(80px);
   animation: organic-float 20s ease-in-out infinite;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
 body::before {

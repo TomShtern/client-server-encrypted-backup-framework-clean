@@ -2,7 +2,7 @@
 <html lang="en" class="theme-dark">
 <head>
   <meta charset="utf-8" />
-  <title>CyberBackup – Final Wireframe v4</title>
+  <title>ARCHIVED: CyberBackup – Final Wireframe v4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Desktop/laptop layout only. All key elements have stable IDs for JS wiring. -->
   <style>
@@ -145,10 +145,15 @@
     /* Logs (full width under main) */
     .logs { margin: var(--gap-4) 0 var(--gap-5); }
     .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-    #logFilters { display: flex; gap: 8px; }
+    .filter-group { display: flex; gap: 8px; border: none; margin: 0; padding: 0; }
     .filter-btn { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: transparent; font-size: var(--fs-12); }
     .filter-btn.active { background: var(--surface-alt); }
     #logContainer { background: #0b0f13; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; height: 280px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: var(--fs-13); }
+
+    .heading-centered { text-align: center; margin-bottom: 10px; }
+    .text-center { text-align: center; }
+    .row.centered { justify-content: center; margin-top: 14px; }
+    .modal-card { max-width: 480px; margin: 12vh auto 0; }
 
     /* Toasts */
     .toast-stack { position: fixed; top: 14px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
@@ -177,18 +182,23 @@
   <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
 
   <div class="container">
+    <div class="message">
+      <h1>Archived: wireframe_v4.html</h1>
+      <p>This wireframe file has been archived; the canonical client UI is <a href="NewGUIforClient.html">NewGUIforClient.html</a>.</p>
+      <p>Full content is preserved at <code>archived/wireframe_v4-full.html</code> for historical reference.</p>
+    </div>
     <header role="banner">
       <div class="header-row">
         <div class="brand">
           <div class="name" id="appLogo">CyberBackup</div>
           <div class="tag">Client</div>
         </div>
-        <div class="status-bar" role="status" aria-live="polite">
+        <output id="statusOutput" class="status-bar" aria-live="polite">
           <span id="connStatus" class="badge disconnected" title="Connection state">Disconnected</span>
           <span id="connHealth" class="muted" title="Round-trip latency">Latency —</span>
           <span id="connQuality" class="chip quality-offline" title="Connection quality">● Offline</span>
           <button id="themeToggle" class="ghost" title="Toggle Theme" aria-label="Toggle theme">Theme</button>
-        </div>
+        </output>
       </div>
     </header>
 
@@ -207,7 +217,7 @@
           <div id="usernameHint" class="hint" role="alert" hidden>Username is required</div>
         </label>
 
-        <div id="fileDropZone" class="stack" role="group" aria-label="File selection area" title="Drag & drop a file or use Choose File">
+        <div id="fileDropZone" class="stack" aria-label="File selection area" title="Drag & drop a file or use Choose File">
           <div class="row">
             <button id="fileSelectBtn" class="ghost" aria-controls="fileInput" aria-haspopup="dialog">Choose File</button>
             <input id="fileInput" type="file" hidden />
@@ -261,7 +271,7 @@
           </div>
         </div>
 
-        <div class="actions" role="group" aria-label="Actions">
+        <div class="actions" aria-label="Actions">
           <button id="primaryActionBtn" class="primary">Connect / Start</button>
           <button id="pauseBtn" disabled>Pause</button>
           <button id="resumeBtn" disabled>Resume</button>
@@ -279,15 +289,15 @@
 
     <!-- LOGS (full width) -->
     <section class="logs" aria-labelledby="logTitle">
-      <div id="logTitle" class="phase" aria-hidden="true" style="margin-bottom:10px; text-align:center;">Logs</div>
+      <div id="logTitle" class="phase heading-centered" aria-hidden="true">Logs</div>
       <div class="card">
         <div class="toolbar">
-          <div id="logFilters" role="group" aria-label="Log filters">
+          <fieldset id="logFilters" class="filter-group" aria-label="Log filters">
             <button id="filterAll" class="filter-btn active" data-level="all" aria-pressed="true">All</button>
             <button id="filterInfo" class="filter-btn" data-level="info">Info</button>
             <button id="filterWarn" class="filter-btn" data-level="warn">Warn</button>
             <button id="filterError" class="filter-btn" data-level="error">Error</button>
-          </div>
+          </fieldset>
           <div class="row">
             <label class="row" title="Autoscroll new lines">
               <input id="logAutoscrollToggle" type="checkbox" checked />
@@ -302,16 +312,16 @@
   </div>
 
   <!-- Confirm Modal skeleton (hidden by default) -->
-  <div id="modalConfirm" class="sr-only" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc" hidden>
-    <div class="card" style="max-width:480px;margin: 12vh auto 0;">
-      <div id="modalTitle" class="phase" style="text-align:center;">Confirm</div>
-      <div id="modalDesc" class="muted" style="text-align:center;">Are you sure you want to stop the transfer?</div>
-      <div class="row" style="margin-top:14px;justify-content:center;">
+  <dialog id="modalConfirm" class="sr-only" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+    <div class="card modal-card">
+      <div id="modalTitle" class="phase text-center">Confirm</div>
+      <div id="modalDesc" class="muted text-center">Are you sure you want to stop the transfer?</div>
+      <div class="row centered">
         <button id="modalCancelBtn" class="ghost">Cancel</button>
         <button id="modalOkBtn" class="primary">OK</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- Screen-reader live region -->
   <div id="srLive" class="sr-only" aria-live="polite"></div>

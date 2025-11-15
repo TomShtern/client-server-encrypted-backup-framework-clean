@@ -475,6 +475,86 @@ function setupThemeToggle() {
   });
 }
 
+// Data particles initialization (safe DOM methods)
+function initDataParticles() {
+  const container = document.getElementById('dataParticles');
+  if (!container) return;
+
+  // Clear any existing particles safely
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  // Create particles based on screen size (reduced for performance)
+  const particleCount = window.innerWidth > 1200 ? 8 : window.innerWidth > 768 ? 5 : 3;
+
+  for (let i = 0; i < particleCount; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+
+    // Randomize particle position and animation
+    particle.style.left = Math.random() * 100 + '%';
+    particle.style.animationDelay = Math.random() * 20 + 's';
+    particle.style.animationDuration = (12 + Math.random() * 10) + 's';
+
+    container.appendChild(particle);
+  }
+}
+
+// Ripple effect handler
+function initRippleEffects() {
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('.ripple');
+    if (!target) return;
+
+    const rect = target.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = e.clientX - rect.left - size / 2;
+    const y = e.clientY - rect.top - size / 2;
+
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple-effect';
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+
+    target.appendChild(ripple);
+
+    setTimeout(() => {
+      ripple.remove();
+    }, 600);
+  });
+}
+
+// Floating label enhancement
+function initFloatingLabels() {
+  const floatingLabels = document.querySelectorAll('.floating-label input');
+
+  floatingLabels.forEach(input => {
+    // Check if input has value on load
+    const checkValue = () => {
+      if (input.value) {
+        input.classList.add('has-value');
+      } else {
+        input.classList.remove('has-value');
+      }
+    };
+
+    checkValue();
+
+    input.addEventListener('focus', () => {
+      input.classList.add('focused');
+    });
+
+    input.addEventListener('blur', () => {
+      input.classList.remove('focused');
+      checkValue();
+    });
+
+    input.addEventListener('input', checkValue);
+  });
+}
+
 // Initialize all enhancements
 function initializeEnhancements() {
   setupValidation();
@@ -482,6 +562,11 @@ function initializeEnhancements() {
   setupLogSearch();
   setupSpeedChart();
   setupThemeToggle();
+
+  // Enhanced interactions
+  initDataParticles();
+  initRippleEffects();
+  initFloatingLabels();
 
   // Set initial progress ring state
   updateProgressRingState(ProgressRingStates.IDLE);
@@ -499,6 +584,15 @@ function initializeEnhancements() {
       updatePrimaryButtonState();
     });
   }
+
+  // Responsive particle count on resize
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      initDataParticles();
+    }, 250);
+  });
 }
 
 // Export functions for use by main app
@@ -528,5 +622,8 @@ export {
   getFileTypeInfo,
   ProgressRingStates,
   initializeEnhancements,
-  speedChart
+  speedChart,
+  initDataParticles,
+  initRippleEffects,
+  initFloatingLabels
 };

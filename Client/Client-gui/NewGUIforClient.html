@@ -27,14 +27,8 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#2563eb" />
 
-    <!-- Enhanced Cyber-Organic Synthesis Styles -->
-    <link rel="stylesheet" href="styles/enhanced-typography.css" />
-    <link rel="stylesheet" href="styles/enhanced-colors.css" />
-    <link rel="stylesheet" href="styles/enhanced-backgrounds.css" />
-    <link rel="stylesheet" href="styles/enhanced-interactions.css" />
-    <link rel="stylesheet" href="styles/enhanced-layout.css" />
-    <link rel="stylesheet" href="styles/enhanced-loading.css" />
-    <link rel="stylesheet" href="styles/enhanced-accessibility.css" />
+    <!-- Main Application Styles (includes all enhancements) -->
+    <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
     <!-- Data Flow Particles -->
@@ -97,6 +91,7 @@
                         class="interactive"
                     />
                     <span class="label-text">Server Address</span>
+                    <span id="serverValidIcon" class="validation-icon" aria-hidden="true"></span>
                     <div id="serverHint" class="hint text-caption" role="alert" hidden>Invalid host:port format</div>
                 </label>
 
@@ -111,6 +106,7 @@
                         class="interactive"
                     />
                     <span class="label-text">Username</span>
+                    <span id="usernameValidIcon" class="validation-icon" aria-hidden="true"></span>
                     <div id="usernameHint" class="hint text-caption" role="alert" hidden>Username is required</div>
                 </label>
 
@@ -177,14 +173,6 @@
                                 stroke-linecap="round" stroke-dasharray="282.743" stroke-dashoffset="282.743"
                                 class="progress-fill" />
                     </svg>
-                            stroke-width="6"
-                            fill="none"
-                            stroke-linecap="round"
-                            stroke-dasharray="282.743"
-                            stroke-dashoffset="282.743"
-                            filter="url(#glow)"
-                        ></circle>
-                    </svg>
                     <div class="kpi">
                         <div id="progressPct" class="pct">0%</div>
                         <div class="eta">⏱ <span id="etaText">ETA —</span></div>
@@ -192,29 +180,29 @@
                 </div>
 
                 <div class="actions" aria-label="Transfer actions">
-                    <button id="primaryActionBtn" class="primary" type="button">
+                    <button id="primaryActionBtn" class="interactive primary ripple" type="button">
                         <span id="primaryBtnSpinner" class="loading-spinner" style="display: none;"></span>
-                        <span id="primaryBtnText">Select a file first</span>
+                        <span id="primaryBtnText">Connect & Start</span>
                     </button>
-                    <button id="pauseBtn" class="ghost" type="button" disabled>⏸ Pause</button>
-                    <button id="resumeBtn" class="ghost" type="button" disabled>▶️ Resume</button>
-                    <button id="stopBtn" class="ghost" type="button" disabled>⏹ Stop</button>
+                    <button id="pauseBtn" class="interactive ripple" type="button" disabled>Pause</button>
+                    <button id="resumeBtn" class="interactive ripple" type="button" disabled>Resume</button>
+                    <button id="stopBtn" class="interactive ripple" type="button" disabled>Stop</button>
                 </div>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Bytes Sent</div>
                         <div class="value" id="statBytes">—</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Speed</div>
                         <div class="value" id="statSpeed">—</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">File Size</div>
                         <div class="value" id="statSize">—</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Elapsed</div>
                         <div class="value" id="statElapsed">—</div>
                     </div>
@@ -231,8 +219,8 @@
         </main>
 
         <section class="logs" aria-labelledby="logTitle">
-            <div id="logTitle" class="heading-centered">Activity Logs</div>
-            <div class="card card-transparent">
+            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Activity Logs</div>
+            <div class="card">
                 <div class="toolbar">
                     <div class="log-search">
                         <input
@@ -240,23 +228,24 @@
                             type="text"
                             placeholder="Search logs..."
                             aria-label="Search logs"
+                            class="interactive"
                         />
                     </div>
-                    <fieldset class="filter-group">
+                    <fieldset class="filter-group" aria-label="Log filters">
                         <legend class="sr-only">Log filters</legend>
-                        <button id="filterAll" class="filter-btn active" type="button" data-level="all" aria-pressed="true">
+                        <button id="filterAll" class="filter-btn interactive active" type="button" data-level="all" aria-pressed="true">
                             All
                         </button>
-                        <button id="filterInfo" class="filter-btn" type="button" data-level="info">Info</button>
-                        <button id="filterWarn" class="filter-btn" type="button" data-level="warn">Warn</button>
-                        <button id="filterError" class="filter-btn" type="button" data-level="error">Error</button>
+                        <button id="filterInfo" class="filter-btn interactive" type="button" data-level="info">Info</button>
+                        <button id="filterWarn" class="filter-btn interactive" type="button" data-level="warn">Warn</button>
+                        <button id="filterError" class="filter-btn interactive" type="button" data-level="error">Error</button>
                     </fieldset>
                     <div class="row">
-                        <label class="row label-autoscroll" for="logAutoscrollToggle" title="Autoscroll new lines">
+                        <label class="row interactive label-autoscroll" for="logAutoscrollToggle" title="Autoscroll new lines">
                             <input id="logAutoscrollToggle" type="checkbox" checked />
                             <span>Autoscroll</span>
                         </label>
-                        <button id="logExportBtn" class="ghost" type="button">📥 Export</button>
+                        <button id="logExportBtn" class="interactive ripple" type="button">Export</button>
                     </div>
                 </div>
                 <pre id="logContainer" aria-live="polite"></pre>
@@ -264,13 +253,13 @@
         </section>
     </div>
 
-    <dialog id="modalConfirm" class="modal" aria-labelledby="modalTitle" aria-describedby="modalDesc">
-        <div class="modal-card">
-            <div id="modalTitle" class="phase heading-centered">Confirm</div>
-            <div id="modalDesc" class="muted heading-centered">Are you sure you want to stop the transfer?</div>
-            <div class="modal-actions">
-                <button id="modalCancelBtn" class="ghost" type="button">Cancel</button>
-                <button id="modalOkBtn" class="primary" type="button">OK</button>
+    <dialog id="modalConfirm" class="sr-only" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <div class="card modal-card">
+            <div id="modalTitle" class="phase text-center">Confirm</div>
+            <div id="modalDesc" class="muted text-center">Are you sure you want to stop the transfer?</div>
+            <div class="row centered">
+                <button id="modalCancelBtn" class="interactive ghost" type="button">Cancel</button>
+                <button id="modalOkBtn" class="interactive primary" type="button">OK</button>
             </div>
         </div>
     </dialog>

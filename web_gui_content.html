@@ -21,22 +21,18 @@
             })();
         </script>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
-
     <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <meta name="theme-color" content="#2563eb">
 
-    <link rel="stylesheet" href="styles/theme.css">
-    <!-- Trimmed stylesheet set to reduce conflicting layout rules -->
-    <!-- Removed layout.css grid and auxiliary experimental layers for stability -->
-    <link rel="stylesheet" href="styles/components.css">
-    <link rel="stylesheet" href="styles/animations.css">
+    <!-- Main Application Styles (includes all enhancements) -->
     <link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
+    <!-- Data Flow Particles -->
+    <div class="data-particles" id="dataParticles"><div class="particle" style="left: 90.0148%; animation-delay: 10.3468s; animation-duration: 13.4596s;"></div><div class="particle" style="left: 31.776%; animation-delay: 19.5954s; animation-duration: 18.1281s;"></div><div class="particle" style="left: 73.5274%; animation-delay: 2.45578s; animation-duration: 21.6437s;"></div><div class="particle" style="left: 95.2746%; animation-delay: 11.5628s; animation-duration: 20.7006s;"></div><div class="particle" style="left: 6.77329%; animation-delay: 5.83651s; animation-duration: 17.9389s;"></div><div class="particle" style="left: 5.84525%; animation-delay: 5.14047s; animation-duration: 20.3444s;"></div><div class="particle" style="left: 19.0373%; animation-delay: 6.99122s; animation-duration: 21.8427s;"></div><div class="particle" style="left: 38.2582%; animation-delay: 14.6443s; animation-duration: 21.4447s;"></div></div>
+
+    <!-- Toasts container -->
     <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
 
     <div class="container">
@@ -48,96 +44,112 @@
                 </div>
                 <div class="status-bar">
                     <output id="statusOutput" class="status-output" aria-live="polite">
-                        <span id="connStatus" class="badge muted" title="Connection state">Ready</span>
+                        <span id="connStatus" class="badge muted" title="Connection state" style="cursor: pointer;">Ready</span>
                         <span id="connHealth" class="muted" title="Round-trip latency">Latency —</span>
                         <span id="connQuality" class="chip quality-offline" title="Connection quality">● Offline</span>
                     </output>
-                    <button id="themeToggle" class="ghost" type="button" title="Toggle theme" aria-label="Switch to light mode">☀️ Light mode</button>
+                    <div id="connectionDetails" class="connection-details">
+                        <h4>Connection Details</h4>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Status:</span>
+                            <span class="connection-metric-value" id="detailStatus">Offline</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Latency:</span>
+                            <span class="connection-metric-value" id="detailLatency">—</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Server:</span>
+                            <span class="connection-metric-value" id="detailServer">Not connected</span>
+                        </div>
+                        <div class="connection-metric">
+                            <span class="connection-metric-label">Uptime:</span>
+                            <span class="connection-metric-value" id="detailUptime">—</span>
+                        </div>
+                    </div>
+                    <button id="themeToggle" class="interactive ghost" title="Toggle Theme" aria-label="Switch to light mode">☀️ Light mode</button>
                 </div>
             </div>
         </header>
 
         <main id="mainContent" aria-label="Backup workflow">
-            <section class="stack" aria-labelledby="cfgTitle">
+            <aside class="stack stagger-in" aria-labelledby="cfgTitle">
                 <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
 
-                <label>
-                    Server
-                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:1256" autocomplete="off" aria-describedby="serverHint" style="">
-                    <span id="serverHint" class="hint" role="alert" hidden="">Invalid host:port format</span>
+                <label class="floating-label">
+                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:9090" autocomplete="off" aria-describedby="serverHint" class="interactive has-value" style="">
+                    <span class="label-text">Server Address</span>
+                    <span id="serverValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    <div id="serverHint" class="hint text-caption" role="alert" hidden="">Invalid host:port format</div>
                 </label>
 
-                <label>
-                    Username
-                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off" aria-describedby="usernameHint" style="">
-                    <span id="usernameHint" class="hint" role="alert" hidden="">Username is required</span>
+                <label class="floating-label">
+                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off" aria-describedby="usernameHint" class="interactive has-value" style="">
+                    <span class="label-text">Username</span>
+                    <span id="usernameValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    <div id="usernameHint" class="hint text-caption" role="alert" hidden="">Username is required</div>
                 </label>
 
-                <div id="fileDropZone" class="stack file-drop-zone" aria-label="File selection area" title="Drag &amp; drop a file or use Choose File">
+                <div id="fileDropZone" class="file-drop-zone interactive" aria-label="File selection area" title="Drag &amp; drop a file or use Choose File">
                     <div class="row">
-                        <button id="fileSelectBtn" class="ghost" type="button" aria-controls="fileInput">
+                        <button id="fileSelectBtn" class="interactive ghost ripple" aria-controls="fileInput" aria-haspopup="dialog">
                             Choose File
                         </button>
                         <input id="fileInput" type="file" hidden="" style="">
-                        <button id="recentFilesBtn" class="ghost" type="button" title="Recent files">
-                            Recent
-                        </button>
+                        <button id="recentFilesBtn" class="interactive ghost" title="Recent Files">Recent</button>
                     </div>
                     <div class="file-card" aria-live="polite">
                         <div class="file-icon" aria-hidden="true">📄</div>
                         <div class="file-meta">
                             <div class="file-name" id="fileName">Drag &amp; drop a file here or choose above</div>
-                            <div class="file-sub" id="fileInfo">Size — • Type —</div>
+                            <div class="file-sub text-caption" id="fileInfo">Size — • Type —</div>
                         </div>
                         <div class="file-actions">
-                            <button id="clearFileBtn" class="ghost" type="button" disabled="">Clear</button>
+                            <button id="clearFileBtn" class="interactive ghost" disabled="">Clear</button>
                         </div>
                     </div>
                 </div>
 
-                <details id="advancedPanel">
-                    <summary>Advanced</summary>
+                <details id="advancedPanel" class="interactive">
+                    <summary>Advanced Settings</summary>
                     <div class="adv-body">
                         <div class="split">
-                            <label>
+                            <label class="floating-label">
                                 Chunk Size (MB)
-                                <input id="advChunkSize" type="text" placeholder="8" aria-invalid="false" style="">
+                                <input id="advChunkSize" type="text" placeholder="8" class="interactive" aria-invalid="false" style="">
+                                <span class="label-text">Chunk Size</span>
                             </label>
-                            <label>
+                            <label class="floating-label">
                                 Retry Limit
-                                <input id="advRetryLimit" type="text" placeholder="3" aria-invalid="false" style="">
+                                <input id="advRetryLimit" type="text" placeholder="3" class="interactive" aria-invalid="false" style="">
+                                <span class="label-text">Retry Limit</span>
                             </label>
                         </div>
                         <div class="row">
-                            <button id="advResetBtn" class="ghost" type="button">Reset to defaults</button>
+                            <button id="advResetBtn" class="interactive ghost">Reset to defaults</button>
                         </div>
                     </div>
                 </details>
-            </section>
+            </aside>
 
-            <section class="stack" aria-labelledby="statusTitle">
+            <!-- STATUS PANEL -->
+            <section class="stack stagger-in" aria-labelledby="statusTitle">
                 <div id="statusTitle" class="phase" aria-hidden="true">Status</div>
 
-                <div id="phaseText" class="phase">Idle</div>
+                <div id="phaseText" class="phase liquid-text">Idle</div>
 
                 <div class="center">
-                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
+                    <div class="progress-glow"></div>
+                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true" class="idle">
                         <defs>
                             <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1"></stop>
-                                <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1"></stop>
-                                <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1"></stop>
+                                <stop offset="0%" stop-color="#60a5fa"></stop>
+                                <stop offset="50%" stop-color="#a78bfa"></stop>
+                                <stop offset="100%" stop-color="#ec4899"></stop>
                             </linearGradient>
-                            <filter id="glow">
-                                <feGaussianBlur stdDeviation="2" result="coloredBlur"></feGaussianBlur>
-                                <feMerge>
-                                    <feMergeNode in="coloredBlur"></feMergeNode>
-                                    <feMergeNode in="SourceGraphic"></feMergeNode>
-                                </feMerge>
-                            </filter>
                         </defs>
-                        <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="none"></circle>
-                        <circle id="progressArc" cx="50" cy="50" r="45" stroke="url(#progressGradient)" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="282.743" stroke-dashoffset="282.743" filter="url(#glow)" style="stroke-dashoffset: 282.74;"></circle>
+                        <circle cx="50" cy="50" r="45" stroke="var(--bg-tertiary)" stroke-width="4" fill="none"></circle>
+                        <circle id="progressArc" cx="50" cy="50" r="45" stroke="url(#progressGradient)" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="282.743" stroke-dashoffset="282.743" class="progress-fill" style="stroke-dashoffset: 282.74;"></circle>
                     </svg>
                     <div class="kpi">
                         <div id="progressPct" class="pct">0%</div>
@@ -146,52 +158,63 @@
                 </div>
 
                 <div class="actions" aria-label="Transfer actions">
-                    <button id="primaryActionBtn" class="primary" type="button">Connect</button>
-                    <button id="pauseBtn" class="ghost" type="button" disabled="">⏸ Pause</button>
-                    <button id="resumeBtn" class="ghost" type="button" disabled="">▶️ Resume</button>
-                    <button id="stopBtn" class="ghost" type="button" disabled="">⏹ Stop</button>
+                    <button id="primaryActionBtn" class="interactive primary ripple" type="button" style="opacity: 1;">Connect</button>
+                    <button id="pauseBtn" class="interactive ripple" type="button" disabled="">Pause</button>
+                    <button id="resumeBtn" class="interactive ripple" type="button" disabled="">Resume</button>
+                    <button id="stopBtn" class="interactive ripple" type="button" disabled="">Stop</button>
                 </div>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Bytes Sent</div>
                         <div class="value" id="statBytes">0 B</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Speed</div>
                         <div class="value" id="statSpeed">0 B/s</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">File Size</div>
                         <div class="value" id="statSize">0 B</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat interactive">
                         <div class="label">Elapsed</div>
                         <div class="value" id="statElapsed">—</div>
                     </div>
+                </div>
+
+                <div id="speedChartContainer" class="speed-chart-container">
+                    <div class="speed-chart-header">
+                        <span class="speed-chart-title">Transfer Speed (Last 30s)</span>
+                        <button id="toggleSpeedChart" class="ghost" type="button" style="padding: 4px 8px; font-size: var(--fs-11);">Hide</button>
+                    </div>
+                    <canvas id="speedChart" class="speed-chart" width="0" height="0"></canvas>
                 </div>
             </section>
         </main>
 
         <section class="logs" aria-labelledby="logTitle">
-            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Logs</div>
+            <div id="logTitle" class="phase heading-centered" aria-hidden="true">Activity Logs</div>
             <div class="card">
                 <div class="toolbar">
-                    <fieldset class="filter-group">
+                    <div class="log-search">
+                        <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs" class="interactive" style="">
+                    </div>
+                    <fieldset class="filter-group" aria-label="Log filters">
                         <legend class="sr-only">Log filters</legend>
-                        <button id="filterAll" class="filter-btn active" type="button" data-level="all" aria-pressed="true">
+                        <button id="filterAll" class="filter-btn interactive active" type="button" data-level="all" aria-pressed="true">
                             All
                         </button>
-                        <button id="filterInfo" class="filter-btn" type="button" data-level="info">Info</button>
-                        <button id="filterWarn" class="filter-btn" type="button" data-level="warn">Warn</button>
-                        <button id="filterError" class="filter-btn" type="button" data-level="error">Error</button>
+                        <button id="filterInfo" class="filter-btn interactive" type="button" data-level="info">Info</button>
+                        <button id="filterWarn" class="filter-btn interactive" type="button" data-level="warn">Warn</button>
+                        <button id="filterError" class="filter-btn interactive" type="button" data-level="error">Error</button>
                     </fieldset>
                     <div class="row">
-                        <label class="row" for="logAutoscrollToggle" title="Autoscroll new lines">
+                        <label class="row interactive label-autoscroll" for="logAutoscrollToggle" title="Autoscroll new lines">
                             <input id="logAutoscrollToggle" type="checkbox" checked="" style="">
                             <span>Autoscroll</span>
                         </label>
-                        <button id="logExportBtn" type="button">Export</button>
+                        <button id="logExportBtn" class="interactive ripple" type="button">Export</button>
                     </div>
                 </div>
                 <pre id="logContainer" aria-live="polite"></pre>
@@ -199,13 +222,13 @@
         </section>
     </div>
 
-    <dialog id="modalConfirm" class="modal" aria-labelledby="modalTitle" aria-describedby="modalDesc">
-        <div class="modal-card">
-            <div id="modalTitle" class="phase heading-centered">Confirm</div>
-            <div id="modalDesc" class="muted heading-centered">Are you sure you want to stop the transfer?</div>
-            <div class="modal-actions">
-                <button id="modalCancelBtn" class="ghost" type="button">Cancel</button>
-                <button id="modalOkBtn" class="primary" type="button">OK</button>
+    <dialog id="modalConfirm" class="sr-only" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <div class="card modal-card">
+            <div id="modalTitle" class="phase text-center">Confirm</div>
+            <div id="modalDesc" class="muted text-center">Are you sure you want to stop the transfer?</div>
+            <div class="row centered">
+                <button id="modalCancelBtn" class="interactive ghost" type="button">Cancel</button>
+                <button id="modalOkBtn" class="interactive primary" type="button">OK</button>
             </div>
         </div>
     </dialog>
@@ -268,5 +291,6 @@
     </script>
 
     <script type="module" src="scripts/app.js"></script>
+  <script type="module" src="scripts/enhancements.js"></script>
 
 </body></html>
