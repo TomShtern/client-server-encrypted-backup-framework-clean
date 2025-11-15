@@ -102,9 +102,9 @@
   --weight-bold: 700;
   --weight-black: 900;
 
-  /* Progress Ring - Hero Size (desktop-optimized, less dominating) */
-  --ring-size: 360px;
-  --ring-max: 420px;
+  /* Progress Ring - Hero Size (desktop-optimized, compact) */
+  --ring-size: 320px;
+  --ring-max: 380px;
 
   /* Transitions */
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -465,10 +465,10 @@ main > .stack:last-child {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   width: 100%;
-  padding: var(--space-xl) 0 var(--space-lg);
-  min-height: 420px;
+  padding: var(--space-lg) 0 var(--space-md);
+  min-height: 320px;
 }
 
 /* Actions and stats full width */
@@ -711,15 +711,15 @@ button[disabled] {
   border: 2px dashed var(--border);
   border-radius: var(--radius-xl);
   background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%), var(--surface-alt);
-  padding: var(--space-xl);
+  padding: var(--space-lg);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
-  min-height: 200px;
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--space-lg);
+  gap: var(--space-md);
 }
 
 .file-drop-zone::before {
@@ -752,7 +752,7 @@ button[disabled] {
 }
 
 .file-drop-zone .row {
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   justify-content: center;
   gap: var(--space-md);
 }
@@ -857,14 +857,6 @@ button[disabled] {
   gap: var(--gap-2);
 }
 
-/* Inner center stack tweaks for ring + KPI spacing */
-.center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-}
-
 .phase {
   font-weight: var(--weight-bold);
   font-size: var(--fs-24);
@@ -875,6 +867,16 @@ button[disabled] {
   color: var(--fg);
   position: relative;
   padding-bottom: var(--space-sm);
+}
+
+#statusTitle {
+  margin-bottom: var(--space-xs);
+}
+
+#phaseText {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-top: 0;
 }
 
 .phase::after {
@@ -947,8 +949,8 @@ svg {
   justify-content: center;
   flex-wrap: wrap;
   width: 100%;
-  margin-top: var(--space-xl);
-  margin-bottom: var(--space-lg);
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 .actions button {
@@ -1041,12 +1043,12 @@ svg {
   background: linear-gradient(135deg, rgba(88, 166, 255, 0.06) 0%, transparent 100%), var(--surface-alt);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg) var(--space-md);
+  padding: var(--space-md);
   text-align: center;
   position: relative;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 120px;
+  min-height: 96px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1112,6 +1114,10 @@ svg {
   margin-top: 0;
 }
 
+section.logs .card {
+  padding: var(--space-lg);
+}
+
 .heading-centered {
   margin: 0 0 var(--gap-4) 0;
   padding-bottom: var(--gap-3);
@@ -1126,7 +1132,7 @@ svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--gap-4);
+  margin-bottom: var(--gap-3);
   gap: var(--gap-3);
   flex-wrap: wrap;
 }
@@ -1200,7 +1206,7 @@ svg {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--gap-3);
-  height: 280px;
+  height: 220px;
   overflow: auto;
   font-family: ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: var(--fs-12);
@@ -1437,7 +1443,9 @@ details[open] summary::after {
   gap: var(--gap-3);
 }
 
-/* Responsive */
+}
+
+/* Desktop-only Responsive */
 @media (max-width: 1200px) {
   main {
     grid-template-columns: 1fr;
@@ -1456,133 +1464,6 @@ details[open] summary::after {
     min-width: 240px;
     height: 64px;
     font-size: var(--fs-18);
-  }
-}
-
-@media (max-width: 768px) {
-  .container {
-    padding: var(--space-md);
-    gap: var(--space-lg);
-  }
-
-  header {
-    position: relative;
-    top: 0;
-  }
-
-  .header-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  #statsGrid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-sm);
-  }
-
-  .stat {
-    min-height: 100px;
-    padding: var(--space-md);
-  }
-
-  .stat .value {
-    font-size: var(--fs-24);
-  }
-
-  :root {
-    --ring-size: 320px;
-  }
-
-  .center {
-    padding: var(--space-lg) 0;
-    min-height: 500px;
-  }
-
-  .phase {
-    font-size: var(--fs-28);
-  }
-
-  .kpi .pct {
-    font-size: clamp(48px, 12vw, 72px);
-  }
-
-  .fab-primary {
-    bottom: var(--space-md);
-    min-width: 200px;
-    height: 56px;
-    font-size: var(--fs-16);
-    padding: 0 var(--space-lg);
-  }
-
-  .button-group-pill {
-    flex-direction: column;
-    border-radius: var(--radius-lg);
-  }
-
-  .button-group-pill button {
-    border-radius: 0 !important;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    width: 100%;
-  }
-
-  .button-group-pill button:first-child {
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
-  }
-
-  .button-group-pill button:last-child {
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg) !important;
-    border-bottom: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .container {
-    padding: var(--space-sm);
-  }
-
-  .brand .name {
-    font-size: var(--fs-20);
-  }
-
-  #statsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .actions {
-    flex-direction: column;
-  }
-
-  .actions button {
-    width: 100%;
-  }
-
-  :root {
-    --ring-size: 280px;
-  }
-
-  .stack,
-  .card,
-  section.logs {
-    padding: var(--space-lg);
-  }
-
-  .center {
-    padding: var(--space-md) 0;
-    min-height: 400px;
-  }
-
-  .fab-primary {
-    left: var(--space-sm);
-    right: var(--space-sm);
-    transform: none;
-    width: calc(100% - var(--space-md));
-    min-width: 0;
-  }
-
-  .fab-primary:hover:not(:disabled),
-  .fab-primary:active:not(:disabled) {
-    transform: none;
   }
 }
 
@@ -1664,10 +1545,17 @@ section.logs {
   10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
   20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
-  margin: -1px;
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
+  margin: -1px;
   border: 0;
   clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
   overflow: hidden;
 }
 
@@ -1918,8 +1806,8 @@ dialog {
 
 dialog::backdrop {
   background: rgba(3, 7, 18, 0.8);
-  backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   animation: backdrop-fade-in 0.25s ease;
 }
 

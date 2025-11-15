@@ -1062,7 +1062,8 @@ class App {
   }
 
   #renderProgress(state) {
-    const phaseLabel = state.jobMessage || state.jobPhase;
+    const { jobMessage, jobPhase, progress, connecting, jobStatus, etaSeconds } = state;
+    const phaseLabel = jobMessage || jobPhase;
 
     // Apply phase transition animation when text changes
     if (dom.phaseText.textContent !== phaseLabel) {
@@ -1072,25 +1073,25 @@ class App {
     }
 
     // Determine progress ring state based on job state
-    const progressRing = dom.progressRing;
-    const progress = Math.max(0, Math.min(100, state.progress || 0));
+    const { progressRing } = dom;
+    const normalizedProgress = Math.max(0, Math.min(100, progress || 0));
     let stateClass = '';
 
-    if (state.connecting) {
+    if (connecting) {
       stateClass = 'connecting';
-    } else if (state.jobStatus === 'running') {
-      if (progress >= 100) {
+    } else if (jobStatus === 'running') {
+      if (normalizedProgress >= 100) {
         stateClass = 'completed';
         setTimeout(() => {
           progressRing.classList.remove('completed');
           progressRing.classList.add('active');
         }, 3000); // Reset after 3 seconds
-      } else if (progress > 80) {
+      } else if (normalizedProgress > 80) {
         stateClass = 'completing';
       } else {
         stateClass = 'active';
       }
-    } else if (state.jobStatus === 'completed') {
+    } else if (jobStatus === 'completed') {
       stateClass = 'completed';
     } else {
       stateClass = '';
@@ -1101,7 +1102,7 @@ class App {
     if (stateClass) {
       progressRing.classList.add(stateClass);
     }
-    const offset = CIRCUMFERENCE - (progress / 100) * CIRCUMFERENCE;
+    const offset = CIRCUMFERENCE - (normalizedProgress / 100) * CIRCUMFERENCE;
     const offsetStr = offset.toFixed(2);
 
     // Only update if changed significantly (avoid micro-updates)
@@ -1111,14 +1112,14 @@ class App {
     }
 
     // Add updating animation class for percentage pop
-    const progressText = formatPercentage(progress);
+    const progressText = formatPercentage(normalizedProgress);
     if (dom.progressPct.textContent !== progressText) {
       dom.progressPct.classList.add('updating');
       dom.progressPct.textContent = progressText;
       setTimeout(() => dom.progressPct.classList.remove('updating'), 400);
     }
 
-    const etaText = state.etaSeconds ? formatDuration(state.etaSeconds) : 'ETA —';
+    const etaText = etaSeconds ? formatDuration(etaSeconds) : 'ETA —';
     if (dom.etaText.textContent !== etaText) {
       dom.etaText.textContent = etaText;
     }

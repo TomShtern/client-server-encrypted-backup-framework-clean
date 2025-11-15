@@ -19,6 +19,7 @@
         "nvidia.nsight-copilot",
         "anthropic.claude-code",
         "keploy.keployio",
-        "dbcode.dbcode"
+        "dbcode.dbcode",
+        "supermaven.supermaven"
     ]
 }

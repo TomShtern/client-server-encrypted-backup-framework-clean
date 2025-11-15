@@ -6,14 +6,7 @@
 - **NewGUIforClient.html** - Main application interface (CANONICAL)
 
 ### Styles
-- **styles/app.css** - Complete unified stylesheet with all features
-- **styles/enhanced-typography.css** - Typography system (referenced by enhanced files)
-- **styles/enhanced-colors.css** - Color system (referenced by enhanced files)
-- **styles/enhanced-backgrounds.css** - Background effects (referenced by enhanced files)
-- **styles/enhanced-interactions.css** - Micro-interactions (referenced by enhanced files)
-- **styles/enhanced-layout.css** - Layout utilities (referenced by enhanced files)
-- **styles/enhanced-loading.css** - Loading states (referenced by enhanced files)
-- **styles/enhanced-accessibility.css** - Accessibility features (referenced by enhanced files)
+- **styles/app.css** - Complete unified stylesheet with all features (single source of truth for runtime GUI)
 
 ### Scripts
 - **scripts/** - All JavaScript modules (app.js, services/, ui/, utils/)
@@ -41,6 +34,13 @@
 - performance.css - Merged into app.css
 - professional.css - Merged into app.css
 - theme.css - Merged into app.css
+- enhanced-typography.css - Legacy typography module (not loaded; kept for reference)
+- enhanced-colors.css - Legacy color system (not loaded; kept for reference)
+- enhanced-backgrounds.css - Legacy background effects (not loaded; kept for reference)
+- enhanced-interactions.css - Legacy micro-interactions (not loaded; kept for reference)
+- enhanced-layout.css - Legacy layout utilities (not loaded; kept for reference)
+- enhanced-loading.css - Legacy loading components (not loaded; kept for reference)
+- enhanced-accessibility.css - Legacy accessibility helpers (not loaded; kept for reference)
 
 ### Documentation (archived/)
 - GUI_FINALIZATION_SUMMARY.md - Historical documentation
