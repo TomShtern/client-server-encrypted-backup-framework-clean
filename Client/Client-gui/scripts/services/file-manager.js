@@ -94,9 +94,13 @@ export class FileManager {
     if (!this.nameLabel || !this.infoLabel) {
       return;
     }
+    const namePlaceholder = this.nameLabel.dataset.placeholder || 'Drag & drop a file here or choose above';
+    const infoPlaceholder = this.infoLabel.dataset.placeholder || 'Size — • Type —';
     if (!this.currentFileMeta) {
-      this.nameLabel.textContent = 'Drag & drop a file here or choose above';
-      this.infoLabel.textContent = 'Size — • Type —';
+      this.nameLabel.textContent = namePlaceholder;
+      this.nameLabel.classList.add('placeholder');
+      this.infoLabel.textContent = infoPlaceholder;
+      this.infoLabel.classList.add('placeholder');
       if (this.clearButton) {
         this.clearButton.disabled = true;
       }
@@ -111,7 +115,9 @@ export class FileManager {
     this.dropZone?.classList.remove('file-invalid');
 
     this.nameLabel.textContent = name;
+    this.nameLabel.classList.remove('placeholder');
     this.infoLabel.textContent = `${formatBytes(size)} • ${type}`;
+    this.infoLabel.classList.remove('placeholder');
 
     // Add animation to file icon
     const fileIcon = this.dropZone?.querySelector('.file-icon');

@@ -122,8 +122,20 @@
                     <div class="file-card" aria-live="polite">
                         <div class="file-icon" aria-hidden="true">📄</div>
                         <div class="file-meta">
-                            <div class="file-name" id="fileName">Drag & drop a file here or choose above</div>
-                            <div class="file-sub text-caption" id="fileInfo">Size — • Type —</div>
+                            <div
+                                class="file-name placeholder"
+                                id="fileName"
+                                data-placeholder="Drag & drop a file here or choose above"
+                            >
+                                Drag & drop a file here or choose above
+                            </div>
+                            <div
+                                class="file-sub text-caption placeholder"
+                                id="fileInfo"
+                                data-placeholder="Size — • Type —"
+                            >
+                                Size — • Type —
+                            </div>
                         </div>
                         <div class="file-actions">
                             <button id="clearFileBtn" class="interactive ghost" disabled>Clear</button>
@@ -182,7 +194,7 @@
 
                 <div class="actions" aria-label="Transfer actions">
                     <button id="primaryActionBtn" class="interactive primary ripple" type="button">
-                        <span id="primaryBtnSpinner" class="loading-spinner" style="display: none;"></span>
+                        <span id="primaryBtnSpinner" class="loading-spinner"></span>
                         <span id="primaryBtnText">Connect & Start</span>
                     </button>
                     <button id="pauseBtn" class="interactive ripple" type="button" disabled>Pause</button>
@@ -212,14 +224,14 @@
                 <div id="speedChartContainer" class="speed-chart-container">
                     <div class="speed-chart-header">
                         <span class="speed-chart-title">Transfer Speed (Last 30s)</span>
-                        <button id="toggleSpeedChart" class="ghost" type="button" style="padding: 4px 8px; font-size: var(--fs-11);">Hide</button>
+                        <button id="toggleSpeedChart" class="ghost speed-chart-toggle" type="button">Hide</button>
                     </div>
                     <canvas id="speedChart" class="speed-chart"></canvas>
                 </div>
             </section>
-        </main>
 
-        <section class="logs" aria-labelledby="logTitle">
+            <!-- Activity Logs - Grid Row 2 -->
+            <section class="logs" aria-labelledby="logTitle">
             <div id="logTitle" class="phase heading-centered" aria-hidden="true">Activity Logs</div>
             <div class="card">
                 <div class="toolbar">
@@ -252,6 +264,7 @@
                 <pre id="logContainer" aria-live="polite"></pre>
             </div>
         </section>
+        </main>
     </div>
 
     <dialog id="modalConfirm" class="sr-only" aria-labelledby="modalTitle" aria-describedby="modalDesc">

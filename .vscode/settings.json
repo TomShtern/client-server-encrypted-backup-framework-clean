@@ -89,5 +89,8 @@
   "sonarlint.connectedMode.project": {
     "connectionId": "c-ares",
     "projectKey": "c-ares_c-ares"
+  },
+  "[css]": {
+    "editor.semanticHighlighting.enabled": false
   }
 }

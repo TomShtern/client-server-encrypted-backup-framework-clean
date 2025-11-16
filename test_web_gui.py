@@ -51,7 +51,10 @@ def main():
         print(f"Navigating to {target_url}...")
         try:
             response = page.goto(target_url, wait_until='networkidle', timeout=30000)
-            print(f"Page loaded with status: {response.status}")
+            if response:
+                print(f"Page loaded with status: {response.status}")
+            else:
+                print("Page navigation failed: No response received.")
         except Exception as e:
             print(f"ERROR navigating to page: {e}")
             browser.close()
