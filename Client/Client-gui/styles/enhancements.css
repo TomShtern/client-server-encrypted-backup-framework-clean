@@ -44,16 +44,16 @@ main#mainContent > aside.stack {
   gap: var(--space-xs) !important;
 }
 
-/* Reduce spacing between Configuration title and first field */
+/* Halve top padding for Configuration title */
 main#mainContent > aside.stack > #cfgTitle {
   margin-bottom: 0 !important;
-  padding-top: var(--space-sm) !important;
+  padding-top: calc(var(--space-sm) * 0.5) !important;
 }
 
 /* File drop zone - adjusted height to match Status panel */
 main#mainContent > aside.stack .file-drop-zone {
   padding: var(--space-md) var(--space-sm) !important;
-  min-height: 465px !important;
+  min-height: 437px !important;
 }
 
 /* Reduce internal spacing in file drop zone */
@@ -84,23 +84,30 @@ section.logs {
    COMPRESS STATUS PANEL TITLES
    ======================================== */
 
-/* "Status" title - ultra-compact */
+/* Halve top padding for Status title */
 main#mainContent > section.stack > .phase:first-child {
   margin-bottom: 0 !important;
   padding-bottom: 0 !important;
-  padding-top: var(--space-sm) !important;
+  padding-top: calc(var(--space-sm) * 0.5) !important;
 }
 
-/* "Idle" text - overlap with ring */
+/* Reposition "Idle" text in the center of the progress ring */
 main#mainContent > section.stack > div.phase.liquid-text {
-  margin-top: 0 !important;
-  margin-bottom: calc(var(--space-md) * -1) !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  font-size: 1.25rem !important;
+  opacity: 0.4 !important;
+  z-index: 1 !important;
 }
 
-/* Progress ring - keep big, minimal margins */
+/* Progress ring - keep big, minimal margins, positioned for Idle overlay */
 main#mainContent > section.stack > .center {
   margin-top: 0 !important;
   margin-bottom: var(--space-sm) !important;
+  position: relative !important;
 }
 
 /* Buttons - ultra-compact */
@@ -146,4 +153,252 @@ main#mainContent > aside.stack::-webkit-scrollbar-thumb {
 
 main#mainContent > aside.stack::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
+}
+
+/* ========================================
+   ACTIVITY LOGS - PROFESSIONAL REDESIGN
+   ======================================== */
+
+/* Main logs section - clean spacing */
+section.logs {
+  padding: 0 !important;
+  margin-top: var(--space-2xl) !important;
+}
+
+/* Logs title - refined typography */
+section.logs > .phase {
+  margin-bottom: var(--space-lg) !important;
+  padding-bottom: 0 !important;
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* Card container - elevated panel */
+section.logs .card {
+  padding: 0 !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden !important;
+}
+
+/* ========================================
+   TOOLBAR - SINGLE LINE LAYOUT
+   ======================================== */
+
+/* Main toolbar - single horizontal bar */
+section.logs .toolbar {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-md) !important;
+  padding: var(--space-md) var(--space-lg) !important;
+  background: var(--bg-tertiary) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* Search container - primary element */
+section.logs .log-search {
+  flex: 1 1 300px !important;
+  max-width: 400px !important;
+}
+
+/* Search input - modern styling */
+section.logs .log-search input {
+  width: 100% !important;
+  padding: var(--space-sm) var(--space-md) !important;
+  font-size: 0.875rem !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  transition: all 0.2s ease !important;
+}
+
+section.logs .log-search input:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1) !important;
+}
+
+/* ========================================
+   FILTER BUTTONS - PILL STYLE
+   ======================================== */
+
+/* Filter group - clean inline layout */
+section.logs .filter-group {
+  display: flex !important;
+  gap: var(--space-xs) !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Remove the legend (sr-only is fine) */
+section.logs .filter-group legend {
+  display: none !important;
+}
+
+/* Filter buttons - modern pill design */
+section.logs .filter-btn {
+  padding: var(--space-xs) var(--space-md) !important;
+  font-size: 0.813rem !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  background: var(--bg) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-full) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+}
+
+/* Filter button hover */
+section.logs .filter-btn:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-secondary) !important;
+  border-color: var(--border) !important;
+}
+
+/* Active filter button */
+section.logs .filter-btn.active {
+  color: #ffffff !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  font-weight: 600 !important;
+}
+
+/* ========================================
+   TOOLBAR UTILITIES
+   ======================================== */
+
+/* Right-side utilities container */
+section.logs .toolbar > .row {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-md) !important;
+  margin-left: auto !important;
+}
+
+/* Autoscroll label - clean checkbox style */
+section.logs .label-autoscroll {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-xs) !important;
+  font-size: 0.875rem !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+section.logs .label-autoscroll:hover {
+  color: var(--text-primary) !important;
+}
+
+/* Checkbox styling */
+section.logs .label-autoscroll input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  cursor: pointer !important;
+}
+
+/* Export button - secondary action */
+section.logs #logExportBtn {
+  padding: var(--space-xs) var(--space-md) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+section.logs #logExportBtn:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-hover) !important;
+}
+
+/* ========================================
+   LOG DISPLAY AREA
+   ======================================== */
+
+/* Log container - professional code viewer */
+section.logs pre#logContainer {
+  min-height: 280px !important;
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  padding: var(--space-lg) !important;
+  margin: 0 !important;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+  font-size: 0.813rem !important;
+  line-height: 1.7 !important;
+  color: var(--text-primary) !important;
+  background: var(--bg) !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  tab-size: 4 !important;
+}
+
+/* Log lines - subtle hover effect */
+section.logs pre#logContainer:hover {
+  background: var(--bg) !important;
+}
+
+/* Custom scrollbar - sleek design */
+section.logs pre#logContainer::-webkit-scrollbar {
+  width: 10px !important;
+  background: transparent !important;
+}
+
+section.logs pre#logContainer::-webkit-scrollbar-track {
+  background: var(--bg-secondary) !important;
+  border-left: 1px solid var(--border) !important;
+}
+
+section.logs pre#logContainer::-webkit-scrollbar-thumb {
+  background: var(--border-hover) !important;
+  border-radius: var(--radius-sm) !important;
+  border: 2px solid var(--bg-secondary) !important;
+}
+
+section.logs pre#logContainer::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary) !important;
+}
+
+/* Empty state message */
+section.logs pre#logContainer:empty::before {
+  content: 'No log entries yet. Activity will appear here once you start a backup...' !important;
+  display: block !important;
+  padding: var(--space-xl) !important;
+  text-align: center !important;
+  color: var(--text-tertiary) !important;
+  font-style: italic !important;
+}
+
+/* ========================================
+   LOG SYNTAX HIGHLIGHTING
+   ======================================== */
+
+/* INFO level logs - blue accent */
+section.logs pre#logContainer .log-info {
+  color: #60a5fa !important;
+}
+
+/* WARN level logs - yellow/amber accent */
+section.logs pre#logContainer .log-warn {
+  color: #fbbf24 !important;
+}
+
+/* ERROR level logs - red accent */
+section.logs pre#logContainer .log-error {
+  color: #ef4444 !important;
+  font-weight: 500 !important;
+}
+
+/* Timestamps - muted */
+section.logs pre#logContainer .log-timestamp {
+  color: var(--text-tertiary) !important;
+  opacity: 0.7 !important;
 }
