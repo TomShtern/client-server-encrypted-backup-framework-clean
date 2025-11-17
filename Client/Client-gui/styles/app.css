@@ -84,23 +84,23 @@
   --space-2xl: 48px;
   --space-3xl: 64px;
 
-  /* Typography - Dramatic Scale */
-  --fs-10: 10px;
-  --fs-11: 11px;
-  --fs-12: 12px;
-  --fs-13: 13px;
-  --fs-14: 14px;
-  --fs-15: 15px;
-  --fs-16: 16px;
-  --fs-18: 18px;
-  --fs-20: 20px;
-  --fs-24: 24px;
-  --fs-28: 28px;
-  --fs-32: 32px;
-  --fs-36: 36px;
-  --fs-48: 48px;
-  --fs-56: 56px;
-  --fs-72: 72px;
+  /* Typography - Enhanced Scale */
+  --fs-10: 11px;
+  --fs-11: 13px;
+  --fs-12: 14px;
+  --fs-13: 15px;
+  --fs-14: 16px;
+  --fs-15: 17px;
+  --fs-16: 18px;
+  --fs-18: 20px;
+  --fs-20: 22px;
+  --fs-24: 26px;
+  --fs-28: 30px;
+  --fs-32: 34px;
+  --fs-36: 38px;
+  --fs-48: 50px;
+  --fs-56: 58px;
+  --fs-72: 74px;
 
   --weight-thin: 300;
   --weight-normal: 400;
@@ -239,7 +239,7 @@ summary {
   padding: var(--space-lg) var(--space-xl);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2xl);
+  gap: var(--space-lg);
   min-height: 100vh;
   overflow-x: hidden;
 }
