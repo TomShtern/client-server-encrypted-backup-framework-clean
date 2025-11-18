@@ -11,7 +11,12 @@ import os
 import sys
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+# Log rotation settings
+LOG_ROTATION_MAX_FILES = 6  # Keep last 6 log files
+LOG_ROTATION_MAX_SIZE_MB = 700  # Maximum total size in MB
 
 # Import the safe_print function to prevent console encoding errors
 from .utils.utf8_solution import safe_print
@@ -158,6 +163,75 @@ def get_code_map(server_type: str) -> list[dict[str, str]]:
     return CODE_MAPS["api"] if "api" in st else CODE_MAPS["backup"]
 
 
+def cleanup_old_logs(
+    log_dir: str = "logs",
+    max_files: int = LOG_ROTATION_MAX_FILES,
+    max_size_mb: int = LOG_ROTATION_MAX_SIZE_MB,
+) -> dict[str, int]:
+    """
+    Clean up old log files based on count and total size limits.
+
+    Strategy:
+    1. Keep only the last `max_files` log files
+    2. If total size exceeds `max_size_mb`, delete oldest files until under limit
+
+    Args:
+        log_dir: Directory containing log files
+        max_files: Maximum number of log files to keep (default: 6)
+        max_size_mb: Maximum total size in MB (default: 700)
+
+    Returns:
+        Dictionary with cleanup statistics
+    """
+    log_path = Path(log_dir)
+    if not log_path.exists():
+        return {"deleted_count": 0, "deleted_bytes": 0, "remaining_count": 0}
+
+    # Get all log files sorted by modification time (newest first)
+    log_files = sorted(log_path.glob("*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+
+    if not log_files:
+        return {"deleted_count": 0, "deleted_bytes": 0, "remaining_count": 0}
+
+    deleted_count = 0
+    deleted_bytes = 0
+
+    # Step 1: Keep only max_files
+    if len(log_files) > max_files:
+        files_to_delete = log_files[max_files:]
+        for f in files_to_delete:
+            try:
+                deleted_bytes += f.stat().st_size
+                f.unlink()
+                deleted_count += 1
+            except (OSError, PermissionError):
+                pass  # Skip files that can't be deleted
+        log_files = log_files[:max_files]
+
+    # Step 2: Enforce size limit
+    max_size_bytes = max_size_mb * 1024 * 1024
+    while log_files:
+        total_size = sum(f.stat().st_size for f in log_files if f.exists())
+        if total_size <= max_size_bytes:
+            break
+        # Delete oldest file
+        oldest = log_files.pop()
+        try:
+            deleted_bytes += oldest.stat().st_size
+            oldest.unlink()
+            deleted_count += 1
+        except (OSError, PermissionError):
+            pass
+
+    remaining_count = len(list(log_path.glob("*.log")))
+
+    return {
+        "deleted_count": deleted_count,
+        "deleted_bytes": deleted_bytes,
+        "remaining_count": remaining_count,
+    }
+
+
 def setup_dual_logging(
     logger_name: str,
     server_type: str,
@@ -204,6 +278,9 @@ def setup_dual_logging(
 
     # Create log directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
+
+    # Clean up old logs before creating new one (smart rotation)
+    cleanup_old_logs(log_dir)
 
     # Generate log file name with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

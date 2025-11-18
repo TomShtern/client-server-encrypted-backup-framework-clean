@@ -199,8 +199,18 @@ def retry(max_attempts: int = 3, backoff_base: float = 0.5, exceptions: tuple = 
     return decorator
 
 # Maintain compatibility: also log to the original server.log file
+# Now uses RotatingFileHandler to prevent unbounded growth
+import os
+from logging.handlers import RotatingFileHandler
+
 LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
-server_log_handler = logging.FileHandler("server.log", mode='a')
+os.makedirs("logs", exist_ok=True)
+server_log_handler = RotatingFileHandler(
+    "logs/server.log",
+    mode='a',
+    maxBytes=10*1024*1024,  # 10 MB per file
+    backupCount=5           # Keep 5 backup files
+)
 server_log_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 server_log_handler.setLevel(logging.DEBUG)
 logger.addHandler(server_log_handler)

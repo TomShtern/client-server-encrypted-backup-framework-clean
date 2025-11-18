@@ -89,11 +89,20 @@ LOG_FORMAT = '%(asctime)s - %(threadName)s - %(levelname)s - %(message)s'
 
 def setup_logging():
     """Configure logging for the backup server."""
+    import os
+    from logging.handlers import RotatingFileHandler
+
+    os.makedirs("logs", exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,  # Set to DEBUG for verbose output
         format=LOG_FORMAT,
         handlers=[
-            logging.FileHandler("server.log", mode='a'),  # Append mode
+            RotatingFileHandler(
+                "logs/server.log",
+                mode='a',
+                maxBytes=10*1024*1024,  # 10 MB per file
+                backupCount=5           # Keep 5 backup files
+            ),
             logging.StreamHandler(sys.stdout)  # Also log to console
         ]
     )
