@@ -74,7 +74,7 @@
   "debug.console.fontSize": 17,
   "scm.inputFontSize": 16,
   "terminal.integrated.fontLigatures.enabled": true,
-  "terminal.integrated.fontSize": 17,
+  "terminal.integrated.fontSize": 14,
   "chat.editor.fontSize": 18,
   "chat.fontSize": 16,
   "markdown.preview.fontSize": 16,
