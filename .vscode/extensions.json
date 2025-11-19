@@ -20,6 +20,9 @@
         "anthropic.claude-code",
         "keploy.keployio",
         "dbcode.dbcode",
-        "supermaven.supermaven"
+        "supermaven.supermaven",
+        "google.geminicodeassist",
+        "google.gemini-cli-vscode-ide-companion",
+        "dbaeumer.vscode-eslint"
     ]
 }

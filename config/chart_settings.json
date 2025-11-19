@@ -1,0 +1,32 @@
+{
+  "settings": {
+    "time_range_minutes": 1,
+    "update_interval": 15,
+    "chart_type": "bar",
+    "show_thresholds": true,
+    "auto_scale": true,
+    "theme": "default"
+  },
+  "thresholds": {
+    "cpu": {
+      "warning": 70.0,
+      "critical": 90.0,
+      "enabled": true
+    },
+    "memory": {
+      "warning": 80.0,
+      "critical": 95.0,
+      "enabled": true
+    },
+    "disk": {
+      "warning": 85.0,
+      "critical": 95.0,
+      "enabled": true
+    },
+    "network": {
+      "warning": 50.0,
+      "critical": 100.0,
+      "enabled": true
+    }
+  }
+}

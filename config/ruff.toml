@@ -1,0 +1,54 @@
+line-length = 110
+target-version = "py311"
+exclude = [
+	".git",
+	".mypy_cache",
+	".ruff_cache",
+	".venv",
+	"venv",
+	"flet_venv",
+	"build",
+	"dist",
+	"node_modules",
+	"logs",
+	"docs",
+	"received_files",
+	"scripts",
+	"tests",
+	"tmp",
+	"vcpkg",
+	"python_server",
+	"python_server/server_gui",
+	"stubs",
+	"temp_core_init.py",
+	"start_servers.py",
+	"search_methods.py",
+	"flet_venv_broken",
+	"validate-workspace-setup.py",
+	"verify_flet_venv_setup.py",
+	"test_bridge.py",
+	"test_gui_integration.py",
+	"test_import.py",
+	"test_import_fix.py",
+	"test_venv_setup.py"
+]
+
+force-exclude = true
+
+[lint]
+select = [
+	"E",  # pycodestyle errors
+	"F",  # pyflakes
+	"W",  # pycodestyle warnings
+	"B",  # flake8-bugbear
+	"I",  # isort-compatible import order
+	"N",  # pep8-naming
+	"UP", # pyupgrade
+	"RUF" # Ruff-specific rules
+]
+ignore = []
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false

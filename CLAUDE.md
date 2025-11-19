@@ -435,10 +435,20 @@ ruff check --select F401,F841 .
 ---
 
 **Version**: CyberBackup 3.0
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-18
 **Status**: Production-ready Python stack, C++ API server in development
 
 **Key Documents**:
 - [CODE_ISSUES_AND_FIXES.md](CODE_ISSUES_AND_FIXES.md) - 42 fixed issues
 - [FUNCTIONAL_ISSUES_REPORT.md](FUNCTIONAL_ISSUES_REPORT.md) - Issue analysis
 - [docs/CPP_API_SERVER_MIGRATION_PLAN.md](docs/CPP_API_SERVER_MIGRATION_PLAN.md) - Migration details
+- [PROJECT_STRUCTURE_AND_DUPLICATION_REPORT.md](PROJECT_STRUCTURE_AND_DUPLICATION_REPORT.md) - Codebase organization & cleanup tracking
+- [project_files_inventory.json](project_files_inventory.json) - Complete file inventory (18MB, use for analysis)
+- [docs/flet/](docs/flet/) - Consolidated Flet 0.28.3 documentation (17 files)
+
+## Recent Updates (2025-11-18)
+
+- **Log rotation**: Implemented in `Shared/logging_utils.py` and `python_server/server/` (max 6 files, 700MB)
+- **Flet docs**: Moved from `AI-CONTEXT-IMPORTANT/` to `docs/flet/`
+- **Client GUI**: Finalized at `Client/Client-gui/` (production-ready)
+- **Cleanup scripts**: Added `scripts/cleanup_*.py` for maintenance

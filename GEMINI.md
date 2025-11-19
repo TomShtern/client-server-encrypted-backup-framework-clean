@@ -14,7 +14,7 @@ The system is composed of several interconnected components:
 
 1.  **C++ Client (`Client/`)**:
     *   **Purpose**: Handles native encryption (RSA-1024 + AES-256-CBC) and file transfer using a custom binary protocol with CRC verification.
-    *   **Build System**: Uses CMake (`Client/CMakeLists.txt`) and vcpkg for dependency management.
+    *   **Build System**: Uses CMake (`CMakeLists.txt`) and vcpkg for dependency management.
     *   **Interaction**: Executed by the Flask API server (`api_server/cyberbackup_api_server.py`) via `RealBackupExecutor` for actual backup operations.
 
 2.  **Python Backup Server (`python_server/`)**:
