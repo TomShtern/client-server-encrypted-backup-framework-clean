@@ -54,9 +54,10 @@ else:
 import contextlib
 
 # Setup standardized import paths
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Shared'))
+# Setup standardized import paths
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 with contextlib.suppress(ImportError):
-    from path_utils import setup_imports  # type: ignore
+    from Shared.filesystem.path_utils import setup_imports
     setup_imports()
 # Configure logging
 logging.basicConfig(

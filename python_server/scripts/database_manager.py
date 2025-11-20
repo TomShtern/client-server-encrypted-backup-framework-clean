@@ -11,7 +11,11 @@ import sys
 from datetime import datetime
 
 # Setup standardized import paths
-from Shared.path_utils import setup_imports
+import sys
+import os
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+from Shared.filesystem.path_utils import setup_imports
 
 setup_imports()
 
