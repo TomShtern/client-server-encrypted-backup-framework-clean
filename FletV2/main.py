@@ -69,7 +69,7 @@ _here, flet_v2_root, repo_root, project_root = _bootstrap_paths()
 # ALWAYS import UTF-8 solution FIRST to fix encoding issues
 # This MUST be imported before any subprocess or console operations
 try:
-    import Shared.utils.utf8_solution as _utf8_solution
+    import Shared.filesystem.utf8_solution as _utf8_solution
 
     # Ensure initialization for side effects
     _utf8_solution.ensure_initialized()

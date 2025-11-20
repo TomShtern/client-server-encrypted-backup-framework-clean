@@ -122,10 +122,10 @@ def setup_terminal_debugging(log_level: int = logging.INFO, logger_name: str | N
         logging.getLogger("Shared.utils.thread_manager").setLevel(
             logging.ERROR
         )  # Reduce thread management logs
-        logging.getLogger("Shared.utils.process_monitor").setLevel(
-            logging.WARNING
-        )  # Reduce process monitor logs
-        logging.getLogger("Shared.utils.process_monitor_gui").setLevel(logging.WARNING)
+        logging.getLogger("Shared.monitoring.thread_manager").setLevel(
+            logging.DEBUG if debug_mode_enabled else logging.INFO
+        )
+        logging.getLogger("Shared.monitoring.process_monitor_gui").setLevel(logging.WARNING)
 
         # Application-specific loggers - reduce verbosity for cleaner output (allow override below)
         logging.getLogger("views.dashboard").setLevel(

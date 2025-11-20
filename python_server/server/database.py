@@ -195,7 +195,7 @@ class DatabaseConnectionPool:
             shared_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Shared', 'utils')
             sys.path.append(shared_path)
             try:
-                from Shared.utils.thread_manager import create_managed_thread
+                from Shared.monitoring.thread_manager import create_managed_thread
 
                 def cleanup_database_resources():
                     """Cleanup function for database monitoring resources"""

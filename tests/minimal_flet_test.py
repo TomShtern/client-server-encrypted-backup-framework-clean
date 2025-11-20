@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 # Import UTF-8 solution
 try:
-    import Shared.utils.utf8_solution
+    import Shared.filesystem.utf8_solution
     print("[UTF-8] UTF-8 solution imported successfully")
 except ImportError:
     print("[WARNING] UTF-8 solution not available")

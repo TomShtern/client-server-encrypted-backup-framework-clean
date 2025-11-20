@@ -33,7 +33,7 @@ os.environ['KIVY_TEXT'] = 'sdl2'
 os.environ['KIVY_WINDOW'] = 'sdl2'
 
 # UTF-8 environment setup
-from Shared.utils.utf8_solution import UTF8Support
+from Shared.filesystem.utf8_solution import UTF8Support
 
 utf8_env = UTF8Support.get_env()
 for key, value in utf8_env.items():

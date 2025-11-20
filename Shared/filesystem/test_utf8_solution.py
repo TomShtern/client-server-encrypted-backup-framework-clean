@@ -12,7 +12,7 @@ import sys
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, project_root)
 
-import Shared.utils.utf8_solution as utf8
+import Shared.filesystem.utf8_solution as utf8
 
 
 def demo_basic_functionality():

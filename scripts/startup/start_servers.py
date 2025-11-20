@@ -44,15 +44,14 @@ sys.path.insert(0, project_root)
 
 # UTF-8 support for subprocess operations
 # Enhanced output with emojis and colors
-from Shared.utils.enhanced_output import (
+from Shared.logging.enhanced_output import (
+    EmojiLogger,
     Emojis,
-    error_print,
-    info_print,
-    startup_print,
+    Colors,
     success_print,
-    warning_print,
+    safe_print,
 )
-from Shared.utils.utf8_solution import Popen_utf8
+from Shared.filesystem.utf8_solution import Popen_utf8
 
 
 def check_port_available(port):

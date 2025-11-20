@@ -14,7 +14,7 @@ def main():
 
     # Test importing our UTF-8 solution
     try:
-        import Shared.utils.utf8_solution as utf8_solution
+        import Shared.filesystem.utf8_solution as utf8_solution
         utf8_solution.safe_print("✅ UTF-8 solution imported successfully")
 
         # Test UTF-8 functionality

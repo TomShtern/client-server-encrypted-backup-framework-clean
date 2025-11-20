@@ -29,7 +29,7 @@ setup_imports()
 # Import the components we're testing
 from python_server.server.config import COMPATIBLE_VERSIONS
 from python_server.server.protocol import validate_protocol_version
-from Shared.utils.error_handler import (
+from Shared.logging.error_handler import (
     ErrorCategory,
     ErrorCode,
     ErrorSeverity,

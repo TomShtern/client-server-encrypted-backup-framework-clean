@@ -537,7 +537,7 @@ def start_websocket_cleanup_thread():
         import sys
 
         sys.path.append(os.path.join(os.path.dirname(__file__), "..", "Shared", "utils"))
-        from Shared.utils.thread_manager import create_managed_thread
+        from Shared.monitoring.thread_manager import create_managed_thread
 
         # Create managed cleanup thread
         cleanup_thread_name = create_managed_thread(

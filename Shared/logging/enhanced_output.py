@@ -6,7 +6,8 @@ Provides centralized emoji definitions and color-enhanced logging that integrate
 with the existing logging infrastructure. Safe fallbacks ensure compatibility.
 
 USAGE:
-    from Shared.utils.enhanced_output import EmojiLogger, Emojis, Colors
+# Self-contained module, no external Shared.utils imports needed for these classes
+
 
     # Enhanced logging with emojis and colors
     logger = EmojiLogger.get_logger("my-component")

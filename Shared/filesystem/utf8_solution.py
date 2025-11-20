@@ -34,7 +34,7 @@ Optional Library Integrations (automatically detected and used when available):
 
 Quick start (recommended):
 
-        import Shared.utils.utf8_solution as utf8
+        import Shared.filesystem.utf8_solution as utf8
 
         # ensure initialization (idempotent, safe). optional but recommended
         utf8.ensure_initialized()
@@ -45,7 +45,7 @@ Quick start (recommended):
 Core usage examples:
 
         # Basic import (silent init) + enhanced safe print
-        import Shared.utils.utf8_solution as utf8
+        import Shared.filesystem.utf8_solution as utf8
         utf8.safe_print("🎉 Hello 🌍 שלום עולם ✅")  # Uses rich when available
 
         # Enhanced bidirectional text (uses python-bidi when available)

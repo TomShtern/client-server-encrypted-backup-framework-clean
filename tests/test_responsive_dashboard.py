@@ -22,7 +22,7 @@ sys.path.insert(0, str(project_root))
 
 # Import UTF-8 solution early
 try:
-    import Shared.utils.utf8_solution
+    import Shared.filesystem.utf8_solution
 except ImportError:
     pass
 

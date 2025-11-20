@@ -8,11 +8,11 @@ import os
 import sys
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def _import_enhanced_modules():
     """Import enhanced output modules with error handling."""
-    from Shared.utils.enhanced_output import (
+    from Shared.logging.enhanced_output import (
         Colors,
         EmojiLogger,
         Emojis,
@@ -106,24 +106,24 @@ def test_enhanced_output():
 
 def _import_utf8_modules():
     """Import UTF-8 modules with error handling."""
-    from Shared.utils.enhanced_output import success_print
-    from Shared.utils.utf8_solution import enhanced_safe_print
-    return enhanced_safe_print, success_print
+    from Shared.logging.enhanced_output import success_print
+    from Shared.filesystem.utf8_solution import safe_print
+    return safe_print, success_print
 
 def test_utf8_integration():
     """Test UTF-8 integration with enhanced output."""
 
     try:
-        enhanced_safe_print, success_print = _import_utf8_modules()
+        safe_print, success_print = _import_utf8_modules()
 
         print(f"\n{'='*60}")
         print("🎯 UTF-8 Integration Test")
         print("="*60)
 
         # Test UTF-8 with emojis
-        enhanced_safe_print("Hebrew text: שלום עולם")
-        enhanced_safe_print("Emoji test: 🚀🎉✅❌⚠️🔧📁🌐")
-        enhanced_safe_print("Mixed: Hebrew שלום + Emojis 🎉 + English Hello")
+        safe_print("Hebrew text: שלום עולם")
+        safe_print("Emoji test: 🚀🎉✅❌⚠️🔧📁🌐")
+        safe_print("Mixed: Hebrew שלום + Emojis 🎉 + English Hello")
 
         success_print("UTF-8 integration test completed!", "UTF8")
 
@@ -138,8 +138,8 @@ def test_utf8_integration():
 
 def _import_logging_modules():
     """Import logging modules with error handling."""
-    from Shared.logging_utils import setup_dual_logging
-    from Shared.utils.enhanced_output import success_print
+    from Shared.logging.logging_utils import setup_dual_logging
+    from Shared.logging.enhanced_output import success_print
     return setup_dual_logging, success_print
 
 def test_logging_integration():

@@ -19,13 +19,13 @@ LOG_ROTATION_MAX_FILES = 6  # Keep last 6 log files
 LOG_ROTATION_MAX_SIZE_MB = 700  # Maximum total size in MB
 
 # Import the safe_print function to prevent console encoding errors
-from .utils.utf8_solution import safe_print
+from Shared.filesystem.utf8_solution import safe_print
 
 # Try to import enhanced output for emoji/color support
 try:
-    from .utils.enhanced_output import Colors as EnhancedColors
-    from .utils.enhanced_output import Emojis as EnhancedEmojis
-    from .utils.enhanced_output import enhance_existing_logger
+    from Shared.logging.enhanced_output import Colors as EnhancedColors
+    from Shared.logging.enhanced_output import Emojis as EnhancedEmojis
+    from Shared.logging.enhanced_output import enhance_existing_logger
 
     ENHANCED_OUTPUT_AVAILABLE = True
 except ImportError:

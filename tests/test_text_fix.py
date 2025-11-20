@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 
 # UTF-8 solution
 try:
-    import Shared.utils.utf8_solution
+    import Shared.filesystem.utf8_solution
     print("[INFO] UTF-8 solution enabled")
 except ImportError:
     print("[WARNING] UTF-8 solution not available")

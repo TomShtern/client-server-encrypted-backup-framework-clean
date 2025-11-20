@@ -6,7 +6,7 @@ FIXED LAUNCHER - CyberBackup 3.0 Reliable System Startup
 This script addresses the key issues found in the original one-click launcher:
 
 1. SERVER-GUI DECOUPLING: Starts server in console mode if GUI fails
-2. DIRECT PATH EXECUTION: Avoids module import issues 
+2. DIRECT PATH EXECUTION: Avoids module import issues
 3. ROBUST ERROR HANDLING: Continues even if individual components fail
 4. PROPER STARTUP SEQUENCE: Backup server FIRST, then API server
 5. VALIDATION: Verifies each service is actually working before proceeding
@@ -29,7 +29,7 @@ from pathlib import Path
 
 # Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from Shared.utils.utf8_solution import Popen_utf8, run_utf8
+from Shared.filesystem.utf8_solution import Popen_utf8, run_utf8
 
 # Change to project root
 project_root = Path(__file__).parent.parent

@@ -1,4 +1,69 @@
-# Client-Server Encrypted Backup Framework - Claude Instructions
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+<system_tools>
+
+# 💻 SYSTEM_TOOL_INVENTORY
+
+### 🛠 CORE UTILITIES: Search, Analysis & Refactoring
+
+*High-performance tools for file operations and code intelligence.*
+- **ripgrep** (`rg`) `v14.1.0`
+  - **Context:** Primary text search engine.
+  - **Capabilities:** Ultra-fast regex search, ignores `.gitignore` by default.
+- **fd** (`fd`) `v10.3.0`
+  - **Context:** File system traversal.
+  - **Capabilities:** User-friendly, fast alternative to `find`.
+- **fzf** (`fzf`) `v0.67.0`
+  - **Context:** Interactive filtering.
+  - **Capabilities:** General-purpose command-line fuzzy finder.
+- **tokei** (`tokei`) `v12.1.2`
+  - **Context:** Codebase Statistics.
+  - **Capabilities:** Rapidly counts lines of code (LOC), comments, and blanks across all languages.
+- **ast-grep** (`sg`) `v0.40.0`
+  - **Context:** Advanced Refactoring & Linting.
+  - **Capabilities:** Structural code search and transformation using Abstract Syntax Trees (AST). Supports precise pattern matching and large-scale automated refactoring beyond regex limitations.
+- **bat** (`bat`) `v0.26.0`
+  - **Context:** File Reading.
+  - **Capabilities:** `cat` clone with automatic syntax highlighting and Git integration.
+- **eza** (`eza`) `v0.23.4`
+  - **Context:** Directory Listing.
+  - **Capabilities:** Modern replacement for `ls` with git status icons and colors.
+- **sd** (`sd`) `v1.0.0`
+  - **Context:** Text Stream Editing.
+  - **Capabilities:** Intuitive find & replace tool (simpler `sed` replacement).
+- **jq** (`jq`) `v1.8.1`
+  - **Context:** JSON Parsing.
+  - **Capabilities:** Command-line JSON processor/filter.
+- **yq** (`yq`) `v4.48.2`
+  - **Context:** Structured Data Parsing.
+  - **Capabilities:** Processor for YAML, TOML, and XML.
+- **Semgrep** (`semgrep`) `v1.140.0`
+  - **Capabilities:** Polyglot Static Application Security Testing (SAST) and logic checker.
+
+### 🐍 PYTHON EXCLUSIVES: Primary Development Stack
+
+*Environment: 3.13.7*
+
+- **Python** (`python`) `v3.13.7`
+  - **Capabilities:** Core language runtime.
+- **uv / pip** (`uv`) `Latest`
+  - **Capabilities:** Package management. `uv` is the preferred ultra-fast Rust-based installer.
+- **Ruff** (`ruff`) `v0.14.1`
+  - **Capabilities:** High-performance linter and formatter. Replaces Flake8, isort, and Pylint.
+- **Black** (`black`) `Latest`
+  - **Capabilities:** Deterministic code formatter.
+- **Pyright** (`pyright`) `v1.1.407`
+  - **Capabilities:** Static type checker (Strict Mode enabled).
+
+### 🌐 SECONDARY RUNTIMES
+
+- **Node.js** (`node`) `v24.11.1` - JavaScript runtime.
+- **Bun** (`bun`) `v1.3.1` - All-in-one JS runtime, bundler, and test runner.
+- **Java** (`java`) `JDK 25 & 8` - Java Development Kit.
+
+</system_tools>
 
 ## Project Context
 
@@ -11,12 +76,13 @@ CyberBackup 3.0: Encrypted file backup system with Python server, FletV2 desktop
 - **C++ Client**: Binary protocol, AES-256-CBC encryption, RSA-1024 key exchange
 - **SQLite Database**: `defensive.db` with connection pooling
 
-## Recent Critical Changes (2025-11-07)
+## Recent Critical Changes
 
-1. **Unified Configuration**: Use `Shared.unified_config_manager.py` (replaces fragmented config sources)
-2. **Memory Management**: Use `Shared.utils.memory_efficient_file_transfer.py` (prevents leaks)
-3. **C++ API Server**: In development at `cpp_api_server/` (will replace Flask, see `docs/CPP_API_SERVER_MIGRATION_PLAN.md`)
-4. **Fixed Issues**: 42 bugs documented in `CODE_ISSUES_AND_FIXES.md` and `FUNCTIONAL_ISSUES_REPORT.md`
+1. **Shared Reorganized**: Utilities now in subdirectories - `config/`, `filesystem/`, `validation/`, `logging/`, `monitoring/`
+2. **Unified Configuration**: Use `Shared/config/unified_config.py` (replaces fragmented config sources)
+3. **Memory Management**: Use `Shared/filesystem/memory_efficient_file_transfer.py` (prevents leaks)
+4. **C++ API Server**: In development at `cpp_api_server/` (will replace Flask, see `docs/CPP_API_SERVER_MIGRATION_PLAN.md`)
+5. **Fixed Issues**: 42 bugs documented in `docs/reports/CODE_ISSUES_AND_FIXES.md`
 
 ## Critical File Locations
 
@@ -24,19 +90,25 @@ CyberBackup 3.0: Encrypted file backup system with Python server, FletV2 desktop
 - [python_server/server/server.py](python_server/server/server.py) - Main backup server
 - [python_server/server/file_transfer.py](python_server/server/file_transfer.py) - Transfer management
 - [python_server/server/database.py](python_server/server/database.py) - Database with connection pooling
+- [python_server/server/client_manager.py](python_server/server/client_manager.py) - Client state management
+- [python_server/server/request_handlers.py](python_server/server/request_handlers.py) - Protocol message handlers
 
 **GUI:**
 - [FletV2/main.py](FletV2/main.py) - Desktop GUI entry point
 - [FletV2/server_adapter.py](FletV2/server_adapter.py) - ServerBridge for direct server calls
+- [FletV2/scripts/start_with_server.py](FletV2/scripts/start_with_server.py) - Launcher with integrated server
 - [api_server/cyberbackup_api_server.py](api_server/cyberbackup_api_server.py) - Current web API (being replaced)
 
-**Shared Utilities:**
-- [Shared/unified_config_manager.py](Shared/unified_config_manager.py) - Unified configuration
-- [Shared/utils/memory_efficient_file_transfer.py](Shared/utils/memory_efficient_file_transfer.py) - Memory-bounded transfers
-- [Shared/utils/validation_utils.py](Shared/utils/validation_utils.py) - Centralized validators
+**Shared Utilities (Reorganized into subdirectories):**
+- [Shared/config/unified_config.py](Shared/config/unified_config.py) - Unified configuration manager
+- [Shared/filesystem/memory_efficient_file_transfer.py](Shared/filesystem/memory_efficient_file_transfer.py) - Memory-bounded transfers
+- [Shared/validation/validation_utils.py](Shared/validation/validation_utils.py) - Centralized validators
+- [Shared/logging/logging_utils.py](Shared/logging/logging_utils.py) - Logging with rotation
+- [Shared/utils/utf8_solution.py](Shared/utils/utf8_solution.py) - UTF-8 bootstrap
+- [Shared/crc.py](Shared/crc.py) - Unified CRC32 implementation
 
 **Configuration:**
-- `config.json` - Base configuration (committed)
+- `config/config.json` - Base configuration (committed)
 - `config.local.json` - Local overrides (gitignored)
 - Environment variables - Highest precedence
 
@@ -45,7 +117,7 @@ CyberBackup 3.0: Encrypted file backup system with Python server, FletV2 desktop
 ### 1. Configuration Access
 ```python
 # ✅ ALWAYS use unified config manager
-from Shared.unified_config_manager import load_unified_config
+from Shared.config.unified_config import load_unified_config
 config = load_unified_config()
 port = config.server.port
 
@@ -162,14 +234,14 @@ Common leaks fixed in this codebase:
 
 ### Configuration Pattern
 ```python
-from Shared.unified_config_manager import load_unified_config
+from Shared.config.unified_config import load_unified_config
 
 config = load_unified_config()
 server_host = config.server.host
 api_port = config.api_server.port
 ```
 
-**Precedence**: Environment variables → config.local.json → config.json → .env files
+**Precedence**: Environment variables → config.local.json → config/config.json → .env files
 
 ### Validation Pattern
 ```python
@@ -258,9 +330,36 @@ async def update_status(self):
     self.page.update()  # Redraws ENTIRE page!
 ```
 
+### View Lifecycle Pattern (Flet)
+All FletV2 views must return a tuple with lifecycle functions:
+```python
+def create_my_view(server_bridge, page, state_manager=None):
+    """Standard view creation pattern."""
+    subscriptions = []
+
+    # Dispose - cleanup resources
+    def dispose_fn():
+        for sub in subscriptions:
+            state_manager.unsubscribe(sub)
+        if hasattr(page, 'overlay'):
+            page.overlay.clear()
+
+    # Setup - called AFTER view attached to page
+    def setup_fn():
+        page.run_task(load_data)
+        if state_manager:
+            sub = state_manager.subscribe('event', on_event)
+            subscriptions.append(sub)
+
+    content = ft.Column(controls=[...])
+    return content, dispose_fn, setup_fn
+```
+
+**Rule**: `setup_fn()` must execute AFTER view is attached to page to prevent "Control must be added to the page first" errors.
+
 ### Memory-Efficient Transfer Pattern
 ```python
-from Shared.utils.memory_efficient_file_transfer import get_transfer_manager
+from Shared.filesystem.memory_efficient_file_transfer import get_transfer_manager
 
 # Create transfer with bounds checking
 transfer_mgr = get_transfer_manager()
@@ -274,6 +373,36 @@ stats = transfer_mgr.get_statistics()
 logger.info(f"Active transfers: {stats['active_transfers']}, Memory: {stats['current_memory_mb']}MB")
 ```
 
+## Flet 0.28.3 Limitations
+
+When working with FletV2, be aware of these API differences:
+- No `SelectableText` - use `ft.Text(selectable=True)`
+- No `ft.Colors.SURFACE_VARIANT` - use `ft.Colors.SURFACE` or `ft.Colors.GREY_100`
+- No `Dropdown(height=...)` - parameter not supported
+- No `ft.Positioned` - use `expand=True` on filling overlay layers within Stack
+- Icons: use `SAVE_OUTLINED` not `SAVE_AS_OUTLINE`, `DATASET` not `DATABASE`
+
+## UTF-8 Bootstrap Requirement
+
+**First import** in entry files must be `Shared.utils.utf8_solution` to configure Windows console encoding:
+```python
+# Must be FIRST import
+import Shared.utils.utf8_solution  # noqa: F401
+```
+
+Missing this causes `UnicodeEncodeError` when printing logs and GUI display corruption with non-ASCII characters. Required in: `FletV2/main.py`, `python_server/server/server.py`, `api_server/cyberbackup_api_server.py`
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `PYTHONNOUSERSITE=1` | Prevent user site-packages conflicts | - |
+| `CYBERBACKUP_DISABLE_INTEGRATED_GUI=1` | Use FletV2 instead of embedded server GUI | - |
+| `FLET_V2_DEBUG=1` | Verbose GUI logging | - |
+| `FLET_DASHBOARD_DEBUG=1` | Dashboard-specific logging (performance hit) | - |
+| `REAL_SERVER_URL` | API base URL for real server mode | Mock mode |
+| `BACKUP_SERVER_TOKEN` | Bearer token for API auth | - |
+
 ## Development Workflow
 
 ### Quick Start
@@ -283,10 +412,13 @@ pip install -r requirements.txt
 
 # Configure (edit config.local.json or set env vars)
 # Launch GUI + Server
-pwsh -File FletV2/start_with_server.ps1
+python FletV2/scripts/start_with_server.py
 
-# Or manual start
-python FletV2/start_with_server.py
+# One-click build and run (builds C++ client, starts all services)
+python scripts/one_click_build_and_run.py
+
+# Development with hot reload
+flet run -r FletV2/main.py
 ```
 
 ### Code Quality
@@ -302,9 +434,9 @@ pyright
 pytest tests/
 
 # Validate configuration
-python -c "from Shared.unified_config_manager import get_unified_config_manager; \
-           errors = get_unified_config_manager().validate_configuration(); \
-           print('Valid' if not errors else errors)"
+python -c "from Shared.config.unified_config import load_unified_config; \
+           config = load_unified_config(); \
+           print('Config loaded successfully')"
 ```
 
 ### Pre-Commit Checklist
@@ -380,8 +512,32 @@ cmake --build cpp_api_server/build --config Release
 cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --config Release
 
+# Run single test
+pytest tests/test_protocol.py -v
+pytest tests/test_protocol.py::test_specific_function -v
+
 # Find unused code
 ruff check --select F401,F841 .
+
+# Kill stale Python processes (port conflicts)
+taskkill /f /im python.exe
+```
+
+## C++ Client Subprocess Pattern
+
+When spawning C++ client from Python, **always use batch mode**:
+```python
+# ✅ CORRECT - Non-interactive mode
+process = subprocess.Popen(
+    ["EncryptedBackupClient.exe", "--batch"],
+    cwd=client_dir,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True
+)
+
+# ❌ WRONG - Will hang waiting for user input
+process = subprocess.Popen(["EncryptedBackupClient.exe"], ...)
 ```
 
 ## Architecture Decision Records
@@ -435,20 +591,22 @@ ruff check --select F401,F841 .
 ---
 
 **Version**: CyberBackup 3.0
-**Last Updated**: 2025-11-18
+**Last Updated**: 2025-11-20
 **Status**: Production-ready Python stack, C++ API server in development
 
 **Key Documents**:
-- [CODE_ISSUES_AND_FIXES.md](CODE_ISSUES_AND_FIXES.md) - 42 fixed issues
-- [FUNCTIONAL_ISSUES_REPORT.md](FUNCTIONAL_ISSUES_REPORT.md) - Issue analysis
+- [docs/reports/CODE_ISSUES_AND_FIXES.md](docs/reports/CODE_ISSUES_AND_FIXES.md) - 42 fixed issues
 - [docs/CPP_API_SERVER_MIGRATION_PLAN.md](docs/CPP_API_SERVER_MIGRATION_PLAN.md) - Migration details
-- [PROJECT_STRUCTURE_AND_DUPLICATION_REPORT.md](PROJECT_STRUCTURE_AND_DUPLICATION_REPORT.md) - Codebase organization & cleanup tracking
-- [project_files_inventory.json](project_files_inventory.json) - Complete file inventory (18MB, use for analysis)
-- [docs/flet/](docs/flet/) - Consolidated Flet 0.28.3 documentation (17 files)
+- [docs/reference/flet/](docs/reference/flet/) - Consolidated Flet 0.28.3 documentation (18 files)
+- [.github/copilot-instructions.md](.github/copilot-instructions.md) - Detailed FletV2 patterns and ServerBridge API
 
-## Recent Updates (2025-11-18)
+## Recent Updates
 
-- **Log rotation**: Implemented in `Shared/logging_utils.py` and `python_server/server/` (max 6 files, 700MB)
-- **Flet docs**: Moved from `AI-CONTEXT-IMPORTANT/` to `docs/flet/`
-- **Client GUI**: Finalized at `Client/Client-gui/` (production-ready)
-- **Cleanup scripts**: Added `scripts/cleanup_*.py` for maintenance
+- **Shared reorganized**: Subdirectories for config/, filesystem/, validation/, logging/, monitoring/
+- **Unified config**: Use `Shared/config/unified_config.py` (replaces fragmented config sources)
+- **Memory management**: Use `Shared/filesystem/memory_efficient_file_transfer.py` (prevents leaks)
+- **Log rotation**: Implemented in `Shared/logging/logging_utils.py` (max 6 files, 700MB)
+- **Flet docs**: Consolidated at `docs/reference/flet/` (18 files for Flet 0.28.3)
+- **Web GUI**: Production-ready at `api_server/web_ui/NewGUIforClient.html`
+- **Archive**: Legacy code moved to `_archive/` directory
+- **Scripts organized**: `scripts/` has subdirectories for debugging/, diagnostics/, maintenance/, etc.

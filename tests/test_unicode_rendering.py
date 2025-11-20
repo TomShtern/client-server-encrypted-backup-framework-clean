@@ -14,14 +14,14 @@ sys.path.insert(0, str(project_root))
 
 # UTF-8 solution - CRITICAL: Import early for proper Unicode setup
 try:
-    import Shared.utils.utf8_solution
-    from Shared.utils.utf8_solution import UTF8Support
+    import Shared.filesystem.utf8_solution
+    from Shared.filesystem.utf8_solution import UTF8Support
     # Ensure UTF-8 environment is applied
     utf8_env = UTF8Support.get_env()
     for key, value in utf8_env.items():
         os.environ[key] = value
     print("[INFO] UTF-8 solution enabled with environment setup")
-    print(f"[INFO] UTF-8 test result: {Shared.utils.utf8_solution.test_utf8()}")
+    print(f"[INFO] UTF-8 test result: {Shared.filesystem.utf8_solution.test_utf8()}")
 except ImportError:
     print("[WARNING] UTF-8 solution not available")
 

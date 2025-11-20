@@ -16,20 +16,6 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
-from typing import IO, Any
-
-# UTF-8 support for subprocess operations with C++ client
-from Shared.unified_monitor import UnifiedFileMonitor
-
-# Enhanced output with emojis and colors
-from Shared.utils.enhanced_output import EmojiLogger, Emojis
-from Shared.utils.error_handler import ErrorSeverity, handle_subprocess_error
-from Shared.utils.file_lifecycle import SynchronizedFileManager
-from Shared.utils.utf8_solution import Popen_utf8
-
-logger = logging.getLogger(__name__)
-# Create enhanced logger for better visual feedback
-enhanced_logger = EmojiLogger.get_logger("backup-executor")
 
 
 class RealBackupExecutor:

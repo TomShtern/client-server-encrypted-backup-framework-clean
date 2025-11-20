@@ -41,7 +41,7 @@ from Crypto.Random import get_random_bytes
 from Shared.observability import get_metrics_collector
 
 # Import error handling utilities
-from Shared.utils.error_handling import handle_request_errors_detailed, handle_specific_request_errors
+from Shared.logging.error_handling import handle_request_errors_detailed, handle_specific_request_errors
 
 # Import validation utilities
 from Shared.utils.validation_utils import is_valid_filename_for_storage
@@ -82,7 +82,7 @@ logger = logging.getLogger(__name__)
 class RequestHandler:
     """
     Handles all client request processing for the backup server.
-    
+
     This class contains all the request processing methods that were previously
     part of the monolithic Server class, providing better separation of concerns
     and modularity.
@@ -91,7 +91,7 @@ class RequestHandler:
     def __init__(self, server_instance: Any) -> None:
         """
         Initialize the RequestHandler with a reference to the server instance.
-        
+
         Args:
             server_instance: The main Server instance containing shared resources
                            (client management, database, GUI, etc.)

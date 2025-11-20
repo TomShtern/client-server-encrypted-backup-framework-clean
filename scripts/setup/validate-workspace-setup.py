@@ -13,7 +13,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 try:
-    import Shared.utils.utf8_solution
+    import Shared.filesystem.utf8_solution
     print("[INFO] UTF-8 solution imported successfully")
 except ImportError as e:
     print(f"[WARNING] UTF-8 solution not available: {e}")

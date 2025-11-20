@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Import UTF-8 solution first
 try:
-    import Shared.utils.utf8_solution
+    import Shared.filesystem.utf8_solution
     print("[INFO] UTF-8 solution imported successfully")
 except ImportError:
     print("[WARNING] UTF-8 solution not available")
