@@ -55,7 +55,7 @@ setup_imports()  # This must be called before any other first-party imports
 
 from python_server.server.connection_health import get_connection_health_monitor  # Moved from global scope
 from python_server.server.server_singleton import ensure_single_server_instance
-from Shared.logging_utils import (
+from Shared.logging.logging_utils import (
     create_enhanced_logger,
     create_log_monitor_info,
     log_performance_metrics,
@@ -63,9 +63,9 @@ from Shared.logging_utils import (
 )
 from Shared.observability_middleware import setup_observability_for_flask
 from Shared.sentry_config import capture_error, init_sentry
-from Shared.unified_monitor import UnifiedFileMonitor
-from Shared.utils.performance_monitor import get_performance_monitor  # Moved from api_perf_job()
-from Shared.utils.unified_config import get_config
+from Shared.monitoring.unified_monitor import UnifiedFileMonitor
+from Shared.monitoring.performance_monitor import get_performance_monitor  # Moved from api_perf_job()
+from Shared.config.unified_config import get_config
 
 # Define PROJECT_ROOT for consistent path resolution
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

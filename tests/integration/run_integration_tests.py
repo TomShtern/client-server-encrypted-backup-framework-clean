@@ -29,7 +29,7 @@ from Shared.path_utils import setup_imports
 
 setup_imports()
 
-from Shared.logging_utils import setup_dual_logging
+from Shared.logging.logging_utils import setup_dual_logging
 
 
 class IntegrationTestRunner:

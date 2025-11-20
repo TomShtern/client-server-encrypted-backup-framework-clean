@@ -14,6 +14,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import Shared.utils.utf8_solution
 
 # Make commonly used modules easily accessible
-from . import config, crc, filename_validator, logging_utils, observability
+# Make commonly used modules easily accessible
+from .config import unified_config as config
+from . import crc
+from .validation import filename_validator
+from .logging import logging_utils
+from .monitoring import observability
 
 __all__ = ["config", "crc", "filename_validator", "logging_utils", "observability"]

@@ -10,10 +10,10 @@ from pathlib import Path
 
 def main():
     # Get project root before any other operations
-    project_root = Path(__file__).parent.resolve()
+    project_root = Path(__file__).parent.parent.resolve()
 
     # Setup standardized import paths
-    from Shared.path_utils import setup_imports
+    from Shared.filesystem.path_utils import setup_imports
     setup_imports()
 
     try:

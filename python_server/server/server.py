@@ -24,8 +24,8 @@ from Shared.path_utils import setup_imports
 setup_imports()
 
 # Now import ALL Shared modules after path setup - consolidate all imports here
-from Shared.logging_utils import create_enhanced_logger, create_log_monitor_info, setup_dual_logging
-from Shared.observability import get_metrics_collector, get_system_monitor
+from Shared.logging.logging_utils import create_enhanced_logger, create_log_monitor_info, setup_dual_logging
+from Shared.monitoring.observability import get_metrics_collector, get_system_monitor
 
 # Try to import Sentry config - handle gracefully if not available
 try:
@@ -447,7 +447,7 @@ class BackupServer:
             # Calculate active transfers while holding lock for consistency
             active_transfers = self._calculate_active_transfers()
 
-  
+
 
     def _parse_string_from_payload(self, payload_bytes: bytes, field_len: int, max_actual_len: int, field_name: str = "String") -> str:
         """
@@ -625,7 +625,7 @@ class BackupServer:
         except Exception as e:
             logger.critical(f"Critical error in periodic maintenance job: {e}", exc_info=True)
 
-    
+
     def _handle_startup_system_exit(self, e: SystemExit, start_time: float):
         """Extract method to handle SystemExit during startup."""
         duration_ms = (time.time() - start_time) * 1000
