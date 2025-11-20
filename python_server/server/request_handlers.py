@@ -44,7 +44,7 @@ from Shared.observability import get_metrics_collector
 from Shared.logging.error_handling import handle_request_errors_detailed, handle_specific_request_errors
 
 # Import validation utilities
-from Shared.utils.validation_utils import is_valid_filename_for_storage
+from Shared.validation.validation_utils import is_valid_filename_for_storage
 
 # Import configuration constants
 from .config import (

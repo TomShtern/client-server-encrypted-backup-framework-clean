@@ -445,7 +445,7 @@ This comprehensive review deployed 12 specialized agents to scan all major compo
 | 4     | Client         | 34    | ~4000 |
 | 5     | Shared         | 32    | ~3500 |
 | 6     | scripts/tests  | 123   | ~6000 |
-| 7     | cpp_api_server | 15    | ~1200 |
+| 7     | _archive/cpp_api_server_prototype | 15    | ~1200 | _(archived)_
 | 8     | Database       | 4     | ~4000 |
 | 9     | config         | 10+   | ~1000 |
 | 10    | root configs   | 10    | ~500  |

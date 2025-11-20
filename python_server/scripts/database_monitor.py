@@ -60,11 +60,13 @@ with contextlib.suppress(ImportError):
     from Shared.filesystem.path_utils import setup_imports
     setup_imports()
 # Configure logging
+log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../logs'))
+os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('database_monitor.log'),
+        logging.FileHandler(os.path.join(log_dir, 'database_monitor.log')),
         logging.StreamHandler()
     ]
 )

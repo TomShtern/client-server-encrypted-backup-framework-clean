@@ -72,7 +72,8 @@ CyberBackup 3.0: Encrypted file backup system with Python server, FletV2 desktop
 **Core Architecture:**
 - **Python Backup Server** (port 1256): Handles C++ client connections, file transfers, encryption
 - **FletV2 Desktop GUI**: Admin interface with Material Design 3, direct server method calls
-- **API Server** (port 9090): Flask bridge for web GUI (C++ replacement in progress at `cpp_api_server/`)
+- **API Server** (port 9090): Flask bridge for web GUI (stable, production-ready)
+  - _Note: C++ replacement was prototyped but archived at `_archive/cpp_api_server_prototype/`_
 - **C++ Client**: Binary protocol, AES-256-CBC encryption, RSA-1024 key exchange
 - **SQLite Database**: `defensive.db` with connection pooling
 
@@ -81,7 +82,8 @@ CyberBackup 3.0: Encrypted file backup system with Python server, FletV2 desktop
 1. **Shared Reorganized**: Utilities now in subdirectories - `config/`, `filesystem/`, `validation/`, `logging/`, `monitoring/`
 2. **Unified Configuration**: Use `Shared/config/unified_config.py` (replaces fragmented config sources)
 3. **Memory Management**: Use `Shared/filesystem/memory_efficient_file_transfer.py` (prevents leaks)
-4. **C++ API Server**: In development at `cpp_api_server/` (will replace Flask, see `docs/CPP_API_SERVER_MIGRATION_PLAN.md`)
+4. **C++ API Server**: Experimental prototype archived at `_archive/cpp_api_server_prototype/` (see ARCHIVE_README.md)
+   - Active API server is Flask-based at `api_server/cyberbackup_api_server.py`
 5. **Fixed Issues**: 42 bugs documented in `docs/reports/CODE_ISSUES_AND_FIXES.md`
 
 ## Critical File Locations
@@ -504,11 +506,7 @@ logger.error(f"Database operation failed: {e}", exc_info=True)
 python scripts/migrate_database.py
 python scripts/validate_database.py
 
-# Build C++ (API server)
-cmake -B cpp_api_server/build -S cpp_api_server
-cmake --build cpp_api_server/build --config Release
-
-# Build C++ (client)
+# C++ Client Build
 cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --config Release
 
@@ -596,7 +594,7 @@ process = subprocess.Popen(["EncryptedBackupClient.exe"], ...)
 
 **Key Documents**:
 - [docs/reports/CODE_ISSUES_AND_FIXES.md](docs/reports/CODE_ISSUES_AND_FIXES.md) - 42 fixed issues
-- [docs/CPP_API_SERVER_MIGRATION_PLAN.md](docs/CPP_API_SERVER_MIGRATION_PLAN.md) - Migration details
+- [_archive/cpp_api_server_prototype/CPP_API_SERVER_MIGRATION_PLAN.md](_archive/cpp_api_server_prototype/CPP_API_SERVER_MIGRATION_PLAN.md) - Archived C++ API prototype
 - [docs/reference/flet/](docs/reference/flet/) - Consolidated Flet 0.28.3 documentation (18 files)
 - [.github/copilot-instructions.md](.github/copilot-instructions.md) - Detailed FletV2 patterns and ServerBridge API
 

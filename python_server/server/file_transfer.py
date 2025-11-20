@@ -44,15 +44,15 @@ from typing import Any
 from Shared.observability import get_metrics_collector
 
 # Import validation utilities
-from Shared.utils.validation_utils import is_valid_filename_for_storage
+from Shared.validation.validation_utils import is_valid_filename_for_storage
 
 # Import memory-efficient utilities
-from Shared.utils.streaming_file_utils import (
+from Shared.filesystem.streaming_file_utils import (
     calculate_file_crc32_streaming,
     MemoryUsageTracker,
     log_memory_efficiency
 )
-from Shared.utils.memory_efficient_file_transfer import (
+from Shared.filesystem.memory_efficient_file_transfer import (
     get_transfer_manager,
     TransferConfig
 )

@@ -90,5 +90,5 @@ else()
     target_compile_options(EncryptedBackupClient PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-# C++ API server disabled - using Python Flask API server instead
-# add_subdirectory(cpp_api_server)
+# C++ API server archived - see _archive/cpp_api_server_prototype/
+# The project uses Python Flask API server instead (api_server/cyberbackup_api_server.py)

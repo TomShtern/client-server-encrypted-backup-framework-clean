@@ -587,7 +587,7 @@ class RealBackupExecutor:
             # --- Job Registration ---
             expected_size = os.path.getsize(file_path)
             # Use streaming hash calculation to prevent memory overflow on large files
-            from Shared.utils.streaming_file_utils import calculate_file_hash_streaming
+            from Shared.filesystem.streaming_file_utils import calculate_file_hash_streaming
 
             expected_hash = calculate_file_hash_streaming(file_path, "sha256")
             if expected_hash is None:

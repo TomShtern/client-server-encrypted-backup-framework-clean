@@ -57,7 +57,7 @@ def validate_client_data(client_data: dict[str, Any]) -> bool:
 
     # Validate client name
     if "name" in client_data:
-        from Shared.utils.validation_utils import is_valid_client_name
+        from Shared.validation.validation_utils import is_valid_client_name
 
         if not is_valid_client_name(client_data["name"]):
             logger.warning(f"Client data validation failed: Invalid client name '{client_data['name']}'")
