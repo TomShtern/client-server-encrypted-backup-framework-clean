@@ -8,7 +8,7 @@
     "enable_logging": true,
     "log_level": "INFO",
     "database_path": "data/database/defensive.db",
-    "received_files_dir": "received_files",
+    "received_files_dir": "data/storage",
     "keys_dir": "data/security"
   },
   "api_server": {

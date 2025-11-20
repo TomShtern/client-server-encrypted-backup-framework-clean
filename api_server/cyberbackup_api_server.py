@@ -71,7 +71,7 @@ from Shared.utils.unified_config import get_config
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Global paths for static file serving
-CLIENT_GUI_PATH = os.path.join(PROJECT_ROOT, "Client", "Client-gui")
+CLIENT_GUI_PATH = os.path.join(PROJECT_ROOT, "api_server", "web_ui")
 PYTHON_SERVER_PATH = os.path.join(PROJECT_ROOT, "python_server")
 
 # Initialize Sentry error tracking (after all imports)
