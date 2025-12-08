@@ -1127,13 +1127,13 @@ app.config.update(
 **Evidence** (REAL EXPOSED CREDENTIALS - REQUIRES IMMEDIATE ACTION):
 ```json
 // .mcp.json
-"GITHUB_PERSONAL_ACCESS_TOKEN": "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"
+"GITHUB_PERSONAL_ACCESS_TOKEN": ""
 
 // .kilocode/mcp.json
-"TAVILY_API_KEY": "5da39d04c6c4442dbf27d7bded1dd961.WIp3MGX4W1GcMYn0UqZkWvg8"
+"TAVILY_API_KEY": ""
 
 // .qwen/settings.json
-"TAVILY_API_KEY": "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"
+"TAVILY_API_KEY": ""
 ```
 
 **Issue**: Active API tokens committed to repository. GitHub PAT provides access to GitHub repositories. Tavily keys provide access to AI search API. These credentials should be revoked IMMEDIATELY.
