@@ -63,19 +63,33 @@ class App {
   async init() {
     ProfessionalGUIEnhancements.init();
 
+    // Subscribe to state changes early so the UI can render even when offline
+    this.state.subscribe((state) => this.#render(state));
+
     // Check protocol
     if (API_CONFIG.isFileProtocol()) {
       API_CONFIG.showFileProtocolWarning(this.toast.show.bind(this.toast));
     }
 
-    // Start monitoring
-    this.monitor.start();
+    // IMPORTANT:
+    // When the UI is served standalone (e.g., via start_client_gui.py), the API server may not be running.
+    // Avoid automatic network calls on load to prevent noisy console errors.
+    const isHostedByApiServer =
+      !API_CONFIG.isFileProtocol() && (globalThis.location?.port === String(API_CONFIG.API_PORT));
 
-    // Start socket
-    await this.socket.start();
-
-    // Subscribe to state changes
-    this.state.subscribe((state) => this.#render(state));
+    if (isHostedByApiServer) {
+      this.monitor.start();
+      await this.socket.start();
+    } else {
+      // Set initial status to offline/unknown without touching the network.
+      if (globalThis.updateDualServerStatus) {
+        globalThis.updateDualServerStatus({ apiOnline: false, backupOnline: false });
+      }
+      this.logs.add(
+        'API server not detected on this origin. Network monitoring will start after you connect.',
+        { phase: 'NET', level: 'warn' }
+      );
+    }
 
     // GPU Optimization: Pause animations when tab is hidden
     document.addEventListener('visibilitychange', () => {
@@ -135,6 +149,12 @@ class App {
         port: parsed.port,
         username: this.state.snapshot.username
       });
+
+      // Start monitoring + websocket AFTER we know the API server is reachable.
+      this.monitor.start();
+      if (!this.socket.socket) {
+        await this.socket.start();
+      }
 
       this.state.update({
         connected: true,

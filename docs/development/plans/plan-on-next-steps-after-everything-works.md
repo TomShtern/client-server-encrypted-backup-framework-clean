@@ -28,7 +28,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 
 ### 2. **Cryptographic Implementation Flaws**
 
-#### Critical IV Vulnerability  
+#### Critical IV Vulnerability
 - **Issue**: AES-CBC uses fixed zero IV (all zeros)
 - **Risk**: CRITICAL - Allows plaintext recovery from multiple ciphertexts
 - **Location**: `include/client/crypto_compliance.h:159-164`
@@ -36,7 +36,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 
 #### Insecure Key Exchange
 - **Issue**: No authentication of RSA public keys during exchange
-- **Risk**: HIGH - Man-in-the-middle attacks possible  
+- **Risk**: HIGH - Man-in-the-middle attacks possible
 - **Location**: `server/request_handlers.py:89-100`
 
 #### Weak Integrity Protection
@@ -51,7 +51,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 - **Risk**: HIGH - Memory corruption and potential code execution
 - **Location**: `src/wrappers/RSAWrapper.cpp:86,270,281`
 
-#### Path Traversal Vulnerabilities  
+#### Path Traversal Vulnerabilities
 - **Issue**: Insufficient filename validation
 - **Risk**: MEDIUM - Directory traversal attacks possible
 - **Location**: `server/file_transfer.py:528-564`
@@ -66,7 +66,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 #### Cross-Site Scripting (XSS)
 - **Issue**: `innerHTML` usage without sanitization
 - **Risk**: MEDIUM - Client-side code execution
-- **Location**: `src/client/app.js`, `src/client/NewGUIforClient.html`
+- **Location**: `api_server/web_ui/js/app.js`, `api_server/web_ui/index.html` (canonical; `NewGUIforClient.html` is legacy)
 
 #### No CSRF Protection
 - **Issue**: Web interface lacks CSRF tokens
@@ -89,7 +89,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 
 ### Phase 1: Critical Vulnerabilities (Immediate)
 1. **Fix AES IV generation** - Implement random IV per encryption
-2. **Replace command injection** - Use safe alternatives to `system()` calls  
+2. **Replace command injection** - Use safe alternatives to `system()` calls
 3. **Add bounds checking** - Fix buffer overflow vulnerabilities
 4. **Implement password authentication** - Add proper user credentials
 
@@ -99,7 +99,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 3. **Replace CRC with HMAC** - Use cryptographic integrity protection
 4. **Add session tokens** - Implement secure session management
 
-### Phase 3: Medium-Priority Issues (Week 2)  
+### Phase 3: Medium-Priority Issues (Week 2)
 1. **Sanitize web inputs** - Fix XSS vulnerabilities
 2. **Add CSRF protection** - Implement request validation
 3. **Encrypt stored credentials** - Protect private keys at rest
@@ -107,7 +107,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 
 ### Phase 4: Security Infrastructure (Week 3)
 1. **Implement audit logging** - Track security events
-2. **Add rate limiting** - Prevent brute force attacks  
+2. **Add rate limiting** - Prevent brute force attacks
 3. **Create security testing** - Automated vulnerability scanning
 4. **Document security architecture** - Security implementation guide
 
@@ -115,7 +115,7 @@ Based on comprehensive analysis of the Client Server Encrypted Backup Framework 
 
 ### Penetration Testing Targets
 1. **Authentication bypass attempts**
-2. **Man-in-the-middle attacks**  
+2. **Man-in-the-middle attacks**
 3. **Buffer overflow exploitation**
 4. **Command injection testing**
 5. **Web interface security testing**

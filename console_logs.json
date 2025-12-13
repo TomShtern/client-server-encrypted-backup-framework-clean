@@ -3,9 +3,9 @@
     "type": "info",
     "text": "Sentry disabled in local mode",
     "location": {
-      "url": "http://localhost:9091/index.html",
-      "lineNumber": 12,
-      "columnNumber": 28
+      "url": "http://localhost:8080/index.html",
+      "lineNumber": 14,
+      "columnNumber": 24
     }
   }
 ]

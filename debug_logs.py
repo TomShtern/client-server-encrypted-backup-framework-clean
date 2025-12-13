@@ -10,7 +10,7 @@ async def run():
         page = await browser.new_page()
 
         # Navigate to the page
-        await page.goto("http://localhost:8080/NewGUIforClient.html")
+        await page.goto("http://localhost:8080/index.html")
 
         # Wait for page to load
         await page.wait_for_load_state("networkidle")

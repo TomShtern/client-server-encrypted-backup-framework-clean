@@ -1,0 +1,38 @@
+[
+  {
+    "type": "info",
+    "text": "Sentry disabled in local mode",
+    "location": {
+      "url": "http://127.0.0.1:9092/index.html",
+      "lineNumber": 14,
+      "columnNumber": 24
+    }
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    "location": {
+      "url": "http://127.0.0.1:9090/api/health",
+      "lineNumber": 0,
+      "columnNumber": 0
+    }
+  },
+  {
+    "type": "error",
+    "text": "WebSocket connection to 'ws://127.0.0.1:9090/socket.io/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED",
+    "location": {
+      "url": "https://cdn.socket.io/4.7.5/socket.io.min.js",
+      "lineNumber": 5,
+      "columnNumber": 0
+    }
+  },
+  {
+    "type": "error",
+    "text": "Socket error: i: websocket error\n    at i.value (https://cdn.socket.io/4.7.5/socket.io.min.js:6:9704)\n    at ws.onerror (https://cdn.socket.io/4.7.5/socket.io.min.js:6:17874)",
+    "location": {
+      "url": "http://127.0.0.1:9092/js/app.js",
+      "lineNumber": 337,
+      "columnNumber": 12
+    }
+  }
+]

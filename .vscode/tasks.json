@@ -10,7 +10,7 @@
 				"--port",
 				"9091",
 				"--page",
-				"NewGUIforClient.html"
+				"index.html"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -33,7 +33,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$ErrorActionPreference='Stop'; cd '${workspaceFolder}/Client/Client-gui'; if (-not (Test-Path node_modules)) { echo 'Installing client web GUI dependencies...'; npm install --no-audit --no-fund }; echo 'Starting static client web GUI on http://localhost:9091'; npx http-server -p 9091 -c-1 ."
+				"$ErrorActionPreference='Stop'; cd '${workspaceFolder}/api_server/web_ui'; if (-not (Test-Path node_modules)) { echo 'Installing client web UI dependencies...'; npm install --no-audit --no-fund }; echo 'Starting static client web UI on http://localhost:9091/index.html'; npx http-server -p 9091 -c-1 ."
 			],
 			"isBackground": true,
 			"problemMatcher": [],
@@ -51,7 +51,7 @@
 			"dependsOn": "Run Client Web GUI (static)",
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
-				"test_web_gui.py",
+				"tests/integration/test_web_gui.py",
 				"http://localhost:9091"
 			],
 			"options": {
@@ -71,8 +71,8 @@
 			"type": "shell",
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
-				"test_web_gui.py",
-				"http://localhost:9091/NewGUIforClient.html"
+				"tests/integration/test_web_gui.py",
+				"http://localhost:9091/index.html"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -213,7 +213,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$ErrorActionPreference='Stop'; Write-Host '🚀 Starting API Server (port 9090)...' -ForegroundColor Cyan; Start-Process -FilePath '${workspaceFolder}/flet_venv/Scripts/python.exe' -ArgumentList 'api_server/cyberbackup_api_server.py' -WorkingDirectory '${workspaceFolder}' -WindowStyle Minimized; Start-Sleep -Seconds 2; Write-Host '🌐 Opening Client Web GUI...' -ForegroundColor Green; Start-Process 'http://localhost:9090'; Write-Host '✅ Client Web GUI with API Server started!' -ForegroundColor Green; Write-Host 'Press Ctrl+C to stop...' -ForegroundColor Yellow; while($true) { Start-Sleep -Seconds 60 }"
+				"$ErrorActionPreference=\"Stop\"; Write-Host \"🚀 Starting API Server (port 9090)...\" -ForegroundColor Cyan; Start-Process -FilePath \"${workspaceFolder}/flet_venv/Scripts/python.exe\" -ArgumentList \"api_server/cyberbackup_api_server.py\" -WorkingDirectory \"${workspaceFolder}\" -WindowStyle Minimized; Start-Sleep -Seconds 2; Write-Host \"🌐 Opening Client Web GUI...\" -ForegroundColor Green; Start-Process \"http://localhost:9090\"; Write-Host \"✅ Client Web GUI with API Server started!\" -ForegroundColor Green; Write-Host \"Press Ctrl+C to stop...\" -ForegroundColor Yellow; while($true) { Start-Sleep -Seconds 60 }"
 			],
 			"isBackground": true,
 			"problemMatcher": [],

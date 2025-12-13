@@ -1,5 +1,3 @@
-
-
 """
 Server Singleton Manager - Ensures only one Python server instance runs at a time.
 If a new instance is started, it will terminate the old one and take its place.
@@ -16,6 +14,7 @@ from pathlib import Path
 # Try to import psutil for advanced process checking
 try:
     import psutil
+
     HAS_PSUTIL = True
     psutil_module = psutil
 except ImportError:
@@ -23,6 +22,7 @@ except ImportError:
     psutil_module = None
 
 logger = logging.getLogger(__name__)
+
 
 class ServerSingletonManager:
     """
@@ -33,7 +33,7 @@ class ServerSingletonManager:
     def __init__(self, server_name: str = "BackupServer", port: int = 1256):
         """
         Initialize the singleton manager.
-        
+
         Args:
             server_name: A unique name for the server process (e.g., "BackupServer", "BackupServerGUI").
             port: The port the server will use. This helps in identifying the process.
@@ -67,6 +67,37 @@ class ServerSingletonManager:
             logger.info(f"Process with PID {pid} is not running. No action needed.")
             return
 
+        # Safety check (Windows PID reuse): ensure the recorded PID is actually
+        # still associated with *this server's port* before terminating.
+        #
+        # Without this, a stale PID file can point to an unrelated process (PID reuse),
+        # and we'd end up terminating the wrong program.
+        if HAS_PSUTIL and psutil_module is not None:
+            try:
+                p_check = psutil_module.Process(pid)
+                try:
+                    conns = p_check.net_connections(kind="inet")
+                except (psutil_module.AccessDenied, psutil_module.NoSuchProcess):
+                    conns = []
+                holds_port = any(
+                    getattr(c, "laddr", None)
+                    and getattr(c.laddr, "port", None) == self.port
+                    for c in conns
+                )
+                if not holds_port:
+                    logger.warning(
+                        "PID file points to a running process that does not hold the expected port "
+                        f"{self.port} (PID: {pid}). Treating lock as stale; not terminating."
+                    )
+                    return
+            except Exception as e:
+                # If we cannot validate, prefer safety over killing an unknown process.
+                logger.warning(
+                    f"Could not validate PID {pid} holds port {self.port} ({e}). "
+                    "Treating lock as stale; not terminating."
+                )
+                return
+
         logger.warning(f"Terminating existing server process with PID {pid}.")
         try:
             if HAS_PSUTIL and psutil_module is not None:
@@ -77,7 +108,9 @@ class ServerSingletonManager:
                     p.wait(timeout=3)
                 except Exception as timeout_ex:  # Use generic Exception since psutil might not be available
                     if "TimeoutExpired" in str(type(timeout_ex)):
-                        logger.warning(f"Process {pid} did not terminate gracefully. Killing it.")
+                        logger.warning(
+                            f"Process {pid} did not terminate gracefully. Killing it."
+                        )
                         p.kill()
                         p.wait(timeout=3)
                     else:
@@ -85,7 +118,7 @@ class ServerSingletonManager:
             else:
                 # Fallback for systems without psutil
                 os.kill(pid, signal.SIGTERM)
-                time.sleep(2) # Give it time to die
+                time.sleep(2)  # Give it time to die
 
             logger.info(f"Process {pid} terminated.")
             # Wait a moment for OS to release resources (e.g., network port)
@@ -96,23 +129,30 @@ class ServerSingletonManager:
             # Force kill using system command as last resort
             try:
                 import subprocess
-                if os.name == 'nt':  # Windows
-                    subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+
+                if os.name == "nt":  # Windows
+                    subprocess.run(
+                        ["taskkill", "/F", "/PID", str(pid)], capture_output=True
+                    )
                     logger.warning(f"Used taskkill to force terminate PID {pid}")
                     time.sleep(2)
                 else:  # Unix-like
-                    subprocess.run(['kill', '-9', str(pid)], capture_output=True)
+                    subprocess.run(["kill", "-9", str(pid)], capture_output=True)
                     logger.warning(f"Used kill -9 to force terminate PID {pid}")
                     time.sleep(2)
             except Exception as force_kill_error:
-                logger.critical(f"CRITICAL: Even force kill failed for PID {pid}: {force_kill_error}")
+                logger.critical(
+                    f"CRITICAL: Even force kill failed for PID {pid}: {force_kill_error}"
+                )
                 # This is critical, if we can't kill the old process, the new one shouldn't start.
-                raise RuntimeError(f"Could not terminate existing process {pid} - system may be in inconsistent state.") from e
+                raise RuntimeError(
+                    f"Could not terminate existing process {pid} - system may be in inconsistent state."
+                ) from e
 
     def acquire_lock(self) -> bool:
         """
         Acquires the singleton lock. If an existing instance is found, it's terminated.
-        
+
         Returns:
             True if the lock was acquired, False otherwise.
         """
@@ -122,20 +162,22 @@ class ServerSingletonManager:
                 pid = int(self.pid_file.read_text().strip())
                 self._terminate_process(pid)
             except (ValueError, OSError) as e:
-                logger.warning(f"Could not read or process PID file {self.pid_file}: {e}. Assuming stale lock.")
+                logger.warning(
+                    f"Could not read or process PID file {self.pid_file}: {e}. Assuming stale lock."
+                )
             except RuntimeError as e:
                 logger.critical(f"CRITICAL: {e}")
-                return False # Failed to kill the old process
+                return False  # Failed to kill the old process
             finally:
                 # Clean up the old PID file
                 try:
                     self.pid_file.unlink()
                 except OSError:
-                    pass # May already be gone
+                    pass  # May already be gone
 
         # 2. Check if the port is in use with retry logic for Windows TIME_WAIT
         max_retries = 12  # Up to 60 seconds total wait
-        retry_delay = 1   # Start with 1 second delay
+        retry_delay = 1  # Start with 1 second delay
 
         for attempt in range(max_retries):
             try:
@@ -147,13 +189,21 @@ class ServerSingletonManager:
                 break
             except OSError as e:
                 if attempt < max_retries - 1:  # Not the last attempt
-                    logger.warning(f"Port {self.port} still in use (attempt {attempt + 1}/{max_retries}). "
-                                 f"Waiting {retry_delay} seconds... Error: {e}")
+                    logger.warning(
+                        f"Port {self.port} still in use (attempt {attempt + 1}/{max_retries}). "
+                        f"Waiting {retry_delay} seconds... Error: {e}"
+                    )
                     time.sleep(retry_delay)
-                    retry_delay = min(retry_delay * 1.5, 10)  # Exponential backoff, max 10 seconds
+                    retry_delay = min(
+                        retry_delay * 1.5, 10
+                    )  # Exponential backoff, max 10 seconds
                 else:  # Last attempt failed
-                    logger.error(f"Port {self.port} is still in use after {max_retries} attempts. Error: {e}")
-                    logger.error("This may be due to another application using the port, or Windows TIME_WAIT state.")
+                    logger.error(
+                        f"Port {self.port} is still in use after {max_retries} attempts. Error: {e}"
+                    )
+                    logger.error(
+                        "This may be due to another application using the port, or Windows TIME_WAIT state."
+                    )
                     logger.error("Try waiting a few minutes or use a different port.")
                     return False
 
@@ -161,7 +211,9 @@ class ServerSingletonManager:
         try:
             self.pid_file.write_text(str(os.getpid()))
             self.is_locked = True
-            logger.info(f"Successfully acquired singleton lock for {self.server_name} (PID: {os.getpid()}).")
+            logger.info(
+                f"Successfully acquired singleton lock for {self.server_name} (PID: {os.getpid()})."
+            )
             return True
         except OSError as e:
             logger.error(f"Failed to create new PID file {self.pid_file}: {e}")
@@ -171,48 +223,65 @@ class ServerSingletonManager:
         """Cleans up the PID file upon process exit."""
         if self.is_locked:
             try:
-                if self.pid_file.exists() and int(self.pid_file.read_text().strip()) == os.getpid():
+                if (
+                    self.pid_file.exists()
+                    and int(self.pid_file.read_text().strip()) == os.getpid()
+                ):
                     self.pid_file.unlink()
                     logger.info(f"Cleaned up PID file {self.pid_file}.")
             except (OSError, ValueError) as e:
                 logger.warning(f"Error during PID file cleanup: {e}")
         self.is_locked = False
 
-def ensure_single_server_instance(server_name: str = "BackupServer", port: int = 1256) -> "ServerSingletonManager":
+
+def ensure_single_server_instance(
+    server_name: str = "BackupServer", port: int = 1256
+) -> "ServerSingletonManager":
     """
     Ensures only one instance of the server is running.
     If another instance is found, it is terminated.
-    
+
     Args:
         server_name: A unique name for the server process.
         port: The port the server will use.
-        
+
     Returns:
         A ServerSingletonManager instance.
-        
+
     Raises:
         SystemExit: If the lock cannot be acquired.
     """
     singleton = ServerSingletonManager(server_name, port)
 
     if not singleton.acquire_lock():
-        print(f"\n[CRITICAL ERROR] Could not acquire singleton lock for {server_name} on port {port}.")
+        print(
+            f"\n[CRITICAL ERROR] Could not acquire singleton lock for {server_name} on port {port}."
+        )
         print("   Another instance may be running and could not be terminated,")
         print("   or the port might be in use by another application.")
         print("   This is a FATAL error - process will terminate immediately.")
-        logger.critical(f"FATAL: Singleton lock acquisition failed for {server_name}:{port}")
+        logger.critical(
+            f"FATAL: Singleton lock acquisition failed for {server_name}:{port}"
+        )
         os._exit(1)  # Force immediate exit, bypassing any exception handlers
 
     return singleton
+
 
 # CLI utility for checking and cleaning up
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Server Singleton Management Utility")
-    parser.add_argument("--cleanup", action="store_true", help="Force cleanup of a stale lock file")
-    parser.add_argument("--port", type=int, default=1256, help="Server port (default: 1256)")
-    parser.add_argument("--name", default="BackupServer", help="Server name (default: BackupServer)")
+    parser.add_argument(
+        "--cleanup", action="store_true", help="Force cleanup of a stale lock file"
+    )
+    parser.add_argument(
+        "--port", type=int, default=1256, help="Server port (default: 1256)"
+    )
+    parser.add_argument(
+        "--name", default="BackupServer", help="Server name (default: BackupServer)"
+    )
 
     args = parser.parse_args()
 

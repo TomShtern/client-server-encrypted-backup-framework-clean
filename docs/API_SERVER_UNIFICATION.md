@@ -10,7 +10,7 @@ The CyberBackup 3.0 project has been unified to use a single, canonical API serv
 **File:** `cyberbackup_api_server.py` (project root)
 
 **Features:**
-- Complete Flask API backend for NewGUIforClient.html
+- Complete Flask API backend for the canonical Web UI (`api_server/web_ui/index.html`)
 - Real integration with C++ backup client and Python backup server
 - Enhanced observability and structured logging
 - Performance monitoring and metrics collection
@@ -91,7 +91,7 @@ The integration test suite in `tests/integration/` validates the complete flow u
 
 ### System Architecture
 ```
-Web UI (NewGUIforClient.html)
+Web UI (index.html)
     ↓
 Flask API Server (cyberbackup_api_server.py:9090)
     ↓
@@ -152,7 +152,7 @@ File Storage (received_files/)
 
 ---
 
-**Unification Date:** 2025-01-09  
-**Canonical Server:** `cyberbackup_api_server.py`  
-**Archived Location:** `archived/api_servers/`  
+**Unification Date:** 2025-01-09
+**Canonical Server:** `cyberbackup_api_server.py`
+**Archived Location:** `archived/api_servers/`
 **Status:** ✅ COMPLETE

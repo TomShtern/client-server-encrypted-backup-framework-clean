@@ -1,7 +1,7 @@
 # Repository Reorganization Report
 
-**Date:** 2025-08-09  
-**Time:** 22:39:40 UTC  
+**Date:** 2025-08-09
+**Time:** 22:39:40 UTC
 **Operation:** Complete repository reorganization and canonicalization
 
 ## Executive Summary
@@ -125,7 +125,7 @@ Rationale: Keys logically belong with the client artifacts (not mixed in generic
 - `database_monitor.py` → `Database/database_monitor.py`
 
 ### GUI Files (3 files)
-- `src/client/NewGUIforClient.html` → `Client/Client-gui/NewGUIforClient.html`
+- `src/client/NewGUIforClient.html` → `api_server/web_ui/index.html` (renamed; `NewGUIforClient.html` is legacy)
 - `src/server/ServerGUI.py` → `python_server/server-gui/ServerGUI.py`
 - `src/server/server_gui_settings.json` → `python_server/server-gui/server_gui_settings.json`
 
@@ -139,7 +139,7 @@ Rationale: Keys logically belong with the client artifacts (not mixed in generic
 2. `python_server/server/file_transfer.py` - `_CRC32_TABLE` and `_calculate_crc()` method
 3. `Client/cpp/client.cpp` - `crc_table` and multiple CRC functions
 
-**Canonical Implementation:** 
+**Canonical Implementation:**
 - Python: `python_server/shared/crc.py`
 - C++: `Client/deps/shared/crc.h/.cpp`
 

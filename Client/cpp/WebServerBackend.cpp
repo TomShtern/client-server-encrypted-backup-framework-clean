@@ -169,6 +169,11 @@ public:
 // Global application state
 BackupState g_state;
 
+// Canonical Web UI (served by this backend)
+static const std::string kWebUiRoot = "api_server/web_ui";
+static const std::string kWebUiEntry = "index.html";
+static const std::string kWebUiLegacyEntry = "NewGUIforClient.html";
+
 // Static file cache for performance
 class StaticFileCache {
 private:
@@ -184,7 +189,8 @@ public:
 
         if (!html_loaded_) {
             try {
-                std::ifstream file("Client/Client-gui/NewGUIforClient.html");
+                const std::string html_path = kWebUiRoot + "/" + kWebUiEntry;
+                std::ifstream file(html_path);
                 if (file.is_open()) {
                     cached_html_ = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
                     html_loaded_ = true;
@@ -305,46 +311,53 @@ handle_request(http::request<Body, http::basic_fields<Allocator>>&& req) {
 
         // Determine the file path based on the request target
         std::string target_str(target);
-        if (target_str == "/" || target_str == "/index.html" || target_str == "/NewGUIforClient.html") {
-            // Serve the main HTML file
+        if (target_str == ("/" + kWebUiLegacyEntry)) {
+            // Compatibility redirect: legacy entry point -> canonical
+            res.result(http::status::moved_permanently);
+            res.set(http::field::location, "/" + kWebUiEntry);
+            res.body() = "";
+            res.prepare_payload();
+            return res;
+        }
+
+        if (target_str == "/" || target_str == ("/" + kWebUiEntry)) {
+            // Serve the canonical HTML entry point
             std::string html_content = g_static_cache.getHTML();
             if (!html_content.empty()) {
                 res.result(http::status::ok);
-                res.set(http::field::content_type, "text/html");
+                res.set(http::field::content_type, "text/html; charset=utf-8");
                 res.body() = html_content;
                 res.prepare_payload();
                 return res;
-            } else {
-                // If we can't load the HTML file, return a 404
-                res.result(http::status::not_found);
-                res.set(http::field::content_type, "text/plain");
-                res.body() = "File not found";
-                res.prepare_payload();
-                return res;
             }
-        } else if (target_str.length() >= 8 && target_str.substr(0, 8) == "/styles/" ||
-                   target_str.length() >= 9 && target_str.substr(0, 9) == "/scripts/") {
-            // Serve CSS and JS files
-            file_path = "Client/Client-gui" + std::string(target);
-            std::string file_content = read_file(file_path);
-            if (!file_content.empty()) {
-                res.result(http::status::ok);
-                res.set(http::field::content_type, get_content_type(file_path).c_str());
-                res.body() = file_content;
-                res.prepare_payload();
-                return res;
-            } else {
-                // If we can't load the file, return a 404
-                res.result(http::status::not_found);
-                res.set(http::field::content_type, "text/plain");
-                res.body() = "File not found";
-                res.prepare_payload();
-                return res;
-            }
+
+            res.result(http::status::not_found);
+            res.set(http::field::content_type, "text/plain; charset=utf-8");
+            res.body() = "Web UI entry point not found";
+            res.prepare_payload();
+            return res;
         }
-        // For other static files in the root directory
-        else if (target_str.length() >= 1 && target_str[0] == '/') {
-            file_path = "Client/Client-gui" + std::string(target);
+
+        // Map historical asset paths to current layout.
+        // Old: /styles/*, /scripts/* -> New: /css/*, /js/*
+        std::string effective_target = target_str;
+        if (effective_target.rfind("/styles/", 0) == 0) {
+            effective_target = "/css/" + effective_target.substr(std::string("/styles/").length());
+        } else if (effective_target.rfind("/scripts/", 0) == 0) {
+            effective_target = "/js/" + effective_target.substr(std::string("/scripts/").length());
+        }
+
+        // Basic traversal hardening
+        if (effective_target.find("..") != std::string::npos || effective_target.find('\\') != std::string::npos) {
+            res.result(http::status::forbidden);
+            res.set(http::field::content_type, "text/plain; charset=utf-8");
+            res.body() = "Access denied";
+            res.prepare_payload();
+            return res;
+        }
+
+        if (!effective_target.empty() && effective_target[0] == '/') {
+            file_path = kWebUiRoot + effective_target;
             std::string file_content = read_file(file_path);
             if (!file_content.empty()) {
                 res.result(http::status::ok);

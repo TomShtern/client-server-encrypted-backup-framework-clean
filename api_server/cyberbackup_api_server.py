@@ -6,7 +6,7 @@ CyberBackup 3.0 API Server - CANONICAL IMPLEMENTATION
 This is the OFFICIAL and ONLY API server for CyberBackup 3.0.
 
 Features:
-- Complete Flask API backend for NewGUIforClient.html interface
+- Complete Flask API backend for index.html interface
 - Real integration with C++ backup client and Python backup server
 - Enhanced observability and structured logging
 - Performance monitoring and metrics collection
@@ -71,6 +71,7 @@ from flask import (  # noqa: E402
     Flask,
     Response,
     jsonify,
+    redirect,
     request,
     send_file,
     send_from_directory,
@@ -183,9 +184,17 @@ class ServerLifecycleManager:
         # Method 1: Kill by Port
         killed_count += ServerLifecycleManager._kill_port_holders(port, current_pid)
 
-        # Method 2: Kill by Script Name (secondary cleanup)
-        # We perform this to ensure no "half-dead" instances remain
-        killed_count += ServerLifecycleManager._kill_old_instances(current_pid)
+        # Method 2: (Optional) Kill by Script Name (secondary cleanup)
+        #
+        # IMPORTANT (Windows): This is intentionally *disabled by default*.
+        # Killing by script name is overly aggressive and can race with a concurrently
+        # starting instance, causing mutual termination (flaky startup, port never binds).
+        #
+        # The singleton PID-lock + "kill by port" check above is the safe, primary
+        # mechanism. Only enable the script-name cleanup when you explicitly need to
+        # recover from a pathological state.
+        if force:
+            killed_count += ServerLifecycleManager._kill_old_instances(current_pid)
 
         if killed_count > 0:
             print(
@@ -773,6 +782,7 @@ def start_websocket_cleanup_thread():
 
 # Static file serving
 @app.route("/")
+@app.route(f"/{CLIENT_GUI_HTML_FILE}")
 def serve_client():
     """Serve the main client HTML interface"""
     try:
@@ -788,12 +798,19 @@ def serve_client():
     except FileNotFoundError as e:
         logger.error(f"HTML file not found: {e}")
         return (
-            f"<h1>Client GUI not found</h1><p>Please ensure Client/Client-gui/{CLIENT_GUI_HTML_FILE} exists</p>",
+            "<h1>Client GUI not found</h1>"
+            f"<p>Please ensure <code>api_server/web_ui/{CLIENT_GUI_HTML_FILE}</code> exists.</p>",
             404,
         )
     except Exception as e:
         logger.error(f"Error serving HTML: {e}")
         return f"<h1>Server Error</h1><p>Error serving client: {e}</p>", 500
+
+
+@app.route("/NewGUIforClient.html")
+def serve_client_legacy_html():
+    """Compatibility redirect for legacy entry point."""
+    return redirect(f"/{CLIENT_GUI_HTML_FILE}", code=301)
 
 
 @app.route("/<path:filename>")
@@ -900,7 +917,7 @@ def serve_progress_config():
 def serve_favicon():
     """Serve favicon with better error handling"""
     try:
-        # Try to serve favicon from Client-gui directory if it exists
+        # Try to serve favicon from Web UI directory if it exists
         favicon_path = os.path.join(CLIENT_GUI_PATH, "favicon.ico")
 
         # Return favicon if it exists, otherwise return 204
@@ -1895,8 +1912,13 @@ if __name__ == "__main__":
     port = 9090  # Restore original port - SO_REUSEADDR will prevent zombie issues
 
     # --- SELF-HEALING STARTUP ---
-    # Ensure port 9090 is free before starting
-    ServerLifecycleManager.ensure_startup_state(port=port)
+    # Ensure port 9090 is free before starting.
+    #
+    # NOTE: We deliberately avoid the script-name kill path here (force=False)
+    # because the singleton PID lock already handles old-instance cleanup safely.
+    # The script-name kill was causing occasional race conditions where two instances
+    # kill each other during startup.
+    ServerLifecycleManager.ensure_startup_state(port=port, force=False)
 
     try:
         print("[WEBSOCKET] Starting Flask-SocketIO server with real-time support...")

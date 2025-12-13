@@ -16,7 +16,14 @@ class ThemeManager {
 
   #init() {
     this.#apply(this.currentTheme);
-    this.themeToggle?.addEventListener('click', () => this.toggle());
+
+    // Checkbox semantics: use change event and treat checked=true as dark mode
+    this.themeToggle?.addEventListener('change', () => {
+      const next = this.themeToggle.checked ? 'dark' : 'light';
+      this.#apply(next);
+      localStorage.setItem('theme', next);
+    });
+
     this.prefersDark.addEventListener('change', (e) => {
       if (!localStorage.getItem('theme')) {
         this.#apply(e.matches ? 'dark' : 'light');
@@ -35,9 +42,16 @@ class ThemeManager {
     // Toggle classes to match CSS selectors (html.theme-dark, html.theme-light)
     document.documentElement.classList.remove('theme-dark', 'theme-light');
     document.documentElement.classList.add(`theme-${theme}`);
-    const icon = this.themeToggle?.querySelector('i');
-    if (icon) {
-      icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+    if (this.themeToggle) {
+      this.themeToggle.checked = theme === 'dark';
+      // Optional micro-interaction hook
+      this.themeToggle.classList.add('rotating');
+      setTimeout(() => this.themeToggle?.classList.remove('rotating'), 650);
+    }
+
+    if (dom.themeLabel) {
+      dom.themeLabel.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
     }
   }
 }
@@ -63,11 +77,22 @@ class LogStore {
     this.logs.unshift(entry);
     if (this.logs.length > this.maxLogs) this.logs.pop();
     this.#render(entry);
+    this.#syncEmptyAndCount();
   }
 
   clear() {
     this.logs = [];
     if (this.container) this.container.innerHTML = '';
+    this.#syncEmptyAndCount();
+  }
+
+  #syncEmptyAndCount() {
+    if (dom.logEntryCount) {
+      dom.logEntryCount.textContent = String(this.logs.length);
+    }
+    if (dom.logsEmptyState) {
+      dom.logsEmptyState.hidden = this.logs.length > 0;
+    }
   }
 
   #render(entry) {
@@ -309,6 +334,7 @@ class ProfessionalGUIEnhancements {
     this.setupConnectionDropdown();
     this.setupLogSearch();
     this.setupSpeedChart();
+    this.setupAdvancedSettingsPanel();
     this.setupDragAndDrop();
     this.setupShortcuts();
     this.setupBrowserNotifications();
@@ -397,17 +423,80 @@ class ProfessionalGUIEnhancements {
 
     if (toggleBtn && container) {
       toggleBtn.addEventListener('click', () => {
-        const isVisible = container.classList.contains('show');
+        const isVisible = !container.hidden;
         if (isVisible) {
+          container.hidden = true;
           container.classList.remove('show');
-          toggleBtn.textContent = 'Show Chart';
+          toggleBtn.textContent = 'Show';
+          toggleBtn.setAttribute('aria-expanded', 'false');
         } else {
+          container.hidden = false;
           container.classList.add('show');
-          toggleBtn.textContent = 'Hide Chart';
+          toggleBtn.textContent = 'Hide';
+          toggleBtn.setAttribute('aria-expanded', 'true');
           if (this.chartInstance) this.chartInstance.draw();
         }
       });
     }
+  }
+
+  static setupAdvancedSettingsPanel() {
+    const panel = dom.advancedPanel;
+    if (!panel) return;
+
+    const toggle = panel.querySelector('.advanced-toggle');
+    const content = dom.advancedContent || panel.querySelector('#advancedContent');
+    if (!toggle || !content) return;
+
+    const applyExpanded = (expanded) => {
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      panel.classList.toggle('expanded', expanded);
+      content.hidden = !expanded;
+    };
+
+    // Initialize from markup
+    applyExpanded(toggle.getAttribute('aria-expanded') !== 'false');
+
+    toggle.addEventListener('click', () => {
+      const next = toggle.getAttribute('aria-expanded') !== 'true';
+      applyExpanded(next);
+    });
+
+    // Tabs
+    const tabButtons = Array.from(panel.querySelectorAll('.tab-btn[role="tab"]'));
+    const tabPanels = Array.from(panel.querySelectorAll('.tab-panel[role="tabpanel"]'));
+    if (tabButtons.length === 0 || tabPanels.length === 0) return;
+
+    const activateTab = (btn) => {
+      const panelId = btn.getAttribute('aria-controls');
+      for (const b of tabButtons) {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+        b.tabIndex = active ? 0 : -1;
+      }
+      for (const p of tabPanels) {
+        const active = p.id === panelId;
+        p.classList.toggle('active', active);
+        p.hidden = !active;
+      }
+    };
+
+    for (const btn of tabButtons) {
+      btn.addEventListener('click', () => activateTab(btn));
+      btn.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const idx = tabButtons.indexOf(btn);
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        const next = tabButtons[(idx + dir + tabButtons.length) % tabButtons.length];
+        next.focus();
+        activateTab(next);
+      });
+    }
+
+    const initial = tabButtons.find((b) => b.classList.contains('active')) || tabButtons[0];
+    activateTab(initial);
   }
 
   static setupDragAndDrop() {
@@ -548,3 +637,41 @@ class ProfessionalGUIEnhancements {
     document.head.appendChild(style);
   }
 }
+
+
+// --- Dual server status helpers (used by ConnectionMonitor) ---
+
+function setStatusPill(pillEl, online, { onlineText = 'Online', offlineText = 'Offline' } = {}) {
+  if (!pillEl) return;
+  const dot = pillEl.querySelector('.status-dot');
+  const text = pillEl.querySelector('.status-text');
+
+  const state = online === true ? 'online' : online === false ? 'offline' : 'connecting';
+  if (dot) dot.className = `status-dot ${state}`;
+  if (text) {
+    text.textContent = online === true ? onlineText : online === false ? offlineText : 'Checking';
+  }
+}
+
+globalThis.updateDualServerStatus = ({ apiOnline, backupOnline, latency } = {}) => {
+  setStatusPill(dom.webServerStatus, apiOnline, { onlineText: 'Online', offlineText: 'Offline' });
+  setStatusPill(dom.backupServerStatus, backupOnline, { onlineText: 'Online', offlineText: 'Offline' });
+
+  if (Number.isFinite(latency)) {
+    const ms = Math.max(0, Math.round(latency));
+    if (dom.latencyValue) dom.latencyValue.textContent = String(ms);
+    if (dom.detailLatency) dom.detailLatency.textContent = `${ms} ms`;
+    if (dom.connHealth) dom.connHealth.title = `Round-trip latency: ${ms} ms`;
+  }
+
+  if (dom.detailServer && dom.serverInput?.value) {
+    dom.detailServer.textContent = dom.serverInput.value;
+  }
+
+  if (dom.detailStatus) {
+    if (apiOnline === false) dom.detailStatus.textContent = 'Web server offline';
+    else if (backupOnline === false) dom.detailStatus.textContent = 'Backup server offline';
+    else if (apiOnline === true && backupOnline === true) dom.detailStatus.textContent = 'Ready';
+    else dom.detailStatus.textContent = 'Checking';
+  }
+};

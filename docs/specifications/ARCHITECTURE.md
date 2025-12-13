@@ -8,7 +8,7 @@ This document outlines the architecture of the CyberBackup system. The system is
 ┌──────────────────┐      (HTTP)      ┌───────────────────────────┐      (Custom TCP)      ┌────────────────────────┐
 │                  │                  │                           │                        │                        │
 │  Web UI (Browser)├─────────────────►│  Client GUI Backend       ├───────────────────────►│  Python Backup Server  │
-│ (NewGUIforClient.html) │                  │  (cyberbackup_api_server.py) │                        │  (server.py)           │
+│     (index.html)  │                  │  (cyberbackup_api_server.py) │                        │  (server.py)           │
 │                  │◄─────────────────┤                           │                        │                        │
 └──────────────────┘      (API Status)   └─────────────┬─────────────┘                        └────────────────────────┘
                                                       │
@@ -24,7 +24,7 @@ This document outlines the architecture of the CyberBackup system. The system is
 
 ### 1. Web UI (HTML/CSS/JavaScript)
 
-*   **File:** `src/client/NewGUIforClient.html`
+*   **File:** `api_server/web_ui/index.html`
 *   **Role:** This is the user-facing interface that runs in a standard web browser. It provides the user with controls to connect to the server, select a file, and start the backup process.
 *   **Interaction:** It does not interact with the C++ client or the Python backup server directly. Instead, it communicates exclusively with the "Client GUI Backend" via HTTP requests (REST API).
 
@@ -33,7 +33,7 @@ This document outlines the architecture of the CyberBackup system. The system is
 *   **File:** `cyberbackup_api_server.py`
 *   **Role:** This component acts as a vital bridge between the web interface and the native C++ client.
 *   **Responsibilities:**
-    *   Serves the `NewGUIforClient.html` file to the user's browser.
+    *   Serves the Web UI (`index.html`) file to the user's browser.
     *   Provides a REST API (e.g., `/api/start_backup`, `/api/status`) that the Web UI can call.
     *   Receives commands from the Web UI and, in response, executes the C++ client (`EncryptedBackupClient.exe`) as a local command-line process.
     *   Monitors the status of the C++ client and provides real-time progress updates back to the Web UI.

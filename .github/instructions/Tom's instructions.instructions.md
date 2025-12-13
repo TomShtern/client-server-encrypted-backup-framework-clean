@@ -4,7 +4,7 @@
 ## Architecture Overview
 This is a **sophisticated 4-layer encrypted backup system** with unique hybrid web-to-native architecture:
 
-1. **Web UI Layer** (`src/client/NewGUIforClient.html`) - Cyberpunk-themed SPA with 15+ JavaScript classes
+1. **Web UI Layer** (`api_server/web_ui/index.html`) - Vanilla ES6 SPA (modular JS + CSS)
 2. **Flask API Bridge** (`cyberbackup_api_server.py` + `real_backup_executor.py`) - **Critical integration layer**
 3. **C++ Client Engine** (`src/client/client.cpp` + `src/client/main.cpp`) - High-performance encryption engine (1700+ lines)
 4. **Python Server** (`src/server/server.py`) - Multi-threaded backup storage with custom binary protocol

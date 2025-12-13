@@ -3,12 +3,12 @@
   Prerequisites & Setup
 
   1. Install Dependencies:
-  # Install Python dependencies (including the Flask fix I 
+  # Install Python dependencies (including the Flask fix I
   implemented)
   pip install -r requirements.txt
 
   # Ensure you have CMake and vcpkg set up
-  # vcpkg should be in the project directory (already present)     
+  # vcpkg should be in the project directory (already present)
 
   2. Build the C++ Client:
   # From the project root directory
@@ -16,7 +16,7 @@
   cd build
 
   # Configure with vcpkg
-  cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystem     
+  cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystem
   s/vcpkg.cmake
 
   # Build the C++ client
@@ -31,7 +31,7 @@
   # From project root
   cd server
   python server.py
-  # Server will start on port 1256 (configurable in port.info)     
+  # Server will start on port 1256 (configurable in port.info)
 
   Step 2: Start the Flask API Bridge (Layer 2)
   # From project root
@@ -40,9 +40,10 @@
 
   Step 3: Open Web GUI (Layer 1)
   # Open in browser:
-  # file:///C:/path/to/Client_Server_Encrypted_Backup_Framewor     
-  k/src/client/NewGUIforClient.html
-  # OR use the Flask API endpoint (if implemented)
+  # Option A: Served by API server:
+  # http://localhost:9090/
+  # Option B: Open the static file directly:
+  # file:///C:/path/to/Client_Server_Encrypted_Backup_Framework/api_server/web_ui/index.html
 
   Step 4: Test File Transfer
   # Use the web interface to select a file and upload
@@ -52,18 +53,18 @@
 
   Key Configuration Notes:
 
-  - Ports: Server (1256), Flask API (9090) - ensure these are      
+  - Ports: Server (1256), Flask API (9090) - ensure these are
   free
   - Working Directory: Run from project root where
   transfer.info will be created
-  - Batch Mode: C++ client uses --batch flag to prevent GUI        
+  - Batch Mode: C++ client uses --batch flag to prevent GUI
   conflicts
   - File Verification: Check server/received_files/ for
   successful transfers
 
   Troubleshooting:
 
-  - Port conflicts: Change ports in server/port.info and Flask     
+  - Port conflicts: Change ports in server/port.info and Flask
    API
   - File not found: Ensure
   build/Release/EncryptedBackupClient.exe exists

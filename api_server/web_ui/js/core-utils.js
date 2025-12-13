@@ -62,6 +62,14 @@ function initializeDom() {
   dom.statusOutput = getElement('statusOutput');
   dom.connStatus = getOptionalElement('connStatus');  // Removed in new dual-server design
   dom.connHealth = getElement('connHealth');
+  dom.latencyValue = getOptionalElement('latencyValue');
+  dom.webServerStatus = getOptionalElement('webServerStatus');
+  dom.backupServerStatus = getOptionalElement('backupServerStatus');
+  dom.detailStatus = getOptionalElement('detailStatus');
+  dom.detailLatency = getOptionalElement('detailLatency');
+  dom.detailServer = getOptionalElement('detailServer');
+  dom.detailUptime = getOptionalElement('detailUptime');
+  dom.themeLabel = document.querySelector('.theme-label');
   dom.connQuality = getOptionalElement('connQuality');  // Removed in new dual-server design
   dom.themeToggle = getElement('themeToggle');
   dom.serverInput = getElement('serverInput');

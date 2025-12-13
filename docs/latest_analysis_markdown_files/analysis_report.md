@@ -94,7 +94,7 @@
 **Impact:** MEDIUM - User experience
 **Difficulty:** MEDIUM - UI/UX redesign
 **Invasiveness:** MEDIUM - Web UI and API integration
-**Files:** `src/client/NewGUIforClient.html`, API endpoints
+**Files:** `api_server/web_ui/index.html` (canonical; `NewGUIforClient.html` is legacy), API endpoints
 
 ### 11. Bandwidth Throttling and QoS
 **What:** No network bandwidth control
@@ -144,7 +144,7 @@
 **Files:** Client and server registration logic
 
 ### 16. RSA Key Exchange (TASK-mbgdrbij-f1s34)
-**Status:** PENDING  
+**Status:** PENDING
 **What:** Secure key exchange mechanism
 **Impact:** HIGH - Security foundation
 **Difficulty:** HARD
@@ -173,7 +173,7 @@
 ## 💡 IMPACT SUMMARY
 
 - **Critical Security Fixes:** 3 items - Prevent data breaches
-- **Stability Improvements:** 4 items - Reduce crashes and errors  
+- **Stability Improvements:** 4 items - Reduce crashes and errors
 - **User Experience:** 3 items - Better interface and feedback
 - **Performance:** 2 items - Faster operations
 - **Code Quality:** 4 items - Maintainability and developer experience

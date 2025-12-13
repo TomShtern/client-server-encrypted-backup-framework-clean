@@ -7,6 +7,7 @@ Uses Playwright to capture screenshots and verify the layout is correct.
 import asyncio
 import sys
 from pathlib import Path
+
 from playwright.async_api import async_playwright
 
 
@@ -17,13 +18,12 @@ async def test_gui_layout():
     async with async_playwright() as p:
         # Launch browser
         browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context(
-            viewport={"width": 1920, "height": 1080}
-        )
+        context = await browser.new_context(viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
 
-        # Navigate to the GUI
-        gui_path = Path(__file__).parent / "Client" / "Client-gui" / "NewGUIforClient.html"
+        # Navigate to the canonical Web UI (file:// mode)
+        repo_root = Path(__file__).resolve().parents[2]
+        gui_path = repo_root / "api_server" / "web_ui" / "index.html"
         gui_url = f"file://{gui_path.as_posix()}"
 
         print(f"Loading GUI from: {gui_url}")
@@ -69,8 +69,8 @@ async def test_gui_layout():
         # Verify no overlap
         if config_box and status_box:
             # Check if panels don't overlap horizontally
-            config_right = config_box['x'] + config_box['width']
-            status_left = status_box['x']
+            config_right = config_box["x"] + config_box["width"]
+            status_left = status_box["x"]
 
             if config_right > status_left:
                 print("❌ WARNING: Configuration and Status panels are overlapping!")
@@ -79,8 +79,8 @@ async def test_gui_layout():
 
         if main_box and logs_box:
             # Check if logs is below main content
-            main_bottom = main_box['y'] + main_box['height']
-            logs_top = logs_box['y']
+            main_bottom = main_box["y"] + main_box["height"]
+            logs_top = logs_box["y"]
 
             if logs_top < main_bottom:
                 print("❌ WARNING: Logs section is overlapping with main content!")
@@ -92,7 +92,7 @@ async def test_gui_layout():
         # Keep browser open for manual inspection
         print("\nBrowser will remain open for manual inspection...")
         print("Press Enter to close browser and exit...")
-        input()
+        await asyncio.to_thread(input)
 
         await browser.close()
 
@@ -106,5 +106,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

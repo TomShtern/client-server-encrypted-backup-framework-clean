@@ -10,9 +10,9 @@
 
 | File | Size | Modified |
 |------|------|----------|
-| NewGUIforClient.html | 17.7 KB | Nov 16 04:51 |
+| index.html | 17.7 KB | Nov 16 04:51 |
 
-#### NewGUIforClient.html
+#### index.html
 **Main application entry point (CANONICAL)**
 
 Pure vanilla ES6 single-page application that loads CSS from `styles/app.css` and JavaScript from `scripts/app.js`. Includes all required DOM elements: status display, file input, progress indicators, connection metrics, logs panel, theme toggle.
@@ -512,7 +512,7 @@ Python launcher script that starts the development HTTP server and automatically
   - Adds cache-control headers to prevent caching issues
   - Suppresses HTTP server logs for cleaner output
 - Starts server on `localhost:port` in main thread
-- Auto-opens browser to `http://localhost:port/NewGUIforClient.html` after 1s delay
+- Auto-opens browser to `http://localhost:port/index.html` after 1s delay
 - Handles Ctrl+C gracefully for shutdown
 
 **Metadata:** 2937 bytes; created Nov 09 13:39; modified Nov 09 14:54
@@ -583,7 +583,7 @@ Timestamped records of application behavior, errors, state changes, and system e
 
 ### Dependency Tree
 ```
-NewGUIforClient.html (entry)
+index.html (entry)
 ├─ styles/app.css (master design system)
 ├─ styles/enhancements.css (layout refinements)
 └─ scripts/app.js (main controller)
@@ -619,21 +619,21 @@ scripts/enhancements.js (standalone)
 - **Assets:** desktop_view.png, initial_state.png
 - **Docs:** GUI_FINALIZATION_SUMMARY.md
 
-**Reason:** Single canonical architecture (NewGUIforClient.html + app.css) eliminates duplication and prevents confusion.
+**Reason:** Single canonical architecture (index.html + app.css) eliminates duplication and prevents confusion.
 
 ---
 
 ## ⚙️ ARCHITECTURE PRINCIPLES
 
 ### Single Source of Truth
-- **HTML:** `NewGUIforClient.html` (only entry point)
+- **HTML:** `index.html` (only entry point)
 - **CSS:** `app.css` (complete design system + components)
 - **JS:** `scripts/app.js` (main controller) + modular services
 
 ### File Organization
 ```
 Client-gui/
-├── [CANONICAL] NewGUIforClient.html ──────┐
+├── [CANONICAL] index.html ────────────────┐
 ├── [STYLES] styles/app.css                 ├─ ACTIVE FILES
 ├── [SCRIPTS] scripts/ (16 modules)         │  (DO NOT MODIFY ARCHIVED)
 ├── [CONFIG] package.json, README.md        │
@@ -661,7 +661,7 @@ Client-gui/
 - Edit **app.css** for style changes (single source of truth)
 - Add new services to **scripts/services/** for new business logic
 - Update **app.js** for application flow changes
-- Modify **NewGUIforClient.html** for DOM structure changes
+- Modify **index.html** for DOM structure changes
 - Run `npm run validate` to check module integrity
 
 ### DON'T ❌

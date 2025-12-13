@@ -32,7 +32,7 @@ python one_click_build_and_run.py
 
 ### Demo Usage (2 minutes)
 1. **Web interface opens automatically** at `http://localhost:9090`
-2. **Connect**: Use default settings (`127.0.0.1:1256`, any username)  
+2. **Connect**: Use default settings (`127.0.0.1:1256`, any username)
 3. **Upload**: Select any file and click "Start Backup"
 4. **Watch**: Real-time progress with phase descriptions and ETA
 5. **Success**: See actual files in `src/server/received_files/`
@@ -41,7 +41,7 @@ python one_click_build_and_run.py
 
 ### ✨ Real-Time Progress Tracking
 - **WebSocket Communication**: Instant progress updates (no 2-3 second polling delays)
-- **Rich Phase Context**: "Encrypting file with AES-256..." vs raw "ENCRYPTING" 
+- **Rich Phase Context**: "Encrypting file with AES-256..." vs raw "ENCRYPTING"
 - **Accurate ETA**: Based on actual C++ client phase measurements
 - **Smooth UI**: 50ms debounced updates for professional feel
 
@@ -53,7 +53,7 @@ python one_click_build_and_run.py
 
 ### 🛡️ Production-Ready Features
 - **Error Recovery**: Simple restart button (no auto-restart complexity)
-- **Connection Health**: Automatic fallback if WebSocket fails  
+- **Connection Health**: Automatic fallback if WebSocket fails
 - **Security**: Origin-locked CORS, proper input validation
 - **Performance**: Debounced UI updates, memory leak prevention
 
@@ -106,7 +106,7 @@ python one_click_build_and_run.py
       "progress_range": [0, 10]
     },
     "ENCRYPTING": {
-      "weight": 0.30, 
+      "weight": 0.30,
       "description": "Encrypting file with AES-256...",
       "progress_range": [25, 55]
     }
@@ -155,21 +155,23 @@ pytest test_demo_scenarios.py::TestCyberBackupDemo::test_happy_path_real_time_pr
 ### Test Coverage
 - ✅ **Happy Path**: Real-time progress 0% → 100% with timing validation
 - ✅ **WebSocket Reliability**: Connection status and fallback behavior
-- ✅ **Error Recovery**: Error display and restart functionality  
+- ✅ **Error Recovery**: Error display and restart functionality
 - ✅ **Configuration**: Progress config loading and phase descriptions
 
 ## 📁 Project Structure
 
 ```
-├── src/
-│   ├── client/
-│   │   ├── client.cpp              # C++ client with timestamp logging
-│   │   └── NewGUIforClient.html    # WebSocket-enabled web interface
-│   ├── server/
-│   │   └── server.py               # Multi-threaded backup server
-│   └── api/
-│       └── real_backup_executor.py # WebSocket integration layer
-├── cyberbackup_api_server.py       # Flask-SocketIO API server
+├── api_server/
+│   ├── cyberbackup_api_server.py   # Flask-SocketIO API server
+│   ├── real_backup_executor.py     # WebSocket integration layer
+│   └── web_ui/
+│       ├── index.html              # Web UI entry point (WebSocket-enabled)
+│       ├── js/                     # ES6 modules
+│       └── css/                    # Styles
+├── Client/
+│   └── cpp/                        # C++ client
+├── python_server/
+│   └── server/                     # Multi-threaded backup server
 ├── progress_config.json            # Progress calibration configuration
 ├── test_demo_scenarios.py          # Portfolio validation tests
 ├── one_click_build_and_run.py      # 5-minute setup script
@@ -185,7 +187,7 @@ pytest test_demo_scenarios.py::TestCyberBackupDemo::test_happy_path_real_time_pr
 - **Performance Engineering**: 20-30x improvement in update latency
 - **Testing**: Comprehensive Playwright test suite
 
-### For Software Engineers  
+### For Software Engineers
 - **Problem Solving**: Solved false failure reports with hybrid approach
 - **Code Quality**: Professional error handling and memory management
 - **User Experience**: Smooth progress bars with ETA calculations
@@ -203,9 +205,9 @@ pytest test_demo_scenarios.py::TestCyberBackupDemo::test_happy_path_real_time_pr
 ### Problem Solved
 **Original Issue**: Web GUI always reported backup failure despite successful file transfers visible in server GUI. Progress bar stayed at 0% due to C++ client completing transfers faster than 2-3 second polling intervals could detect.
 
-**Solution Approach**: 
+**Solution Approach**:
 1. **Real-time Communication**: WebSocket eliminates polling delays
-2. **Actual Measurements**: C++ client logs exact phase timestamps  
+2. **Actual Measurements**: C++ client logs exact phase timestamps
 3. **Rich Progress Context**: Configuration-based phase descriptions and ETA
 4. **Hybrid Reliability**: Polling fallback ensures system never breaks
 

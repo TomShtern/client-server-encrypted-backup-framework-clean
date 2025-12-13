@@ -12,7 +12,7 @@ High-level flow:
 
 ### Core Components
 - **Web UI**
-  - src/client/NewGUIforClient.html
+  - api_server/web_ui/index.html
   - Purpose: File selection UX, status/progress display, talks to API server.
 - **Canonical API Server (Flask/SocketIO) – Port 9090**
   - cyberbackup_api_server.py
@@ -30,7 +30,7 @@ High-level flow:
 ```mermaid
 graph TB
     subgraph "Client Side"
-        UI[Web UI<br/>NewGUIforClient.html]
+        UI[Web UI<br/>index.html]
         API[Flask API Server<br/>cyberbackup_api_server.py<br/>Port 9090]
         CPP[C++ Client<br/>EncryptedBackupClient.exe]
     end
@@ -133,7 +133,7 @@ block-beta
 ## Component Responsibilities (What each key file does)
 
 ### Web/UI
-- **src/client/NewGUIforClient.html**
+- **api_server/web_ui/index.html**
   - Single-page interface that initiates backups via HTTP/WebSocket calls to the API server and displays live progress and results.
 
 ### API Server (Canonical)
@@ -218,7 +218,7 @@ graph TD
     style M fill:#fff3e0
 ```
 
-1. User opens Web UI (NewGUIforClient.html) via the API server.
+1. User opens Web UI (index.html) via the API server.
 2. User selects files and clicks "Backup".
 3. API server launches C++ client (EncryptedBackupClient.exe) and streams progress to UI.
 4. Client connects to Python server (port 1256), asks for public key, receives AES key via RSA, and establishes AES-256-CBC.
@@ -303,7 +303,7 @@ graph LR
 - **Run API server:**
   - python cyberbackup_api_server.py
 - **Open UI:**
-  - Visit the API server's served UI (NewGUIforClient.html)
+  - Visit the API server's served UI (index.html)
 
 ### Tests
 - **Integration tests** (tests/integration, test_demo_scenarios.py):
@@ -413,7 +413,7 @@ graph LR
 ├── src/
 │   ├── client/
 │   │   ├── client.cpp              # C++ client (protocol + crypto + sending)
-│   │   └── NewGUIforClient.html    # Web UI
+│   │   └── index.html              # Web UI
 │   ├── server/
 │   │   ├── server.py               # Server lifecycle and orchestration
 │   │   ├── network_server.py       # TCP listener, concurrency control, header parsing

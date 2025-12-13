@@ -2350,7 +2350,7 @@ svg {
   width: 150%;
   height: 150%;
   background-size: cover;
-  background: radial-gradient(ellipse at center,
+  background-image: radial-gradient(ellipse at center,
       rgba(88, 166, 255, 0.15) 0%,
       rgba(34, 211, 238, 0.08) 30%,
       transparent 60%);

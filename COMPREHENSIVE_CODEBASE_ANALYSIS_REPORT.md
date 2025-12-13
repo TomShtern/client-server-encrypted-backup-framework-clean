@@ -766,11 +766,11 @@ threading.Event().wait(2)
 
 ### 59. Hardcoded File Paths in Static File Cache
 
-**Location**: `Client/cpp/WebServerBackend.cpp:186`
+**Location**: `Client/cpp/WebServerBackend.cpp` (static file cache)
 
 **Code Pattern**:
 ```cpp
-std::ifstream file("Client/Client-gui/NewGUIforClient.html");
+std::ifstream file("api_server/web_ui/index.html");
 ```
 
 **Severity**: MEDIUM

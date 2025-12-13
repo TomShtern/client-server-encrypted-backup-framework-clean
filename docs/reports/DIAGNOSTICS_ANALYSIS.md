@@ -158,7 +158,7 @@ Minor suggestions for web files:
 - **Optional:** Could refactor large functions for maintainability
 
 **2. Code Duplication (Magic Strings)**
-- Repeated string literals like `'NewGUIforClient.html'`, `'progress_config.json'`
+- Repeated string literals like `'NewGUIforClient.html'` (legacy compatibility), `'progress_config.json'`
 - SonarQube suggests constants
 - **Impact:** None - works fine as-is
 - **Optional:** Extract to constants for easier maintenance

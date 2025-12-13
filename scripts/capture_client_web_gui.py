@@ -1,16 +1,18 @@
 """
-Start a temporary static server for Client/Client-gui, open the client in Playwright,
+Start a temporary static server for the canonical Web UI (api_server/web_ui), open it in Playwright,
 collect console output, take a full-page screenshot, then shut the server down.
 
 Usage:
-  python scripts/capture_client_web_gui.py [--port 9091] [--page NewGUIforClient.html]
+    python scripts/capture_client_web_gui.py [--dir api_server/web_ui] [--port 9091] [--page index.html]
 
 Outputs:
   - client_web_gui_screenshot.png
   - console_logs.json
   - web_gui_content.html
 """
+
 from __future__ import annotations
+
 import argparse
 import contextlib
 import http.server
@@ -19,13 +21,13 @@ import os
 import socket
 import threading
 import time
-from pathlib import Path
 import webbrowser
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-CLIENT_DIR = ROOT / "Client" / "Client-gui"
+DEFAULT_WEB_UI_DIR = ROOT / "api_server" / "web_ui"
 
 
 class SilentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -37,7 +39,9 @@ class SilentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 def wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
     end = time.time() + timeout
     while time.time() < end:
-        with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        with contextlib.closing(
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ) as sock:
             sock.settimeout(0.5)
             try:
                 sock.connect((host, port))
@@ -47,7 +51,9 @@ def wait_for_port(host: str, port: int, timeout: float = 10.0) -> bool:
     return False
 
 
-def start_server(host: str, port: int, directory: Path) -> tuple[http.server.ThreadingHTTPServer, threading.Thread]:
+def start_server(
+    host: str, port: int, directory: Path
+) -> tuple[http.server.ThreadingHTTPServer, threading.Thread]:
     os.chdir(directory)
     handler = SilentHTTPRequestHandler
     server = http.server.ThreadingHTTPServer((host, port), handler)
@@ -58,25 +64,46 @@ def start_server(host: str, port: int, directory: Path) -> tuple[http.server.Thr
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dir",
+        type=str,
+        default=str(DEFAULT_WEB_UI_DIR),
+        help="Directory to serve (default: api_server/web_ui)",
+    )
     parser.add_argument("--port", type=int, default=9091)
-    parser.add_argument("--page", type=str, default="NewGUIforClient.html")
-    parser.add_argument("--headless", action="store_true", help="Run browser headless (default)")
-    parser.add_argument("--headed", action="store_true", help="Run browser in headed/visible mode")
-    parser.add_argument("--open-default", action="store_true", help="Also open the page in your default system browser")
-    parser.add_argument("--keep-alive", type=int, default=0, help="Keep server alive N seconds (use with --open-default)")
+    parser.add_argument("--page", type=str, default="index.html")
+    parser.add_argument(
+        "--headless", action="store_true", help="Run browser headless (default)"
+    )
+    parser.add_argument(
+        "--headed", action="store_true", help="Run browser in headed/visible mode"
+    )
+    parser.add_argument(
+        "--open-default",
+        action="store_true",
+        help="Also open the page in your default system browser",
+    )
+    parser.add_argument(
+        "--keep-alive",
+        type=int,
+        default=0,
+        help="Keep server alive N seconds (use with --open-default)",
+    )
     args = parser.parse_args()
 
     host = "127.0.0.1"
     port = args.port
     page_name = args.page
 
-    if not CLIENT_DIR.is_dir():
-        print(f"ERROR: Client directory not found: {CLIENT_DIR}")
+    serve_dir = Path(args.dir).expanduser().resolve()
+
+    if not serve_dir.is_dir():
+        print(f"ERROR: Web UI directory not found: {serve_dir}")
         return 2
 
     # Start static server
-    print(f"Starting static server at http://{host}:{port} serving {CLIENT_DIR} ...")
-    server, thread = start_server(host, port, CLIENT_DIR)
+    print(f"Starting static server at http://{host}:{port} serving {serve_dir} ...")
+    server, thread = start_server(host, port, serve_dir)
     try:
         if not wait_for_port(host, port, timeout=10):
             print("ERROR: Server did not become ready in time")
@@ -98,12 +125,17 @@ def main() -> int:
             env_override = os.getenv("PLAYWRIGHT_HEADLESS")
             if env_override is not None:
                 headless = env_override.lower() not in ("false", "0", "no")
-            browser = p.chromium.launch(headless=headless, args=["--disable-web-security"], slow_mo=0 if headless else 50)
+            browser = p.chromium.launch(
+                headless=headless,
+                args=["--disable-web-security"],
+                slow_mo=0 if headless else 50,
+            )
             if not headless:
                 print("Browser launched in headed mode.")
             page = browser.new_page()
             # Improve viewport size for large progress ring visibility
             from contextlib import suppress
+
             with suppress(Exception):
                 page.set_viewport_size({"width": 1600, "height": 1000})
 
@@ -165,7 +197,9 @@ def main() -> int:
 
             # Summary
             print("\n=== Summary ===")
-            print(f"Console messages: {len(console_logs)} | Errors/Warnings: {len(errors)}")
+            print(
+                f"Console messages: {len(console_logs)} | Errors/Warnings: {len(errors)}"
+            )
 
             browser.close()
 
