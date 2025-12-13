@@ -315,16 +315,20 @@ class ConnectionMonitor {
 }
 
 class AdvancedSettings {
-  constructor({ chunkInput, retryInput, resetButton, toast, announcer }) {
+  constructor({ chunkInput, retryInput, resetButton, restoreLink, toast, announcer }) {
     this.chunkInput = chunkInput;
     this.retryInput = retryInput;
     this.resetButton = resetButton;
+    this.restoreLink = restoreLink;
     this.toast = toast;
     this.announcer = announcer;
     this.limits = { chunkSize: { min: 1, max: 256 }, retryLimit: { min: 0, max: 20 } };
     this.defaults = { chunkSize: 8, retryLimit: 3 };
     this.keys = { chunk: 'cyberbackup-chunk-size', retry: 'cyberbackup-retry-limit' };
+    this.hints = new Map();
 
+    this.#captureHint(this.chunkInput);
+    this.#captureHint(this.retryInput);
     this.#hydrate();
     this.#bindEvents();
   }
@@ -354,26 +358,85 @@ class AdvancedSettings {
     if (!input) return;
     input.value = value.toString();
     input.setAttribute('aria-invalid', 'false');
+    this.#resetHint(input);
     if (key) localStorage.setItem(key, value.toString());
   }
 
   #bindEvents() {
     this.resetButton?.addEventListener('click', () => this.reset());
-    this.chunkInput?.addEventListener('blur', () => this.#validate(this.chunkInput, this.keys.chunk, this.limits.chunkSize));
-    this.retryInput?.addEventListener('blur', () => this.#validate(this.retryInput, this.keys.retry, this.limits.retryLimit));
+    this.restoreLink?.addEventListener('click', (event) => {
+      event?.preventDefault?.();
+      this.reset();
+    });
+
+    const bindField = (input, key, limits) => {
+      if (!input) return;
+      input.addEventListener('focus', () => this.#handleFocus(input));
+      input.addEventListener('input', () => this.#validate(input, key, limits, { notify: false }));
+      input.addEventListener('blur', () => this.#validate(input, key, limits, { notify: true }));
+    };
+
+    bindField(this.chunkInput, this.keys.chunk, this.limits.chunkSize);
+    bindField(this.retryInput, this.keys.retry, this.limits.retryLimit);
   }
 
-  #validate(input, key, limits) {
+  #validate(input, key, limits, { notify = true } = {}) {
     if (!input) return;
     const val = validateNumericInput(input, limits);
     if (val === null) {
       input.setAttribute('aria-invalid', 'true');
-      this.toast?.show(`Enter a value between ${limits.min} and ${limits.max}`, 'warn');
-      return;
+      this.#setHint(input, `Enter a value between ${limits.min} and ${limits.max}`, true);
+      if (notify) {
+        this.toast?.show(`Enter a value between ${limits.min} and ${limits.max}`, 'warn');
+        this.announcer?.announce(`Invalid value. Enter between ${limits.min} and ${limits.max}.`);
+      }
+      return null;
     }
     input.value = val.toString();
     input.setAttribute('aria-invalid', 'false');
+    this.#resetHint(input);
     localStorage.setItem(key, val.toString());
+    if (notify) this.announcer?.announce(`Updated to ${val}`);
+    return val;
+  }
+
+  #handleFocus(input) {
+    input.setAttribute('aria-invalid', 'false');
+    this.#resetHint(input);
+  }
+
+  #captureHint(input) {
+    if (!input) return;
+    const hint = this.#getHintElement(input);
+    if (hint) {
+      this.hints.set(input, hint.textContent?.trim() || '');
+    }
+  }
+
+  #resetHint(input) {
+    if (!input) return;
+    const defaultHint = this.hints.get(input);
+    if (typeof defaultHint === 'string') {
+      this.#setHint(input, defaultHint, false);
+    }
+  }
+
+  #setHint(input, text, alert = false) {
+    const hint = this.#getHintElement(input);
+    if (!hint) return;
+    hint.textContent = text;
+    if (alert) {
+      hint.setAttribute('role', 'alert');
+    } else {
+      hint.removeAttribute('role');
+    }
+  }
+
+  #getHintElement(input) {
+    if (!input) return null;
+    const hintId = input.getAttribute('aria-describedby');
+    if (!hintId) return null;
+    return document.getElementById(hintId);
   }
 
   #load(key, fallback) {

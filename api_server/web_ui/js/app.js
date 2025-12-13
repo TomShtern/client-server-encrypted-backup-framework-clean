@@ -24,6 +24,7 @@ class App {
     // Initialize Managers
     this.api = new ApiClient(API_CONFIG.getApiBaseUrl());
     this.toast = new ToastManager(dom.toastStack);
+    this.announcer = new ScreenReaderAnnouncer(dom.srLive);
     this.logs = new LogStore(dom.logContainer); // FIXED: Was dom.logsContainer (undefined in core-utils)
     this.theme = new ThemeManager(); // Uses dom.themeToggle internally
 
@@ -33,11 +34,12 @@ class App {
 
 
     this.advancedSettings = new AdvancedSettings({
-      chunkInput: dom.chunkSizeInput,
-      retryInput: dom.retryLimitInput,
-      resetButton: dom.resetSettingsBtn,
+      chunkInput: dom.advChunkSize,
+      retryInput: dom.advRetryLimit,
+      resetButton: dom.advResetBtn,
+      restoreLink: dom.advRestoreDefaults,
       toast: this.toast,
-      announcer: dom.announcer
+      announcer: this.announcer
     });
 
     // Initialize Networking

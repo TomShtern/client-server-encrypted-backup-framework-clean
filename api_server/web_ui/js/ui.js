@@ -598,18 +598,24 @@ class ProfessionalGUIEnhancements {
     const fileMetadata = document.getElementById('fileMetadata');
     const fileTypeBadge = document.getElementById('fileTypeBadge');
     const fileModified = document.getElementById('fileModified');
+    const fileSize = document.getElementById('fileSize');
     const defaultContent = document.getElementById('defaultDropContent');
     const previewCard = document.getElementById('filePreviewCard');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const dropZone = document.getElementById('fileDropZone');
 
     if (!file) {
       if (defaultContent) defaultContent.style.display = 'flex';
       if (previewCard) previewCard.style.display = 'none';
+      if (fileSize) fileSize.textContent = '';
+      if (fileModified) fileModified.textContent = '';
+      dropZone?.classList.remove('file-selected');
       return;
     }
 
     if (defaultContent) defaultContent.style.display = 'none';
     if (previewCard) previewCard.style.display = 'grid';
+    dropZone?.classList.add('file-selected');
 
     const ext = file.name.split('.').pop().toLowerCase();
     const typeInfo = this.FILE_TYPE_ICONS[ext] || this.FILE_TYPE_ICONS.default;
@@ -624,6 +630,9 @@ class ProfessionalGUIEnhancements {
     if (fileModified) {
       const date = new Date(file.lastModified);
       fileModified.textContent = `Modified: ${date.toLocaleDateString()}`;
+    }
+    if (fileSize) {
+      fileSize.textContent = formatters.bytes?.(file.size) || `${file.size} B`;
     }
   }
 

@@ -99,12 +99,16 @@ function initializeDom() {
   dom.connectionStatusMessage = getOptionalElement('connectionStatusMessage');
   dom.connectionStatusText = getOptionalElement('connectionStatusText');
   dom.connectionStatusIcon = getOptionalElement('connectionStatusIcon');
+  dom.qualityBadge = getOptionalElement('qualityBadge');
+  dom.lastChecked = getOptionalElement('lastChecked');
+  dom.troubleshootChip = getOptionalElement('troubleshootChip');
   dom.pauseBtn = getElement('pauseBtn');
   dom.resumeBtn = getElement('resumeBtn');
   dom.stopBtn = getElement('stopBtn');
   dom.advChunkSize = getOptionalElement('advChunkSize');
   dom.advRetryLimit = getOptionalElement('advRetryLimit');
   dom.advResetBtn = getOptionalElement('advResetBtn');
+  dom.advRestoreDefaults = getOptionalElement('advRestoreDefaults');
   // Advanced settings panel elements
   dom.advancedPanel = getOptionalElement('advancedPanel');
   dom.advancedContent = getOptionalElement('advancedContent');
@@ -131,12 +135,14 @@ function initializeDom() {
   dom.logAutoscrollToggle = getOptionalElement('logAutoscrollToggle');
   dom.logExportBtn = getOptionalElement('logExportBtn');
   dom.logClearBtn = getOptionalElement('logClearBtn');
+  dom.logCopyBtn = getOptionalElement('logCopyBtn');
   dom.logDemoBtn = getOptionalElement('logDemoBtn');
   dom.logSearchInput = getOptionalElement('logSearchInput');
   dom.searchClearBtn = getOptionalElement('searchClearBtn');
   dom.logEntryCount = getOptionalElement('logEntryCount');
   dom.logContainer = getElement('logContainer');
   dom.logsEmptyState = getOptionalElement('logsEmptyState');
+  dom.logsSkeleton = getOptionalElement('logsSkeleton');
   dom.toastStack = getElement('toastStack');
   dom.modal = getElement('modalConfirm');
   dom.modalCancelBtn = getElement('modalCancelBtn');
@@ -150,10 +156,18 @@ function initializeDom() {
   dom.speedChart = getOptionalElement('speedChart');
   dom.toggleSpeedChart = getOptionalElement('toggleSpeedChart');
   dom.speedChartContainer = getOptionalElement('speedChartContainer');
+  dom.speedChartPlaceholder = getOptionalElement('speedChartPlaceholder');
   dom.dragOverlay = getOptionalElement('dragOverlay');
+  dom.dragOverlayLabel = getOptionalElement('dragOverlayLabel');
   dom.shortcutModal = getOptionalElement('shortcutModal');
   dom.shortcutBtn = getOptionalElement('shortcutBtn');
   dom.closeShortcutBtn = getOptionalElement('closeShortcutBtn');
+  dom.troubleshootSheet = getOptionalElement('troubleshootSheet');
+  dom.closeTroubleshoot = getOptionalElement('closeTroubleshoot');
+  dom.forcePingBtn = getOptionalElement('forcePingBtn');
+  dom.filterRecentLogsBtn = getOptionalElement('filterRecentLogsBtn');
+  dom.copyDiagnosticsBtn = getOptionalElement('copyDiagnosticsBtn');
+  dom.offlineChecklist = getOptionalElement('offlineChecklist');
 }
 
 /**
@@ -297,6 +311,26 @@ const formatters = {
     if (hrs > 0) return `${hrs}h ${mins.toString().padStart(2, '0')}m`;
     if (mins > 0) return `${mins}m ${secs.toString().padStart(2, '0')}s`;
     return `${secs}s`;
+  },
+
+  /**
+   * Formats a timestamp to a relative time string
+   * @param {number} timestamp - The timestamp to format
+   * @returns {string} Formatted relative time string
+   */
+  relativeTime(timestamp) {
+    if (!timestamp) return '—';
+    const now = Date.now();
+    const diff = Math.max(0, now - Number(timestamp));
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 5) return 'Just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   },
 
   /**

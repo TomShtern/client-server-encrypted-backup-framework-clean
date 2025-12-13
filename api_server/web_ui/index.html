@@ -38,6 +38,7 @@
 </head>
 
 <body>
+    <a class="skip-link" href="#statusPanel">Skip to status</a>
     <!-- Drag & Drop Overlay -->
     <div id="dragOverlay" class="drag-overlay">
         <div class="drag-content">
@@ -46,7 +47,7 @@
                 <polyline points="17 8 12 3 7 8" stroke-linecap="round" stroke-linejoin="round" />
                 <line x1="12" y1="3" x2="12" y2="15" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <span>Drop files to upload</span>
+            <span id="dragOverlayLabel">Release to upload</span>
         </div>
     </div>
 
@@ -72,9 +73,9 @@
                     <div class="name" id="appLogo">CyberBackup</div>
                     <div class="tag">Client</div>
                 </div>
-                <div class="status-bar">
+                <div class="status-bar header-rail">
                     <!-- Dual Server Status Indicators -->
-                    <div class="server-status-group" aria-live="polite">
+                    <div class="server-status-group header-pill" aria-live="polite">
                         <span id="webServerStatus" class="server-status" title="Web API Server (Port 9090)">
                             <span class="status-label">Web Server:</span>
                             <span class="status-dot connecting"></span>
@@ -87,7 +88,7 @@
                             <span class="status-text">Checking</span>
                         </span>
                     </div>
-                    <output id="statusOutput" class="status-output" aria-live="polite">
+                    <output id="statusOutput" class="status-output header-pill" aria-live="polite">
                         <span id="connHealth" class="latency-indicator" title="Round-trip latency">
                             <span class="latency-label">Latency</span>
                             <svg class="latency-graph" width="24" height="16" viewBox="0 0 24 16" fill="none">
@@ -103,7 +104,11 @@
                             <span class="latency-value" id="latencyValue">—</span>
                             <span class="latency-unit">ms</span>
                         </span>
+                        <span id="qualityBadge" class="quality-chip" aria-live="polite" title="Connection quality">Quality: checking</span>
+                        <span id="lastChecked" class="last-checked" aria-live="polite">Last checked —</span>
                     </output>
+                    <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button" aria-expanded="false"
+                        aria-controls="troubleshootSheet">⚡ Troubleshoot</button>
                     <div id="connectionDetails" class="connection-details">
                         <h4>Connection Details</h4>
                         <div class="connection-metric">
@@ -123,7 +128,7 @@
                             <span class="connection-metric-value" id="detailUptime">—</span>
                         </div>
                     </div>
-                    <div class="theme-toggle-wrapper">
+                    <div class="theme-toggle-wrapper header-pill">
                         <svg class="theme-icon sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="4" fill="currentColor" />
                             <path
@@ -182,17 +187,19 @@
                                 stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                         <div class="drop-zone-text">Drag &amp; drop a file here</div>
+                        <div class="drop-zone-help">Accepted: zip, tar · Up to 1 GB · AES-256 encrypted</div>
                         <span class="drop-zone-or">or</span>
                         <button type="button" class="choose-file-btn" id="chooseFileBtn">Choose File</button>
                     </div>
 
                     <!-- Selected State -->
-                    <div class="file-card" id="filePreviewCard" style="display: none;">
+                    <div class="file-card file-chip" id="filePreviewCard" style="display: none;">
                         <div class="file-icon" id="fileIcon"></div>
                         <div class="file-meta">
                             <div class="file-name" id="fileNameDisplay"></div>
                             <div class="file-metadata" id="fileMetadata">
                                 <span class="file-badge" id="fileTypeBadge"></span>
+                                <span class="file-size" id="fileSize"></span>
                                 <span class="file-modified" id="fileModified"></span>
                             </div>
                         </div>
@@ -273,7 +280,8 @@
                                 <div class="setting-row">
                                     <label for="advChunkSize">Chunk Size (MB)</label>
                                     <input id="advChunkSize" type="text" placeholder="8" class="interactive"
-                                        value="8" />
+                                        value="8" aria-describedby="advChunkHint" />
+                                    <div id="advChunkHint" class="hint" aria-live="polite">1–256 MB</div>
                                 </div>
                             </div>
                             <div id="tab-encryption" class="tab-panel" role="tabpanel" hidden>
@@ -295,9 +303,14 @@
                                 <div class="setting-row">
                                     <label for="advRetryLimit">Retry Limit</label>
                                     <input id="advRetryLimit" type="text" placeholder="3" class="interactive"
-                                        value="3" />
+                                        value="3" aria-describedby="advRetryHint" />
+                                    <div id="advRetryHint" class="hint" aria-live="polite">0–20 retries</div>
                                 </div>
                             </div>
+                        </div>
+                        <div class="advanced-actions">
+                            <button id="advResetBtn" type="button" class="logs-action-btn" title="Reset advanced settings">Reset</button>
+                            <button id="advRestoreDefaults" type="button" class="text-link" title="Restore defaults without closing the panel">Restore defaults</button>
                         </div>
                     </div>
                 </div>
@@ -346,8 +359,12 @@
 
                 <div class="actions" aria-label="Transfer actions">
                     <button id="primaryActionBtn" class="interactive primary ripple" type="button">
-                        <span id="primaryBtnSpinner" class="loading-spinner"></span>
-                        <span id="primaryBtnText">CONNECT</span>
+                        <span class="cta-icon" aria-hidden="true">⬆</span>
+                        <span class="cta-text">
+                            <span id="primaryBtnSpinner" class="loading-spinner"></span>
+                            <span id="primaryBtnText">CONNECT</span>
+                            <span class="cta-subtitle">Encrypted upload · AES-256 · CRC-verified</span>
+                        </span>
                     </button>
                     <button id="pauseBtn" class="interactive ripple action-btn" type="button" disabled>PAUSE</button>
                     <button id="resumeBtn" class="interactive ripple action-btn" type="button" disabled>RESUME</button>
@@ -421,6 +438,7 @@
                         <button id="toggleSpeedChart" class="ghost speed-chart-toggle" type="button">Hide</button>
                     </div>
                     <canvas id="speedChart" class="speed-chart"></canvas>
+                    <div id="speedChartPlaceholder" class="speed-chart-placeholder">No data yet—start a backup to see throughput.</div>
                 </div>
             </section>
 
@@ -470,6 +488,7 @@
                     <div class="logs-actions">
                         <span class="logs-count"><span id="logEntryCount">0</span> entries</span>
                         <button id="logClearBtn" class="logs-action-btn" type="button" title="Clear logs">Clear</button>
+                        <button id="logCopyBtn" class="logs-action-btn" type="button" title="Copy last 50 entries">Copy last 50</button>
                         <button id="logDemoBtn" class="logs-action-btn" type="button" title="Add demo logs"
                             hidden>Demo</button>
                     </div>
@@ -477,6 +496,12 @@
 
                 <!-- Log Entries -->
                 <div id="logContainer" class="logs-container" aria-live="polite">
+                    <div class="logs-skeleton" id="logsSkeleton" hidden>
+                        <div class="log-skeleton-row"></div>
+                        <div class="log-skeleton-row"></div>
+                        <div class="log-skeleton-row"></div>
+                        <div class="log-skeleton-row"></div>
+                    </div>
                     <div class="logs-empty" id="logsEmptyState">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="1.5">
@@ -484,6 +509,7 @@
                             <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5" />
                         </svg>
                         <span>No activity yet</span>
+                        <a class="text-link" href="https://github.com" target="_blank" rel="noreferrer">View docs</a>
                     </div>
                 </div>
             </section>
@@ -540,6 +566,29 @@
                     <span class="key">?</span>
                     <span class="desc">Show Shortcuts</span>
                 </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Troubleshoot Sheet -->
+    <dialog id="troubleshootSheet" class="troubleshoot-sheet" aria-labelledby="troubleshootTitle">
+        <div class="troubleshoot-content">
+            <div class="troubleshoot-header">
+                <div class="phase" id="troubleshootTitle">Troubleshoot Connection</div>
+                <button id="closeTroubleshoot" class="ghost" type="button">✕</button>
+            </div>
+            <div class="troubleshoot-actions">
+                <button id="forcePingBtn" type="button" class="logs-action-btn">Force ping</button>
+                <button id="filterRecentLogsBtn" type="button" class="logs-action-btn">Last 5 minutes</button>
+                <button id="copyDiagnosticsBtn" type="button" class="logs-action-btn">Copy diagnostics</button>
+            </div>
+            <div class="troubleshoot-checklist" id="offlineChecklist">
+                <strong>Quick checklist</strong>
+                <ul>
+                    <li>Check VPN / firewall</li>
+                    <li>Ensure ports 9090 &amp; 1256 are reachable</li>
+                    <li>Retry ping</li>
+                </ul>
             </div>
         </div>
     </dialog>
