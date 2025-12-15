@@ -67,7 +67,7 @@ class LogStore {
 
   add(message, { level = 'info', phase = 'GENERAL' } = {}) {
     const entry = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       timestamp: new Date(),
       message,
       level,
@@ -148,7 +148,19 @@ class FileManager {
     this.input = input;
     this.dropZone = dropZone;
     this.onFileSelect = onFileSelect;
+    this.toast = null;
+    this.announcer = null;
     this.#bindEvents();
+  }
+
+  setToast(toastManager) {
+    this.toast = toastManager;
+    return this;
+  }
+
+  setAnnouncer(announcer) {
+    this.announcer = announcer;
+    return this;
   }
 
   #bindEvents() {
@@ -184,21 +196,56 @@ class FileManager {
   }
 
   #handleFiles(files) {
-    if (files?.length) {
-      const file = files[0];
-      this.onFileSelect(file);
-      ProfessionalGUIEnhancements.updateFileCardPreview(file);
+    if (!files?.length) {
+      this.#announce('No file selected');
+      return;
     }
+
+    const file = files[0];
+    const validation = FILE_VALIDATION.validate(file);
+    if (!validation.valid) {
+      this.#showValidationError(validation.error || 'Unsupported file');
+      this.clear(false);
+      return;
+    }
+
+    this.#clearErrorState();
+    this.onFileSelect(file);
+    ProfessionalGUIEnhancements.updateFileCardPreview(file);
+    this.#announce(`Selected file ${file.name}, size ${formatters.formatBytes(file.size)}`);
   }
 
-  clear() {
+  clear(announce = true) {
     if (this.input) this.input.value = '';
+    this.#clearErrorState();
     ProfessionalGUIEnhancements.updateFileCardPreview(null);
     this.onFileSelect(null);
+    if (announce) this.#announce('File selection cleared');
   }
 
   getFile() {
     return this.input?.files?.[0];
+  }
+
+  #showValidationError(message) {
+    this.toast?.show(message, 'error');
+    this.dropZone?.classList.add('input-error');
+    this.input?.classList.add('input-error');
+    this.#announce(message);
+  }
+
+  #clearErrorState() {
+    this.dropZone?.classList.remove('input-error');
+    this.input?.classList.remove('input-error');
+  }
+
+  #announce(message) {
+    if (this.announcer) {
+      this.announcer.announce(message);
+    } else if (dom.srLive) {
+      dom.srLive.textContent = '';
+      requestAnimationFrame(() => { dom.srLive.textContent = message; });
+    }
   }
 }
 
@@ -330,6 +377,56 @@ class SpeedChart {
     gradient.addColorStop(1, this.#hexToRgba(this.colors.line, 0));
     this.ctx.fillStyle = gradient;
     this.ctx.fill();
+
+    const summary = document.getElementById('speedChartSummary');
+    if (summary) {
+      const latest = this.dataPoints[this.dataPoints.length - 1];
+      summary.textContent = `Current speed: ${formatters.formatSpeed(latest || 0)}.`;
+    }
+  }
+}
+
+/**
+ * Focus trap utility for modal dialogs to keep keyboard navigation inside.
+ */
+class FocusTrap {
+  constructor(element) {
+    this.element = element;
+    this.focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    this.active = false;
+    this.focusables = [];
+    this.handleKeydown = this.#onKeydown.bind(this);
+  }
+
+  activate() {
+    if (!this.element) return;
+    this.focusables = Array.from(this.element.querySelectorAll(this.focusableSelector))
+      .filter((el) => !el.hasAttribute('hidden'));
+    if (this.focusables.length === 0) return;
+    this.active = true;
+    this.element.addEventListener('keydown', this.handleKeydown);
+    this.focusables[0].focus();
+  }
+
+  deactivate() {
+    if (!this.active) return;
+    this.active = false;
+    this.element.removeEventListener('keydown', this.handleKeydown);
+  }
+
+  #onKeydown(event) {
+    if (!this.active || event.key !== 'Tab') return;
+    const first = this.focusables[0];
+    const last = this.focusables[this.focusables.length - 1];
+    if (!first || !last) return;
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 }
 
@@ -704,14 +801,31 @@ class ProfessionalGUIEnhancements {
     const closeBtn = document.getElementById('closeShortcutBtn');
     if (!modal || !btn || !closeBtn) return;
 
-    btn.addEventListener('click', () => modal.showModal());
-    closeBtn.addEventListener('click', () => modal.close());
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
+    const trap = new FocusTrap(modal);
+
+    const openModal = () => {
+      modal.showModal();
+      trap.activate();
+    };
+
+    const closeModal = () => {
+      trap.deactivate();
+      modal.close();
+    };
+
+    btn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    modal.addEventListener('close', () => trap.deactivate());
 
     document.addEventListener('keydown', (e) => {
       if (e.key === '?' && e.shiftKey && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
-        modal.showModal();
+        openModal();
+      }
+      if (e.key === 'Escape' && modal.open) {
+        e.preventDefault();
+        closeModal();
       }
       // Ctrl/Cmd + Enter to start backup
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -843,7 +957,7 @@ globalThis.updateDualServerStatus = ({ apiOnline, backupOnline, latency } = {}) 
   }
 
   if (dom.detailStatus) {
-    if (apiOnline === false) dom.detailStatus.textContent = 'Web server offline';
+    if (apiOnline === false) dom.detailStatus.textContent = 'API server offline';
     else if (backupOnline === false) dom.detailStatus.textContent = 'Backup server offline';
     else if (apiOnline === true && backupOnline === true) dom.detailStatus.textContent = 'Ready';
     else dom.detailStatus.textContent = 'Checking';

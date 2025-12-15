@@ -364,6 +364,32 @@ body {
   border: 0;
 }
 
+/* Input validation error state */
+.input-error,
+input.input-error,
+input[aria-invalid="true"],
+.input-error .interactive {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.2);
+}
+
+.hint.error {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+/* Focus visibility for keyboard users */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.stat:focus-visible,
+.interactive:focus-visible {
+  outline: 2px solid var(--focus, #6ab7ff);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(106, 183, 255, 0.25);
+}
+
 body {
   position: relative;
   /* Isolate stacking context so the circuit overlay can sit behind content safely */
@@ -557,36 +583,8 @@ html.theme-light .header-pill {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   API BADGE + INLINE BANNER
+   INLINE BANNER
    ═══════════════════════════════════════════════════════════════ */
-.api-badge {
-  font-size: var(--fs-12);
-  color: var(--fg-secondary);
-  letter-spacing: 0.2px;
-}
-
-.api-badge-label {
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.api-badge-value {
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.api-badge.api-live .api-badge-value {
-  color: var(--success);
-}
-
-.api-badge.api-offline .api-badge-value {
-  color: var(--warning);
-}
-
-.api-badge.api-disabled .api-badge-value,
-.api-badge.api-file .api-badge-value {
-  color: var(--danger);
-}
 
 .inline-error-banner {
   margin: var(--space-md) 0 var(--space-lg);

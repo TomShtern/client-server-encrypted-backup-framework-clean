@@ -75,8 +75,8 @@
                 <div class="status-bar">
                     <!-- Dual Server Status Indicators -->
                     <div class="server-status-group" aria-live="polite">
-                        <span id="webServerStatus" class="server-status" title="Web API Server (Port 9090)">
-                            <span class="status-label">Web Server:</span>
+                        <span id="webServerStatus" class="server-status" title="API Server (Port 9090)">
+                            <span class="status-label">API Server:</span>
                             <span class="status-dot online"></span>
                             <span class="status-text">Online</span>
                         </span>
@@ -126,7 +126,7 @@
                             <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
                         </svg>
                         <label class="theme-switch" for="themeToggle">
-                            <input type="checkbox" id="themeToggle" aria-label="Toggle theme" style="">
+                            <input type="checkbox" id="themeToggle" aria-label="Toggle theme">
                             <span class="theme-slider"></span>
                         </label>
                         <span class="theme-label">Light mode</span>
@@ -140,14 +140,14 @@
                 <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
 
                 <label class="floating-label">
-                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:9090" autocomplete="off" aria-describedby="serverHint" class="interactive has-value" style="">
+                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:9090" autocomplete="off" aria-describedby="serverHint" class="interactive has-value">
                     <span class="label-text">Server Address</span>
                     <span id="serverValidIcon" class="validation-icon" aria-hidden="true"></span>
                     <div id="serverHint" class="hint text-caption" role="alert" hidden="">Invalid host:port format</div>
                 </label>
 
                 <label class="floating-label">
-                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off" aria-describedby="usernameHint" class="interactive has-value" style="">
+                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off" aria-describedby="usernameHint" class="interactive has-value">
                     <span class="label-text">Username</span>
                     <span id="usernameValidIcon" class="validation-icon" aria-hidden="true"></span>
                     <div id="usernameHint" class="hint text-caption" role="alert" hidden="">Username is required</div>
@@ -189,7 +189,7 @@
                         </div>
                     </div>
 
-                    <input id="fileInput" type="file" hidden="" style="">
+                    <input id="fileInput" type="file" hidden="">
                 </div>
 
                 <div id="advancedPanel" class="advanced-settings-panel expanded">
@@ -220,7 +220,7 @@
                                     <label for="advPolycene" title="Enable Polyglot Environment">Polyglot Environment
                                         (Polycene)</label>
                                     <label class="toggle-switch" aria-label="Toggle Polyglot Environment">
-                                        <input type="checkbox" id="advPolycene" style="">
+                                        <input type="checkbox" id="advPolycene">
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -238,7 +238,7 @@
                                 <div class="setting-row">
                                     <label for="advAutoRetry">Auto Retry</label>
                                     <label class="toggle-switch" aria-label="Toggle Auto Retry">
-                                        <input type="checkbox" id="advAutoRetry" checked="" style="">
+                                        <input type="checkbox" id="advAutoRetry" checked="">
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -255,7 +255,7 @@
                                 </div>
                                 <div class="setting-row">
                                     <label for="advChunkSize">Chunk Size (MB)</label>
-                                    <input id="advChunkSize" type="text" placeholder="8" class="interactive" value="8" style="">
+                                    <input id="advChunkSize" type="text" placeholder="8" class="interactive" value="8">
                                 </div>
                             </div>
                             <div id="tab-encryption" class="tab-panel" role="tabpanel" hidden="">
@@ -270,13 +270,13 @@
                                 <div class="setting-row">
                                     <label for="advVerify">Verify Integrity</label>
                                     <label class="toggle-switch" aria-label="Toggle Verify Integrity">
-                                        <input type="checkbox" id="advVerify" checked="" style="">
+                                        <input type="checkbox" id="advVerify" checked="">
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
                                 <div class="setting-row">
                                     <label for="advRetryLimit">Retry Limit</label>
-                                    <input id="advRetryLimit" type="text" placeholder="3" class="interactive" value="3" style="">
+                                    <input id="advRetryLimit" type="text" placeholder="3" class="interactive" value="3">
                                 </div>
                             </div>
                         </div>
@@ -411,7 +411,7 @@
                             <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"></circle>
                             <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
                         </svg>
-                        <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs" class="logs-search-input" style="">
+                        <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs" class="logs-search-input">
                         <button type="button" class="search-clear-btn" id="searchClearBtn" hidden="">
                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                 <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>

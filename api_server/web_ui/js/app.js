@@ -20,6 +20,8 @@ class App {
       username: 'User-' + Math.floor(Math.random() * 10000)
     });
 
+    this.operationInProgress = false;
+
     // Initialize Managers
     // Initialize Managers
     this.api = new ApiClient(API_CONFIG.getApiBaseUrl());
@@ -30,7 +32,7 @@ class App {
 
     // Fix: FileManager takes 3 args (input, dropZone, callback)
     this.fileManager = new FileManager(dom.fileInput, dom.fileDropZone, (file) => this.#onFileSelected(file));
-
+    this.fileManager.setToast(this.toast).setAnnouncer(this.announcer);
 
 
     this.advancedSettings = new AdvancedSettings({
@@ -74,13 +76,10 @@ class App {
     this.state.subscribe((state) => this.#render(state));
 
     const isFileProtocol = API_CONFIG.isFileProtocol();
-    this.#updateApiBadge();
 
     // Check protocol
     if (isFileProtocol) {
       API_CONFIG.showFileProtocolWarning(this.toast.show.bind(this.toast));
-
-      this.#updateApiBadge({ mode: 'file' });
       this.showInlineBanner({
         severity: 'error',
         title: 'API disabled in file:// mode',
@@ -104,14 +103,10 @@ class App {
       !isFileProtocol && (globalThis.location?.port === String(API_CONFIG.API_PORT));
 
     if (isHostedByApiServer) {
-      this.#updateApiBadge({ mode: 'live' });
       this.hideInlineBanner();
       this.monitor.start();
       await this.socket.start();
     } else {
-      if (!isFileProtocol) {
-        this.#updateApiBadge({ mode: 'offline' });
-      }
       // Set initial status to offline/unknown without touching the network.
       if (globalThis.updateDualServerStatus) {
         globalThis.updateDualServerStatus({ apiOnline: false, backupOnline: false });
@@ -177,42 +172,6 @@ class App {
     dom.inlineErrorDismiss?.addEventListener('click', () => this.hideInlineBanner());
   }
 
-  #updateApiBadge(override = null) {
-    if (!dom.apiBadge || !dom.apiBadgeValue) return;
-
-    const defaults = {
-      mode: API_CONFIG.isFileProtocol() ? 'file' : 'offline',
-      value: API_CONFIG.isFileProtocol() ? 'file://' : (API_CONFIG.getApiBaseUrl() || 'unknown'),
-      title: 'Web UI API mode'
-    };
-
-    const cfg = { ...defaults, ...(override || {}) };
-
-    dom.apiBadge.classList.remove('api-live', 'api-offline', 'api-disabled', 'api-file');
-
-    const classByMode = {
-      live: 'api-live',
-      offline: 'api-offline',
-      disabled: 'api-disabled',
-      file: 'api-file',
-    };
-    dom.apiBadge.classList.add(classByMode[cfg.mode] || 'api-offline');
-
-    if (cfg.mode === 'live') {
-      dom.apiBadgeValue.textContent = 'live';
-      dom.apiBadge.title = `${cfg.title} (connected to API on this origin)`;
-    } else if (cfg.mode === 'file') {
-      dom.apiBadgeValue.textContent = 'file://';
-      dom.apiBadge.title = `${cfg.title} (file protocol)`;
-    } else if (cfg.mode === 'disabled') {
-      dom.apiBadgeValue.textContent = 'disabled';
-      dom.apiBadge.title = `${cfg.title} (disabled)`;
-    } else {
-      dom.apiBadgeValue.textContent = 'offline';
-      dom.apiBadge.title = `${cfg.title} (not detected on this origin)`;
-    }
-  }
-
   showInlineBanner({ severity = 'error', title = 'Notice', body = '', actionHref = '', actionText = 'Open' } = {}) {
     const banner = dom.inlineErrorBanner;
     if (!banner || !dom.inlineErrorTitle || !dom.inlineErrorBody) return;
@@ -247,6 +206,10 @@ class App {
    * Toggles between connect and disconnect based on current state.
    */
   #handlePrimaryAction() {
+    if (this.operationInProgress) {
+      this.toast.show('Operation in progress, please wait…', 'info');
+      return;
+    }
     if (this.state.snapshot.connected) {
       this.#handleDisconnect();
     } else {
@@ -255,6 +218,7 @@ class App {
   }
 
   async #handleConnect() {
+    if (this.operationInProgress) return;
     if (API_CONFIG.isFileProtocol()) {
       this.toast.show('API unavailable in file:// mode. Open http://localhost:9090 instead.', 'warn');
       this.setConnectionStatus('API unavailable in file:// mode', 'error');
@@ -279,7 +243,14 @@ class App {
       return;
     }
 
+    if (!CONSTANTS.USERNAME_PATTERN.test(username)) {
+      this.toast.show('Invalid username. Use letters, numbers, spaces, dot, dash, or @.', 'error');
+      this.#updateConnectionStatus('Invalid username', 'error');
+      return;
+    }
+
     try {
+      this.operationInProgress = true;
       // Update button to connecting state
       this.#setButtonState('connecting');
       this.#updateConnectionStatus('Connecting...', 'pending');
@@ -319,11 +290,15 @@ class App {
         actionText: 'Open live UI'
       });
       ErrorBoundary.handle(error, 'Connection');
+      } finally {
+        this.operationInProgress = false;
     }
   }
 
   async #handleDisconnect() {
+      if (this.operationInProgress) return;
     try {
+        this.operationInProgress = true;
       this.#setButtonState('disconnecting');
       this.#updateConnectionStatus('Disconnecting...', 'pending');
 
@@ -338,6 +313,8 @@ class App {
       this.#setButtonState('connected'); // Restore if disconnect failed
       this.#updateConnectionStatus('Disconnect failed', 'error');
       ErrorBoundary.handle(error, 'Disconnect');
+    } finally {
+      this.operationInProgress = false;
     }
   }
 
@@ -424,6 +401,7 @@ class App {
   }
 
   async #handleStartBackup(fileArg) {
+    if (this.operationInProgress) return;
     const file = fileArg || this.fileManager.input?.files?.[0];
     if (!file) {
       this.toast.show('Please select a file first', 'warn');
@@ -436,6 +414,7 @@ class App {
     }
 
     try {
+      this.operationInProgress = true;
       this.state.update({
         status: 'uploading',
         progress: 0,
@@ -464,6 +443,8 @@ class App {
     } catch (error) {
       this.state.update({ status: 'error' });
       ErrorBoundary.handle(error, 'Start Backup');
+    } finally {
+      this.operationInProgress = false;
     }
   }
 
@@ -637,17 +618,22 @@ class App {
     const offset = circumference * (1 - pct / 100);
     dom.progressArc.style.strokeDasharray = `${circumference}`;
     dom.progressArc.style.strokeDashoffset = `${offset}`;
+    if (dom.progressRing) {
+      dom.progressRing.setAttribute('aria-valuenow', Math.round(pct).toString());
+    }
   }
 
   #renderStats(state, transferActive, transferFinished) {
     if (dom.stats?.bytes) {
       const showBytes = transferActive || transferFinished || Number(state.totalBytes) > 0;
       dom.stats.bytes.textContent = showBytes ? formatters.formatBytes(state.bytesTransferred || 0) : '—';
+      dom.statsContainers?.bytes?.setAttribute('aria-label', `Bytes Sent: ${dom.stats.bytes.textContent}`);
     }
 
     if (dom.stats?.size) {
       const hasSize = Number(state.totalBytes) > 0;
       dom.stats.size.textContent = hasSize ? formatters.formatBytes(state.totalBytes || 0) : '—';
+      dom.statsContainers?.size?.setAttribute('aria-label', `File Size: ${dom.stats.size.textContent}`);
     }
 
     if (dom.stats?.speed) {
@@ -656,6 +642,7 @@ class App {
       else if (state.status === 'paused') speedText = 'Paused';
       else if (state.status === 'completed') speedText = '0 B/s';
       dom.stats.speed.textContent = speedText;
+      dom.statsContainers?.speed?.setAttribute('aria-label', `Speed: ${dom.stats.speed.textContent}`);
     }
 
     if (dom.stats?.elapsed) {
@@ -666,6 +653,7 @@ class App {
       } else {
         dom.stats.elapsed.textContent = '--';
       }
+      dom.statsContainers?.elapsed?.setAttribute('aria-label', `Elapsed: ${dom.stats.elapsed.textContent}`);
     }
 
     if (dom.etaText) {

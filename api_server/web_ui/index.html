@@ -76,8 +76,8 @@
                 <div class="status-bar header-rail">
                     <!-- Dual Server Status Indicators -->
                     <div class="server-status-group header-pill" aria-live="polite">
-                        <span id="webServerStatus" class="server-status" title="Web API Server (Port 9090)">
-                            <span class="status-label">Web Server:</span>
+                        <span id="webServerStatus" class="server-status" title="API Server (Port 9090)">
+                            <span class="status-label">API Server:</span>
                             <span class="status-dot connecting"></span>
                             <span class="status-text">Checking</span>
                         </span>
@@ -88,10 +88,6 @@
                             <span class="status-text">Checking</span>
                         </span>
                     </div>
-                    <output id="apiBadge" class="header-pill api-badge" aria-live="polite" title="Web UI API mode">
-                        <span class="api-badge-label">API</span>
-                        <span class="api-badge-value" id="apiBadgeValue">—</span>
-                    </output>
                     <button id="statusOutput" class="status-output header-pill" type="button" aria-expanded="false" aria-controls="connectionDetails">
                         <span id="connHealth" class="latency-indicator" title="Round-trip latency">
                             <span class="latency-label">Latency</span>
@@ -348,7 +344,9 @@
                 <div class="center">
                     <div class="progress-glow"></div>
                     <div class="ring-decoration"></div>
-                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true">
+                    <svg id="progressRing" viewBox="0 0 100 100" role="progressbar"
+                        aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+                        aria-label="Backup progress">
                         <defs>
                             <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                 <stop offset="0%" stop-color="#00f2ff" />
@@ -396,7 +394,7 @@
                 </output>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
-                    <div class="stat interactive">
+                    <div class="stat interactive" id="statBytesContainer" tabindex="0" role="status" aria-label="Bytes Sent: 0 B">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M3 8L8 3L13 8M8 3V13" stroke="currentColor" stroke-width="1.5"
@@ -408,7 +406,7 @@
                             <div class="value" id="statBytes">0 B</div>
                         </div>
                     </div>
-                    <div class="stat interactive">
+                    <div class="stat interactive" id="statSpeedContainer" tabindex="0" role="status" aria-label="Speed: 0 B/s">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -421,7 +419,7 @@
                             <div class="value" id="statSpeed">0 B/s</div>
                         </div>
                     </div>
-                    <div class="stat interactive">
+                    <div class="stat interactive" id="statSizeContainer" tabindex="0" role="status" aria-label="File Size: 0 B">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <rect x="3" y="2" width="10" height="12" rx="1" stroke="currentColor"
@@ -435,7 +433,7 @@
                             <div class="value" id="statSize">0 B</div>
                         </div>
                     </div>
-                    <div class="stat interactive">
+                    <div class="stat interactive" id="statElapsedContainer" tabindex="0" role="status" aria-label="Elapsed: --">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -455,7 +453,11 @@
                         <span class="speed-chart-title">Transfer Speed (Last 30s)</span>
                         <button id="toggleSpeedChart" class="ghost speed-chart-toggle" type="button">Hide</button>
                     </div>
-                    <canvas id="speedChart" class="speed-chart"></canvas>
+                    <canvas id="speedChart" class="speed-chart" role="img"
+                        aria-label="Transfer speed chart showing throughput over the last 30 seconds"></canvas>
+                    <div id="speedChartSummary" class="sr-only" aria-live="polite">
+                        Current speed: calculating...
+                    </div>
                     <div id="speedChartPlaceholder" class="speed-chart-placeholder">No data yet—start a backup to see throughput.</div>
                 </div>
             </section>

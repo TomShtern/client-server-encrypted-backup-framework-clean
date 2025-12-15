@@ -63,8 +63,6 @@ function initializeDom() {
   dom.connStatus = getOptionalElement('connStatus');  // Removed in new dual-server design
   dom.connHealth = getElement('connHealth');
   dom.latencyValue = getOptionalElement('latencyValue');
-  dom.apiBadge = getOptionalElement('apiBadge');
-  dom.apiBadgeValue = getOptionalElement('apiBadgeValue');
   dom.webServerStatus = getOptionalElement('webServerStatus');
   dom.backupServerStatus = getOptionalElement('backupServerStatus');
   dom.detailStatus = getOptionalElement('detailStatus');
@@ -126,6 +124,12 @@ function initializeDom() {
     size: getElement('statSize'),
     elapsed: getElement('statElapsed'),
   };
+  dom.statsContainers = {
+    bytes: getOptionalElement('statBytesContainer'),
+    speed: getOptionalElement('statSpeedContainer'),
+    size: getOptionalElement('statSizeContainer'),
+    elapsed: getOptionalElement('statElapsedContainer'),
+  };
   // Log filter buttons
   dom.logFilters = [
     getElement('filterAll'),
@@ -162,13 +166,13 @@ function initializeDom() {
   dom.inlineErrorDismiss = getOptionalElement('inlineErrorDismiss');
 
   // --- Missing Elements added during Refactoring ---
-  dom.logContainer = getElement('logContainer'); // Standardized name
   dom.clearFileBtn = getOptionalElement('clearFileBtn');
   dom.connectionDetails = getOptionalElement('connectionDetails');
   dom.speedChart = getOptionalElement('speedChart');
   dom.toggleSpeedChart = getOptionalElement('toggleSpeedChart');
   dom.speedChartContainer = getOptionalElement('speedChartContainer');
   dom.speedChartPlaceholder = getOptionalElement('speedChartPlaceholder');
+  dom.speedChartSummary = getOptionalElement('speedChartSummary');
   dom.dragOverlay = getOptionalElement('dragOverlay');
   dom.dragOverlayLabel = getOptionalElement('dragOverlayLabel');
   dom.shortcutModal = getOptionalElement('shortcutModal');
@@ -399,6 +403,42 @@ const formatters = {
  */
 function clamp(value, { min, max }) {
   return Math.min(Math.max(value, min), max);
+}
+
+/**
+ * Generates a UUID v4 compatible string with browser-safe fallback.
+ * Uses native crypto.randomUUID when available, otherwise derives from
+ * crypto.getRandomValues or Math.random as a last resort.
+ * @returns {string} UUID string
+ */
+function generateUUID() {
+  try {
+    if (globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+
+    const getRandomValues = globalThis.crypto?.getRandomValues?.bind(globalThis.crypto);
+    const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+
+    const randomNibble = () => {
+      if (getRandomValues) {
+        const buf = new Uint8Array(1);
+        getRandomValues(buf);
+        return buf[0] % 16;
+      }
+      return Math.floor(Math.random() * 16);
+    };
+
+    return template.replace(/[xy]/g, (c) => {
+      const r = randomNibble();
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  } catch (err) {
+    console.warn('UUID generation fallback used:', err);
+    // Simple Math.random fallback as a last resort
+    return `fallback-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+  }
 }
 
 /**
@@ -1038,3 +1078,62 @@ class TimerManager {
     return this.#timerId;
   }
 }
+
+// Shared constants for validation and defaults
+const CONSTANTS = {
+  MAX_FILE_SIZE: 1024 * 1024 * 1024, // 1GB
+  USERNAME_PATTERN: /^[\w\-. @]+$/, // Alphanumeric, dash, dot, space, @
+};
+
+/**
+ * File validation configuration
+ */
+const FILE_VALIDATION = {
+  maxSize: CONSTANTS.MAX_FILE_SIZE,
+  allowedExtensions: ['.zip', '.tar', '.tgz', '.gz', '.tar.gz'],
+  allowedMimeTypes: [
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-tar',
+    'application/gzip',
+    'application/x-gzip',
+    'application/x-gtar',
+  ],
+  errorMessages: {
+    sizeExceeded: 'File too large. Maximum allowed size is 1 GB.',
+    invalidType: 'Unsupported file type. Only .zip and .tar archives are allowed.',
+    empty: 'File is empty.',
+  },
+
+  isExtensionAllowed(filename) {
+    if (!filename) return false;
+    const lower = filename.toLowerCase();
+    return this.allowedExtensions.some((ext) => lower.endsWith(ext));
+  },
+
+  isMimeAllowed(mime) {
+    if (!mime) return false;
+    return this.allowedMimeTypes.includes(mime.toLowerCase());
+  },
+
+  validate(file) {
+    if (!file) {
+      return { valid: false, error: this.errorMessages.invalidType };
+    }
+
+    if (file.size === 0) {
+      return { valid: false, error: this.errorMessages.empty };
+    }
+
+    if (file.size > this.maxSize) {
+      return { valid: false, error: this.errorMessages.sizeExceeded };
+    }
+
+    const typeOk = this.isMimeAllowed(file.type) || this.isExtensionAllowed(file.name || '');
+    if (!typeOk) {
+      return { valid: false, error: this.errorMessages.invalidType };
+    }
+
+    return { valid: true };
+  },
+};
