@@ -63,6 +63,8 @@ function initializeDom() {
   dom.connStatus = getOptionalElement('connStatus');  // Removed in new dual-server design
   dom.connHealth = getElement('connHealth');
   dom.latencyValue = getOptionalElement('latencyValue');
+  dom.apiBadge = getOptionalElement('apiBadge');
+  dom.apiBadgeValue = getOptionalElement('apiBadgeValue');
   dom.webServerStatus = getOptionalElement('webServerStatus');
   dom.backupServerStatus = getOptionalElement('backupServerStatus');
   dom.detailStatus = getOptionalElement('detailStatus');
@@ -97,6 +99,7 @@ function initializeDom() {
   dom.primaryBtnSpinner = getOptionalElement('primaryBtnSpinner');
   // Connection status message
   dom.connectionStatusMessage = getOptionalElement('connectionStatusMessage');
+  dom.connectionStatusSpinner = getOptionalElement('connectionStatusSpinner');
   dom.connectionStatusText = getOptionalElement('connectionStatusText');
   dom.connectionStatusIcon = getOptionalElement('connectionStatusIcon');
   dom.qualityBadge = getOptionalElement('qualityBadge');
@@ -142,12 +145,21 @@ function initializeDom() {
   dom.logEntryCount = getOptionalElement('logEntryCount');
   dom.logContainer = getElement('logContainer');
   dom.logsEmptyState = getOptionalElement('logsEmptyState');
+  dom.logsEmptyTitle = getOptionalElement('logsEmptyTitle');
+  dom.logsEmptyDesc = getOptionalElement('logsEmptyDesc');
   dom.logsSkeleton = getOptionalElement('logsSkeleton');
   dom.toastStack = getElement('toastStack');
   dom.modal = getElement('modalConfirm');
   dom.modalCancelBtn = getElement('modalCancelBtn');
   dom.modalOkBtn = getElement('modalOkBtn');
   dom.srLive = getElement('srLive');
+
+  // Inline banner (optional)
+  dom.inlineErrorBanner = getOptionalElement('inlineErrorBanner');
+  dom.inlineErrorTitle = getOptionalElement('inlineErrorTitle');
+  dom.inlineErrorBody = getOptionalElement('inlineErrorBody');
+  dom.inlineErrorAction = getOptionalElement('inlineErrorAction');
+  dom.inlineErrorDismiss = getOptionalElement('inlineErrorDismiss');
 
   // --- Missing Elements added during Refactoring ---
   dom.logContainer = getElement('logContainer'); // Standardized name

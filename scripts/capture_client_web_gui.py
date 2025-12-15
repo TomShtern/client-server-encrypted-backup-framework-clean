@@ -62,7 +62,7 @@ def start_server(
     return server, thread
 
 
-def main() -> int:
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dir",
@@ -79,6 +79,14 @@ def main() -> int:
         "--headed", action="store_true", help="Run browser in headed/visible mode"
     )
     parser.add_argument(
+        "--maximize",
+        action="store_true",
+        help=(
+            "Headed mode only: start maximized and let the viewport follow the window size. "
+            "Useful when you want the page to use the full available screen."
+        ),
+    )
+    parser.add_argument(
         "--open-default",
         action="store_true",
         help="Also open the page in your default system browser",
@@ -89,7 +97,91 @@ def main() -> int:
         default=0,
         help="Keep server alive N seconds (use with --open-default)",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def _resolve_playwright_launch(
+    args: argparse.Namespace,
+) -> tuple[bool, list[str], dict | None]:
+    """Resolve headless/headed, Chromium args, and viewport.
+
+    Returns:
+        (headless, launch_args, viewport)
+    """
+    headless = True
+    if args.headed:
+        headless = False
+    elif args.headless:
+        headless = True
+
+    # Allow env override PLAYWRIGHT_HEADLESS=false
+    env_override = os.getenv("PLAYWRIGHT_HEADLESS")
+    if env_override is not None:
+        headless = env_override.lower() not in ("false", "0", "no")
+
+    launch_args: list[str] = ["--disable-web-security"]
+    viewport: dict | None = {"width": 1600, "height": 1000}
+    if not headless and args.maximize:
+        launch_args.append("--start-maximized")
+        viewport = None
+
+    return headless, launch_args, viewport
+
+
+def _navigate_with_retry(page, url: str) -> tuple[object | None, int | None]:
+    """Navigate to url with a single retry.
+
+    Returns:
+        (response, error_code) where error_code is None on success.
+    """
+    try:
+        resp = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        return resp, None
+    except Exception as e:  # noqa: BLE001
+        print(f"ERROR navigating to page: {e}")
+        time.sleep(1.5)
+        try:
+            resp = page.goto(url, wait_until="load", timeout=15000)
+            return resp, None
+        except Exception as e2:  # noqa: BLE001
+            print(f"SECOND FAILURE navigating to page: {e2}")
+            return None, 4
+
+
+def _maybe_open_default_browser(url: str, args: argparse.Namespace) -> None:
+    if not args.open_default:
+        return
+
+    try:
+        webbrowser.open(url, new=2)
+        print("Opened in default browser.")
+        if args.keep_alive and args.keep_alive > 0:
+            print(f"Keeping server alive for {args.keep_alive}s ...")
+            time.sleep(args.keep_alive)
+    except Exception as e:  # noqa: BLE001
+        print(f"Failed to open default browser: {e}")
+
+
+def _write_outputs(page, console_logs: list[dict], errors: list[dict]) -> None:
+    screenshot_path = ROOT / "client_web_gui_screenshot.png"
+    page.screenshot(path=str(screenshot_path), full_page=True)
+    print(f"Screenshot saved to: {screenshot_path}")
+
+    html_path = ROOT / "web_gui_content.html"
+    html = page.content()
+    html_path.write_text(html, encoding="utf-8")
+    print(f"HTML saved to: {html_path}")
+
+    logs_path = ROOT / "console_logs.json"
+    logs_path.write_text(json.dumps(console_logs, indent=2), encoding="utf-8")
+    print(f"Console logs saved to: {logs_path}")
+
+    print("\n=== Summary ===")
+    print(f"Console messages: {len(console_logs)} | Errors/Warnings: {len(errors)}")
+
+
+def main() -> int:
+    args = _parse_args()
 
     host = "127.0.0.1"
     port = args.port
@@ -115,29 +207,16 @@ def main() -> int:
         console_logs = []
         errors = []
         with sync_playwright() as p:
-            # Determine headless vs headed preference
-            headless = True
-            if args.headed:
-                headless = False
-            elif args.headless:
-                headless = True
-            # Allow env override PLAYWRIGHT_HEADLESS=false
-            env_override = os.getenv("PLAYWRIGHT_HEADLESS")
-            if env_override is not None:
-                headless = env_override.lower() not in ("false", "0", "no")
+            headless, launch_args, viewport = _resolve_playwright_launch(args)
             browser = p.chromium.launch(
                 headless=headless,
-                args=["--disable-web-security"],
+                args=launch_args,
                 slow_mo=0 if headless else 50,
             )
             if not headless:
                 print("Browser launched in headed mode.")
-            page = browser.new_page()
-            # Improve viewport size for large progress ring visibility
-            from contextlib import suppress
-
-            with suppress(Exception):
-                page.set_viewport_size({"width": 1600, "height": 1000})
+            context = browser.new_context(viewport=viewport)
+            page = context.new_page()
 
             # Capture console
             def handle_console(msg):
@@ -150,56 +229,20 @@ def main() -> int:
             page.on("console", handle_console)
 
             # Navigate and wait
-            try:
-                resp = page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                status = resp.status if resp else None
-                print(f"Page loaded with status: {status}")
-            except Exception as e:  # noqa: BLE001
-                print(f"ERROR navigating to page: {e}")
-                # Attempt a single retry after short delay (handles transient race)
-                time.sleep(1.5)
-                try:
-                    resp = page.goto(url, wait_until="load", timeout=15000)
-                    status = resp.status if resp else None
-                    print(f"Retry loaded with status: {status}")
-                except Exception as e2:  # noqa: BLE001
-                    print(f"SECOND FAILURE navigating to page: {e2}")
-                    browser.close()
-                    return 4
+            resp, nav_error = _navigate_with_retry(page, url)
+            if nav_error is not None:
+                browser.close()
+                return nav_error
+
+            status = resp.status if resp else None
+            print(f"Page loaded with status: {status}")
 
             # A short settle time for late JS
             page.wait_for_timeout(1000)
 
-            # Optionally open default browser for manual inspection
-            if args.open_default:
-                try:
-                    webbrowser.open(url, new=2)
-                    print("Opened in default browser.")
-                    if args.keep_alive and args.keep_alive > 0:
-                        print(f"Keeping server alive for {args.keep_alive}s ...")
-                        time.sleep(args.keep_alive)
-                except Exception as e:
-                    print(f"Failed to open default browser: {e}")
+            _maybe_open_default_browser(url, args)
 
-            # Screenshot and dump
-            screenshot_path = ROOT / "client_web_gui_screenshot.png"
-            page.screenshot(path=str(screenshot_path), full_page=True)
-            print(f"Screenshot saved to: {screenshot_path}")
-
-            html_path = ROOT / "web_gui_content.html"
-            html = page.content()
-            html_path.write_text(html, encoding="utf-8")
-            print(f"HTML saved to: {html_path}")
-
-            logs_path = ROOT / "console_logs.json"
-            logs_path.write_text(json.dumps(console_logs, indent=2), encoding="utf-8")
-            print(f"Console logs saved to: {logs_path}")
-
-            # Summary
-            print("\n=== Summary ===")
-            print(
-                f"Console messages: {len(console_logs)} | Errors/Warnings: {len(errors)}"
-            )
+            _write_outputs(page, console_logs, errors)
 
             browser.close()
 

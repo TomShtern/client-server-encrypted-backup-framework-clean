@@ -10,7 +10,9 @@
 				"--port",
 				"9091",
 				"--page",
-				"index.html"
+				"index.html",
+				"--headed",
+				"--maximize"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -52,7 +54,9 @@
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
 				"tests/integration/test_web_gui.py",
-				"http://localhost:9091"
+				"http://localhost:9091",
+				"--headed",
+				"--maximize"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -72,7 +76,9 @@
 			"command": "${workspaceFolder}/flet_venv/Scripts/python.exe",
 			"args": [
 				"tests/integration/test_web_gui.py",
-				"http://localhost:9091/index.html"
+				"http://localhost:9091/index.html",
+				"--headed",
+				"--maximize"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"

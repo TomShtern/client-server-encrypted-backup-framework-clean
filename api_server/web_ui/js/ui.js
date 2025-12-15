@@ -77,12 +77,17 @@ class LogStore {
     this.logs.unshift(entry);
     if (this.logs.length > this.maxLogs) this.logs.pop();
     this.#render(entry);
+
+    // Respect active UI filters/search (if enabled)
+    globalThis.applyLogFilters?.();
+
     this.#syncEmptyAndCount();
   }
 
   clear() {
     this.logs = [];
     if (this.container) this.container.innerHTML = '';
+    globalThis.applyLogFilters?.();
     this.#syncEmptyAndCount();
   }
 
@@ -91,7 +96,13 @@ class LogStore {
       dom.logEntryCount.textContent = String(this.logs.length);
     }
     if (dom.logsEmptyState) {
-      dom.logsEmptyState.hidden = this.logs.length > 0;
+      // When search/filter hides all visible log entries, show the empty-state.
+      const visibleCount = this.container
+        ? Array.from(this.container.querySelectorAll('[data-log-entry]'))
+          .filter((el) => !el.hidden && el.style.display !== 'none').length
+        : 0;
+
+      dom.logsEmptyState.hidden = visibleCount > 0;
     }
   }
 
@@ -101,6 +112,9 @@ class LogStore {
     const div = document.createElement('div');
     div.className = `log-entry log-${entry.level}`;
     div.dataset.logEntry = '';
+    div.dataset.level = entry.level;
+    div.dataset.phase = entry.phase;
+    div.dataset.ts = String(entry.timestamp.getTime());
 
     const timeSpan = document.createElement('span');
     timeSpan.className = 'log-time';
@@ -381,39 +395,190 @@ class ProfessionalGUIEnhancements {
   }
 
   static setupConnectionDropdown() {
-    const statusBadge = dom.connStatus;
+    const statusBadge = dom.statusOutput;
     const dropdown = dom.connectionDetails;
 
     if (!statusBadge || !dropdown) return;
 
     statusBadge.addEventListener('click', (e) => {
       e.stopPropagation();
-      dropdown.classList.toggle('show');
+      const next = !dropdown.classList.contains('show');
+      dropdown.classList.toggle('show', next);
+      statusBadge.setAttribute('aria-expanded', next ? 'true' : 'false');
     });
 
     document.addEventListener('click', (e) => {
       if (!dropdown.contains(e.target) && !statusBadge.contains(e.target)) {
         dropdown.classList.remove('show');
+        statusBadge.setAttribute('aria-expanded', 'false');
       }
     });
   }
 
   static setupLogSearch() {
-    const searchInput = document.getElementById('logSearchInput');
-    if (!searchInput) return;
+    const searchInput = dom.logSearchInput;
+    const clearBtn = dom.searchClearBtn;
+    const filterButtons = dom.logFilters;
+    const indicator = dom.segmentIndicator;
+    const recentBtn = dom.filterRecentLogsBtn;
+    const emptyTitle = dom.logsEmptyTitle;
+    const emptyDesc = dom.logsEmptyDesc;
 
+    if (!searchInput || !dom.logContainer) return;
+
+    const defaultEmptyTitle = emptyTitle?.textContent || 'No activity yet';
+    const defaultEmptyDesc = emptyDesc?.textContent || 'Connect and start a backup to see activity.';
+
+    let currentQuery = '';
+    let currentLevel = 'all';
+    let recentOnly = false;
+    const RECENT_WINDOW_MS = 5 * 60 * 1000;
+
+    const getEntryLevel = (el) => {
+      const raw = (el.dataset.level || '').toLowerCase();
+      if (raw) return raw;
+      if (el.classList.contains('log-error')) return 'error';
+      if (el.classList.contains('log-warn')) return 'warn';
+      if (el.classList.contains('log-info')) return 'info';
+      if (el.classList.contains('log-success')) return 'success';
+      return 'info';
+    };
+
+    const levelMatches = (level, entryLevel) => {
+      if (level === 'all') return true;
+      if (level === 'info') return entryLevel === 'info' || entryLevel === 'success';
+      return entryLevel === level;
+    };
+
+    const updateEmptyCopy = ({ totalLogs, visibleLogs }) => {
+      if (!dom.logsEmptyState) return;
+
+      if (visibleLogs > 0) {
+        dom.logsEmptyState.hidden = true;
+        return;
+      }
+
+      dom.logsEmptyState.hidden = false;
+
+      if (!emptyTitle || !emptyDesc) return;
+
+      if (totalLogs === 0) {
+        emptyTitle.textContent = defaultEmptyTitle;
+        emptyDesc.textContent = defaultEmptyDesc;
+        return;
+      }
+
+      if (currentQuery) {
+        emptyTitle.textContent = 'No matching logs';
+        emptyDesc.textContent = 'Try clearing search or changing the filter.';
+        return;
+      }
+
+      if (recentOnly) {
+        emptyTitle.textContent = 'No recent logs';
+        emptyDesc.textContent = 'Try again after activity, or disable the recent filter.';
+        return;
+      }
+
+      if (currentLevel !== 'all') {
+        emptyTitle.textContent = `No ${currentLevel} logs`;
+        emptyDesc.textContent = 'Try a different level or clear the filter.';
+        return;
+      }
+
+      emptyTitle.textContent = defaultEmptyTitle;
+      emptyDesc.textContent = defaultEmptyDesc;
+    };
+
+    const applyFilters = () => {
+      const logEntries = dom.logContainer.querySelectorAll('[data-log-entry]');
+      const query = currentQuery;
+      const now = Date.now();
+
+      let visibleCount = 0;
+      for (const entry of logEntries) {
+        const text = entry.textContent.toLowerCase();
+        const entryLevel = getEntryLevel(entry);
+
+        const ts = Number(entry.dataset.ts);
+        const withinRecentWindow = !Number.isFinite(ts) || (now - ts) <= RECENT_WINDOW_MS;
+
+        const visible = (!query || text.includes(query))
+          && levelMatches(currentLevel, entryLevel)
+          && (!recentOnly || withinRecentWindow);
+        entry.style.display = visible ? '' : 'none';
+        if (visible) visibleCount++;
+      }
+
+      updateEmptyCopy({ totalLogs: logEntries.length, visibleLogs: visibleCount });
+    };
+
+    // Expose so LogStore can reapply when new entries arrive.
+    globalThis.applyLogFilters = applyFilters;
+
+    // Search input (debounced)
     let searchTimeout;
     searchInput.addEventListener('input', () => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
-        const query = searchInput.value.toLowerCase().trim();
-        const logEntries = document.querySelectorAll('[data-log-entry]');
-        for (const entry of logEntries) {
-          const text = entry.textContent.toLowerCase();
-          entry.style.display = (!query || text.includes(query)) ? '' : 'none';
-        }
-      }, 300);
+        currentQuery = (searchInput.value || '').toLowerCase().trim();
+        if (clearBtn) clearBtn.hidden = !currentQuery;
+        applyFilters();
+      }, 200);
     });
+
+    // Clear search button
+    clearBtn?.addEventListener('click', () => {
+      searchInput.value = '';
+      currentQuery = '';
+      clearBtn.hidden = true;
+      applyFilters();
+      searchInput.focus();
+    });
+
+    // Level filter buttons + animated indicator
+    const setActiveFilterButton = (btn) => {
+      if (!btn) return;
+
+      for (const b of filterButtons || []) {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      }
+
+      currentLevel = (btn.dataset.level || 'all').toLowerCase();
+
+      if (indicator && btn.offsetParent) {
+        indicator.style.left = `${btn.offsetLeft}px`;
+        indicator.style.width = `${btn.offsetWidth}px`;
+      }
+
+      applyFilters();
+    };
+
+    for (const btn of filterButtons || []) {
+      btn.addEventListener('click', () => setActiveFilterButton(btn));
+    }
+
+    // Recent logs toggle (Troubleshoot sheet)
+    if (recentBtn) {
+      recentBtn.setAttribute('aria-pressed', 'false');
+      recentBtn.title = 'Show only the last 5 minutes of log entries';
+      recentBtn.addEventListener('click', () => {
+        recentOnly = !recentOnly;
+        recentBtn.setAttribute('aria-pressed', recentOnly ? 'true' : 'false');
+        recentBtn.classList.toggle('active', recentOnly);
+        recentBtn.title = recentOnly
+          ? 'Filtering to last 5 minutes (click to show all)'
+          : 'Show only the last 5 minutes of log entries';
+        applyFilters();
+      });
+    }
+
+    // Initial state
+    if (clearBtn) clearBtn.hidden = true;
+    const initialBtn = (filterButtons || []).find((b) => b.classList.contains('active')) || (filterButtons || [])[0];
+    if (initialBtn) setActiveFilterButton(initialBtn);
   }
 
   static setupSpeedChart() {

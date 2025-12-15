@@ -27,6 +27,15 @@ class ErrorBoundary {
       console.warn('Failed to show toast:', toastError);
     }
 
+    // Mirror critical failures into the persistent status strip (non-blocking).
+    try {
+      if (globalThis.app?.setConnectionStatus) {
+        globalThis.app.setConnectionStatus(userMessage, 'error');
+      }
+    } catch (statusError) {
+      console.warn('Failed to set status message:', statusError);
+    }
+
     if (recovery) {
       try {
         recovery();

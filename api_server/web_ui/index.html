@@ -88,7 +88,11 @@
                             <span class="status-text">Checking</span>
                         </span>
                     </div>
-                    <output id="statusOutput" class="status-output header-pill" aria-live="polite">
+                    <output id="apiBadge" class="header-pill api-badge" aria-live="polite" title="Web UI API mode">
+                        <span class="api-badge-label">API</span>
+                        <span class="api-badge-value" id="apiBadgeValue">—</span>
+                    </output>
+                    <button id="statusOutput" class="status-output header-pill" type="button" aria-expanded="false" aria-controls="connectionDetails">
                         <span id="connHealth" class="latency-indicator" title="Round-trip latency">
                             <span class="latency-label">Latency</span>
                             <svg class="latency-graph" width="24" height="16" viewBox="0 0 24 16" fill="none">
@@ -106,7 +110,7 @@
                         </span>
                         <span id="qualityBadge" class="quality-chip" aria-live="polite" title="Connection quality">Quality: checking</span>
                         <span id="lastChecked" class="last-checked" aria-live="polite">Last checked —</span>
-                    </output>
+                    </button>
                     <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button" aria-expanded="false"
                         aria-controls="troubleshootSheet">⚡ Troubleshoot</button>
                     <div id="connectionDetails" class="connection-details">
@@ -144,6 +148,20 @@
                 </div>
             </div>
         </header>
+
+        <div id="inlineErrorBanner" class="inline-error-banner" role="alert" aria-live="assertive" hidden>
+            <div class="inline-error-inner">
+                <div class="inline-error-icon" aria-hidden="true">!</div>
+                <div class="inline-error-copy">
+                    <div id="inlineErrorTitle" class="inline-error-title">Notice</div>
+                    <div id="inlineErrorBody" class="inline-error-body">—</div>
+                </div>
+                <div class="inline-error-actions">
+                    <a id="inlineErrorAction" class="inline-error-action" href="#" target="_blank" rel="noopener" hidden>Open</a>
+                    <button id="inlineErrorDismiss" class="inline-error-dismiss" type="button" aria-label="Dismiss banner">×</button>
+                </div>
+            </div>
+        </div>
 
         <main id="mainContent" aria-label="Backup workflow">
             <aside class="stack stagger-in" aria-labelledby="cfgTitle">
@@ -204,7 +222,7 @@
                             </div>
                         </div>
                         <div class="file-actions">
-                            <button type="button" id="clearFileBtn" class="action-btn" title="Remove file">✕</button>
+                            <button type="button" id="clearFileBtn" class="action-btn" title="Remove file" aria-label="Remove selected file">✕</button>
                         </div>
                     </div>
 
@@ -363,7 +381,6 @@
                         <span class="cta-text">
                             <span id="primaryBtnSpinner" class="loading-spinner"></span>
                             <span id="primaryBtnText">CONNECT</span>
-                            <span class="cta-subtitle">Encrypted upload · AES-256 · CRC-verified</span>
                         </span>
                     </button>
                     <button id="pauseBtn" class="interactive ripple action-btn" type="button" disabled>PAUSE</button>
@@ -372,10 +389,11 @@
                 </div>
 
                 <!-- Connection Status Message -->
-                <div id="connectionStatusMessage" class="connection-status-message" aria-live="polite">
+                <output id="connectionStatusMessage" class="connection-status-message" aria-live="polite" aria-atomic="true">
+                    <span id="connectionStatusSpinner" class="loading-spinner" aria-hidden="true"></span>
                     <span id="connectionStatusIcon" class="status-icon">ℹ</span>
                     <span id="connectionStatusText">Ready to connect</span>
-                </div>
+                </output>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
                     <div class="stat interactive">
@@ -457,7 +475,7 @@
                         </svg>
                         <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs"
                             class="logs-search-input" />
-                        <button type="button" class="search-clear-btn" id="searchClearBtn" hidden>
+                        <button type="button" class="search-clear-btn" id="searchClearBtn" aria-label="Clear log search" hidden>
                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                 <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5"
                                     stroke-linecap="round" />
@@ -508,7 +526,8 @@
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5" />
                         </svg>
-                        <span>No activity yet</span>
+                        <span id="logsEmptyTitle">No activity yet</span>
+                        <span id="logsEmptyDesc" class="empty-description">Connect and start a backup to see activity.</span>
                         <a class="text-link" href="https://github.com" target="_blank" rel="noreferrer">View docs</a>
                     </div>
                 </div>
@@ -532,14 +551,14 @@
     <div id="srLive" class="sr-only" aria-live="polite"></div>
 
     <!-- Keyboard Shortcuts Button -->
-    <button id="shortcutBtn" class="shortcut-btn" title="Keyboard Shortcuts (Shift+?)">?</button>
+    <button id="shortcutBtn" class="shortcut-btn" title="Keyboard Shortcuts (Shift+?)" aria-label="Keyboard shortcuts">?</button>
 
     <!-- Shortcuts Modal -->
     <dialog id="shortcutModal" class="shortcut-modal">
         <div class="shortcut-content">
             <div class="shortcut-header">
                 <h3>Keyboard Shortcuts</h3>
-                <button id="closeShortcutBtn" class="close-btn">✕</button>
+                <button id="closeShortcutBtn" class="close-btn" aria-label="Close keyboard shortcuts">✕</button>
             </div>
             <div class="shortcut-grid">
                 <div class="shortcut-item">
@@ -575,7 +594,7 @@
         <div class="troubleshoot-content">
             <div class="troubleshoot-header">
                 <div class="phase" id="troubleshootTitle">Troubleshoot Connection</div>
-                <button id="closeTroubleshoot" class="ghost" type="button">✕</button>
+                <button id="closeTroubleshoot" class="ghost" type="button" aria-label="Close troubleshoot">✕</button>
             </div>
             <div class="troubleshoot-actions">
                 <button id="forcePingBtn" type="button" class="logs-action-btn">Force ping</button>
