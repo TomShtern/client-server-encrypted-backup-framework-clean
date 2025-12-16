@@ -3,6 +3,7 @@
  * Theme management, logging UI, file handling, and visual enhancements.
  * Depends on: core-utils.js
  */
+/* global dom, formatters, generateUUID, getStorageWithFallback, setStorageWithFallback */
 
 // --- Theme Management ---
 
@@ -10,7 +11,8 @@ class ThemeManager {
   constructor() {
     this.themeToggle = dom.themeToggle;
     this.prefersDark = globalThis.matchMedia('(prefers-color-scheme: dark)');
-    this.currentTheme = localStorage.getItem('theme') || (this.prefersDark.matches ? 'dark' : 'light');
+    const storedTheme = getStorageWithFallback('theme');
+    this.currentTheme = storedTheme || (this.prefersDark.matches ? 'dark' : 'light');
     this.#init();
   }
 
@@ -21,11 +23,11 @@ class ThemeManager {
     this.themeToggle?.addEventListener('change', () => {
       const next = this.themeToggle.checked ? 'dark' : 'light';
       this.#apply(next);
-      localStorage.setItem('theme', next);
+      setStorageWithFallback('theme', next);
     });
 
     this.prefersDark.addEventListener('change', (e) => {
-      if (!localStorage.getItem('theme')) {
+      if (!getStorageWithFallback('theme')) {
         this.#apply(e.matches ? 'dark' : 'light');
       }
     });
@@ -34,7 +36,7 @@ class ThemeManager {
   toggle() {
     const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
     this.#apply(newTheme);
-    localStorage.setItem('theme', newTheme);
+    setStorageWithFallback('theme', newTheme);
   }
 
   #apply(theme) {
@@ -63,6 +65,7 @@ class LogStore {
     this.container = container;
     this.maxLogs = maxLogs;
     this.logs = [];
+    this.visibleCount = 0;
   }
 
   add(message, { level = 'info', phase = 'GENERAL' } = {}) {
@@ -78,6 +81,9 @@ class LogStore {
     if (this.logs.length > this.maxLogs) this.logs.pop();
     this.#render(entry);
 
+    // Increment visible count (new entries are visible by default)
+    this.visibleCount++;
+
     // Respect active UI filters/search (if enabled)
     globalThis.applyLogFilters?.();
 
@@ -86,6 +92,7 @@ class LogStore {
 
   clear() {
     this.logs = [];
+    this.visibleCount = 0;
     if (this.container) this.container.innerHTML = '';
     globalThis.applyLogFilters?.();
     this.#syncEmptyAndCount();
@@ -96,14 +103,17 @@ class LogStore {
       dom.logEntryCount.textContent = String(this.logs.length);
     }
     if (dom.logsEmptyState) {
-      // When search/filter hides all visible log entries, show the empty-state.
-      const visibleCount = this.container
-        ? Array.from(this.container.querySelectorAll('[data-log-entry]'))
-          .filter((el) => !el.hidden && el.style.display !== 'none').length
-        : 0;
-
-      dom.logsEmptyState.hidden = visibleCount > 0;
+      dom.logsEmptyState.hidden = this.visibleCount > 0;
     }
+  }
+
+  /**
+   * Updates the visible count (called by filter logic)
+   * @param {number} count
+   */
+  setVisibleCount(count) {
+    this.visibleCount = count;
+    this.#syncEmptyAndCount();
   }
 
   #render(entry) {
@@ -314,7 +324,8 @@ class SpeedChart {
   }
 
   #attachResizeListener() {
-    this.#resizeHandler = () => this.resizeCanvas();
+    // Debounce resize to prevent excessive redraws
+    this.#resizeHandler = domUtils.debounce(() => this.resizeCanvas(), 250);
     window.addEventListener('resize', this.#resizeHandler);
   }
 
@@ -444,12 +455,170 @@ class ProfessionalGUIEnhancements {
     this.initFloatingLabels();
     this.setupConnectionDropdown();
     this.setupLogSearch();
+    this.setupCopyButtons();
     this.setupSpeedChart();
     this.setupAdvancedSettingsPanel();
     this.setupDragAndDrop();
     this.setupShortcuts();
+    this.setupTroubleshootPanel();
     this.setupBrowserNotifications();
     this.addEnhancementStyles();
+  }
+
+  static #getApp() {
+    return globalThis.app || null;
+  }
+
+  static #announce(message) {
+    const app = this.#getApp();
+    if (app?.announcer) {
+      app.announcer.announce(message);
+      return;
+    }
+    if (dom.srLive) {
+      dom.srLive.textContent = '';
+      requestAnimationFrame(() => {
+        dom.srLive.textContent = String(message);
+      });
+    }
+  }
+
+  static #toast(message, variant = 'info', duration) {
+    const app = this.#getApp();
+    if (app?.toast) {
+      app.toast.show(message, variant, duration);
+      return;
+    }
+    console.info('[Toast]', variant, message);
+  }
+
+  static #flashButton(button, { text = null, durationMs = 900 } = {}) {
+    if (!button) return;
+    const originalText = button.textContent;
+    button.classList.add('is-success');
+    if (text) button.textContent = text;
+    window.setTimeout(() => {
+      button.classList.remove('is-success');
+      if (text) button.textContent = originalText;
+    }, durationMs);
+  }
+
+  static async copyWithFeedback(text, {
+    toastMessage = 'Copied to clipboard',
+    announceMessage = 'Copied to clipboard',
+    button = null,
+  } = {}) {
+    try {
+      const ok = await globalThis.copyTextToClipboard?.(text);
+      if (!ok) {
+        this.#toast('Copy failed (clipboard not available)', 'warn');
+        this.#announce('Copy failed');
+        return false;
+      }
+      this.#toast(toastMessage, 'success');
+      this.#announce(announceMessage);
+      if (button) {
+        this.#flashButton(button, { text: 'Copied!' });
+      }
+      return true;
+    } catch (error) {
+      console.warn('copyWithFeedback failed:', error);
+      this.#toast('Copy failed', 'error');
+      this.#announce('Copy failed');
+      return false;
+    }
+  }
+
+  static #getVisibleLogLines({ limit = 50 } = {}) {
+    if (!dom.logContainer) return [];
+    const entries = Array.from(dom.logContainer.querySelectorAll('[data-log-entry]'))
+      .filter((el) => {
+        const style = globalThis.getComputedStyle?.(el);
+        return style?.display !== 'none';
+      })
+      .slice(0, limit);
+
+    return entries.map((entry) => {
+      const time = entry.querySelector('.log-time')?.textContent?.trim() || '--:--:--';
+      const phase = entry.querySelector('.log-phase')?.textContent?.trim() || '[GENERAL]';
+      const msg = entry.querySelector('.log-message')?.textContent?.trim() || '';
+      return `${time} ${phase} ${msg}`.trim();
+    });
+  }
+
+  static #downloadTextFile(filename, text) {
+    try {
+      const blob = new Blob([String(text ?? '')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    } catch (error) {
+      console.warn('downloadTextFile failed:', error);
+      return false;
+    }
+  }
+
+  static setupCopyButtons() {
+    const clearBtn = dom.logClearBtn;
+    const copyBtn = dom.logCopyBtn;
+    const exportBtn = dom.logExportBtn;
+
+    clearBtn?.addEventListener('click', () => {
+      const app = this.#getApp();
+      if (!app?.logs) return;
+      app.logs.clear();
+      this.#toast('Logs cleared', 'info');
+      this.#announce('Logs cleared');
+      this.#flashButton(clearBtn, { text: 'Cleared' });
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      const lines = this.#getVisibleLogLines({ limit: 50 });
+      if (lines.length === 0) {
+        this.#toast('No logs to copy', 'info');
+        this.#announce('No logs to copy');
+        return;
+      }
+      const header = `CyberBackup Activity Logs\nGenerated: ${new Date().toISOString()}\n\n`;
+      const payload = header + lines.join('\n');
+      await this.copyWithFeedback(payload, {
+        toastMessage: 'Logs copied',
+        announceMessage: 'Logs copied to clipboard',
+        button: copyBtn,
+      });
+    });
+
+    exportBtn?.addEventListener('click', () => {
+      const lines = this.#getVisibleLogLines({ limit: 500 });
+      if (lines.length === 0) {
+        this.#toast('No logs to export', 'info');
+        this.#announce('No logs to export');
+        return;
+      }
+      const now = new Date();
+      const stamp = now.toISOString().replaceAll(':', '').replaceAll('-', '').replace('T', '-').slice(0, 15);
+      const filename = `cyberbackup-logs-${stamp}.txt`;
+      const header = `CyberBackup Activity Logs\nGenerated: ${now.toISOString()}\n\n`;
+      const payload = header + lines.join('\n');
+
+      const ok = this.#downloadTextFile(filename, payload);
+      if (ok) {
+        this.#toast('Logs exported', 'success');
+        this.#announce('Logs exported');
+        this.#flashButton(exportBtn, { text: 'Saved' });
+      } else {
+        this.#toast('Export failed', 'error');
+        this.#announce('Export failed');
+      }
+    });
   }
 
   static initRippleEffects() {
@@ -605,6 +774,10 @@ class ProfessionalGUIEnhancements {
           && (!recentOnly || withinRecentWindow);
         entry.style.display = visible ? '' : 'none';
         if (visible) visibleCount++;
+      }
+
+      if (globalThis.app?.logs) {
+        globalThis.app.logs.setVisibleCount(visibleCount);
       }
 
       updateEmptyCopy({ totalLogs: logEntries.length, visibleLogs: visibleCount });
@@ -818,20 +991,159 @@ class ProfessionalGUIEnhancements {
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
     modal.addEventListener('close', () => trap.deactivate());
 
+    // Escape-to-stop safety latch (press twice within a short window).
+    let escapeStopArmedUntil = 0;
+
     document.addEventListener('keydown', (e) => {
-      if (e.key === '?' && e.shiftKey && document.activeElement.tagName !== 'INPUT') {
+      const activeEl = document.activeElement;
+      const tag = activeEl?.tagName || '';
+      const isInput =
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) ||
+        Boolean(activeEl?.isContentEditable);
+
+      const { app } = globalThis;
+      const status = app?.state?.snapshot?.status;
+
+      // ? - Show shortcuts
+      if (e.key === '?' && e.shiftKey && !isInput) {
         e.preventDefault();
         openModal();
+        return;
       }
-      if (e.key === 'Escape' && modal.open) {
+
+      // Escape - Close modal, or arm stop on active transfer
+      if (e.key === 'Escape') {
+        if (modal.open) {
+          e.preventDefault();
+          closeModal();
+          return;
+        }
+        if (status === 'uploading' && !isInput) {
+          e.preventDefault();
+          const now = Date.now();
+          if (now < escapeStopArmedUntil) {
+            dom.stopBtn?.click();
+            escapeStopArmedUntil = 0;
+          } else {
+            escapeStopArmedUntil = now + 2000;
+            app?.toast?.show('Press Escape again to stop transfer', 'warn');
+          }
+        }
+        return;
+      }
+
+      // Ctrl/Cmd + L - Clear logs
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L') && !isInput) {
         e.preventDefault();
-        closeModal();
+        if (dom.logClearBtn && !dom.logClearBtn.disabled) dom.logClearBtn.click();
+        else app?.logs?.clear();
+        app?.toast?.show('Logs cleared', 'info');
+        return;
       }
-      // Ctrl/Cmd + Enter to start backup
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        const startBtn = document.getElementById('start-backup-btn'); // Check ID
-        if (startBtn && !startBtn.disabled) startBtn.click();
+
+      // Ctrl/Cmd + O - Open file picker
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O') && !isInput) {
+        e.preventDefault();
+        dom.fileInput?.click();
+        return;
       }
+
+      // Enter - Connect/start primary action
+      if (e.key === 'Enter' && !isInput) {
+        e.preventDefault();
+        dom.primaryActionBtn?.click();
+        return;
+      }
+
+      // Space - Pause/Resume (when transfer active)
+      if ((e.key === ' ' || e.code === 'Space') && !isInput) {
+        if (status === 'uploading') {
+          e.preventDefault();
+          dom.pauseBtn?.click();
+        } else if (status === 'paused') {
+          e.preventDefault();
+          dom.resumeBtn?.click();
+        }
+      }
+    });
+  }
+
+  static setupTroubleshootPanel() {
+    const sheet = dom.troubleshootSheet;
+    const chip = dom.troubleshootChip;
+    const closeBtn = dom.closeTroubleshoot;
+    if (!sheet || !chip) return;
+
+    const trap = new FocusTrap(sheet);
+
+    const openSheet = () => {
+      if (sheet.open) return;
+      sheet.showModal();
+      chip.setAttribute('aria-expanded', 'true');
+      trap.activate();
+    };
+
+    const closeSheet = () => {
+      if (!sheet.open) return;
+      trap.deactivate();
+      sheet.close();
+      chip.setAttribute('aria-expanded', 'false');
+    };
+
+    chip.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (sheet.open) closeSheet();
+      else openSheet();
+    });
+
+    closeBtn?.addEventListener('click', () => closeSheet());
+
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet) closeSheet();
+    });
+
+    sheet.addEventListener('close', () => {
+      trap.deactivate();
+      chip.setAttribute('aria-expanded', 'false');
+    });
+
+    // Actions inside the sheet
+    dom.forcePingBtn?.addEventListener('click', () => {
+      const app = this.#getApp();
+      if (!app?.monitor?.forcePing) {
+        this.#toast('Ping not available', 'warn');
+        return;
+      }
+      this.#toast('Pinging API…', 'info', 1500);
+      app.monitor.forcePing();
+    });
+
+    dom.copyDiagnosticsBtn?.addEventListener('click', async () => {
+      const app = this.#getApp();
+      const snapshot = app?.state?.snapshot || {};
+      const monitor = app?.lastMonitorResult || {};
+      const visibleLines = this.#getVisibleLogLines({ limit: 50 });
+      const diagnostics = [
+        'CyberBackup Web UI diagnostics',
+        `Generated: ${new Date().toISOString()}`,
+        `Location: ${globalThis.location?.href || 'unknown'}`,
+        `UserAgent: ${globalThis.navigator?.userAgent || 'unknown'}`,
+        '',
+        'State snapshot:',
+        JSON.stringify(snapshot, null, 2),
+        '',
+        'Last monitor result:',
+        JSON.stringify(monitor, null, 2),
+        '',
+        'Recent visible logs (newest first):',
+        visibleLines.length ? visibleLines.join('\n') : '(none)',
+      ].join('\n');
+
+      await this.copyWithFeedback(diagnostics, {
+        toastMessage: 'Diagnostics copied',
+        announceMessage: 'Diagnostics copied to clipboard',
+        button: dom.copyDiagnosticsBtn,
+      });
     });
   }
 

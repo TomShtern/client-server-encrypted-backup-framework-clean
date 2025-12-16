@@ -6,7 +6,7 @@
 
 ---
 
-## Progress Update (2025-12-15)
+## Progress Update (2025-12-17)
 
 ### Completed
 - **Task 2 – Duplicate DOM registration**: Removed the second `dom.logContainer` assignment (see `js/core-utils.js`).
@@ -18,10 +18,32 @@
   - Speed chart has role/summary live text (see `index.html`, `js/ui.js`, `js/core-utils.js`).
   - File drop/selection now announces results via ScreenReaderAnnouncer (see `js/ui.js`).
   - Shortcut modal gained a focus trap; focus-visible outlines added for interactive controls (see `js/ui.js`, `css/styles.css`).
+- **Task 10 – Performance**:
+  - 10.1 Debounced SpeedChart resize handler to prevent excessive redraws (see `js/ui.js`).
+  - 10.2 Log filtering now tracks visible count via LogStore instead of DOM scans (see `js/ui.js`).
+  - 10.3 Animations pause when idle via render-time gating and CSS (see `js/app.js`, `css/styles.css`).
+  - 10.4 Circuit pattern extracted to external SVG asset to reduce CSS weight (see `css/styles.css`, `img/circuit-pattern.svg`).
+- **Task 19 – Global error handlers**: Added window-level `error` and `unhandledrejection` hooks in `app.js` that route failures through `ErrorBoundary` (toasts + status strip).
+- **Task 20 – LocalStorage error handling**: Implemented `safeLocalStorage`/`safeSessionStorage` with quota/security handling and in-memory fallback; replaced direct usage in theme persistence, advanced settings, and demo-mode detection (see `js/core-utils.js`, `js/ui.js`, `js/core.js`, `js/app.js`).
+
+### Completed (since 2025-12-16)
+- **Task 9 – Accessibility (incremental)**:
+  - Phase text is now a live `<output>` element (polite/atomic) so status transitions are announced more reliably (see `index.html`).
+  - Progress ring semantics now use a visually-hidden native `<progress>` element (with the SVG ring marked decorative), avoiding misleading custom ARIA on SVG (see `index.html`, `js/core-utils.js`, `js/app.js`).
+  - Stat cards are no longer keyboard-focusable and no longer use `role="status"` (they were not interactive); values remain readable and updated normally (see `index.html`, `js/app.js`).
+  - Speed chart canvas no longer uses `role="img"`; it uses fallback text + `aria-describedby` pointing at the existing screen-reader summary (see `index.html`).
+- **Task 13 – Missing Visual Feedback (key items)**:
+  - Stats now pulse on change (lightweight value-change detection + CSS pulse) (see `js/app.js`).
+  - Status panel now shows explicit visual accents for `paused` / `completed` / `error` (ring stroke + glow + status text) (see `js/app.js`, `css/styles.css`).
+  - Log action buttons now provide brief positive feedback on success (flash state) (see `js/ui.js`, `css/styles.css`).
+- **Task 14 – Feature Completions (selected items)**:
+  - Keyboard shortcuts expanded (clear logs, open file picker, Enter primary action, Space pause/resume, Esc-to-stop safety latch) (see `js/ui.js`).
+- **Testing tooling (quality-of-life)**:
+  - Playwright web GUI capture script now retries `localhost` URLs with `127.0.0.1` on connection refusal (common IPv6/IPv4 binding mismatch on Windows) (see `tests/integration/test_web_gui.py`).
 
 ### Outstanding / Not Started
-- Task 9 remaining items (e.g., stat role/ARIA refinements beyond focus-visible styling where needed).
-- Task 10 (performance optimizations), Task 11 (refactors/demo extraction), Task 12 (visual consistency cleanup), Task 13 (additional visual feedback), Task 14+ (feature completions/new features), Task 18–20 (docs, error handling) are still pending.
+- Task 9 remaining items (e.g., refine announcement strategy to avoid noisy updates while still exposing key changes; confirm with screen-reader pass).
+- Task 11 (refactors/demo extraction), Task 12 (visual consistency cleanup), Task 15+ (new features), Task 18 (documentation) still pending.
 
 ---
 
@@ -1306,7 +1328,18 @@ const applyFilters = () => {
 
 ## Task 11: Code Organization Refactoring
 
-### 11.1 Extract Demo Mode to Separate Class
+### 11.1 Extract Demo Mode to Separate Class ✅ Completed
+
+Implementation:
+- Added `js/demo-mode.js` with a `DemoMode` class (enabled detection via query param or `safeLocalStorage`, start/pause/resume/stop, simulated transfer timer, global export on `globalThis`).
+- Updated `index.html` to load `js/demo-mode.js` before `js/app.js` so the class is available at init.
+- Refactored `app.js` to rely on `this.demo` for demo state/labels and removed legacy inline demo logic and timers.
+
+Outcome:
+- Demo mode is fully modular, reusable, and no longer tangled in `app.js`.
+- Phase labels and progress rendering use `DemoMode.active`; log demo button calls `demo.start()`.
+
+Next for Task 11: proceed to 11.2 (comment cleanup / minor refactors) and remaining organization items.
 
 **Create** `js/demo-mode.js`:
 

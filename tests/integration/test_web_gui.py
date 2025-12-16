@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from urllib.parse import urlparse, urlunparse
 
 from playwright.sync_api import sync_playwright
 
@@ -104,17 +105,43 @@ def main() -> None:
 
         page.on("pageerror", handle_page_error)
 
+        def _swap_host(url: str, new_host: str) -> str:
+            parsed = urlparse(url)
+            if not parsed.scheme:
+                return url
+            port_part = f":{parsed.port}" if parsed.port else ""
+            return urlunparse(parsed._replace(netloc=f"{new_host}{port_part}"))
+
+        def _goto_with_fallback(url: str):
+            print(f"Navigating to {url}...")
+            return page.goto(url, wait_until="networkidle", timeout=30000)
+
         # Navigate to the web GUI
-        print(f"Navigating to {target_url}...")
         try:
-            response = page.goto(target_url, wait_until="networkidle", timeout=30000)
-            if response:
-                print(f"Page loaded with status: {response.status}")
-            else:
-                print("Page navigation failed: No response received.")
+            response = _goto_with_fallback(target_url)
         except Exception as e:
-            print(f"ERROR navigating to page: {e}")
-            return
+            # Windows environments sometimes resolve localhost to IPv6 (::1), while local dev servers
+            # may only listen on IPv4. In that case, fall back to 127.0.0.1 for convenience.
+            should_fallback = (
+                "localhost" in target_url and "ERR_CONNECTION_REFUSED" in str(e)
+            )
+            if should_fallback:
+                fallback_url = _swap_host(target_url, "127.0.0.1")
+                print(f"Retrying with IPv4 loopback: {fallback_url}")
+                try:
+                    response = _goto_with_fallback(fallback_url)
+                    target_url = fallback_url
+                except Exception as e2:
+                    print(f"ERROR navigating to page: {e2}")
+                    return
+            else:
+                print(f"ERROR navigating to page: {e}")
+                return
+
+        if response:
+            print(f"Page loaded with status: {response.status}")
+        else:
+            print("Page navigation failed: No response received.")
 
         # Wait a bit for JS to execute
         page.wait_for_timeout(2000)

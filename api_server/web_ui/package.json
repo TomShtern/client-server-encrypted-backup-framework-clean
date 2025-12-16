@@ -9,7 +9,7 @@
     "start": "http-server . -p 8080 -c-1",
     "build": "npm run validate && npm run lint",
     "validate": "node scripts/validate-modules.js",
-    "lint": "echo 'ESLint not configured - skipping'",
+    "lint": "eslint . --ext .js",
     "test": "echo 'Tests not configured - skipping'",
     "serve": "python -m http.server 8080",
     "clean": "find . -name '*.log' -delete && find . -name '.DS_Store' -delete",

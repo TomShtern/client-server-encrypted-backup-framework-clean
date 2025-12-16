@@ -344,9 +344,11 @@
                 <div class="center">
                     <div class="progress-glow"></div>
                     <div class="ring-decoration"></div>
-                    <svg id="progressRing" viewBox="0 0 100 100" role="progressbar"
-                        aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
-                        aria-label="Backup progress">
+                    <!-- Native progress for accessibility (screen readers). Kept visually hidden. -->
+                    <progress id="progressNative" class="sr-only" max="100" value="0" aria-label="Backup progress">0%</progress>
+
+                    <!-- Visual ring (decorative). Real progress semantics are provided by #progressNative. -->
+                    <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
                         <defs>
                             <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                 <stop offset="0%" stop-color="#00f2ff" />
@@ -368,7 +370,7 @@
                     </svg>
                     <div class="kpi">
                         <div id="progressPct" class="pct">0%</div>
-                        <div id="phaseText" class="phase-status">Idle</div>
+                        <output id="phaseText" class="phase-status" aria-live="polite" aria-atomic="true">Idle</output>
                         <div class="eta">ETA <span id="etaText">—</span></div>
                     </div>
                 </div>
@@ -394,7 +396,7 @@
                 </output>
 
                 <div id="statsGrid" aria-label="Transfer statistics">
-                    <div class="stat interactive" id="statBytesContainer" tabindex="0" role="status" aria-label="Bytes Sent: 0 B">
+                    <div class="stat interactive" id="statBytesContainer" aria-label="Bytes Sent: 0 B">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M3 8L8 3L13 8M8 3V13" stroke="currentColor" stroke-width="1.5"
@@ -406,7 +408,7 @@
                             <div class="value" id="statBytes">0 B</div>
                         </div>
                     </div>
-                    <div class="stat interactive" id="statSpeedContainer" tabindex="0" role="status" aria-label="Speed: 0 B/s">
+                    <div class="stat interactive" id="statSpeedContainer" aria-label="Speed: 0 B/s">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -419,7 +421,7 @@
                             <div class="value" id="statSpeed">0 B/s</div>
                         </div>
                     </div>
-                    <div class="stat interactive" id="statSizeContainer" tabindex="0" role="status" aria-label="File Size: 0 B">
+                    <div class="stat interactive" id="statSizeContainer" aria-label="File Size: 0 B">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <rect x="3" y="2" width="10" height="12" rx="1" stroke="currentColor"
@@ -433,7 +435,7 @@
                             <div class="value" id="statSize">0 B</div>
                         </div>
                     </div>
-                    <div class="stat interactive" id="statElapsedContainer" tabindex="0" role="status" aria-label="Elapsed: --">
+                    <div class="stat interactive" id="statElapsedContainer" aria-label="Elapsed: --">
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -453,8 +455,9 @@
                         <span class="speed-chart-title">Transfer Speed (Last 30s)</span>
                         <button id="toggleSpeedChart" class="ghost speed-chart-toggle" type="button">Hide</button>
                     </div>
-                    <canvas id="speedChart" class="speed-chart" role="img"
-                        aria-label="Transfer speed chart showing throughput over the last 30 seconds"></canvas>
+                    <canvas id="speedChart" class="speed-chart" aria-describedby="speedChartSummary">
+                        Transfer speed chart showing throughput over the last 30 seconds.
+                    </canvas>
                     <div id="speedChartSummary" class="sr-only" aria-live="polite">
                         Current speed: calculating...
                     </div>
@@ -509,6 +512,7 @@
                         <span class="logs-count"><span id="logEntryCount">0</span> entries</span>
                         <button id="logClearBtn" class="logs-action-btn" type="button" title="Clear logs">Clear</button>
                         <button id="logCopyBtn" class="logs-action-btn" type="button" title="Copy last 50 entries">Copy last 50</button>
+                        <button id="logExportBtn" class="logs-action-btn" type="button" title="Export logs to a text file">Export</button>
                         <button id="logDemoBtn" class="logs-action-btn" type="button" title="Add demo logs"
                             hidden>Demo</button>
                     </div>
@@ -625,6 +629,7 @@
     <script src="js/core-utils.js" defer></script>
     <script src="js/core.js" defer></script>
     <script src="js/ui.js" defer></script>
+    <script src="js/demo-mode.js" defer></script>
     <script src="js/app.js" defer></script>
 </body>
 

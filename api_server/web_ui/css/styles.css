@@ -179,7 +179,7 @@
   /* ═══════════════════════════════════════════════════════════════
      CYBER CIRCUIT PATTERN - Distinctive visual identity
      ═══════════════════════════════════════════════════════════════ */
-  --circuit-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%2358a6ff' stroke-width='0.4'%3E%3Crect x='10' y='10' width='16' height='16' rx='2' opacity='0.12'/%3E%3Crect x='94' y='10' width='16' height='16' rx='2' opacity='0.12'/%3E%3Crect x='10' y='94' width='16' height='16' rx='2' opacity='0.12'/%3E%3Crect x='94' y='94' width='16' height='16' rx='2' opacity='0.12'/%3E%3Ccircle cx='18' cy='18' r='2' opacity='0.15'/%3E%3Ccircle cx='102' cy='18' r='2' opacity='0.15'/%3E%3Ccircle cx='18' cy='102' r='2' opacity='0.15'/%3E%3Ccircle cx='102' cy='102' r='2' opacity='0.15'/%3E%3Ccircle cx='60' cy='60' r='3' opacity='0.1'/%3E%3Cpath d='M26 18 L60 18 M60 18 L60 57 M60 63 L60 102 M26 102 L57 102 M63 102 L94 102 M102 26 L102 57 M102 63 L102 94 M18 26 L18 94 M94 18 L63 18' stroke-linecap='round' opacity='0.08'/%3E%3Cpath d='M26 10 L30 10 L30 14 M94 10 L90 10 L90 14 M26 110 L30 110 L30 106 M94 110 L90 110 L90 106 M10 26 L10 30 L14 30 M110 26 L110 30 L106 30 M10 94 L10 90 L14 90 M110 94 L110 90 L106 90' stroke-linecap='round' opacity='0.1'/%3E%3C/g%3E%3C/svg%3E");
+    --circuit-pattern: url("../img/circuit-pattern.svg");
 
   /* ═══════════════════════════════════════════════════════════════
      DESIGN LANGUAGE TOKENS - Consistency System
@@ -2618,6 +2618,54 @@ svg {
   background: rgba(15, 23, 42, 0.95);
 }
 
+/* Status panel state accents (set by `api_server/web_ui/js/app.js`) */
+.status-panel.uploading #progressArc {
+  stroke: url(#progressGradient);
+}
+
+.status-panel.paused #progressArc {
+  stroke: var(--warning);
+}
+
+.status-panel.completed #progressArc {
+  stroke: var(--success);
+}
+
+.status-panel.error #progressArc {
+  stroke: var(--danger);
+}
+
+.status-panel.paused .phase-status {
+  color: var(--warning);
+  text-shadow: 0 0 14px rgba(210, 153, 34, 0.55);
+}
+
+.status-panel.completed .phase-status {
+  color: var(--success);
+  text-shadow: 0 0 16px rgba(63, 185, 80, 0.55);
+}
+
+.status-panel.error .phase-status {
+  color: var(--danger);
+  text-shadow: 0 0 16px rgba(248, 81, 73, 0.55);
+}
+
+.status-panel.completed .progress-glow {
+  background: radial-gradient(circle,
+      rgba(63, 185, 80, 0.14) 0%,
+      rgba(34, 211, 238, 0.06) 25%,
+      rgba(112, 0, 255, 0.03) 45%,
+      transparent 70%);
+}
+
+.status-panel.error .progress-glow {
+  background: radial-gradient(circle,
+      rgba(248, 81, 73, 0.14) 0%,
+      rgba(255, 0, 85, 0.06) 28%,
+      rgba(112, 0, 255, 0.03) 45%,
+      transparent 70%);
+}
+
 .status-bg-animation {
   position: absolute;
   inset: 0;
@@ -3491,6 +3539,14 @@ html.theme-light .logs-toolbar {
   box-shadow: 0 2px 12px rgba(88, 166, 255, 0.2);
 }
 
+/* Brief success flash used by `ProfessionalGUIEnhancements.#flashButton()` */
+.logs-action-btn.is-success {
+  background: rgba(63, 185, 80, 0.12);
+  border-color: rgba(63, 185, 80, 0.35);
+  color: var(--success);
+  box-shadow: 0 2px 12px rgba(63, 185, 80, 0.18);
+}
+
 /* Log Entries Container - Seamless dark area */
 #logContainer {
   position: relative;
@@ -4187,12 +4243,17 @@ html.theme-light .logs-toolbar {
 /* Pause all heavy animations when app is idle (no active transfer) */
 html.app-idle .wave-layer,
 html.app-idle .wave-layer.wave-1,
-html.app-idle .wave-layer.wave-2 {
+html.app-idle .wave-layer.wave-2,
+.animate-paused .wave-layer,
+.animate-paused .wave-layer.wave-1,
+.animate-paused .wave-layer.wave-2 {
   animation-play-state: paused;
 }
 
 html.app-idle .ring-decoration::before,
-html.app-idle .ring-decoration::after {
+html.app-idle .ring-decoration::after,
+.animate-paused .ring-decoration::before,
+.animate-paused .ring-decoration::after {
   animation-play-state: paused;
 }
 
@@ -4206,6 +4267,12 @@ html.app-idle .center::before {
 
 html.app-idle .cloud-upload-icon {
   animation-play-state: paused;
+}
+
+html.app-idle .status-bg-animation,
+.animate-paused .status-bg-animation {
+  opacity: 0.3;
+  transition: opacity 0.5s ease;
 }
 
 html.app-idle .file-drop-zone .drop-zone-wave::before {

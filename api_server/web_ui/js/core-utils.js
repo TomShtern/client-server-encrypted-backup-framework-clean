@@ -47,7 +47,7 @@ function querySelector(selector, parent = document) {
  * Centralized DOM element cache - initialized as empty object
  * Will be populated after DOMContentLoaded to avoid timing issues
  */
-let dom = {};
+const dom = {};
 
 // Initialize DOM cache after document is ready
 if (document.readyState === 'loading') {
@@ -116,6 +116,7 @@ function initializeDom() {
   dom.phaseText = getElement('phaseText');
   dom.progressRing = getElement('progressRing');
   dom.progressArc = getElement('progressArc');
+  dom.progressNative = getOptionalElement('progressNative');
   dom.progressPct = getElement('progressPct');
   dom.etaText = getElement('etaText');
   dom.stats = {
@@ -429,7 +430,7 @@ function generateUUID() {
       return Math.floor(Math.random() * 16);
     };
 
-    return template.replace(/[xy]/g, (c) => {
+    return template.replaceAll(/[xy]/g, (c) => {
       const r = randomNibble();
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
@@ -457,6 +458,58 @@ function validateNumericInput(input, { min, max }) {
     return null;
   }
   return clamp(numeric, { min, max });
+}
+
+/**
+ * Copies text to clipboard with a robust fallback for non-secure contexts.
+ *
+ * @param {string} text
+ * @returns {Promise<boolean>} True if copy succeeded
+ */
+async function copyTextToClipboard(text) {
+  try {
+    const content = String(text ?? '');
+    if (content.length === 0) {
+      return false;
+    }
+
+    // Modern API (requires secure context: https:// or http://localhost)
+    if (globalThis.navigator?.clipboard?.writeText) {
+      await globalThis.navigator.clipboard.writeText(content);
+      return true;
+    }
+  } catch (error) {
+    console.warn('navigator.clipboard.writeText failed, falling back:', error);
+  }
+
+  // Fallback: hidden textarea + execCommand('copy')
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = String(text ?? '');
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+
+    const active = document.activeElement;
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    const ok = document.execCommand('copy');
+    textarea.remove();
+
+    if (active && typeof active.focus === 'function') {
+      active.focus();
+    }
+
+    return Boolean(ok);
+  } catch (error) {
+    console.warn('Clipboard fallback copy failed:', error);
+    return false;
+  }
 }
 
 // --- utils/performance-optimizer.js ---
@@ -560,13 +613,11 @@ function rafDebounce(fn, wait = 16) {
  */
 function rafThrottle(fn, limit = 16) {
   let inThrottle = false;
-  let rafId = null;
 
   return function throttled(...args) {
     if (!inThrottle) {
       requestAnimationFrame(() => {
         fn.apply(this, args);
-        rafId = null;
       });
       inThrottle = true;
       setTimeout(() => {
@@ -1028,6 +1079,100 @@ const API_CONFIG = {
   }
 };
 
+// --- utils/storage.js ---
+/**
+ * Safe localStorage wrapper that handles errors gracefully.
+ * Handles private browsing, quota limits, and disabled storage.
+ *
+ * @param {string} key - Storage key
+ * @param {string|null|undefined} [value] - Value to set (omit to get, null to remove)
+ * @returns {string|null} Retrieved value or null on error
+ */
+function safeLocalStorage(key, value) {
+  try {
+    if (typeof localStorage === 'undefined') {
+      console.warn('localStorage is not available');
+      return null;
+    }
+
+    if (value === null) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    if (value === undefined) {
+      return localStorage.getItem(key);
+    }
+
+    localStorage.setItem(key, value);
+    return value;
+  } catch (error) {
+    if (error?.name === 'QuotaExceededError') {
+      console.warn('localStorage quota exceeded, attempting cleanup');
+      try {
+        localStorage.removeItem('cyberbackup-history');
+        if (value !== undefined && value !== null) {
+          localStorage.setItem(key, value);
+          return value;
+        }
+      } catch (retryError) {
+        console.error('localStorage still failing after cleanup:', retryError);
+      }
+    } else if (error?.name === 'SecurityError') {
+      console.warn('localStorage access denied (private browsing?)');
+    } else {
+      console.warn('localStorage error:', error);
+    }
+    return null;
+  }
+}
+
+/**
+ * Safe sessionStorage wrapper with the same API as safeLocalStorage.
+ * @param {string} key
+ * @param {string|null|undefined} [value]
+ * @returns {string|null}
+ */
+function safeSessionStorage(key, value) {
+  try {
+    if (typeof sessionStorage === 'undefined') {
+      console.warn('sessionStorage is not available');
+      return null;
+    }
+
+    if (value === null) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+
+    if (value === undefined) {
+      return sessionStorage.getItem(key);
+    }
+
+    sessionStorage.setItem(key, value);
+    return value;
+  } catch (error) {
+    console.warn('sessionStorage error:', error);
+    return null;
+  }
+}
+
+// In-memory fallback when persistent storage is unavailable
+const memoryStorage = new Map();
+
+function getStorageWithFallback(key) {
+  const localValue = safeLocalStorage(key);
+  if (localValue !== null) return localValue;
+  return memoryStorage.get(key) || null;
+}
+
+function setStorageWithFallback(key, value) {
+  const result = safeLocalStorage(key, value);
+  if (result === null) {
+    memoryStorage.set(key, value);
+  }
+}
+
 // --- utils/timer-manager.js ---
 /**
  * Unified timer management utility
@@ -1137,3 +1282,32 @@ const FILE_VALIDATION = {
     return { valid: true };
   },
 };
+
+// Expose shared utilities to classic scripts and tests, avoiding unused-var lint noise
+const EXPORTED_GLOBALS = {
+  dom,
+  domUtils,
+  formatters,
+  clamp,
+  generateUUID,
+  validateNumericInput,
+  copyTextToClipboard,
+  PerformanceOptimizer,
+  rafDebounce,
+  rafThrottle,
+  SmoothCounter,
+  performanceOptimizer,
+  StateStore,
+  ToastManager,
+  ScreenReaderAnnouncer,
+  API_CONFIG,
+  safeLocalStorage,
+  safeSessionStorage,
+  getStorageWithFallback,
+  setStorageWithFallback,
+  TimerManager,
+  CONSTANTS,
+  FILE_VALIDATION,
+};
+
+Object.assign(globalThis, EXPORTED_GLOBALS);

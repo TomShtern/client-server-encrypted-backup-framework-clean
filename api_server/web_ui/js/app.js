@@ -3,6 +3,7 @@
  * Orchestrates Core Logic and UI Components.
  * Depends on: core-utils.js, core.js, ui.js
  */
+/* global DemoMode */
 
 class App {
   constructor() {
@@ -22,12 +23,14 @@ class App {
 
     this.operationInProgress = false;
 
-    // Initialize Managers
+    // Track last rendered values to support lightweight UI pulse animations.
+    this._valuePulseTimers = new WeakMap();
+
     // Initialize Managers
     this.api = new ApiClient(API_CONFIG.getApiBaseUrl());
     this.toast = new ToastManager(dom.toastStack);
     this.announcer = new ScreenReaderAnnouncer(dom.srLive);
-    this.logs = new LogStore(dom.logContainer); // FIXED: Was dom.logsContainer (undefined in core-utils)
+    this.logs = new LogStore(dom.logContainer);
     this.theme = new ThemeManager(); // Uses dom.themeToggle internally
 
     // Fix: FileManager takes 3 args (input, dropZone, callback)
@@ -43,6 +46,8 @@ class App {
       toast: this.toast,
       announcer: this.announcer
     });
+
+    this._globalHandlersRegistered = false;
 
     // Initialize Networking
     this.socket = new SocketClient({
@@ -60,13 +65,14 @@ class App {
       onResult: (res) => this.#onMonitorResult(res)
     });
 
+    // Demo mode controller
+    this.demo = new DemoMode(this);
+
     // Bind UI Events
     this.#bindEvents();
 
-    // Demo mode (secondary, opt-in)
-    this.demoEnabled = this.#detectDemoMode();
-    this.demoActive = false;
-    this.demoTimer = null;
+    this.#registerGlobalErrorHandlers();
+
   }
 
   async init() {
@@ -91,7 +97,7 @@ class App {
       // Avoid confusing failures: file:// mode cannot reach the API.
       this.setConnectionStatus('API not available in file:// mode. Open via http://localhost:9090', 'error');
 
-      if (dom.primaryActionBtn && !this.demoEnabled) {
+      if (dom.primaryActionBtn && !this.demo.enabled) {
         dom.primaryActionBtn.disabled = true;
       }
     }
@@ -135,7 +141,7 @@ class App {
       );
     }
 
-    if (this.demoEnabled && dom.logDemoBtn) {
+    if (this.demo.enabled && dom.logDemoBtn) {
       dom.logDemoBtn.hidden = false;
       dom.logDemoBtn.title = 'Run a simulated transfer (demo mode)';
     }
@@ -161,7 +167,7 @@ class App {
     dom.stopBtn?.addEventListener('click', () => this.#handleStop());
 
     // Demo mode helper (hidden unless enabled)
-    dom.logDemoBtn?.addEventListener('click', () => this.#startDemoTransfer());
+    dom.logDemoBtn?.addEventListener('click', () => this.demo.start());
 
     // Settings
     dom.settingsToggle?.addEventListener('click', () => {
@@ -390,6 +396,8 @@ class App {
       }
       // Reset progress if new file selected
       if (this.state.snapshot.status === 'completed' || this.state.snapshot.status === 'error') {
+
+      this.#registerGlobalErrorHandlers();
         this.state.update({ status: 'idle', progress: 0, bytesTransferred: 0 });
       }
 
@@ -450,10 +458,8 @@ class App {
 
   async #handlePause() {
     try {
-      if (this.demoActive) {
-        this.#stopDemoTimer();
-        this.state.update({ status: 'paused' });
-        this.logs.add('Demo transfer paused', { phase: 'DEMO', level: 'info' });
+      if (this.demo.active) {
+        this.demo.pause();
         return;
       }
 
@@ -467,10 +473,8 @@ class App {
 
   async #handleResume() {
     try {
-      if (this.demoActive) {
-        this.state.update({ status: 'uploading' });
-        this.logs.add('Demo transfer resumed', { phase: 'DEMO', level: 'info' });
-        this.#ensureDemoTimer();
+      if (this.demo.active) {
+        this.demo.resume();
         return;
       }
 
@@ -484,12 +488,8 @@ class App {
 
   async #handleStop() {
     try {
-      if (this.demoActive) {
-        this.#stopDemoTimer();
-        this.demoActive = false;
-        this.state.update({ status: 'idle', progress: 0, jobId: null, speed: 0, bytesTransferred: 0 });
-        this.logs.add('Demo transfer stopped', { phase: 'DEMO', level: 'warn' });
-        this.toast.show('Demo stopped', 'info');
+      if (this.demo.active) {
+        this.demo.stop();
         return;
       }
 
@@ -520,7 +520,7 @@ class App {
     this.setConnectionStatus('WebSocket error - status updates may be delayed', 'info');
   }
 
-  #onServerStatus(status) {
+  #onServerStatus(_status) {
     // Handle general server status updates if needed
   }
 
@@ -592,9 +592,9 @@ class App {
     if (!dom.phaseText) return;
     const labels = {
       idle: 'Idle',
-      uploading: this.demoActive ? 'Simulated upload' : 'Uploading',
-      paused: this.demoActive ? 'Simulated (paused)' : 'Paused',
-      completed: this.demoActive ? 'Simulated complete' : 'Completed',
+      uploading: this.demo.active ? 'Simulated upload' : 'Uploading',
+      paused: this.demo.active ? 'Simulated (paused)' : 'Paused',
+      completed: this.demo.active ? 'Simulated complete' : 'Completed',
       error: 'Error',
     };
     dom.phaseText.textContent = labels[status] || 'Idle';
@@ -618,21 +618,71 @@ class App {
     const offset = circumference * (1 - pct / 100);
     dom.progressArc.style.strokeDasharray = `${circumference}`;
     dom.progressArc.style.strokeDashoffset = `${offset}`;
-    if (dom.progressRing) {
-      dom.progressRing.setAttribute('aria-valuenow', Math.round(pct).toString());
+
+    // Accessibility: keep a native <progress> element in sync for assistive tech.
+    if (dom.progressNative) {
+      const rounded = Math.round(pct);
+      dom.progressNative.value = rounded;
+      dom.progressNative.textContent = `${rounded}%`;
     }
   }
 
+  #setTextWithOptionalPulse(el, nextText, { pulse = true } = {}) {
+    if (!el) return;
+
+    const next = String(nextText ?? '');
+    if (el.textContent === next) return;
+
+    el.textContent = next;
+
+    if (!pulse) return;
+
+    // Respect reduced-motion preferences.
+    const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    if (reduceMotion) return;
+
+    // Restart animation reliably.
+    el.classList.remove('value-updating');
+    // Force reflow (small, controlled) to retrigger the animation.
+    void el.offsetWidth;
+    el.classList.add('value-updating');
+
+    const priorTimer = this._valuePulseTimers.get(el);
+    if (priorTimer) {
+      globalThis.clearTimeout(priorTimer);
+    }
+
+    const timer = globalThis.setTimeout(() => {
+      el.classList.remove('value-updating');
+      this._valuePulseTimers.delete(el);
+    }, 320);
+
+    this._valuePulseTimers.set(el, timer);
+  }
+
   #renderStats(state, transferActive, transferFinished) {
+    const isUploading = state.status === 'uploading';
+
+    // Visual emphasis for active transfers.
+    if (dom.statsContainers) {
+      for (const container of Object.values(dom.statsContainers)) {
+        container?.classList.toggle('transfer-active', isUploading);
+      }
+      dom.statsContainers.speed?.classList.toggle('primary-stat', isUploading);
+    }
+
     if (dom.stats?.bytes) {
       const showBytes = transferActive || transferFinished || Number(state.totalBytes) > 0;
-      dom.stats.bytes.textContent = showBytes ? formatters.formatBytes(state.bytesTransferred || 0) : '—';
+      const bytesText = showBytes ? formatters.formatBytes(state.bytesTransferred || 0) : '—';
+      this.#setTextWithOptionalPulse(dom.stats.bytes, bytesText, { pulse: isUploading });
       dom.statsContainers?.bytes?.setAttribute('aria-label', `Bytes Sent: ${dom.stats.bytes.textContent}`);
     }
 
     if (dom.stats?.size) {
       const hasSize = Number(state.totalBytes) > 0;
-      dom.stats.size.textContent = hasSize ? formatters.formatBytes(state.totalBytes || 0) : '—';
+      const sizeText = hasSize ? formatters.formatBytes(state.totalBytes || 0) : '—';
+      // Size changes rarely; pulse is useful even when not actively uploading.
+      this.#setTextWithOptionalPulse(dom.stats.size, sizeText, { pulse: true });
       dom.statsContainers?.size?.setAttribute('aria-label', `File Size: ${dom.stats.size.textContent}`);
     }
 
@@ -641,7 +691,7 @@ class App {
       if (transferActive) speedText = formatters.formatSpeed(state.speed || 0);
       else if (state.status === 'paused') speedText = 'Paused';
       else if (state.status === 'completed') speedText = '0 B/s';
-      dom.stats.speed.textContent = speedText;
+      this.#setTextWithOptionalPulse(dom.stats.speed, speedText, { pulse: isUploading });
       dom.statsContainers?.speed?.setAttribute('aria-label', `Speed: ${dom.stats.speed.textContent}`);
     }
 
@@ -649,9 +699,9 @@ class App {
       const canShow = Boolean(state.startTime) && (transferActive || transferFinished);
       if (canShow) {
         const elapsedSec = Math.max(0, (Date.now() - Number(state.startTime)) / 1000);
-        dom.stats.elapsed.textContent = formatters.formatDuration(elapsedSec);
+        this.#setTextWithOptionalPulse(dom.stats.elapsed, formatters.formatDuration(elapsedSec), { pulse: false });
       } else {
-        dom.stats.elapsed.textContent = '--';
+        this.#setTextWithOptionalPulse(dom.stats.elapsed, '--', { pulse: false });
       }
       dom.statsContainers?.elapsed?.setAttribute('aria-label', `Elapsed: ${dom.stats.elapsed.textContent}`);
     }
@@ -687,6 +737,29 @@ class App {
     ProfessionalGUIEnhancements.chartInstance.addDataPoint(Number(state.speed) || 0);
   }
 
+  #registerGlobalErrorHandlers() {
+    if (this._globalHandlersRegistered) return;
+    this._globalHandlersRegistered = true;
+
+    // Capture unexpected runtime errors
+    globalThis.addEventListener('error', (event) => {
+      if (!event) return;
+      // Ignore known benign ResizeObserver noise in Chromium
+      if (typeof event.message === 'string' && event.message.includes('ResizeObserver loop limit exceeded')) {
+        return;
+      }
+      const err = event.error || event.message || 'Unknown error';
+      ErrorBoundary.handle(err, 'Global Error');
+    });
+
+    // Capture unhandled promise rejections
+    globalThis.addEventListener('unhandledrejection', (event) => {
+      if (!event) return;
+      const reason = event.reason || event;
+      ErrorBoundary.handle(reason, 'Unhandled Rejection');
+    });
+  }
+
   #render(state) {
     const transferActive = this.#isTransferActive(state.status);
     const transferFinished = this.#isTransferFinished(state.status);
@@ -694,6 +767,16 @@ class App {
     // Animation gating: pause heavy visuals when idle.
     const isIdle = transferActive === false;
     document.documentElement.classList.toggle('app-idle', isIdle);
+
+    const statusPanel = document.getElementById('statusPanel');
+    if (statusPanel) {
+      statusPanel.classList.toggle('animate-paused', isIdle);
+      statusPanel.classList.toggle('idle', state.status === 'idle');
+      statusPanel.classList.toggle('uploading', state.status === 'uploading');
+      statusPanel.classList.toggle('paused', state.status === 'paused');
+      statusPanel.classList.toggle('completed', state.status === 'completed');
+      statusPanel.classList.toggle('error', state.status === 'error');
+    }
 
     this.#renderPhaseText(state.status);
     this.#renderProgressPct(state.progress);
@@ -711,91 +794,6 @@ class App {
 
   // --- Demo mode ---
 
-  #detectDemoMode() {
-    try {
-      const params = new URLSearchParams(globalThis.location?.search || '');
-      if (params.has('demo')) return true;
-      return localStorage.getItem('cyberbackup-demo-mode') === '1';
-    } catch {
-      return false;
-    }
-  }
-
-  #startDemoTransfer() {
-    if (!this.demoEnabled) return;
-    if (this.demoActive) {
-      this.toast.show('Demo already running', 'info');
-      return;
-    }
-
-    this.demoActive = true;
-    const totalBytes = 250 * 1024 * 1024;
-    this.logs.add('Demo mode: starting simulated transfer', { phase: 'DEMO', level: 'info' });
-    this.setConnectionStatus('Demo mode (simulated) - no network traffic', 'info');
-
-    this.state.update({
-      connected: false,
-      jobId: 'demo',
-      status: 'uploading',
-      progress: 0,
-      speed: 0,
-      bytesTransferred: 0,
-      totalBytes,
-      startTime: Date.now(),
-    });
-
-    this.#ensureDemoTimer();
-  }
-
-  #ensureDemoTimer() {
-    if (!this.demoActive || this.demoTimer) return;
-
-    this.demoTimer = setInterval(() => {
-      if (!this.demoActive) {
-        this.#stopDemoTimer();
-        return;
-      }
-      if (this.state.snapshot.status !== 'uploading') {
-        return;
-      }
-
-      const currentPct = Math.max(0, Math.min(100, Number(this.state.snapshot.progress) || 0));
-      const bump = 2 + Math.random() * 7;
-      const nextPct = Math.min(100, currentPct + bump);
-      const totalBytes = this.state.snapshot.totalBytes || 1;
-
-      const speed = 8 * 1024 * 1024 + Math.random() * 3 * 1024 * 1024;
-      const bytesTransferred = Math.floor(totalBytes * (nextPct / 100));
-
-      if (nextPct >= 100) {
-        this.state.update({
-          status: 'completed',
-          progress: 100,
-          speed: 0,
-          bytesTransferred: totalBytes,
-        });
-        this.logs.add('Demo transfer complete', { phase: 'DEMO', level: 'success' });
-        this.toast.show('Demo complete (simulated)', 'success');
-        this.demoActive = false;
-        this.#stopDemoTimer();
-        return;
-      }
-
-      this.state.update({
-        status: 'uploading',
-        progress: nextPct,
-        speed,
-        bytesTransferred,
-      });
-    }, 650);
-  }
-
-  #stopDemoTimer() {
-    if (this.demoTimer) {
-      clearInterval(this.demoTimer);
-      this.demoTimer = null;
-    }
-  }
 }
 
 // --- Bootstrap ---

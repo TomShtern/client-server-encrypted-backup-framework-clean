@@ -3,6 +3,7 @@
  * Pure logic, networking, configuration, and utilities.
  * Depends on: core-utils.js
  */
+/* global dom, generateUUID, validateNumericInput, setStorageWithFallback, getStorageWithFallback */
 
 // --- Error Handling ---
 
@@ -368,7 +369,7 @@ class AdvancedSettings {
     input.value = value.toString();
     input.setAttribute('aria-invalid', 'false');
     this.#resetHint(input);
-    if (key) localStorage.setItem(key, value.toString());
+    if (key) setStorageWithFallback(key, value.toString());
   }
 
   #bindEvents() {
@@ -404,7 +405,7 @@ class AdvancedSettings {
     input.value = val.toString();
     input.setAttribute('aria-invalid', 'false');
     this.#resetHint(input);
-    localStorage.setItem(key, val.toString());
+    setStorageWithFallback(key, val.toString());
     if (notify) this.announcer?.announce(`Updated to ${val}`);
     return val;
   }
@@ -450,7 +451,7 @@ class AdvancedSettings {
 
   #load(key, fallback) {
     try {
-      const val = localStorage.getItem(key);
+      const val = getStorageWithFallback(key);
       if (val === null) return fallback;
       const num = parseInt(val, 10);
       return Number.isFinite(num) ? num : fallback;

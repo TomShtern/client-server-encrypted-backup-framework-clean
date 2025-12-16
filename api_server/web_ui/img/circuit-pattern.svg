@@ -1,0 +1,15 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>
+  <g fill='none' stroke='#58a6ff' stroke-width='0.4'>
+    <rect x='10' y='10' width='16' height='16' rx='2' opacity='0.12'/>
+    <rect x='94' y='10' width='16' height='16' rx='2' opacity='0.12'/>
+    <rect x='10' y='94' width='16' height='16' rx='2' opacity='0.12'/>
+    <rect x='94' y='94' width='16' height='16' rx='2' opacity='0.12'/>
+    <circle cx='18' cy='18' r='2' opacity='0.15'/>
+    <circle cx='102' cy='18' r='2' opacity='0.15'/>
+    <circle cx='18' cy='102' r='2' opacity='0.15'/>
+    <circle cx='102' cy='102' r='2' opacity='0.15'/>
+    <circle cx='60' cy='60' r='3' opacity='0.1'/>
+    <path d='M26 18 L60 18 M60 18 L60 57 M60 63 L60 102 M26 102 L57 102 M63 102 L94 102 M102 26 L102 57 M102 63 L102 94 M18 26 L18 94 M94 18 L63 18' stroke-linecap='round' opacity='0.08'/>
+    <path d='M26 10 L30 10 L30 14 M94 10 L90 10 L90 14 M26 110 L30 110 L30 106 M94 110 L90 110 L90 106 M10 26 L10 30 L14 30 M110 26 L110 30 L106 30 M10 94 L10 90 L14 90 M110 94 L110 90 L106 90' stroke-linecap='round' opacity='0.1'/>
+  </g>
+</svg>
