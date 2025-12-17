@@ -6,7 +6,7 @@
 
 ---
 
-## Progress Update (2025-12-17)
+## Progress Update (2025-12-16)
 
 ### Completed
 - **Task 2 – Duplicate DOM registration**: Removed the second `dom.logContainer` assignment (see `js/core-utils.js`).
@@ -23,10 +23,27 @@
   - 10.2 Log filtering now tracks visible count via LogStore instead of DOM scans (see `js/ui.js`).
   - 10.3 Animations pause when idle via render-time gating and CSS (see `js/app.js`, `css/styles.css`).
   - 10.4 Circuit pattern extracted to external SVG asset to reduce CSS weight (see `css/styles.css`, `img/circuit-pattern.svg`).
-- **Task 19 – Global error handlers**: Added window-level `error` and `unhandledrejection` hooks in `app.js` that route failures through `ErrorBoundary` (toasts + status strip).
+- **Task 19 – Global error handlers**: Added window-level `error` and `unhandledrejection` hooks in `app.js` that route failures through `ErrorBoundary` (toasts + status strip). Follow-up: registration is now performed once during `App.init()` (not during render/event binding) and includes a small alias wrapper to avoid future regressions.
 - **Task 20 – LocalStorage error handling**: Implemented `safeLocalStorage`/`safeSessionStorage` with quota/security handling and in-memory fallback; replaced direct usage in theme persistence, advanced settings, and demo-mode detection (see `js/core-utils.js`, `js/ui.js`, `js/core.js`, `js/app.js`).
 
+- **Task 15 – New Features (implemented)**:
+  - 15.1 Auto theme mode (`dark`/`light`/`auto`) with system preference sync (see `js/ui.js`, `index.html`).
+  - 15.2 Basic transfer history persistence (success/failure) using storage fallback (see `js/app.js`, `js/core-utils.js`).
+
+- **Transfer History UI (follow-up completed)**:
+  - Added a dedicated “Transfer History” section to the main dashboard with a semantic `<ul>` list and a “Clear history” action (see `index.html`).
+  - Wired DOM registry support (`dom.transferHistoryList`) and added render + clear behavior (see `js/core-utils.js`, `js/app.js`).
+  - Added layout/styling so the history sits between Status and Activity Logs without breaking the responsive grid (see `css/styles.css`).
+
+- **Task 18 – Documentation Improvements (implemented)**:
+  - 18.1 Added JSDoc to `App` (see `js/app.js`).
+  - 18.2 Documented `AppState` shape (`@typedef`) (see `js/core-utils.js`).
+  - 18.3 Documented `CONSTANTS` with JSDoc (see `js/core-utils.js`).
+
 ### Completed (since 2025-12-16)
+- **Task 11 – Code Organization Refactoring**:
+  - Demo mode extracted into `DemoMode` (`js/demo-mode.js`) and loaded before `app.js`; `app.js` now delegates demo start/pause/resume/stop to the class.
+  - Minor `app.js` readability cleanup (stale comment + extra blank lines removed).
 - **Task 9 – Accessibility (incremental)**:
   - Phase text is now a live `<output>` element (polite/atomic) so status transitions are announced more reliably (see `index.html`).
   - Progress ring semantics now use a visually-hidden native `<progress>` element (with the SVG ring marked decorative), avoiding misleading custom ARIA on SVG (see `index.html`, `js/core-utils.js`, `js/app.js`).
@@ -38,12 +55,24 @@
   - Log action buttons now provide brief positive feedback on success (flash state) (see `js/ui.js`, `css/styles.css`).
 - **Task 14 – Feature Completions (selected items)**:
   - Keyboard shortcuts expanded (clear logs, open file picker, Enter primary action, Space pause/resume, Esc-to-stop safety latch) (see `js/ui.js`).
+- **Task 12 – Visual Consistency Fixes (key items)**:
+  - Consolidated spacing tokens: `--space-*` is primary and `--gap-*` are aliases for backward compatibility (see `css/styles.css`).
+  - Consolidated motion tokens: transitions now derive from `--duration-*` + `--ease-default`; added `--duration-slow` (see `css/styles.css`).
+  - Progress ring gradient now matches brand tokens (`--primary-400` / `--secondary-400` / `--accent-400`) (see `index.html`).
+  - Inline banner icon contrast improved for theme consistency / accessibility tooling (see `css/styles.css`).
 - **Testing tooling (quality-of-life)**:
   - Playwright web GUI capture script now retries `localhost` URLs with `127.0.0.1` on connection refusal (common IPv6/IPv4 binding mismatch on Windows) (see `tests/integration/test_web_gui.py`).
 
+- **Task 9 – Accessibility (announcement strategy)**:
+  - Removed noisy `aria-live` usage on frequently-updating UI regions (toasts container, header connection pills, quality/last-checked, speed chart summary, log container) to avoid constant screen reader interruptions (see `index.html`).
+  - Added change-driven announcements for API/Backup server online/offline transitions (see `js/ui.js`).
+  - Hardened `ScreenReaderAnnouncer` with dedupe/throttle behavior to reduce bursty repeated announcements (see `js/core-utils.js`).
+
 ### Outstanding / Not Started
-- Task 9 remaining items (e.g., refine announcement strategy to avoid noisy updates while still exposing key changes; confirm with screen-reader pass).
-- Task 11 (refactors/demo extraction), Task 12 (visual consistency cleanup), Task 15+ (new features), Task 18 (documentation) still pending.
+- Optional follow-ups:
+  - Add an “Export history” action (CSV/JSON) and/or a simple filter (success/fail).
+  - Consider a confirmation dialog for “Clear history” if accidental clicks become a problem.
+  - Add a small Playwright assertion to verify the Transfer History section renders and updates.
 
 ---
 
@@ -1553,36 +1582,18 @@ async #handleStop() {
 // In #renderPhaseText - access this.demo.active instead of this.demoActive
 ```
 
-### 11.2 Remove Duplicate Comments and Clean Up
+### 11.2 Remove Duplicate Comments and Clean Up ✅ Completed (2025-12-17)
 
 **File:** `js/app.js`
 
-**Remove** duplicate comment on line 23-24:
-```javascript
-// Before
-// Initialize Managers
-// Initialize Managers  <- REMOVE THIS
-
-// After
-// Initialize Managers
-```
-
-**Remove** "FIXED" comment on line 32:
-```javascript
-// Before
-this.logs = new LogStore(dom.logContainer); // FIXED: Was dom.logsContainer (undefined in core-utils)
-
-// After
-this.logs = new LogStore(dom.logContainer);
-```
-
-**Remove** extra blank lines throughout files.
+Implementation:
+- Confirmed the old duplicate "Initialize Managers" comment and "FIXED" trailing comment are no longer present (already resolved during earlier refactors).
+- Removed one stale "Fix:" comment and tightened up extra blank lines in the constructor initialization sequence.
 
 ### Verification
 - App should load without errors
 - Demo mode should work as before
-- Code should be cleaner and more maintainable
-- `app.js` should be ~100 lines shorter
+- No behavior changes; this is strictly readability / maintainability cleanup
 
 ---
 

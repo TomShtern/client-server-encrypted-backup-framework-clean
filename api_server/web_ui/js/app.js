@@ -3,11 +3,82 @@
  * Orchestrates Core Logic and UI Components.
  * Depends on: core-utils.js, core.js, ui.js
  */
-/* global DemoMode */
+/* global DemoMode, generateUUID, getStorageWithFallback, setStorageWithFallback */
 
+/**
+ * Transfer history manager.
+ * Stores last N completed transfers in localStorage (with in-memory fallback).
+ */
+class TransferHistory {
+  #maxEntries = 10;
+  #storageKey = 'cyberbackup-history';
+
+  get entries() {
+    try {
+      const data = getStorageWithFallback(this.#storageKey);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  add(transfer) {
+    const { entries } = this;
+    const {
+      filename = 'unknown',
+      size = 0,
+      status = 'completed',
+      serverAddress = '',
+    } = transfer ?? {};
+
+    entries.unshift({
+      id: generateUUID(),
+      filename: String(filename || 'unknown'),
+      size: Number(size) || 0,
+      status: String(status || 'completed'),
+      timestamp: new Date().toISOString(),
+      serverAddress: String(serverAddress || ''),
+    });
+
+    entries.length = Math.min(entries.length, this.#maxEntries);
+
+    try {
+      setStorageWithFallback(this.#storageKey, JSON.stringify(entries));
+    } catch (e) {
+      console.warn('Failed to save transfer history:', e);
+    }
+  }
+
+  clear() {
+    setStorageWithFallback(this.#storageKey, '[]');
+  }
+}
+
+/**
+ * Main application controller for CyberBackup Client.
+ * Orchestrates UI components, state management, and API/WebSocket interactions.
+ *
+ * @class App
+ * @property {StateStore} state - Reactive state container
+ * @property {ApiClient} api - REST API client
+ * @property {SocketClient} socket - WebSocket client for real-time updates
+ * @property {ConnectionMonitor} monitor - Connection health monitor
+ * @property {ToastManager} toast - Toast notification manager
+ * @property {ScreenReaderAnnouncer} announcer - Accessibility announcer
+ * @property {LogStore} logs - Activity log manager
+ * @property {ThemeManager} theme - Theme manager
+ * @property {TransferHistory} transferHistory - Stores recent completed/failed transfers
+ * @property {FileManager} fileManager - File selection handler
+ * @property {AdvancedSettings} advancedSettings - Advanced settings manager
+ * @property {DemoMode} demo - Demo mode controller
+ * @property {boolean} operationInProgress - Lock flag for async operations
+ */
 class App {
   constructor() {
     // Initialize State
+    /** @type {StateStore<AppState>} */
     this.state = new StateStore({
       connected: false,
       jobId: null,
@@ -32,11 +103,13 @@ class App {
     this.announcer = new ScreenReaderAnnouncer(dom.srLive);
     this.logs = new LogStore(dom.logContainer);
     this.theme = new ThemeManager(); // Uses dom.themeToggle internally
+    this.transferHistory = new TransferHistory();
 
-    // Fix: FileManager takes 3 args (input, dropZone, callback)
+    // Capture the currently active transfer metadata (filename/size) for history.
+    this._activeTransferMeta = null;
+
     this.fileManager = new FileManager(dom.fileInput, dom.fileDropZone, (file) => this.#onFileSelected(file));
     this.fileManager.setToast(this.toast).setAnnouncer(this.announcer);
-
 
     this.advancedSettings = new AdvancedSettings({
       chunkInput: dom.advChunkSize,
@@ -71,15 +144,22 @@ class App {
     // Bind UI Events
     this.#bindEvents();
 
-    this.#registerGlobalErrorHandlers();
-
+    // Cache the last rendered transfer history signature to avoid redundant DOM work.
+    this._lastTransferHistorySig = '';
   }
 
   async init() {
+    // Register global error handlers as early as possible.
+    // Must happen during init (not in render or file selection) to avoid repeated work.
+    this.#setupGlobalErrorHandlers();
+
     ProfessionalGUIEnhancements.init();
 
     // Subscribe to state changes early so the UI can render even when offline
     this.state.subscribe((state) => this.#render(state));
+
+    // Render persisted transfer history immediately (independent of network state)
+    this.#renderTransferHistory({ force: true });
 
     const isFileProtocol = API_CONFIG.isFileProtocol();
 
@@ -169,6 +249,9 @@ class App {
     // Demo mode helper (hidden unless enabled)
     dom.logDemoBtn?.addEventListener('click', () => this.demo.start());
 
+    // Transfer history
+    dom.transferHistoryClearBtn?.addEventListener('click', () => this.#handleClearTransferHistory());
+
     // Settings
     dom.settingsToggle?.addEventListener('click', () => {
       dom.settingsPanel?.classList.toggle('open');
@@ -176,6 +259,25 @@ class App {
 
     // Inline banner dismiss
     dom.inlineErrorDismiss?.addEventListener('click', () => this.hideInlineBanner());
+  }
+
+  #handleClearTransferHistory() {
+    try {
+      const { entries } = this.transferHistory;
+      if (!entries || entries.length === 0) {
+        this.toast.show('Transfer history is already empty', 'info');
+        return;
+      }
+
+      this.transferHistory.clear();
+      this.#renderTransferHistory({ force: true });
+
+      this.logs.add('Transfer history cleared', { phase: 'UI' });
+      this.toast.show('Transfer history cleared', 'info');
+      this.announcer.announce('Transfer history cleared');
+    } catch (error) {
+      ErrorBoundary.handle(error, 'Clear Transfer History');
+    }
   }
 
   showInlineBanner({ severity = 'error', title = 'Notice', body = '', actionHref = '', actionText = 'Open' } = {}) {
@@ -391,13 +493,8 @@ class App {
       });
 
       // Update file label if it exists
-      if (dom.fileLabel) {
-        dom.fileLabel.textContent = file.name;
-      }
       // Reset progress if new file selected
       if (this.state.snapshot.status === 'completed' || this.state.snapshot.status === 'error') {
-
-      this.#registerGlobalErrorHandlers();
         this.state.update({ status: 'idle', progress: 0, bytesTransferred: 0 });
       }
 
@@ -430,6 +527,11 @@ class App {
         totalBytes: file.size,
         bytesTransferred: 0,
       });
+
+      this._activeTransferMeta = {
+        filename: file.name,
+        size: file.size,
+      };
 
       const [host, port] = this.state.snapshot.serverAddress.split(':');
       const options = this.advancedSettings.getOptions();
@@ -496,6 +598,7 @@ class App {
       await this.api.stop();
       this.state.update({ status: 'idle', progress: 0, jobId: null });
       this.socket.clearJob();
+      this._activeTransferMeta = null;
       this.logs.add('Backup stopped', { phase: 'BACKUP' });
       this.toast.show('Backup stopped', 'info');
     } catch (error) {
@@ -535,10 +638,36 @@ class App {
       this.logs.add('Backup completed successfully', { phase: 'BACKUP', level: 'success' });
       this.toast.show('Backup completed!', 'success');
       this.socket.clearJob();
+
+      // Persist transfer history (Task 15.2)
+      if (!this.demo.active && this._activeTransferMeta) {
+        this.transferHistory.add({
+          filename: this._activeTransferMeta.filename,
+          size: this._activeTransferMeta.size,
+          status: 'completed',
+          serverAddress: this.state.snapshot.serverAddress,
+        });
+
+        this.#renderTransferHistory();
+      }
+      this._activeTransferMeta = null;
     } else if (data.status === 'failed') {
       this.state.update({ status: 'error' });
       this.logs.add(`Backup failed: ${data.error || 'Unknown error'}`, { phase: 'BACKUP', level: 'error' });
       this.toast.show('Backup failed', 'error');
+
+      // Persist failure in history too (Task 15.2)
+      if (!this.demo.active && this._activeTransferMeta) {
+        this.transferHistory.add({
+          filename: this._activeTransferMeta.filename,
+          size: this._activeTransferMeta.size,
+          status: 'failed',
+          serverAddress: this.state.snapshot.serverAddress,
+        });
+
+        this.#renderTransferHistory();
+      }
+      this._activeTransferMeta = null;
     } else {
       this.state.update({
         status: 'uploading',
@@ -643,9 +772,15 @@ class App {
 
     // Restart animation reliably.
     el.classList.remove('value-updating');
-    // Force reflow (small, controlled) to retrigger the animation.
-    void el.offsetWidth;
-    el.classList.add('value-updating');
+    // Re-add on the next frame so the animation retriggers reliably without forcing layout.
+    const schedule = globalThis.requestAnimationFrame
+      ? globalThis.requestAnimationFrame.bind(globalThis)
+      : (cb) => globalThis.setTimeout(cb, 0);
+    schedule(() => {
+      // Element may have been removed between updates.
+      if (!el.isConnected) return;
+      el.classList.add('value-updating');
+    });
 
     const priorTimer = this._valuePulseTimers.get(el);
     if (priorTimer) {
@@ -663,65 +798,92 @@ class App {
   #renderStats(state, transferActive, transferFinished) {
     const isUploading = state.status === 'uploading';
 
-    // Visual emphasis for active transfers.
-    if (dom.statsContainers) {
-      for (const container of Object.values(dom.statsContainers)) {
-        container?.classList.toggle('transfer-active', isUploading);
-      }
-      dom.statsContainers.speed?.classList.toggle('primary-stat', isUploading);
+    this.#applyTransferActiveStyles(isUploading);
+    this.#renderStatBytes(state, transferActive, transferFinished, isUploading);
+    this.#renderStatSize(state);
+    this.#renderStatSpeed(state, transferActive, isUploading);
+    this.#renderStatElapsed(state, transferActive, transferFinished);
+    this.#renderEta(state, transferActive);
+  }
+
+  #applyTransferActiveStyles(isUploading) {
+    if (!dom.statsContainers) return;
+
+    for (const container of Object.values(dom.statsContainers)) {
+      container?.classList.toggle('transfer-active', isUploading);
     }
 
-    if (dom.stats?.bytes) {
-      const showBytes = transferActive || transferFinished || Number(state.totalBytes) > 0;
-      const bytesText = showBytes ? formatters.formatBytes(state.bytesTransferred || 0) : '—';
-      this.#setTextWithOptionalPulse(dom.stats.bytes, bytesText, { pulse: isUploading });
-      dom.statsContainers?.bytes?.setAttribute('aria-label', `Bytes Sent: ${dom.stats.bytes.textContent}`);
+    dom.statsContainers.speed?.classList.toggle('primary-stat', isUploading);
+  }
+
+  #renderStatBytes(state, transferActive, transferFinished, isUploading) {
+    if (!dom.stats?.bytes) return;
+
+    const showBytes = transferActive || transferFinished || Number(state.totalBytes) > 0;
+    const bytesText = showBytes ? formatters.formatBytes(state.bytesTransferred || 0) : '—';
+    this.#setTextWithOptionalPulse(dom.stats.bytes, bytesText, { pulse: isUploading });
+    dom.statsContainers?.bytes?.setAttribute('aria-label', `Bytes Sent: ${dom.stats.bytes.textContent}`);
+  }
+
+  #renderStatSize(state) {
+    if (!dom.stats?.size) return;
+
+    const hasSize = Number(state.totalBytes) > 0;
+    const sizeText = hasSize ? formatters.formatBytes(state.totalBytes || 0) : '—';
+    // Size changes rarely; pulse is useful even when not actively uploading.
+    this.#setTextWithOptionalPulse(dom.stats.size, sizeText, { pulse: true });
+    dom.statsContainers?.size?.setAttribute('aria-label', `File Size: ${dom.stats.size.textContent}`);
+  }
+
+  #renderStatSpeed(state, transferActive, isUploading) {
+    if (!dom.stats?.speed) return;
+
+    const speedText = this.#getSpeedText(state, transferActive);
+    this.#setTextWithOptionalPulse(dom.stats.speed, speedText, { pulse: isUploading });
+    dom.statsContainers?.speed?.setAttribute('aria-label', `Speed: ${dom.stats.speed.textContent}`);
+  }
+
+  #getSpeedText(state, transferActive) {
+    if (transferActive) return formatters.formatSpeed(state.speed || 0);
+    if (state.status === 'paused') return 'Paused';
+    if (state.status === 'completed') return '0 B/s';
+    return '—';
+  }
+
+  #renderStatElapsed(state, transferActive, transferFinished) {
+    if (!dom.stats?.elapsed) return;
+
+    const canShow = Boolean(state.startTime) && (transferActive || transferFinished);
+    const text = canShow
+      ? formatters.formatDuration(Math.max(0, (Date.now() - Number(state.startTime)) / 1000))
+      : '--';
+
+    this.#setTextWithOptionalPulse(dom.stats.elapsed, text, { pulse: false });
+    dom.statsContainers?.elapsed?.setAttribute('aria-label', `Elapsed: ${dom.stats.elapsed.textContent}`);
+  }
+
+  #renderEta(state, transferActive) {
+    if (!dom.etaText) return;
+
+    if (state.status === 'paused') {
+      dom.etaText.textContent = 'Paused';
+      return;
     }
 
-    if (dom.stats?.size) {
-      const hasSize = Number(state.totalBytes) > 0;
-      const sizeText = hasSize ? formatters.formatBytes(state.totalBytes || 0) : '—';
-      // Size changes rarely; pulse is useful even when not actively uploading.
-      this.#setTextWithOptionalPulse(dom.stats.size, sizeText, { pulse: true });
-      dom.statsContainers?.size?.setAttribute('aria-label', `File Size: ${dom.stats.size.textContent}`);
+    if (state.status === 'completed') {
+      dom.etaText.textContent = 'Done';
+      return;
     }
 
-    if (dom.stats?.speed) {
-      let speedText = '—';
-      if (transferActive) speedText = formatters.formatSpeed(state.speed || 0);
-      else if (state.status === 'paused') speedText = 'Paused';
-      else if (state.status === 'completed') speedText = '0 B/s';
-      this.#setTextWithOptionalPulse(dom.stats.speed, speedText, { pulse: isUploading });
-      dom.statsContainers?.speed?.setAttribute('aria-label', `Speed: ${dom.stats.speed.textContent}`);
+    const showEta = transferActive && state.totalBytes > 0 && state.speed > 0;
+    if (!showEta) {
+      dom.etaText.textContent = '—';
+      return;
     }
 
-    if (dom.stats?.elapsed) {
-      const canShow = Boolean(state.startTime) && (transferActive || transferFinished);
-      if (canShow) {
-        const elapsedSec = Math.max(0, (Date.now() - Number(state.startTime)) / 1000);
-        this.#setTextWithOptionalPulse(dom.stats.elapsed, formatters.formatDuration(elapsedSec), { pulse: false });
-      } else {
-        this.#setTextWithOptionalPulse(dom.stats.elapsed, '--', { pulse: false });
-      }
-      dom.statsContainers?.elapsed?.setAttribute('aria-label', `Elapsed: ${dom.stats.elapsed.textContent}`);
-    }
-
-    if (dom.etaText) {
-      if (state.status === 'paused') {
-        dom.etaText.textContent = 'Paused';
-      } else if (state.status === 'completed') {
-        dom.etaText.textContent = 'Done';
-      } else {
-        const showEta = transferActive && state.totalBytes > 0 && state.speed > 0;
-        if (showEta) {
-          const remainingBytes = Math.max(0, (state.totalBytes || 0) - (state.bytesTransferred || 0));
-          const etaSec = remainingBytes / Math.max(1, state.speed);
-          dom.etaText.textContent = formatters.formatDuration(etaSec);
-        } else {
-          dom.etaText.textContent = '—';
-        }
-      }
-    }
+    const remainingBytes = Math.max(0, (state.totalBytes || 0) - (state.bytesTransferred || 0));
+    const etaSec = remainingBytes / Math.max(1, state.speed);
+    dom.etaText.textContent = formatters.formatDuration(etaSec);
   }
 
   #renderControls(state, transferActive) {
@@ -735,6 +897,79 @@ class App {
     if (!ProfessionalGUIEnhancements.chartInstance) return;
     if (!Number.isFinite(state.speed)) return;
     ProfessionalGUIEnhancements.chartInstance.addDataPoint(Number(state.speed) || 0);
+  }
+
+  #renderTransferHistory({ force = false } = {}) {
+    if (!dom.transferHistoryList || !dom.transferHistoryEmpty || !dom.transferHistoryCount) return;
+
+    const { entries } = this.transferHistory;
+    const sig = JSON.stringify(entries);
+    if (!force && sig === this._lastTransferHistorySig) return;
+    this._lastTransferHistorySig = sig;
+
+    const count = Array.isArray(entries) ? entries.length : 0;
+    dom.transferHistoryCount.textContent = String(count);
+
+    if (dom.transferHistoryClearBtn) {
+      dom.transferHistoryClearBtn.disabled = count === 0;
+    }
+
+    // Empty state
+    const showEmpty = count === 0;
+    dom.transferHistoryEmpty.hidden = !showEmpty;
+    dom.transferHistoryList.hidden = showEmpty;
+
+    // Render list
+    dom.transferHistoryList.textContent = '';
+    if (showEmpty) return;
+
+    const frag = document.createDocumentFragment();
+
+    for (const entry of entries) {
+      const li = document.createElement('li');
+      li.className = 'transfer-history-item';
+
+      const main = document.createElement('div');
+      main.className = 'transfer-history-main';
+
+      const filename = document.createElement('div');
+      filename.className = 'transfer-history-filename';
+      filename.textContent = String(entry?.filename || 'unknown');
+      filename.title = String(entry?.filename || 'unknown');
+
+      const meta = document.createElement('div');
+      meta.className = 'transfer-history-meta';
+
+      const size = document.createElement('span');
+      size.textContent = formatters.formatBytes(Number(entry?.size) || 0);
+
+      const server = document.createElement('span');
+      server.textContent = String(entry?.serverAddress || '—');
+
+      meta.append(size, server);
+      main.append(filename, meta);
+
+      const badges = document.createElement('div');
+      badges.className = 'transfer-history-badges';
+
+      const status = document.createElement('span');
+      const rawStatus = String(entry?.status || 'completed');
+      const isSuccess = rawStatus === 'completed' || rawStatus === 'success';
+      status.className = `transfer-history-status ${isSuccess ? 'is-success' : 'is-error'}`;
+      status.textContent = isSuccess ? 'Completed' : 'Failed';
+
+      const time = document.createElement('span');
+      time.className = 'transfer-history-time';
+      const ts = Date.parse(String(entry?.timestamp || ''));
+      time.textContent = Number.isFinite(ts) ? formatters.relativeTime(ts) : '—';
+      time.title = Number.isFinite(ts) ? new Date(ts).toISOString() : '';
+
+      badges.append(status, time);
+      li.append(main, badges);
+      frag.appendChild(li);
+    }
+
+    dom.transferHistoryList.appendChild(frag);
   }
 
   #registerGlobalErrorHandlers() {
@@ -758,6 +993,12 @@ class App {
       const reason = event.reason || event;
       ErrorBoundary.handle(reason, 'Unhandled Rejection');
     });
+  }
+
+  // Backwards-compatible alias used by earlier plan iterations.
+  // Keep this small wrapper so any lingering call sites don't cause a parse-time failure.
+  #setupGlobalErrorHandlers() {
+    this.#registerGlobalErrorHandlers();
   }
 
   #render(state) {

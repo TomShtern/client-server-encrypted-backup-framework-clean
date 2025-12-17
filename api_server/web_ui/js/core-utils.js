@@ -153,6 +153,14 @@ function initializeDom() {
   dom.logsEmptyTitle = getOptionalElement('logsEmptyTitle');
   dom.logsEmptyDesc = getOptionalElement('logsEmptyDesc');
   dom.logsSkeleton = getOptionalElement('logsSkeleton');
+
+  // Transfer history (optional)
+  dom.transferHistoryPanel = getOptionalElement('transferHistoryPanel');
+  dom.transferHistoryList = getOptionalElement('transferHistoryList');
+  dom.transferHistoryEmpty = getOptionalElement('transferHistoryEmpty');
+  dom.transferHistoryCount = getOptionalElement('transferHistoryCount');
+  dom.transferHistoryClearBtn = getOptionalElement('transferHistoryClearBtn');
+
   dom.toastStack = getElement('toastStack');
   dom.modal = getElement('modalConfirm');
   dom.modalCancelBtn = getElement('modalCancelBtn');
@@ -482,32 +490,14 @@ async function copyTextToClipboard(text) {
     console.warn('navigator.clipboard.writeText failed, falling back:', error);
   }
 
-  // Fallback: hidden textarea + execCommand('copy')
+  // Fallback: show a prompt so the user can copy manually.
+  // We intentionally avoid the deprecated copy command API.
   try {
-    const textarea = document.createElement('textarea');
-    textarea.value = String(text ?? '');
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'fixed';
-    textarea.style.top = '0';
-    textarea.style.left = '-9999px';
-    textarea.style.opacity = '0';
-
-    const active = document.activeElement;
-
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-
-    const ok = document.execCommand('copy');
-    textarea.remove();
-
-    if (active && typeof active.focus === 'function') {
-      active.focus();
-    }
-
-    return Boolean(ok);
+    if (typeof globalThis.prompt !== 'function') return false;
+    globalThis.prompt('Copy to clipboard (Ctrl+C, Enter):', String(text ?? ''));
+    return true;
   } catch (error) {
-    console.warn('Clipboard fallback copy failed:', error);
+    console.warn('Clipboard fallback prompt failed:', error);
     return false;
   }
 }
@@ -722,6 +712,32 @@ const performanceOptimizer = new PerformanceOptimizer();
 
 // --- state/state-store.js ---
 /**
+ * Transfer/backup lifecycle status values used by the Web UI.
+ * @typedef {'idle'|'uploading'|'paused'|'completed'|'error'} TransferStatus
+ */
+
+/**
+ * Canonical application state shape for the Web UI.
+ *
+ * Notes:
+ * - This state is managed by {@link StateStore} and is rendered by `App`.
+ * - `serverAddress` uses the format `host:port` (e.g. `localhost:1256`).
+ * - `startTime` is a `Date.now()` timestamp (ms) or `null` when idle.
+ *
+ * @typedef {Object} AppState
+ * @property {boolean} connected - Whether the C++ client is connected to the backup server
+ * @property {string|null} jobId - Current backup job id (from API) or null
+ * @property {TransferStatus} status - Current transfer status
+ * @property {number} progress - Progress percentage (0-100)
+ * @property {number} speed - Bytes/sec (may be 0 when idle)
+ * @property {number} bytesTransferred - Bytes transferred so far
+ * @property {number} totalBytes - Total file size in bytes
+ * @property {number|null} startTime - Transfer start timestamp (ms since epoch)
+ * @property {string} serverAddress - Target backup server address (`host:port`)
+ * @property {string} username - Username sent to the backup server
+ */
+
+/**
  * Creates a shallow clone of a value
  * @param {*} value - The value to clone
  * @returns {*} The cloned value
@@ -765,6 +781,7 @@ function shallowEqual(objA, objB) {
 /**
  * Reactive state container with requestAnimationFrame batching
  * Provides a centralized way to manage application state with efficient updates
+ * @template T
  */
 class StateStore {
   #state;
@@ -774,7 +791,7 @@ class StateStore {
 
   /**
    * Creates a new StateStore instance
-   * @param {*} initialState - The initial state
+    * @param {T} initialState - The initial state
    */
   constructor(initialState) {
     this.#state = shallowClone(initialState);
@@ -785,7 +802,7 @@ class StateStore {
 
   /**
    * Gets the current state snapshot
-   * @returns {*} The current state
+   * @returns {T} The current state
    */
   get snapshot() {
     return this.#state;
@@ -794,7 +811,7 @@ class StateStore {
   /**
    * Updates state with a patch object
    * Updates are batched and executed in the next animation frame
-   * @param {*} patch - Partial state update
+    * @param {Partial<T>} patch - Partial state update
    */
   update(patch) {
     if (!this.#pendingUpdate) {
@@ -832,7 +849,7 @@ class StateStore {
 
   /**
    * Updates state immediately without batching
-   * @param {*} patch - Partial state update
+    * @param {Partial<T>} patch - Partial state update
    */
   updateImmediate(patch) {
     const next = { ...this.#state, ...patch };
@@ -845,7 +862,7 @@ class StateStore {
   /**
    * Mutates state directly using a mutator function
    * Useful for complex updates that need reference equality detection
-   * @param {Function} mutator - Function that receives and mutates the state
+    * @param {(draft: T) => void} mutator - Function that receives and mutates the state
    */
   mutate(mutator) {
     const next = { ...this.#state };
@@ -859,7 +876,7 @@ class StateStore {
 
   /**
    * Notifies all listeners of state changes
-   * @param {*} state - The new state
+    * @param {T} state - The new state
    * @private
    */
   #notifyListeners(state) {
@@ -877,7 +894,7 @@ class StateStore {
   /**
    * Subscribes a listener to state changes
    * Returns an unsubscribe function
-   * @param {Function} listener - Function to call when state changes
+    * @param {(state: T) => void} listener - Function to call when state changes
    * @returns {Function} Unsubscribe function
    */
   subscribe(listener) {
@@ -967,6 +984,8 @@ class ToastManager {
 class ScreenReaderAnnouncer {
   #pendingMessages = [];
   #isAnnouncing = false;
+  #lastMessage = '';
+  #lastAnnounceAt = 0;
 
   /**
    * Creates a new ScreenReaderAnnouncer instance
@@ -983,7 +1002,22 @@ class ScreenReaderAnnouncer {
    */
   announce(message) {
     if (!this.liveRegion) return;
-    this.#pendingMessages.push(String(message));
+
+    const next = String(message ?? '').trim();
+    if (!next) return;
+
+    const now = Date.now();
+    // Dedupe repeated messages within a short window to avoid chatty live regions.
+    if (next === this.#lastMessage && now - this.#lastAnnounceAt < 1500) {
+      return;
+    }
+
+    const lastQueued = this.#pendingMessages.at(-1) || '';
+    if (next === lastQueued) {
+      return;
+    }
+
+    this.#pendingMessages.push(next);
     if (!this.#isAnnouncing) {
       void this.#flushQueue();
     }
@@ -1000,6 +1034,10 @@ class ScreenReaderAnnouncer {
       if (!next) {
         continue;
       }
+
+      this.#lastMessage = next;
+      this.#lastAnnounceAt = Date.now();
+
       this.liveRegion.textContent = '';
       await new Promise((resolve) => {
         requestAnimationFrame(() => {
@@ -1019,6 +1057,16 @@ class ScreenReaderAnnouncer {
 /**
  * API Configuration utilities for cross-origin and protocol detection
  */
+/**
+ * @typedef {Object} ApiConfig
+ * @property {number} API_PORT - Flask API server port
+ * @property {number} STATIC_PORT - Static file server port (development)
+ * @property {() => boolean} isFileProtocol - True when opened via file://
+ * @property {() => string} getApiBaseUrl - Base URL for API calls ('' for same-origin)
+ * @property {(toastFn: Function) => void} showFileProtocolWarning - User hint for file:// mode
+ */
+
+/** @type {ApiConfig} */
 const API_CONFIG = {
   // Default API server port
   API_PORT: 9090,
@@ -1224,10 +1272,18 @@ class TimerManager {
   }
 }
 
-// Shared constants for validation and defaults
+/**
+ * Shared application constants.
+ *
+ * Focus: validation + safe defaults used across modules.
+ * @namespace CONSTANTS
+ */
 const CONSTANTS = {
-  MAX_FILE_SIZE: 1024 * 1024 * 1024, // 1GB
-  USERNAME_PATTERN: /^[\w\-. @]+$/, // Alphanumeric, dash, dot, space, @
+  /** Maximum allowed upload size in bytes (1 GB). */
+  MAX_FILE_SIZE: 1024 * 1024 * 1024,
+
+  /** Allowed username characters: alphanumeric, underscore, dash, dot, space, @. */
+  USERNAME_PATTERN: /^[\w\-. @]+$/,
 };
 
 /**

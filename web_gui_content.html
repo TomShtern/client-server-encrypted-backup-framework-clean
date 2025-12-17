@@ -53,8 +53,8 @@
     </div>
 
 
-    <!-- Toasts container -->
-    <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
+    <!-- Toasts container (individual toasts manage their own aria-live) -->
+    <section id="toastStack" class="toast-stack" aria-label="Notifications"></section>
 
     <div class="container">
         <header role="banner">
@@ -75,7 +75,7 @@
                 </div>
                 <div class="status-bar header-rail">
                     <!-- Dual Server Status Indicators -->
-                    <div class="server-status-group header-pill" aria-live="polite">
+                    <div class="server-status-group header-pill">
                         <span id="webServerStatus" class="server-status" title="API Server (Port 9090)">
                             <span class="status-label">API Server:</span>
                             <span class="status-dot offline"></span>
@@ -103,8 +103,8 @@
                             <span class="latency-value" id="latencyValue">—</span>
                             <span class="latency-unit">ms</span>
                         </span>
-                        <span id="qualityBadge" class="quality-chip" aria-live="polite" title="Connection quality">Quality: offline</span>
-                        <span id="lastChecked" class="last-checked" aria-live="polite">Last checked —</span>
+                        <span id="qualityBadge" class="quality-chip" title="Connection quality">Quality: offline</span>
+                        <span id="lastChecked" class="last-checked">Last checked —</span>
                     </button>
                     <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button" aria-expanded="false" aria-controls="troubleshootSheet">⚡ Troubleshoot</button>
                     <div id="connectionDetails" class="connection-details">
@@ -135,7 +135,7 @@
                             <input type="checkbox" id="themeToggle" aria-label="Toggle theme" class="" style="">
                             <span class="theme-slider"></span>
                         </label>
-                        <span class="theme-label">Light mode</span>
+                        <button type="button" class="theme-label" id="themeModeBtn" title="Click to cycle theme mode (dark → light → auto)">Auto (light)</button>
                     </div>
                 </div>
             </div>
@@ -333,9 +333,9 @@
                     <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
                         <defs>
                             <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#00f2ff"></stop>
-                                <stop offset="50%" stop-color="#7000ff"></stop>
-                                <stop offset="100%" stop-color="#ff0055"></stop>
+                                <stop offset="0%" stop-color="#58a6ff"></stop>
+                                <stop offset="50%" stop-color="#a78bfa"></stop>
+                                <stop offset="100%" stop-color="#22d3ee"></stop>
                             </linearGradient>
                             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                                 <feGaussianBlur stdDeviation="4" result="coloredBlur"></feGaussianBlur>
@@ -433,14 +433,37 @@
                     <canvas id="speedChart" class="speed-chart" aria-describedby="speedChartSummary" width="0" height="0">
                         Transfer speed chart showing throughput over the last 30 seconds.
                     </canvas>
-                    <div id="speedChartSummary" class="sr-only" aria-live="polite">
+                    <div id="speedChartSummary" class="sr-only">
                         Current speed: calculating...
                     </div>
                     <div id="speedChartPlaceholder" class="speed-chart-placeholder">No data yet—start a backup to see throughput.</div>
                 </div>
             </section>
 
-            <!-- Activity Logs - Grid Row 2 -->
+            <!-- Transfer History - Grid Row 2 -->
+            <section id="transferHistoryPanel" class="stack transfer-history" aria-labelledby="transferHistoryTitle">
+                <div id="transferHistoryTitle" class="phase">Recent Transfers</div>
+
+                <div class="transfer-history-toolbar">
+                    <span class="transfer-history-count"><span id="transferHistoryCount">0</span> items</span>
+                    <div class="transfer-history-actions">
+                        <button id="transferHistoryClearBtn" class="logs-action-btn" type="button" title="Clear transfer history" disabled="">Clear history</button>
+                    </div>
+                </div>
+
+                <ul id="transferHistoryList" class="transfer-history-list" aria-label="Transfer history" hidden=""></ul>
+
+                <div id="transferHistoryEmpty" class="transfer-history-empty">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                        <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5"></path>
+                    </svg>
+                    <span class="transfer-history-empty-title">No transfers yet</span>
+                    <span class="empty-description">Completed transfers will appear here.</span>
+                </div>
+            </section>
+
+            <!-- Activity Logs - Grid Row 3 -->
             <section class="logs stack" aria-labelledby="logTitle">
                 <!-- Phase Title - matches Configuration and Status panels -->
                 <div id="logTitle" class="phase">Activity Logs</div>
@@ -487,7 +510,7 @@
                 </div>
 
                 <!-- Log Entries -->
-                <div id="logContainer" class="logs-container" aria-live="polite"><div class="log-entry log-info" data-log-entry="" data-level="info" data-phase="INIT" data-ts="1765924924607"><span class="log-time">00:42:04</span><span class="log-phase">[INIT]</span><span class="log-message">Application initialized</span></div><div class="log-entry log-warn" data-log-entry="" data-level="warn" data-phase="NET" data-ts="1765924924591"><span class="log-time">00:42:04</span><span class="log-phase">[NET]</span><span class="log-message">API server not detected on this origin. Network monitoring will start after you connect.</span></div>
+                <div id="logContainer" class="logs-container"><div class="log-entry log-info" data-log-entry="" data-level="info" data-phase="INIT" data-ts="1765929969281"><span class="log-time">02:06:09</span><span class="log-phase">[INIT]</span><span class="log-message">Application initialized</span></div><div class="log-entry log-warn" data-log-entry="" data-level="warn" data-phase="NET" data-ts="1765929969237"><span class="log-time">02:06:09</span><span class="log-phase">[NET]</span><span class="log-message">API server not detected on this origin. Network monitoring will start after you connect.</span></div>
                     <div class="logs-skeleton" id="logsSkeleton" hidden="">
                         <div class="log-skeleton-row"></div>
                         <div class="log-skeleton-row"></div>

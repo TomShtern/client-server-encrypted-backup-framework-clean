@@ -10,10 +10,22 @@
 class ThemeManager {
   constructor() {
     this.themeToggle = dom.themeToggle;
+    this.themeModeButton = dom.themeLabel;
     this.prefersDark = globalThis.matchMedia('(prefers-color-scheme: dark)');
-    const storedTheme = getStorageWithFallback('theme');
-    this.currentTheme = storedTheme || (this.prefersDark.matches ? 'dark' : 'light');
+
+    // Support theme modes: 'dark', 'light', 'auto'
+    const saved = getStorageWithFallback('theme');
+    const allowed = new Set(['dark', 'light', 'auto']);
+    this.mode = allowed.has(saved) ? saved : 'auto';
+    this.currentTheme = this.#resolveTheme();
     this.#init();
+  }
+
+  #resolveTheme() {
+    if (this.mode === 'auto') {
+      return this.prefersDark.matches ? 'dark' : 'light';
+    }
+    return this.mode;
   }
 
   #init() {
@@ -21,22 +33,34 @@ class ThemeManager {
 
     // Checkbox semantics: use change event and treat checked=true as dark mode
     this.themeToggle?.addEventListener('change', () => {
-      const next = this.themeToggle.checked ? 'dark' : 'light';
-      this.#apply(next);
-      setStorageWithFallback('theme', next);
+      this.mode = this.themeToggle.checked ? 'dark' : 'light';
+      this.currentTheme = this.#resolveTheme();
+      this.#apply(this.currentTheme);
+      setStorageWithFallback('theme', this.mode);
+    });
+
+    // Theme mode cycle: dark -> light -> auto -> dark
+    this.themeModeButton?.addEventListener('click', (e) => {
+      // Avoid stealing clicks intended for the checkbox itself.
+      if (e.target === this.themeToggle) return;
+      this.toggle();
     });
 
     this.prefersDark.addEventListener('change', (e) => {
-      if (!getStorageWithFallback('theme')) {
-        this.#apply(e.matches ? 'dark' : 'light');
-      }
+      if (this.mode !== 'auto') return;
+      this.currentTheme = e.matches ? 'dark' : 'light';
+      this.#apply(this.currentTheme);
     });
   }
 
   toggle() {
-    const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
-    this.#apply(newTheme);
-    setStorageWithFallback('theme', newTheme);
+    if (this.mode === 'dark') this.mode = 'light';
+    else if (this.mode === 'light') this.mode = 'auto';
+    else this.mode = 'dark';
+
+    this.currentTheme = this.#resolveTheme();
+    this.#apply(this.currentTheme);
+    setStorageWithFallback('theme', this.mode);
   }
 
   #apply(theme) {
@@ -53,7 +77,13 @@ class ThemeManager {
     }
 
     if (dom.themeLabel) {
-      dom.themeLabel.textContent = theme === 'dark' ? 'Dark mode' : 'Light mode';
+      const labels = {
+        dark: 'Dark mode',
+        light: 'Light mode',
+        auto: `Auto (${theme})`,
+      };
+      dom.themeLabel.textContent = labels[this.mode] || labels[theme] || 'Theme';
+      dom.themeLabel.title = 'Click to cycle theme mode (dark → light → auto)';
     }
   }
 }
@@ -391,7 +421,7 @@ class SpeedChart {
 
     const summary = document.getElementById('speedChartSummary');
     if (summary) {
-      const latest = this.dataPoints[this.dataPoints.length - 1];
+      const latest = this.dataPoints.at(-1);
       summary.textContent = `Current speed: ${formatters.formatSpeed(latest || 0)}.`;
     }
   }
@@ -428,7 +458,7 @@ class FocusTrap {
   #onKeydown(event) {
     if (!this.active || event.key !== 'Tab') return;
     const first = this.focusables[0];
-    const last = this.focusables[this.focusables.length - 1];
+    const last = this.focusables.at(-1);
     if (!first || !last) return;
 
     if (event.shiftKey && document.activeElement === first) {
@@ -483,7 +513,7 @@ class ProfessionalGUIEnhancements {
     }
   }
 
-  static #toast(message, variant = 'info', duration) {
+  static #toast(message, variant = 'info', duration = undefined) {
     const app = this.#getApp();
     if (app?.toast) {
       app.toast.show(message, variant, duration);
@@ -497,7 +527,7 @@ class ProfessionalGUIEnhancements {
     const originalText = button.textContent;
     button.classList.add('is-success');
     if (text) button.textContent = text;
-    window.setTimeout(() => {
+    globalThis.setTimeout(() => {
       button.classList.remove('is-success');
       if (text) button.textContent = originalText;
     }, durationMs);
@@ -994,77 +1024,99 @@ class ProfessionalGUIEnhancements {
     // Escape-to-stop safety latch (press twice within a short window).
     let escapeStopArmedUntil = 0;
 
-    document.addEventListener('keydown', (e) => {
-      const activeEl = document.activeElement;
-      const tag = activeEl?.tagName || '';
-      const isInput =
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) ||
-        Boolean(activeEl?.isContentEditable);
+    const isTextInput = (el) => {
+      const tag = el?.tagName || '';
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || Boolean(el?.isContentEditable);
+    };
 
+    const handleShowShortcuts = (e, { isInput }) => {
+      if (!(e.key === '?' && e.shiftKey && !isInput)) return false;
+      e.preventDefault();
+      openModal();
+      return true;
+    };
+
+    const handleEscape = (e, { isInput, status, app }) => {
+      if (e.key !== 'Escape') return false;
+
+      if (modal.open) {
+        e.preventDefault();
+        closeModal();
+        return true;
+      }
+
+      if (status === 'uploading' && !isInput) {
+        e.preventDefault();
+        const now = Date.now();
+        if (now < escapeStopArmedUntil) {
+          dom.stopBtn?.click();
+          escapeStopArmedUntil = 0;
+        } else {
+          escapeStopArmedUntil = now + 2000;
+          app?.toast?.show('Press Escape again to stop transfer', 'warn');
+        }
+      }
+
+      return true;
+    };
+
+    const handleClearLogs = (e, { isInput, app }) => {
+      const isCombo = (e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L');
+      if (!(isCombo && !isInput)) return false;
+      e.preventDefault();
+      if (dom.logClearBtn && !dom.logClearBtn.disabled) dom.logClearBtn.click();
+      else app?.logs?.clear();
+      app?.toast?.show('Logs cleared', 'info');
+      return true;
+    };
+
+    const handleOpenFilePicker = (e, { isInput }) => {
+      const isCombo = (e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O');
+      if (!(isCombo && !isInput)) return false;
+      e.preventDefault();
+      dom.fileInput?.click();
+      return true;
+    };
+
+    const handlePrimaryAction = (e, { isInput }) => {
+      if (!(e.key === 'Enter' && !isInput)) return false;
+      e.preventDefault();
+      dom.primaryActionBtn?.click();
+      return true;
+    };
+
+    const handlePauseResume = (e, { isInput, status }) => {
+      const isSpace = e.key === ' ' || e.code === 'Space';
+      if (!(isSpace && !isInput)) return false;
+
+      if (status === 'uploading') {
+        e.preventDefault();
+        dom.pauseBtn?.click();
+        return true;
+      }
+
+      if (status === 'paused') {
+        e.preventDefault();
+        dom.resumeBtn?.click();
+        return true;
+      }
+
+      return false;
+    };
+
+    document.addEventListener('keydown', (e) => {
       const { app } = globalThis;
+      const activeEl = document.activeElement;
+      const isInput = isTextInput(activeEl);
       const status = app?.state?.snapshot?.status;
 
-      // ? - Show shortcuts
-      if (e.key === '?' && e.shiftKey && !isInput) {
-        e.preventDefault();
-        openModal();
-        return;
-      }
-
-      // Escape - Close modal, or arm stop on active transfer
-      if (e.key === 'Escape') {
-        if (modal.open) {
-          e.preventDefault();
-          closeModal();
-          return;
-        }
-        if (status === 'uploading' && !isInput) {
-          e.preventDefault();
-          const now = Date.now();
-          if (now < escapeStopArmedUntil) {
-            dom.stopBtn?.click();
-            escapeStopArmedUntil = 0;
-          } else {
-            escapeStopArmedUntil = now + 2000;
-            app?.toast?.show('Press Escape again to stop transfer', 'warn');
-          }
-        }
-        return;
-      }
-
-      // Ctrl/Cmd + L - Clear logs
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L') && !isInput) {
-        e.preventDefault();
-        if (dom.logClearBtn && !dom.logClearBtn.disabled) dom.logClearBtn.click();
-        else app?.logs?.clear();
-        app?.toast?.show('Logs cleared', 'info');
-        return;
-      }
-
-      // Ctrl/Cmd + O - Open file picker
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O') && !isInput) {
-        e.preventDefault();
-        dom.fileInput?.click();
-        return;
-      }
-
-      // Enter - Connect/start primary action
-      if (e.key === 'Enter' && !isInput) {
-        e.preventDefault();
-        dom.primaryActionBtn?.click();
-        return;
-      }
-
-      // Space - Pause/Resume (when transfer active)
-      if ((e.key === ' ' || e.code === 'Space') && !isInput) {
-        if (status === 'uploading') {
-          e.preventDefault();
-          dom.pauseBtn?.click();
-        } else if (status === 'paused') {
-          e.preventDefault();
-          dom.resumeBtn?.click();
-        }
-      }
+      const context = { app, status, isInput };
+      handleShowShortcuts(e, context) ||
+        handleEscape(e, context) ||
+        handleClearLogs(e, context) ||
+        handleOpenFilePicker(e, context) ||
+        handlePrimaryAction(e, context) ||
+        handlePauseResume(e, context);
     });
   }
 
@@ -1195,36 +1247,43 @@ class ProfessionalGUIEnhancements {
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const dropZone = document.getElementById('fileDropZone');
 
+    const setDisplay = (el, display) => {
+      if (el) el.style.display = display;
+    };
+    const setText = (el, text) => {
+      if (el) el.textContent = String(text ?? '');
+    };
+    const setClassName = (el, className) => {
+      if (el) el.className = className;
+    };
+
     if (!file) {
-      if (defaultContent) defaultContent.style.display = 'flex';
-      if (previewCard) previewCard.style.display = 'none';
-      if (fileSize) fileSize.textContent = '';
-      if (fileModified) fileModified.textContent = '';
+      setDisplay(defaultContent, 'flex');
+      setDisplay(previewCard, 'none');
+      setText(fileSize, '');
+      setText(fileModified, '');
       dropZone?.classList.remove('file-selected');
       return;
     }
 
-    if (defaultContent) defaultContent.style.display = 'none';
-    if (previewCard) previewCard.style.display = 'grid';
+    setDisplay(defaultContent, 'none');
+    setDisplay(previewCard, 'grid');
     dropZone?.classList.add('file-selected');
 
     const ext = file.name.split('.').pop().toLowerCase();
     const typeInfo = this.FILE_TYPE_ICONS[ext] || this.FILE_TYPE_ICONS.default;
 
-    if (fileIcon) fileIcon.textContent = typeInfo.icon;
-    if (fileNameDisplay) fileNameDisplay.textContent = file.name;
-    if (fileMetadata) fileMetadata.style.display = 'flex';
+    setText(fileIcon, typeInfo.icon);
+    setText(fileNameDisplay, file.name);
+    setDisplay(fileMetadata, 'flex');
     if (fileTypeBadge) {
-      fileTypeBadge.textContent = typeInfo.badge.toUpperCase();
-      fileTypeBadge.className = `file-badge ${typeInfo.class}`;
+      setText(fileTypeBadge, typeInfo.badge.toUpperCase());
+      setClassName(fileTypeBadge, `file-badge ${typeInfo.class}`);
     }
-    if (fileModified) {
-      const date = new Date(file.lastModified);
-      fileModified.textContent = `Modified: ${date.toLocaleDateString()}`;
-    }
-    if (fileSize) {
-      fileSize.textContent = formatters.bytes?.(file.size) || `${file.size} B`;
-    }
+
+    const date = new Date(file.lastModified);
+    setText(fileModified, `Modified: ${date.toLocaleDateString()}`);
+    setText(fileSize, formatters.bytes?.(file.size) || `${file.size} B`);
   }
 
   static addEnhancementStyles() {
@@ -1241,37 +1300,114 @@ class ProfessionalGUIEnhancements {
 
 // --- Dual server status helpers (used by ConnectionMonitor) ---
 
+let lastApiOnlineAnnounced = null;
+let lastBackupOnlineAnnounced = null;
+
+function announceServerTransition(message) {
+  const { app } = globalThis;
+  if (app?.announcer) {
+    app.announcer.announce(message);
+    return;
+  }
+  if (dom.srLive) {
+    dom.srLive.textContent = '';
+    requestAnimationFrame(() => {
+      dom.srLive.textContent = String(message);
+    });
+  }
+}
+
 function setStatusPill(pillEl, online, { onlineText = 'Online', offlineText = 'Offline' } = {}) {
   if (!pillEl) return;
   const dot = pillEl.querySelector('.status-dot');
   const text = pillEl.querySelector('.status-text');
 
-  const state = online === true ? 'online' : online === false ? 'offline' : 'connecting';
+  const { state, label } = online === true
+    ? { state: 'online', label: onlineText }
+    : online === false
+      ? { state: 'offline', label: offlineText }
+      : { state: 'connecting', label: 'Checking' };
+
   if (dot) dot.className = `status-dot ${state}`;
-  if (text) {
-    text.textContent = online === true ? onlineText : online === false ? offlineText : 'Checking';
+  if (text) text.textContent = label;
+}
+
+function collectServerTransitions({ apiOnline, backupOnline } = {}) {
+  const transitions = [];
+  const nextApiOnline = typeof apiOnline === 'boolean' ? apiOnline : null;
+  const nextBackupOnline = typeof backupOnline === 'boolean' ? backupOnline : null;
+
+  if (
+    typeof lastApiOnlineAnnounced === 'boolean' &&
+    typeof nextApiOnline === 'boolean' &&
+    nextApiOnline !== lastApiOnlineAnnounced
+  ) {
+    transitions.push(`API server ${nextApiOnline ? 'online' : 'offline'}`);
   }
+
+  if (
+    typeof lastBackupOnlineAnnounced === 'boolean' &&
+    typeof nextBackupOnline === 'boolean' &&
+    nextBackupOnline !== lastBackupOnlineAnnounced
+  ) {
+    transitions.push(`Backup server ${nextBackupOnline ? 'online' : 'offline'}`);
+  }
+
+  lastApiOnlineAnnounced = typeof nextApiOnline === 'boolean' ? nextApiOnline : lastApiOnlineAnnounced;
+  lastBackupOnlineAnnounced = typeof nextBackupOnline === 'boolean' ? nextBackupOnline : lastBackupOnlineAnnounced;
+
+  return transitions;
+}
+
+function updateLatencyFields(latency) {
+  const ms = Number.isFinite(latency) ? Math.max(0, Math.round(latency)) : null;
+  if (ms === null) return;
+
+  const setText = (el, value) => {
+    if (el) el.textContent = String(value);
+  };
+  const setTitle = (el, value) => {
+    if (el) el.title = String(value);
+  };
+
+  setText(dom.latencyValue, ms);
+  setText(dom.detailLatency, `${ms} ms`);
+  setTitle(dom.connHealth, `Round-trip latency: ${ms} ms`);
+}
+
+function updateServerDetails({ apiOnline, backupOnline } = {}) {
+  if (dom.detailServer && dom.serverInput?.value) dom.detailServer.textContent = dom.serverInput.value;
+
+  const statusText = apiOnline === false
+    ? 'API server offline'
+    : backupOnline === false
+      ? 'Backup server offline'
+      : apiOnline === true && backupOnline === true
+        ? 'Ready'
+        : 'Checking';
+
+  if (dom.detailStatus) dom.detailStatus.textContent = statusText;
 }
 
 globalThis.updateDualServerStatus = ({ apiOnline, backupOnline, latency } = {}) => {
+  const transitions = collectServerTransitions({ apiOnline, backupOnline });
+
   setStatusPill(dom.webServerStatus, apiOnline, { onlineText: 'Online', offlineText: 'Offline' });
   setStatusPill(dom.backupServerStatus, backupOnline, { onlineText: 'Online', offlineText: 'Offline' });
 
-  if (Number.isFinite(latency)) {
-    const ms = Math.max(0, Math.round(latency));
-    if (dom.latencyValue) dom.latencyValue.textContent = String(ms);
-    if (dom.detailLatency) dom.detailLatency.textContent = `${ms} ms`;
-    if (dom.connHealth) dom.connHealth.title = `Round-trip latency: ${ms} ms`;
-  }
+  updateLatencyFields(latency);
+  updateServerDetails({ apiOnline, backupOnline });
 
-  if (dom.detailServer && dom.serverInput?.value) {
-    dom.detailServer.textContent = dom.serverInput.value;
-  }
-
-  if (dom.detailStatus) {
-    if (apiOnline === false) dom.detailStatus.textContent = 'API server offline';
-    else if (backupOnline === false) dom.detailStatus.textContent = 'Backup server offline';
-    else if (apiOnline === true && backupOnline === true) dom.detailStatus.textContent = 'Ready';
-    else dom.detailStatus.textContent = 'Checking';
-  }
+  if (transitions.length > 0) announceServerTransition(`${transitions.join('. ')}.`);
 };
+
+// Expose key classes for other script files (app.js) while keeping this file lint-friendly.
+globalThis.CyberBackupUI = globalThis.CyberBackupUI || {};
+Object.assign(globalThis.CyberBackupUI, {
+  ThemeManager,
+  LogStore,
+  FileManager,
+  SpeedChart,
+  FocusTrap,
+  ProfessionalGUIEnhancements,
+});

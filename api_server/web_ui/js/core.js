@@ -3,14 +3,18 @@
  * Pure logic, networking, configuration, and utilities.
  * Depends on: core-utils.js
  */
-/* global dom, generateUUID, validateNumericInput, setStorageWithFallback, getStorageWithFallback */
+/* global validateNumericInput, setStorageWithFallback, getStorageWithFallback */
+/* exported ErrorBoundary, ApiClient, SocketClient, ConnectionMonitor, AdvancedSettings */
+
+// sourcery skip-file
 
 // --- Error Handling ---
 
 class ErrorBoundary {
   static handle(error, context, recovery = null) {
-    console.error(`[${context}] Error:`, error);
-    const userMessage = this.formatUserMessage(error, context);
+    const normalized = this.#normalizeError(error);
+    console.error(`[${context}] Error:`, normalized.raw);
+    const userMessage = this.formatUserMessage(normalized, context);
 
     try {
       if (globalThis.app?.logs) {
@@ -46,17 +50,72 @@ class ErrorBoundary {
     }
   }
 
+  /**
+   * Normalize unknown thrown values into a consistent shape.
+   * @param {*} error
+   * @returns {{name: string, message: string, stack?: string, raw: any}}
+   */
+  static #normalizeError(error) {
+    if (error instanceof Error) {
+      return {
+        name: error.name || 'Error',
+        message: error.message || String(error),
+        stack: error.stack,
+        raw: error,
+      };
+    }
+
+    if (typeof error === 'string') {
+      return {
+        name: 'Error',
+        message: error,
+        raw: error,
+      };
+    }
+
+    if (error && typeof error === 'object') {
+      const name = typeof error.name === 'string' ? error.name : 'Error';
+      const message = typeof error.message === 'string' ? error.message : JSON.stringify(error);
+      const stack = typeof error.stack === 'string' ? error.stack : undefined;
+      return { name, message, stack, raw: error };
+    }
+
+    return {
+      name: 'Error',
+      message: String(error ?? 'Unknown error'),
+      raw: error,
+    };
+  }
+
+  /**
+   * Convert an error into a safe, user-facing message.
+   * @param {{name: string, message: string}} error
+   * @param {string} context
+   * @returns {string}
+   */
   static formatUserMessage(error, context) {
-    if (error.name === 'NetworkError' || error.message.includes('fetch')) {
-      return `Network error: Unable to connect to server.`;
+    const message = String(error?.message || '');
+    const name = String(error?.name || 'Error');
+
+    // Common network/fetch failures.
+    const looksLikeFetch = message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network');
+    const looksLikeConnectionRefused = message.toLowerCase().includes('econnrefused') ||
+      message.toLowerCase().includes('err_connection') ||
+      message.toLowerCase().includes('connection refused');
+
+    if (name === 'AbortError') {
+      return 'Operation cancelled.';
     }
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      return `Connection error: Server is not responding.`;
+
+    if (name === 'NetworkError' || looksLikeFetch || looksLikeConnectionRefused) {
+      return 'Network error: Unable to connect to server.';
     }
-    if (error.name === 'AbortError') {
-      return `Operation cancelled.`;
+
+    if (message) {
+      return message;
     }
-    return error.message || `An unexpected error occurred in ${context}.`;
+
+    return `An unexpected error occurred in ${context}.`;
   }
 }
 
@@ -229,7 +288,7 @@ class SocketClient {
     try {
       const module = await import('https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.esm.min.js');
       return module.io;
-    } catch (e) {
+    } catch {
       throw new Error('Unable to load Socket.IO client');
     }
   }
@@ -453,7 +512,7 @@ class AdvancedSettings {
     try {
       const val = getStorageWithFallback(key);
       if (val === null) return fallback;
-      const num = parseInt(val, 10);
+      const num = Number.parseInt(val, 10);
       return Number.isFinite(num) ? num : fallback;
     } catch { return fallback; }
   }
