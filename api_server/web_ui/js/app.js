@@ -31,17 +31,21 @@ class TransferHistory {
       size = 0,
       status = 'completed',
       serverAddress = '',
+      jobId = '',
     } = transfer ?? {};
 
-    entries.unshift({
+    // Validation
+    const validatedEntry = {
       id: generateUUID(),
+      jobId: String(jobId || ''),
       filename: String(filename || 'unknown'),
       size: Number(size) || 0,
       status: String(status || 'completed'),
       timestamp: new Date().toISOString(),
       serverAddress: String(serverAddress || ''),
-    });
+    };
 
+    entries.unshift(validatedEntry);
     entries.length = Math.min(entries.length, this.#maxEntries);
 
     try {
@@ -53,6 +57,55 @@ class TransferHistory {
 
   clear() {
     setStorageWithFallback(this.#storageKey, '[]');
+  }
+
+  filter(filterFn) {
+    return this.entries.filter(filterFn);
+  }
+
+  filterByStatus(status) {
+    if (!status || status === 'all') return this.entries;
+    return this.entries.filter(entry => entry.status === status);
+  }
+
+  export(format = 'json', entries = null) {
+    const dataToExport = entries || this.entries;
+
+    if (!dataToExport || dataToExport.length === 0) {
+      return null;
+    }
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    let filename, data, blob;
+
+    if (format === 'json') {
+      filename = `transfer-history_${timestamp}.json`;
+      data = JSON.stringify(dataToExport, null, 2);
+      blob = new Blob([data], { type: 'application/json' });
+    } else if (format === 'csv') {
+      filename = `transfer-history_${timestamp}.csv`;
+      const header = 'Timestamp,Job ID,Filename,Size (bytes),Status,Server Address\n';
+      const rows = dataToExport.map(e =>
+        `"${e.timestamp}","${e.jobId || ''}","${e.filename}",${e.size},"${e.status}","${e.serverAddress}"`
+      ).join('\n');
+      data = header + rows;
+      blob = new Blob([data], { type: 'text/csv' });
+    } else {
+      filename = `transfer-history_${timestamp}.txt`;
+      data = dataToExport.map(e =>
+        `[${e.timestamp}] ${e.filename} (${formatters.formatBytes(e.size)}) - ${e.status.toUpperCase()} - ${e.serverAddress}`
+      ).join('\n');
+      blob = new Blob([data], { type: 'text/plain' });
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    return filename;
   }
 }
 
@@ -89,10 +142,15 @@ class App {
       totalBytes: 0,
       startTime: null,
       serverAddress: 'localhost:1256',
-      username: 'User-' + Math.floor(Math.random() * 10000)
+      username: 'User-' + Math.floor(Math.random() * 10000),
+      operationInProgress: false,
+      buttonsEnabled: {
+        primary: true,
+        pause: false,
+        resume: false,
+        stop: false
+      }
     });
-
-    this.operationInProgress = false;
 
     // Track last rendered values to support lightweight UI pulse animations.
     this._valuePulseTimers = new WeakMap();
@@ -101,8 +159,19 @@ class App {
     this.api = new ApiClient(API_CONFIG.getApiBaseUrl());
     this.toast = new ToastManager(dom.toastStack);
     this.announcer = new ScreenReaderAnnouncer(dom.srLive);
-    this.logs = new LogStore(dom.logContainer);
-    this.theme = new ThemeManager(); // Uses dom.themeToggle internally
+    this.logs = new LogStore(dom.logContainer, {
+      maxLogs: 50,
+      logEntryCount: dom.logEntryCount,
+      logsEmptyState: dom.logsEmptyState,
+      searchInput: dom.logSearchInput,
+      searchClearBtn: dom.searchClearBtn,
+      filterButtons: dom.logFilters,
+      segmentIndicator: dom.segmentIndicator,
+      recentFilterBtn: dom.filterRecentLogsBtn,
+      emptyTitle: dom.logsEmptyTitle,
+      emptyDesc: dom.logsEmptyDesc
+    });
+    this.theme = new ThemeManager(dom.themeToggle, dom.themeLabel);
     this.transferHistory = new TransferHistory();
 
     // Capture the currently active transfer metadata (filename/size) for history.
@@ -251,6 +320,13 @@ class App {
 
     // Transfer history
     dom.transferHistoryClearBtn?.addEventListener('click', () => this.#handleClearTransferHistory());
+    dom.transferHistoryExportBtn?.addEventListener('click', (e) => {
+      // Show export format menu on click
+      this.#showExportMenu(e);
+    });
+    dom.transferHistoryFilter?.addEventListener('change', (e) => {
+      this.#handleTransferHistoryFilter(e.target.value);
+    });
 
     // Settings
     dom.settingsToggle?.addEventListener('click', () => {
@@ -277,6 +353,113 @@ class App {
       this.announcer.announce('Transfer history cleared');
     } catch (error) {
       ErrorBoundary.handle(error, 'Clear Transfer History');
+    }
+  }
+
+  #handleExportTransferHistory(format = 'json') {
+    try {
+      const filteredEntries = this.#getFilteredTransfers();
+
+      if (!filteredEntries || filteredEntries.length === 0) {
+        this.toast.show('No transfers to export', 'info');
+        return;
+      }
+
+      const filename = this.transferHistory.export(format, filteredEntries);
+
+      if (!filename) {
+        this.toast.show('Failed to export transfer history', 'error');
+        return;
+      }
+
+      this.logs.add(`Exported ${filteredEntries.length} transfers to ${filename}`, { phase: 'UI' });
+      this.toast.show(`Exported ${filteredEntries.length} transfers as ${format.toUpperCase()}`, 'success');
+      this.announcer.announce(`Exported ${filteredEntries.length} transfers`);
+    } catch (error) {
+      ErrorBoundary.handle(error, 'Export Transfer History');
+    }
+  }
+
+  #showExportMenu(event) {
+    const existingMenu = document.getElementById('exportFormatMenu');
+    if (existingMenu) {
+      existingMenu.remove();
+      return;
+    }
+
+    const menu = document.createElement('div');
+    menu.id = 'exportFormatMenu';
+    menu.className = 'export-menu';
+    menu.innerHTML = `
+      <button class=\"export-menu-item\" data-format=\"json\">
+        <span class=\"export-icon\">📄</span>
+        <span>Export as JSON</span>
+      </button>
+      <button class=\"export-menu-item\" data-format=\"csv\">
+        <span class=\"export-icon\">📊</span>
+        <span>Export as CSV</span>
+      </button>
+    `;
+
+    menu.style.position = 'absolute';
+    menu.style.top = `${event.clientY}px`;
+    menu.style.left = `${event.clientX}px`;
+
+    menu.querySelectorAll('.export-menu-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const { format } = e.currentTarget.dataset;
+        this.#handleExportTransferHistory(format);
+        menu.remove();
+      });
+    });
+
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+
+    document.body.appendChild(menu);
+  }
+
+  #getFilteredTransfers() {
+    const filter = dom.transferHistoryFilter?.value || 'all';
+
+    if (filter === 'all') {
+      return this.transferHistory.entries;
+    }
+
+    // Map UI filter values to status values
+    if (filter === 'success') {
+      return this.transferHistory.filter(entry => {
+        const status = String(entry?.status || 'completed').toLowerCase();
+        return status === 'completed' || status === 'success';
+      });
+    }
+
+    if (filter === 'fail') {
+      return this.transferHistory.filter(entry => {
+        const status = String(entry?.status || 'completed').toLowerCase();
+        return status !== 'completed' && status !== 'success';
+      });
+    }
+
+    return this.transferHistory.entries;
+  }
+
+  #handleTransferHistoryFilter(filterValue) {
+    try {
+      this.#renderTransferHistory({ force: true });
+
+      const count = this.#getFilteredTransfers().length;
+      const filterName = filterValue === 'all' ? 'all transfers' :
+                        filterValue === 'success' ? 'successful transfers' :
+                        'failed transfers';
+
+      this.announcer.announce(`Showing ${filterName}: ${count} items`);
+    } catch (error) {
+      ErrorBoundary.handle(error, 'Filter Transfer History');
     }
   }
 
@@ -314,7 +497,7 @@ class App {
    * Toggles between connect and disconnect based on current state.
    */
   #handlePrimaryAction() {
-    if (this.operationInProgress) {
+    if (this.state.snapshot.operationInProgress) {
       this.toast.show('Operation in progress, please wait…', 'info');
       return;
     }
@@ -326,10 +509,10 @@ class App {
   }
 
   async #handleConnect() {
-    if (this.operationInProgress) return;
+    if (this.state.snapshot.operationInProgress) return;
     if (API_CONFIG.isFileProtocol()) {
       this.toast.show('API unavailable in file:// mode. Open http://localhost:9090 instead.', 'warn');
-      this.setConnectionStatus('API unavailable in file:// mode', 'error');
+      // Use inline banner as primary indicator for file:// protocol error
       this.showInlineBanner({
         severity: 'error',
         title: 'Cannot connect in file:// mode',
@@ -337,6 +520,8 @@ class App {
         actionHref: 'http://localhost:9090',
         actionText: 'Open live UI'
       });
+      // Hide transient status message to avoid duplication
+      this.#hideConnectionStatus();
       return;
     }
 
@@ -358,7 +543,7 @@ class App {
     }
 
     try {
-      this.operationInProgress = true;
+      this.state.update({ operationInProgress: true });
       // Update button to connecting state
       this.#setButtonState('connecting');
       this.#updateConnectionStatus('Connecting...', 'pending');
@@ -389,7 +574,7 @@ class App {
 
     } catch (error) {
       this.#setButtonState('idle');
-      this.#updateConnectionStatus('Connection failed', 'error');
+      // Use inline banner as primary offline indicator
       this.showInlineBanner({
         severity: 'error',
         title: 'Connection failed',
@@ -397,16 +582,18 @@ class App {
         actionHref: 'http://localhost:9090',
         actionText: 'Open live UI'
       });
+      // Hide transient status message to avoid duplication
+      this.#hideConnectionStatus();
       ErrorBoundary.handle(error, 'Connection');
       } finally {
-        this.operationInProgress = false;
+        this.state.update({ operationInProgress: false });
     }
   }
 
   async #handleDisconnect() {
-      if (this.operationInProgress) return;
+      if (this.state.snapshot.operationInProgress) return;
     try {
-        this.operationInProgress = true;
+        this.state.update({ operationInProgress: true });
       this.#setButtonState('disconnecting');
       this.#updateConnectionStatus('Disconnecting...', 'pending');
 
@@ -422,7 +609,7 @@ class App {
       this.#updateConnectionStatus('Disconnect failed', 'error');
       ErrorBoundary.handle(error, 'Disconnect');
     } finally {
-      this.operationInProgress = false;
+      this.state.update({ operationInProgress: false });
     }
   }
 
@@ -449,6 +636,15 @@ class App {
     btn.classList.toggle('connected', cfg.connected);
     if (text) text.textContent = cfg.text;
     if (spinner) spinner.classList.toggle('active', cfg.spinner);
+
+    // Update troubleshoot button based on connection state
+    if (dom.troubleshootChip) {
+      const isConnected = state === 'connected';
+      dom.troubleshootChip.disabled = !isConnected;
+      dom.troubleshootChip.title = isConnected ?
+        'Troubleshoot connection issues' :
+        'Connect to enable diagnostics';
+    }
   }
 
   /**
@@ -462,6 +658,9 @@ class App {
     const iconEl = dom.connectionStatusIcon;
     const spinnerEl = dom.connectionStatusSpinner;
     if (!container || !textEl) return;
+
+    // Show container if hidden
+    if (container.hidden) container.hidden = false;
 
     // Update text
     textEl.textContent = message;
@@ -478,6 +677,16 @@ class App {
     if (iconEl) {
       const icons = { pending: '⏳', success: '✓', error: '✕', info: 'ℹ' };
       iconEl.textContent = icons[type] || '';
+    }
+  }
+
+  /**
+   * Hides connection status message (to avoid redundancy with inline banner).
+   */
+  #hideConnectionStatus() {
+    const container = dom.connectionStatusMessage;
+    if (container) {
+      container.hidden = true;
     }
   }
 
@@ -519,7 +728,7 @@ class App {
     }
 
     try {
-      this.operationInProgress = true;
+      this.state.update({ operationInProgress: true });
       this.state.update({
         status: 'uploading',
         progress: 0,
@@ -554,7 +763,7 @@ class App {
       this.state.update({ status: 'error' });
       ErrorBoundary.handle(error, 'Start Backup');
     } finally {
-      this.operationInProgress = false;
+      this.state.update({ operationInProgress: false });
     }
   }
 
@@ -646,6 +855,7 @@ class App {
           size: this._activeTransferMeta.size,
           status: 'completed',
           serverAddress: this.state.snapshot.serverAddress,
+          jobId: this.state.snapshot.jobId,
         });
 
         this.#renderTransferHistory();
@@ -663,6 +873,7 @@ class App {
           size: this._activeTransferMeta.size,
           status: 'failed',
           serverAddress: this.state.snapshot.serverAddress,
+          jobId: this.state.snapshot.jobId,
         });
 
         this.#renderTransferHistory();
@@ -902,30 +1113,43 @@ class App {
   #renderTransferHistory({ force = false } = {}) {
     if (!dom.transferHistoryList || !dom.transferHistoryEmpty || !dom.transferHistoryCount) return;
 
+    const filteredEntries = this.#getFilteredTransfers();
     const { entries } = this.transferHistory;
     const sig = JSON.stringify(entries);
     if (!force && sig === this._lastTransferHistorySig) return;
     this._lastTransferHistorySig = sig;
 
-    const count = Array.isArray(entries) ? entries.length : 0;
-    dom.transferHistoryCount.textContent = String(count);
+    const totalCount = Array.isArray(entries) ? entries.length : 0;
+    const filteredCount = Array.isArray(filteredEntries) ? filteredEntries.length : 0;
+
+    // Show filtered count / total count
+    const filterValue = dom.transferHistoryFilter?.value || 'all';
+    if (filterValue === 'all') {
+      dom.transferHistoryCount.textContent = String(totalCount);
+    } else {
+      dom.transferHistoryCount.textContent = `${filteredCount} of ${totalCount}`;
+    }
 
     if (dom.transferHistoryClearBtn) {
-      dom.transferHistoryClearBtn.disabled = count === 0;
+      dom.transferHistoryClearBtn.disabled = totalCount === 0;
+    }
+
+    if (dom.transferHistoryExportBtn) {
+      dom.transferHistoryExportBtn.disabled = totalCount === 0;
     }
 
     // Empty state
-    const showEmpty = count === 0;
+    const showEmpty = filteredCount === 0;
     dom.transferHistoryEmpty.hidden = !showEmpty;
     dom.transferHistoryList.hidden = showEmpty;
 
-    // Render list
+    // Render filtered list
     dom.transferHistoryList.textContent = '';
     if (showEmpty) return;
 
     const frag = document.createDocumentFragment();
 
-    for (const entry of entries) {
+    for (const entry of filteredEntries) {
       const li = document.createElement('li');
       li.className = 'transfer-history-item';
 

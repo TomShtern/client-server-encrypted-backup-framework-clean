@@ -60,7 +60,6 @@ if (document.readyState === 'loading') {
 function initializeDom() {
   dom.container = querySelector('.container');
   dom.statusOutput = getElement('statusOutput');
-  dom.connStatus = getOptionalElement('connStatus');  // Removed in new dual-server design
   dom.connHealth = getElement('connHealth');
   dom.latencyValue = getOptionalElement('latencyValue');
   dom.webServerStatus = getOptionalElement('webServerStatus');
@@ -70,7 +69,6 @@ function initializeDom() {
   dom.detailServer = getOptionalElement('detailServer');
   dom.detailUptime = getOptionalElement('detailUptime');
   dom.themeLabel = document.querySelector('.theme-label');
-  dom.connQuality = getOptionalElement('connQuality');  // Removed in new dual-server design
   dom.themeToggle = getElement('themeToggle');
   dom.serverInput = getElement('serverInput');
   dom.usernameInput = getElement('usernameInput');
@@ -86,7 +84,7 @@ function initializeDom() {
   dom.fileMetadata = getOptionalElement('fileMetadata');
   dom.fileTypeBadge = getOptionalElement('fileTypeBadge');
   dom.fileModified = getOptionalElement('fileModified');
-  // Optional elements that may not exist in new design
+  // Optional file action buttons
   dom.fileSelectBtn = getOptionalElement('chooseFileBtn');
   dom.recentFilesBtn = getOptionalElement('recentFilesBtn');
   dom.clearFileBtn = getOptionalElement('clearFileBtn');
@@ -160,6 +158,8 @@ function initializeDom() {
   dom.transferHistoryEmpty = getOptionalElement('transferHistoryEmpty');
   dom.transferHistoryCount = getOptionalElement('transferHistoryCount');
   dom.transferHistoryClearBtn = getOptionalElement('transferHistoryClearBtn');
+  dom.transferHistoryExportBtn = getOptionalElement('transferHistoryExportBtn');
+  dom.transferHistoryFilter = getOptionalElement('transferHistoryFilter');
 
   dom.toastStack = getElement('toastStack');
   dom.modal = getElement('modalConfirm');
@@ -174,8 +174,7 @@ function initializeDom() {
   dom.inlineErrorAction = getOptionalElement('inlineErrorAction');
   dom.inlineErrorDismiss = getOptionalElement('inlineErrorDismiss');
 
-  // --- Missing Elements added during Refactoring ---
-  dom.clearFileBtn = getOptionalElement('clearFileBtn');
+  // Additional optional elements
   dom.connectionDetails = getOptionalElement('connectionDetails');
   dom.speedChart = getOptionalElement('speedChart');
   dom.toggleSpeedChart = getOptionalElement('toggleSpeedChart');

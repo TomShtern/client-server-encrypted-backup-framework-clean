@@ -108,7 +108,7 @@
                         <span id="lastChecked" class="last-checked">Last checked —</span>
                     </button>
                     <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button" aria-expanded="false"
-                        aria-controls="troubleshootSheet">⚡ Troubleshoot</button>
+                        aria-controls="troubleshootSheet" disabled title="Connect to enable diagnostics">⚡ Troubleshoot</button>
                     <div id="connectionDetails" class="connection-details">
                         <h4>Connection Details</h4>
                         <div class="connection-metric">
@@ -164,18 +164,22 @@
                 <div id="cfgTitle" class="phase" aria-hidden="true">Configuration</div>
 
                 <label class="floating-label">
-                    <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:1256"
-                        autocomplete="off" aria-describedby="serverHint" class="interactive" />
                     <span class="label-text">Server Address</span>
-                    <span id="serverValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    <div class="input-wrapper">
+                        <input id="serverInput" type="text" value="127.0.0.1:1256" placeholder="127.0.0.1:1256"
+                            autocomplete="off" aria-describedby="serverHint" class="interactive" />
+                        <span id="serverValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    </div>
                     <div id="serverHint" class="hint text-caption" role="alert" hidden>Invalid host:port format</div>
                 </label>
 
                 <label class="floating-label">
-                    <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off"
-                        aria-describedby="usernameHint" class="interactive" />
                     <span class="label-text">Username</span>
-                    <span id="usernameValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    <div class="input-wrapper">
+                        <input id="usernameInput" type="text" value="user" placeholder="user" autocomplete="off"
+                            aria-describedby="usernameHint" class="interactive" />
+                        <span id="usernameValidIcon" class="validation-icon" aria-hidden="true"></span>
+                    </div>
                     <div id="usernameHint" class="hint text-caption" role="alert" hidden>Username is required</div>
                 </label>
 
@@ -235,90 +239,90 @@
                     </button>
                     <div id="advancedContent" class="advanced-content">
                         <div class="settings-tabs" role="tablist">
-                            <button class="tab-btn active" role="tab" data-tab="network" aria-selected="true"
-                                aria-controls="tab-network">Network</button>
-                            <button class="tab-btn" role="tab" data-tab="schedule" aria-selected="false"
-                                aria-controls="tab-schedule">Schedule</button>
-                            <button class="tab-btn" role="tab" data-tab="compression" aria-selected="false"
-                                aria-controls="tab-compression">Compression</button>
-                            <button class="tab-btn" role="tab" data-tab="encryption" aria-selected="false"
+                            <button class="tab-btn" role="tab" data-tab="encryption" aria-selected="true"
                                 aria-controls="tab-encryption">Encryption</button>
+                            <button class="tab-btn tab-upcoming" role="tab" data-tab="network" aria-selected="false"
+                                aria-controls="tab-network" title="Feature preview - coming soon">Network</button>
+                            <button class="tab-btn tab-upcoming" role="tab" data-tab="schedule" aria-selected="false"
+                                aria-controls="tab-schedule" title="Feature preview - coming soon">Schedule</button>
+                            <button class="tab-btn tab-upcoming" role="tab" data-tab="compression" aria-selected="false"
+                                aria-controls="tab-compression" title="Feature preview - coming soon">Compression</button>
                         </div>
                         <div class="tab-panels">
-                            <div id="tab-network" class="tab-panel active" role="tabpanel">
+                            <div id="tab-encryption" class="tab-panel active" role="tabpanel">
+                                <div class="setting-row">
+                                    <label for="advEncryption">Encryption</label>
+                                    <select id="advEncryption" class="setting-select">
+                                        <option value="aes256" selected>AES-256-CBC</option>
+                                        <option value="aes128" disabled>AES-128-CBC (Coming Soon)</option>
+                                        <option value="chacha" disabled>ChaCha20-Poly1305 (Coming Soon)</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <label for="advKeySize">Key Size</label>
+                                    <select id="advKeySize" class="setting-select">
+                                        <option value="1024" selected>1024 bits (RSA)</option>
+                                        <option value="2048" disabled>2048 bits (Coming Soon)</option>
+                                        <option value="4096" disabled>4096 bits (Coming Soon)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="tab-network" class="tab-panel" role="tabpanel" hidden>
                                 <div class="setting-row">
                                     <label for="advProxy">Proxy</label>
-                                    <select id="advProxy" class="setting-select">
+                                    <select id="advProxy" class="setting-select" disabled>
                                         <option value="">None</option>
                                         <option value="http">HTTP</option>
                                         <option value="socks5">SOCKS5</option>
                                     </select>
+                                    <div class="hint">Feature coming soon</div>
                                 </div>
                                 <div class="setting-row">
                                     <label for="advPolycene" title="Enable Polyglot Environment">Polyglot Environment
                                         (Polycene)</label>
                                     <label class="toggle-switch" aria-label="Toggle Polyglot Environment">
-                                        <input type="checkbox" id="advPolycene">
+                                        <input type="checkbox" id="advPolycene" disabled>
                                         <span class="toggle-slider"></span>
                                     </label>
+                                    <div class="hint">Feature coming soon</div>
                                 </div>
                             </div>
                             <div id="tab-schedule" class="tab-panel" role="tabpanel" hidden>
                                 <div class="setting-row">
                                     <label for="advScheduleType">Schedule Type</label>
-                                    <select id="advScheduleType" class="setting-select">
+                                    <select id="advScheduleType" class="setting-select" disabled>
                                         <option value="manual">Manual</option>
                                         <option value="hourly">Hourly</option>
                                         <option value="daily">Daily</option>
                                         <option value="weekly">Weekly</option>
                                     </select>
+                                    <div class="hint">Feature coming soon</div>
                                 </div>
                                 <div class="setting-row">
                                     <label for="advAutoRetry">Auto Retry</label>
                                     <label class="toggle-switch" aria-label="Toggle Auto Retry">
-                                        <input type="checkbox" id="advAutoRetry" checked>
+                                        <input type="checkbox" id="advAutoRetry" disabled>
                                         <span class="toggle-slider"></span>
                                     </label>
+                                    <div class="hint">Feature coming soon</div>
                                 </div>
                             </div>
                             <div id="tab-compression" class="tab-panel" role="tabpanel" hidden>
                                 <div class="setting-row">
                                     <label for="advCompression">Compression</label>
-                                    <select id="advCompression" class="setting-select">
+                                    <select id="advCompression" class="setting-select" disabled>
                                         <option value="none">None</option>
                                         <option value="gzip">GZIP</option>
                                         <option value="lz4">LZ4 (Fast)</option>
                                         <option value="zstd">ZSTD (Balanced)</option>
                                     </select>
+                                    <div class="hint">Feature coming soon</div>
                                 </div>
                                 <div class="setting-row">
                                     <label for="advChunkSize">Chunk Size (MB)</label>
                                     <input id="advChunkSize" type="text" placeholder="8" class="interactive"
-                                        value="8" aria-describedby="advChunkHint" />
-                                    <div id="advChunkHint" class="hint" aria-live="polite">1–256 MB</div>
-                                </div>
-                            </div>
-                            <div id="tab-encryption" class="tab-panel" role="tabpanel" hidden>
-                                <div class="setting-row">
-                                    <label for="advEncryption">Encryption</label>
-                                    <select id="advEncryption" class="setting-select">
-                                        <option value="aes256" selected>AES-256-CBC</option>
-                                        <option value="aes128">AES-128-CBC</option>
-                                        <option value="chacha">ChaCha20-Poly1305</option>
-                                    </select>
-                                </div>
-                                <div class="setting-row">
-                                    <label for="advVerify">Verify Integrity</label>
-                                    <label class="toggle-switch" aria-label="Toggle Verify Integrity">
-                                        <input type="checkbox" id="advVerify" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="setting-row">
-                                    <label for="advRetryLimit">Retry Limit</label>
-                                    <input id="advRetryLimit" type="text" placeholder="3" class="interactive"
-                                        value="3" aria-describedby="advRetryHint" />
-                                    <div id="advRetryHint" class="hint" aria-live="polite">0–20 retries</div>
+                                        value="8" aria-describedby="advChunkHint" disabled />
+                                    <div id="advChunkHint" class="hint" aria-live="polite">Feature coming soon</div>
                                 </div>
                             </div>
                         </div>
@@ -465,30 +469,9 @@
                 </div>
             </section>
 
-            <!-- Transfer History - Grid Row 2 -->
-            <section id="transferHistoryPanel" class="stack transfer-history" aria-labelledby="transferHistoryTitle">
-                <div id="transferHistoryTitle" class="phase">Recent Transfers</div>
-
-                <div class="transfer-history-toolbar">
-                    <span class="transfer-history-count"><span id="transferHistoryCount">0</span> items</span>
-                    <div class="transfer-history-actions">
-                        <button id="transferHistoryClearBtn" class="logs-action-btn" type="button" title="Clear transfer history" disabled>Clear history</button>
-                    </div>
-                </div>
-
-                <ul id="transferHistoryList" class="transfer-history-list" aria-label="Transfer history"></ul>
-
-                <div id="transferHistoryEmpty" class="transfer-history-empty" hidden>
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5" />
-                    </svg>
-                    <span class="transfer-history-empty-title">No transfers yet</span>
-                    <span class="empty-description">Completed transfers will appear here.</span>
-                </div>
-            </section>
-
-            <!-- Activity Logs - Grid Row 3 -->
+            <!-- Two-Column Grid: Activity Logs (left) + Transfer History (right) -->
+            <div class="logs-transfers-grid">
+                <!-- Activity Logs - Left Column -->
             <section class="logs stack" aria-labelledby="logTitle">
                 <!-- Phase Title - matches Configuration and Status panels -->
                 <div id="logTitle" class="phase">Activity Logs</div>
@@ -561,6 +544,38 @@
                     </div>
                 </div>
             </section>
+
+                <!-- Transfer History - Right Column -->
+                <section id="transferHistoryPanel" class="stack transfer-history" aria-labelledby="transferHistoryTitle">
+                    <div id="transferHistoryTitle" class="phase">Recent Transfers</div>
+
+                    <div class="transfer-history-toolbar">
+                        <span class="transfer-history-count"><span id="transferHistoryCount">0</span> items</span>
+                        <div class="transfer-history-actions">
+                            <select id="transferHistoryFilter" class="logs-action-select" title="Filter transfers">
+                                <option value="all">All Transfers</option>
+                                <option value="success">Successful Only</option>
+                                <option value="fail">Failed Only</option>
+                            </select>
+                            <button id="transferHistoryExportBtn" class="logs-action-btn" type="button" title="Export transfer history" disabled>
+                                <span class="btn-text">Export</span>
+                                <span class="btn-dropdown">▼</span>
+                            </button>
+                            <button id="transferHistoryClearBtn" class="logs-action-btn" type="button" title="Clear transfer history" disabled>Clear</button>
+                        </div>
+                    </div>
+
+                    <ul id="transferHistoryList" class="transfer-history-list" aria-label="Transfer history"></ul>
+
+                    <div id="transferHistoryEmpty" class="transfer-history-empty" hidden>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" opacity="0.5" />
+                        </svg>
+                        <span class="transfer-history-empty-title">No transfers yet</span>
+                        <span class="empty-description">Completed transfers will appear here.</span>
+                    </div>
+                </section>
+            </div>
         </main>
     </div>
 

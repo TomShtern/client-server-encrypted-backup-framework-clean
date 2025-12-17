@@ -448,6 +448,44 @@ html.theme-light body::before {
   pointer-events: auto;
 }
 
+/* Demo Mode Badge */
+.demo-mode-badge {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2001;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.95) 0%, rgba(245, 158, 11, 0.95) 100%);
+  color: rgba(0, 0, 0, 0.9);
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-12);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow:
+    0 4px 16px rgba(251, 191, 36, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  animation: demoBadgePulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes demoBadgePulse {
+  0%, 100% {
+    box-shadow:
+      0 4px 16px rgba(251, 191, 36, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.2),
+      inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 6px 24px rgba(251, 191, 36, 0.6),
+      0 0 0 2px rgba(255, 255, 255, 0.3),
+      inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -954,13 +992,29 @@ html.theme-light .chip.quality-poor {
 main#mainContent {
   display: grid;
   grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   gap: var(--space-lg);
   align-items: stretch;
   overflow: visible;
   max-width: 100%;
   margin: 0;
   padding: 0;
+}
+
+/* Two-column grid for Activity Logs (left) and Transfer History (right) */
+.logs-transfers-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  align-items: stretch;
+}
+
+@media (max-width: 1200px) {
+  .logs-transfers-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
 }
 
 .stack,
@@ -1087,16 +1141,13 @@ label,
 /* Floating Label Container - Critical for form design */
 .floating-label {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  /* Normal flow - use order to reposition */
+  display: block;
   margin-bottom: var(--space-sm);
 }
 
 .floating-label input {
   padding: 8px 12px;
   padding-right: 36px;
-  /* Space for validation icon */
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%), var(--surface-alt);
@@ -1107,11 +1158,7 @@ label,
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
   min-height: 38px;
   width: 100%;
-  order: 2;
-  /* Input after label */
-  margin-top: 2px;
-  position: relative;
-  /* For positioning validation icon */
+  box-sizing: border-box;
 }
 
 .floating-label input:hover {
@@ -1131,38 +1178,41 @@ label,
 
 .floating-label .label-text {
   display: block;
-  /* Override generic .label-text flex */
-  margin: 0;
+  margin: 0 0 2px 0;
   font-size: var(--fs-12);
   font-weight: 600;
   color: var(--fg-secondary);
   letter-spacing: 0.3px;
   transition: color var(--transition-fast), opacity var(--transition-fast);
-  order: 1;
-  /* Label appears first visually */
   line-height: 1.3;
 }
 
-.floating-label input:focus~.label-text,
-.floating-label input:not(:placeholder-shown)~.label-text {
+.floating-label .input-wrapper:focus-within .label-text,
+.floating-label .input-wrapper:has(input:not(:placeholder-shown)) ~ .label-text {
   color: var(--focus);
   font-weight: 700;
 }
 
-.input-wrapper {
+.floating-label .input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
+  display: block;
+  width: 100%;
 }
 
-.floating-label .validation-icon {
+.floating-label .input-wrapper input {
+  width: 100%;
+}
+
+.input-wrapper .validation-icon {
   position: absolute;
-  right: 16px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1;
   pointer-events: none;
   transition: opacity 0.2s ease;
+  z-index: 2;
 }
 
 .floating-label .hint {
@@ -1171,23 +1221,16 @@ label,
   margin-top: var(--space-xs);
 }
 
-.validation-icon {
-  position: absolute;
-  right: 12px;
-  font-size: 18px;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.validation-icon.valid {
+/* Validation icon states - scoped to .input-wrapper context */
+.input-wrapper .validation-icon.valid {
   color: var(--success);
 }
 
-.validation-icon.invalid {
+.input-wrapper .validation-icon.invalid {
   color: var(--danger);
 }
 
-.validation-icon.hidden {
+.input-wrapper .validation-icon.hidden {
   opacity: 0;
 }
 
@@ -1220,10 +1263,11 @@ input[aria-invalid="true"]:focus {
 .hint,
 .text-caption,
 .file-sub {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-13);
   font-weight: var(--weight-normal);
   color: var(--muted);
   margin-top: var(--gap-1);
+  line-height: 1.4;
 }
 
 /* Error/danger hints - override with danger color */
@@ -1313,6 +1357,144 @@ html.theme-light .wave-layer {
 
 html.theme-light .status-bg-animation {
   opacity: 0.5;
+}
+
+/* Transfer History Panel - matches Activity Logs styling */
+.transfer-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 600px;
+  height: 100%;
+}
+
+.transfer-history-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.transfer-history-count {
+  font-size: var(--fs-13);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.transfer-history-count span {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.transfer-history-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.transfer-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.transfer-history-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0.05) 100%), var(--surface-alt);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  align-items: center;
+  font-size: var(--fs-13);
+  transition: all var(--transition-fast);
+}
+
+.transfer-history-item:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.03) 100%), var(--surface);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.transfer-status-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.transfer-status-icon.completed {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+}
+
+.transfer-status-icon.failed {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--danger);
+}
+
+.transfer-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transfer-filename {
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transfer-meta {
+  font-size: var(--fs-11);
+  color: var(--muted);
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.transfer-size,
+.transfer-time {
+  white-space: nowrap;
+}
+
+.transfer-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-3xl) var(--space-xl);
+  color: var(--muted);
+  text-align: center;
+  min-height: 160px;
+}
+
+.transfer-history-empty svg {
+  width: 28px;
+  height: 28px;
+  opacity: 0.3;
+}
+
+.transfer-history-empty-title {
+  font-size: var(--fs-14);
+  font-weight: 600;
+  color: var(--fg-secondary);
 }
 
 /* Global focus indicator - enhanced for accessibility
@@ -1413,12 +1595,12 @@ button.primary {
   color: #ffffff;
   border: 2px solid rgba(88, 166, 255, 0.4);
   font-weight: var(--weight-bold);
-  font-size: var(--fs-16);
-  min-height: 56px;
-  padding: 16px 40px;
-  letter-spacing: 0.5px;
+  font-size: var(--fs-18);
+  min-height: 64px;
+  padding: 20px 48px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  /* Removed box-shadow for performance */
+  box-shadow: 0 8px 24px rgba(31, 111, 235, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
   position: relative;
   overflow: hidden;
 }
@@ -1439,8 +1621,8 @@ button.primary:hover::before {
 button.primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #388bfd 0%, #1f6feb 100%);
   border-color: rgba(88, 166, 255, 0.6);
-  /* Removed box-shadow for performance */
-  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(31, 111, 235, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  transform: translateY(-3px) scale(1.03);
 }
 
 /* Morphing Button State */
@@ -2396,7 +2578,7 @@ svg {
 }
 
 .tab-btn {
-  flex: 1;
+  flex: 0 0 auto;
   padding: var(--space-sm) var(--space-md);
   background: transparent;
   border: none;
@@ -2473,6 +2655,29 @@ svg {
     var(--focus-glow-soft);
 }
 
+/* Disabled tab styles */
+/* Upcoming feature tabs - clickable but visually distinct */
+.tab-btn.tab-upcoming {
+  opacity: 0.7;
+  position: relative;
+}
+
+.tab-btn.tab-upcoming::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.tab-btn.tab-upcoming:hover {
+  opacity: 0.9;
+}
+
 .tab-panels {
   padding: var(--space-sm);
 }
@@ -2528,6 +2733,21 @@ svg {
 .setting-row input:not([type="checkbox"]):focus {
   border-color: var(--accent);
   outline: none;
+}
+
+/* Disabled setting controls */
+.setting-select:disabled,
+.setting-row input:not([type="checkbox"]):disabled,
+.setting-row input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.setting-row input[type="checkbox"]:disabled ~ .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .input-with-unit {
@@ -3014,6 +3234,18 @@ svg {
   opacity: 1;
 }
 
+.stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition: all var(--transition-fast);
+}
+
 .stat-icon {
   width: 36px;
   height: 36px;
@@ -3033,8 +3265,11 @@ svg {
 .stat-content {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-xs);
   min-width: 0;
+  flex: 1;
+  text-align: center;
 }
 
 .stat-content .label {
@@ -3217,8 +3452,6 @@ svg {
    ======================================== */
 
 section.transfer-history.stack {
-  grid-column: 1 / -1;
-  grid-row: 2;
   background: var(--surface-elevated, rgba(22, 27, 34, 0.95));
   border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
   border-radius: var(--card-radius, var(--radius-xl));
@@ -3228,140 +3461,12 @@ section.transfer-history.stack {
     0 0 0 1px rgba(255, 255, 255, 0.02) inset;
 }
 
-.transfer-history-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-sm) 0 var(--space-md);
-  margin-bottom: var(--space-md);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
+/* Duplicate selectors removed - already defined at line 1376+ */
 
-html.theme-light .transfer-history-toolbar {
-  border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-.transfer-history-count {
-  color: var(--muted);
-  font-size: var(--fs-12);
-}
-
-.transfer-history-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  min-height: 56px;
-}
-
-.transfer-history-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-html.theme-light .transfer-history-item {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-.transfer-history-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.transfer-history-filename {
-  color: var(--fg);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.transfer-history-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  color: var(--muted);
-  font-size: var(--fs-12);
-}
-
-.transfer-history-badges {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex: 0 0 auto;
-}
-
-.transfer-history-status {
-  font-size: var(--fs-12);
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.12);
-  white-space: nowrap;
-}
-
-.transfer-history-status.is-success {
-  color: #86efac;
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.10);
-}
-
-html.theme-light .transfer-history-status.is-success {
-  color: #166534;
-  border-color: rgba(22, 101, 52, 0.25);
-  background: rgba(34, 197, 94, 0.08);
-}
-
-.transfer-history-status.is-error {
-  color: #fecaca;
-  border-color: rgba(248, 81, 73, 0.35);
-  background: rgba(248, 81, 73, 0.10);
-}
-
-html.theme-light .transfer-history-status.is-error {
-  color: #991b1b;
-  border-color: rgba(153, 27, 27, 0.25);
-  background: rgba(248, 81, 73, 0.08);
-}
-
-.transfer-history-time {
-  color: var(--muted);
-  font-size: var(--fs-12);
-  white-space: nowrap;
-}
-
-.transfer-history-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg) 0;
-  color: var(--muted);
-  text-align: center;
-}
-
-.transfer-history-empty-title {
-  color: var(--fg);
-  font-weight: 600;
-}
+/* .logs-transfers-grid already defined at line 1005 - duplicate removed */
 
 /* Logs section as a card matching Configuration */
 section.logs.stack {
-  grid-column: 1 / -1;
-  grid-row: 3;
   background: var(--surface-elevated, rgba(22, 27, 34, 0.95));
   /* Removed backdrop-filter for GPU performance */
   border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
@@ -3370,16 +3475,20 @@ section.logs.stack {
   box-shadow:
     0 4px 32px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  min-height: 600px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Responsive layout: collapse the main grid to a single column.
    IMPORTANT: this block must come AFTER the base grid placement rules
-   (aside/status/logs), otherwise later rules re-introduce a second column
+   (aside/status), otherwise later rules re-introduce a second column
    and the UI appears clipped to the right. */
 @media (max-width: 1024px) {
   main#mainContent {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto;
   }
 
   aside.stack {
@@ -3392,20 +3501,11 @@ section.logs.stack {
     grid-column: 1;
     grid-row: 2;
   }
-
-  section.transfer-history.stack {
-    grid-column: 1;
-    grid-row: 3;
-  }
-
-  section.logs.stack {
-    grid-column: 1;
-    grid-row: 4;
-  }
 }
 
 /* Phase title - matches Configuration and Status */
-section.logs.stack>.phase {
+section.logs.stack > .phase,
+section.transfer-history.stack > .phase {
   font-size: var(--fs-12);
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -3718,6 +3818,98 @@ html.theme-light .logs-toolbar {
   box-shadow: 0 2px 12px rgba(63, 185, 80, 0.18);
 }
 
+/* Filter select for transfer history */
+.logs-action-select {
+  background: rgba(var(--surface-rgb), 0.8);
+  color: var(--text-secondary);
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.logs-action-select:hover {
+  border-color: rgba(var(--primary-rgb), 0.35);
+  background: rgba(var(--surface-rgb), 1);
+}
+
+.logs-action-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.15);
+}
+
+/* Export menu dropdown */
+.export-menu {
+  background: var(--surface);
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3),
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  padding: 8px;
+  min-width: 180px;
+  z-index: 1000;
+  animation: fadeSlideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.export-menu-item:hover {
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--primary);
+}
+
+.export-icon {
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+/* Export button with dropdown indicator */
+#transferHistoryExportBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#transferHistoryExportBtn .btn-dropdown {
+  font-size: 10px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+#transferHistoryExportBtn:hover .btn-dropdown {
+  opacity: 1;
+}
+
 /* Log Entries Container - Seamless dark area */
 #logContainer {
   position: relative;
@@ -3769,13 +3961,14 @@ html.theme-light .logs-toolbar {
    PHASE 3.6: EMPTY STATES & LOADING POLISH
    ═══════════════════════════════════════════════════════════════ */
 
-/* Empty State */
+/* Empty State - Compact Design (max ~160-200px) */
 .logs-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-3xl) var(--space-lg);
+  padding: var(--space-xl) var(--space-lg);
+  max-height: 180px;
   text-align: center;
   color: var(--muted);
   animation: fade-in var(--duration-smooth, 400ms) var(--ease-decel, ease);
@@ -3783,28 +3976,7 @@ html.theme-light .logs-toolbar {
 }
 
 .logs-empty::before {
-  content: '';
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  background: radial-gradient(circle, rgba(88, 166, 255, 0.08) 0%, transparent 70%);
-  border-radius: 50%;
-  z-index: 0;
-  animation: empty-state-pulse 4s ease-in-out infinite;
-}
-
-@keyframes empty-state-pulse {
-
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.5;
-  }
-
-  50% {
-    transform: scale(1.2);
-    opacity: 0.8;
-  }
+  content: none; /* Remove animated background circle for simplicity */
 }
 
 @keyframes fade-in {
@@ -3820,33 +3992,19 @@ html.theme-light .logs-toolbar {
 }
 
 .logs-empty svg {
-  width: 64px;
-  height: 64px;
+  width: 32px;
+  height: 32px;
   display: block;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
   color: var(--muted);
   opacity: 0.5;
-  animation: float-gentle 3s ease-in-out infinite;
-  animation-play-state: var(--animation-play-state);
   position: relative;
   z-index: 1;
-  /* Removed filter: drop-shadow for GPU performance */
-}
-
-@keyframes float-gentle {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
+  /* Removed float animation for simplicity */
 }
 
 .logs-empty span {
-  font-size: var(--fs-16);
+  font-size: var(--fs-14);
   font-weight: 600;
   color: var(--fg-secondary);
   margin-bottom: var(--space-xs);

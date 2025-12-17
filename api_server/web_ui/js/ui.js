@@ -8,9 +8,9 @@
 // --- Theme Management ---
 
 class ThemeManager {
-  constructor() {
-    this.themeToggle = dom.themeToggle;
-    this.themeModeButton = dom.themeLabel;
+  constructor(themeToggle, themeLabel) {
+    this.themeToggle = themeToggle || dom.themeToggle;
+    this.themeModeButton = themeLabel || dom.themeLabel;
     this.prefersDark = globalThis.matchMedia('(prefers-color-scheme: dark)');
 
     // Support theme modes: 'dark', 'light', 'auto'
@@ -91,11 +91,247 @@ class ThemeManager {
 // --- Logging System ---
 
 class LogStore {
-  constructor(container, maxLogs = 50) {
+  constructor(container, options = {}) {
     this.container = container;
-    this.maxLogs = maxLogs;
+    this.maxLogs = options.maxLogs || 50;
+    this.logEntryCount = options.logEntryCount || dom.logEntryCount;
+    this.logsEmptyState = options.logsEmptyState || dom.logsEmptyState;
     this.logs = [];
     this.visibleCount = 0;
+
+    // Filter state
+    this.currentQuery = '';
+    this.currentLevel = 'all';
+    this.recentOnly = false;
+    this.RECENT_WINDOW_MS = 5 * 60 * 1000;
+
+    // DOM refs for filtering
+    this.searchInput = options.searchInput || dom.logSearchInput;
+    this.searchClearBtn = options.searchClearBtn || dom.searchClearBtn;
+    this.filterButtons = options.filterButtons || dom.logFilters;
+    this.segmentIndicator = options.segmentIndicator || dom.segmentIndicator;
+    this.recentFilterBtn = options.recentFilterBtn || dom.filterRecentLogsBtn;
+    this.emptyTitle = options.emptyTitle || dom.logsEmptyTitle;
+    this.emptyDesc = options.emptyDesc || dom.logsEmptyDesc;
+
+    this.defaultEmptyTitle = this.emptyTitle?.textContent || 'No activity yet';
+    this.defaultEmptyDesc = this.emptyDesc?.textContent || 'Connect and start a backup to see activity.';
+
+    // Initialize filtering UI
+    this.#initializeFiltering();
+  }
+
+  #initializeFiltering() {
+    if (!this.searchInput || !this.container) return;
+
+    // Search input (debounced)
+    let searchTimeout;
+    this.searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        this.currentQuery = (this.searchInput.value || '').toLowerCase().trim();
+        if (this.searchClearBtn) this.searchClearBtn.hidden = !this.currentQuery;
+        this.applyFilters();
+      }, 200);
+    });
+
+    // Clear search button
+    this.searchClearBtn?.addEventListener('click', () => {
+      this.searchInput.value = '';
+      this.currentQuery = '';
+      this.searchClearBtn.hidden = true;
+      this.applyFilters();
+      this.searchInput.focus();
+    });
+
+    // Level filter buttons
+    for (const btn of this.filterButtons || []) {
+      btn.addEventListener('click', () => this.#setActiveFilterButton(btn));
+    }
+
+    // Recent logs toggle
+    if (this.recentFilterBtn) {
+      this.recentFilterBtn.setAttribute('aria-pressed', 'false');
+      this.recentFilterBtn.title = 'Show only the last 5 minutes of log entries';
+      this.recentFilterBtn.addEventListener('click', () => {
+        this.recentOnly = !this.recentOnly;
+        this.recentFilterBtn.setAttribute('aria-pressed', this.recentOnly ? 'true' : 'false');
+        this.recentFilterBtn.classList.toggle('active', this.recentOnly);
+        this.recentFilterBtn.title = this.recentOnly
+          ? 'Filtering to last 5 minutes (click to show all)'
+          : 'Show only the last 5 minutes of log entries';
+        this.applyFilters();
+      });
+    }
+
+    // Initial state
+    if (this.searchClearBtn) this.searchClearBtn.hidden = true;
+    const initialBtn = (this.filterButtons || []).find((b) => b.classList.contains('active')) || (this.filterButtons || [])[0];
+    if (initialBtn) this.#setActiveFilterButton(initialBtn);
+  }
+
+  #setActiveFilterButton(btn) {
+    if (!btn) return;
+
+    for (const b of this.filterButtons || []) {
+      const active = b === btn;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+
+    this.currentLevel = (btn.dataset.level || 'all').toLowerCase();
+
+    if (this.segmentIndicator && btn.offsetParent) {
+      this.segmentIndicator.style.left = `${btn.offsetLeft}px`;
+      this.segmentIndicator.style.width = `${btn.offsetWidth}px`;
+    }
+
+    this.applyFilters();
+  }
+
+  #getEntryLevel(el) {
+    const raw = (el.dataset.level || '').toLowerCase();
+    if (raw) return raw;
+    if (el.classList.contains('log-error')) return 'error';
+    if (el.classList.contains('log-warn')) return 'warn';
+    if (el.classList.contains('log-info')) return 'info';
+    if (el.classList.contains('log-success')) return 'success';
+    return 'info';
+  }
+
+  #levelMatches(level, entryLevel) {
+    if (level === 'all') return true;
+    if (level === 'info') return entryLevel === 'info' || entryLevel === 'success';
+    return entryLevel === level;
+  }
+
+  #updateEmptyCopy({ totalLogs, visibleLogs }) {
+    if (!this.logsEmptyState) return;
+
+    if (visibleLogs > 0) {
+      this.logsEmptyState.hidden = true;
+      return;
+    }
+
+    this.logsEmptyState.hidden = false;
+
+    if (!this.emptyTitle || !this.emptyDesc) return;
+
+    if (totalLogs === 0) {
+      this.emptyTitle.textContent = this.defaultEmptyTitle;
+      this.emptyDesc.textContent = this.defaultEmptyDesc;
+      return;
+    }
+
+    if (this.currentQuery) {
+      this.emptyTitle.textContent = 'No matching logs';
+      this.emptyDesc.textContent = 'Try clearing search or changing the filter.';
+      return;
+    }
+
+    if (this.recentOnly) {
+      this.emptyTitle.textContent = 'No recent logs';
+      this.emptyDesc.textContent = 'Try again after activity, or disable the recent filter.';
+      return;
+    }
+
+    if (this.currentLevel !== 'all') {
+      this.emptyTitle.textContent = `No ${this.currentLevel} logs`;
+      this.emptyDesc.textContent = 'Try a different level or clear the filter.';
+      return;
+    }
+
+    this.emptyTitle.textContent = this.defaultEmptyTitle;
+    this.emptyDesc.textContent = this.defaultEmptyDesc;
+  }
+
+  applyFilters() {
+    const logEntries = this.container.querySelectorAll('[data-log-entry]');
+    const query = this.currentQuery;
+    const now = Date.now();
+
+    let visibleCount = 0;
+    for (const entry of logEntries) {
+      const text = entry.textContent.toLowerCase();
+      const entryLevel = this.#getEntryLevel(entry);
+
+      const ts = Number(entry.dataset.ts);
+      const withinRecentWindow = !Number.isFinite(ts) || (now - ts) <= this.RECENT_WINDOW_MS;
+
+      const visible = (!query || text.includes(query))
+        && this.#levelMatches(this.currentLevel, entryLevel)
+        && (!this.recentOnly || withinRecentWindow);
+      entry.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    }
+
+    this.setVisibleCount(visibleCount);
+    this.#updateEmptyCopy({ totalLogs: logEntries.length, visibleLogs: visibleCount });
+  }
+
+  search(query) {
+    this.currentQuery = (query || '').toLowerCase().trim();
+    if (this.searchInput) this.searchInput.value = query || '';
+    if (this.searchClearBtn) this.searchClearBtn.hidden = !this.currentQuery;
+    this.applyFilters();
+  }
+
+  setLevel(level) {
+    this.currentLevel = level || 'all';
+    const btn = (this.filterButtons || []).find(b => (b.dataset.level || 'all').toLowerCase() === this.currentLevel);
+    if (btn) this.#setActiveFilterButton(btn);
+  }
+
+  setRecentOnly(enabled) {
+    this.recentOnly = !!enabled;
+    if (this.recentFilterBtn) {
+      this.recentFilterBtn.setAttribute('aria-pressed', this.recentOnly ? 'true' : 'false');
+      this.recentFilterBtn.classList.toggle('active', this.recentOnly);
+    }
+    this.applyFilters();
+  }
+
+  export(format = 'json') {
+    const visibleEntries = Array.from(this.container.querySelectorAll('[data-log-entry]'))
+      .filter(el => el.style.display !== 'none')
+      .map(el => ({
+        timestamp: el.dataset.ts ? new Date(Number(el.dataset.ts)).toISOString() : '',
+        level: this.#getEntryLevel(el),
+        phase: el.dataset.phase || 'GENERAL',
+        message: el.querySelector('.log-message')?.textContent || ''
+      }));
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    let filename, data, blob;
+
+    if (format === 'json') {
+      filename = `logs_${timestamp}.json`;
+      data = JSON.stringify(visibleEntries, null, 2);
+      blob = new Blob([data], { type: 'application/json' });
+    } else if (format === 'csv') {
+      filename = `logs_${timestamp}.csv`;
+      const header = 'Timestamp,Level,Phase,Message\n';
+      const rows = visibleEntries.map(e =>
+        `"${e.timestamp}","${e.level}","${e.phase}","${e.message.replace(/"/g, '""')}"`
+      ).join('\n');
+      data = header + rows;
+      blob = new Blob([data], { type: 'text/csv' });
+    } else {
+      filename = `logs_${timestamp}.txt`;
+      data = visibleEntries.map(e =>
+        `[${e.timestamp}] [${e.level.toUpperCase()}] [${e.phase}] ${e.message}`
+      ).join('\n');
+      blob = new Blob([data], { type: 'text/plain' });
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    return filename;
   }
 
   add(message, { level = 'info', phase = 'GENERAL' } = {}) {
@@ -114,8 +350,8 @@ class LogStore {
     // Increment visible count (new entries are visible by default)
     this.visibleCount++;
 
-    // Respect active UI filters/search (if enabled)
-    globalThis.applyLogFilters?.();
+    // Reapply filters to ensure consistency
+    this.applyFilters();
 
     this.#syncEmptyAndCount();
   }
@@ -124,16 +360,16 @@ class LogStore {
     this.logs = [];
     this.visibleCount = 0;
     if (this.container) this.container.innerHTML = '';
-    globalThis.applyLogFilters?.();
+    this.applyFilters();
     this.#syncEmptyAndCount();
   }
 
   #syncEmptyAndCount() {
-    if (dom.logEntryCount) {
-      dom.logEntryCount.textContent = String(this.logs.length);
+    if (this.logEntryCount) {
+      this.logEntryCount.textContent = String(this.logs.length);
     }
-    if (dom.logsEmptyState) {
-      dom.logsEmptyState.hidden = this.visibleCount > 0;
+    if (this.logsEmptyState) {
+      this.logsEmptyState.hidden = this.visibleCount > 0;
     }
   }
 
@@ -484,7 +720,7 @@ class ProfessionalGUIEnhancements {
     this.initRippleEffects();
     this.initFloatingLabels();
     this.setupConnectionDropdown();
-    this.setupLogSearch();
+    // setupLogSearch removed - now handled by LogStore constructor
     this.setupCopyButtons();
     this.setupSpeedChart();
     this.setupAdvancedSettingsPanel();
@@ -709,176 +945,6 @@ class ProfessionalGUIEnhancements {
         statusBadge.setAttribute('aria-expanded', 'false');
       }
     });
-  }
-
-  static setupLogSearch() {
-    const searchInput = dom.logSearchInput;
-    const clearBtn = dom.searchClearBtn;
-    const filterButtons = dom.logFilters;
-    const indicator = dom.segmentIndicator;
-    const recentBtn = dom.filterRecentLogsBtn;
-    const emptyTitle = dom.logsEmptyTitle;
-    const emptyDesc = dom.logsEmptyDesc;
-
-    if (!searchInput || !dom.logContainer) return;
-
-    const defaultEmptyTitle = emptyTitle?.textContent || 'No activity yet';
-    const defaultEmptyDesc = emptyDesc?.textContent || 'Connect and start a backup to see activity.';
-
-    let currentQuery = '';
-    let currentLevel = 'all';
-    let recentOnly = false;
-    const RECENT_WINDOW_MS = 5 * 60 * 1000;
-
-    const getEntryLevel = (el) => {
-      const raw = (el.dataset.level || '').toLowerCase();
-      if (raw) return raw;
-      if (el.classList.contains('log-error')) return 'error';
-      if (el.classList.contains('log-warn')) return 'warn';
-      if (el.classList.contains('log-info')) return 'info';
-      if (el.classList.contains('log-success')) return 'success';
-      return 'info';
-    };
-
-    const levelMatches = (level, entryLevel) => {
-      if (level === 'all') return true;
-      if (level === 'info') return entryLevel === 'info' || entryLevel === 'success';
-      return entryLevel === level;
-    };
-
-    const updateEmptyCopy = ({ totalLogs, visibleLogs }) => {
-      if (!dom.logsEmptyState) return;
-
-      if (visibleLogs > 0) {
-        dom.logsEmptyState.hidden = true;
-        return;
-      }
-
-      dom.logsEmptyState.hidden = false;
-
-      if (!emptyTitle || !emptyDesc) return;
-
-      if (totalLogs === 0) {
-        emptyTitle.textContent = defaultEmptyTitle;
-        emptyDesc.textContent = defaultEmptyDesc;
-        return;
-      }
-
-      if (currentQuery) {
-        emptyTitle.textContent = 'No matching logs';
-        emptyDesc.textContent = 'Try clearing search or changing the filter.';
-        return;
-      }
-
-      if (recentOnly) {
-        emptyTitle.textContent = 'No recent logs';
-        emptyDesc.textContent = 'Try again after activity, or disable the recent filter.';
-        return;
-      }
-
-      if (currentLevel !== 'all') {
-        emptyTitle.textContent = `No ${currentLevel} logs`;
-        emptyDesc.textContent = 'Try a different level or clear the filter.';
-        return;
-      }
-
-      emptyTitle.textContent = defaultEmptyTitle;
-      emptyDesc.textContent = defaultEmptyDesc;
-    };
-
-    const applyFilters = () => {
-      const logEntries = dom.logContainer.querySelectorAll('[data-log-entry]');
-      const query = currentQuery;
-      const now = Date.now();
-
-      let visibleCount = 0;
-      for (const entry of logEntries) {
-        const text = entry.textContent.toLowerCase();
-        const entryLevel = getEntryLevel(entry);
-
-        const ts = Number(entry.dataset.ts);
-        const withinRecentWindow = !Number.isFinite(ts) || (now - ts) <= RECENT_WINDOW_MS;
-
-        const visible = (!query || text.includes(query))
-          && levelMatches(currentLevel, entryLevel)
-          && (!recentOnly || withinRecentWindow);
-        entry.style.display = visible ? '' : 'none';
-        if (visible) visibleCount++;
-      }
-
-      if (globalThis.app?.logs) {
-        globalThis.app.logs.setVisibleCount(visibleCount);
-      }
-
-      updateEmptyCopy({ totalLogs: logEntries.length, visibleLogs: visibleCount });
-    };
-
-    // Expose so LogStore can reapply when new entries arrive.
-    globalThis.applyLogFilters = applyFilters;
-
-    // Search input (debounced)
-    let searchTimeout;
-    searchInput.addEventListener('input', () => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        currentQuery = (searchInput.value || '').toLowerCase().trim();
-        if (clearBtn) clearBtn.hidden = !currentQuery;
-        applyFilters();
-      }, 200);
-    });
-
-    // Clear search button
-    clearBtn?.addEventListener('click', () => {
-      searchInput.value = '';
-      currentQuery = '';
-      clearBtn.hidden = true;
-      applyFilters();
-      searchInput.focus();
-    });
-
-    // Level filter buttons + animated indicator
-    const setActiveFilterButton = (btn) => {
-      if (!btn) return;
-
-      for (const b of filterButtons || []) {
-        const active = b === btn;
-        b.classList.toggle('active', active);
-        b.setAttribute('aria-pressed', active ? 'true' : 'false');
-      }
-
-      currentLevel = (btn.dataset.level || 'all').toLowerCase();
-
-      if (indicator && btn.offsetParent) {
-        indicator.style.left = `${btn.offsetLeft}px`;
-        indicator.style.width = `${btn.offsetWidth}px`;
-      }
-
-      applyFilters();
-    };
-
-    for (const btn of filterButtons || []) {
-      btn.addEventListener('click', () => setActiveFilterButton(btn));
-    }
-
-    // Recent logs toggle (Troubleshoot sheet)
-    if (recentBtn) {
-      recentBtn.setAttribute('aria-pressed', 'false');
-      recentBtn.title = 'Show only the last 5 minutes of log entries';
-      recentBtn.addEventListener('click', () => {
-        recentOnly = !recentOnly;
-        recentBtn.setAttribute('aria-pressed', recentOnly ? 'true' : 'false');
-        recentBtn.classList.toggle('active', recentOnly);
-        recentBtn.title = recentOnly
-          ? 'Filtering to last 5 minutes (click to show all)'
-          : 'Show only the last 5 minutes of log entries';
-        applyFilters();
-      });
-    }
-
-    // Initial state
-    if (clearBtn) clearBtn.hidden = true;
-    const initialBtn = (filterButtons || []).find((b) => b.classList.contains('active')) || (filterButtons || [])[0];
-    if (initialBtn) setActiveFilterButton(initialBtn);
   }
 
   static setupSpeedChart() {
@@ -1322,11 +1388,17 @@ function setStatusPill(pillEl, online, { onlineText = 'Online', offlineText = 'O
   const dot = pillEl.querySelector('.status-dot');
   const text = pillEl.querySelector('.status-text');
 
-  const { state, label } = online === true
-    ? { state: 'online', label: onlineText }
-    : online === false
-      ? { state: 'offline', label: offlineText }
-      : { state: 'connecting', label: 'Checking' };
+  let state, label;
+  if (online === true) {
+    state = 'online';
+    label = onlineText;
+  } else if (online === false) {
+    state = 'offline';
+    label = offlineText;
+  } else {
+    state = 'connecting';
+    label = 'Checking';
+  }
 
   if (dot) dot.className = `status-dot ${state}`;
   if (text) text.textContent = label;
@@ -1378,13 +1450,16 @@ function updateLatencyFields(latency) {
 function updateServerDetails({ apiOnline, backupOnline } = {}) {
   if (dom.detailServer && dom.serverInput?.value) dom.detailServer.textContent = dom.serverInput.value;
 
-  const statusText = apiOnline === false
-    ? 'API server offline'
-    : backupOnline === false
-      ? 'Backup server offline'
-      : apiOnline === true && backupOnline === true
-        ? 'Ready'
-        : 'Checking';
+  let statusText;
+  if (apiOnline === false) {
+    statusText = 'API server offline';
+  } else if (backupOnline === false) {
+    statusText = 'Backup server offline';
+  } else if (apiOnline === true && backupOnline === true) {
+    statusText = 'Ready';
+  } else {
+    statusText = 'Checking';
+  }
 
   if (dom.detailStatus) dom.detailStatus.textContent = statusText;
 }

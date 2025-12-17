@@ -39,6 +39,18 @@ class DemoMode {
 
   start() {
     if (!this.#enabled) return;
+
+    // Prevent demo mode from starting during a real backup job
+    const currentStatus = this.#app.state.snapshot.status;
+    const hasActiveJob = currentStatus === 'uploading' || currentStatus === 'paused';
+    const isRealConnection = this.#app.state.snapshot.connected;
+
+    if (hasActiveJob && isRealConnection) {
+      this.#app.toast.show('Cannot start demo while real backup is active', 'warn');
+      this.#app.logs.add('Demo mode blocked: real backup in progress', { phase: 'DEMO', level: 'warn' });
+      return;
+    }
+
     if (this.#active) {
       this.#app.toast.show('Demo already running', 'info');
       return;
@@ -47,6 +59,9 @@ class DemoMode {
     this.#active = true;
     this.#app.logs.add('Demo mode: starting simulated transfer', { phase: 'DEMO', level: 'info' });
     this.#app.setConnectionStatus('Demo mode (simulated) - no network traffic', 'info');
+
+    // Add visual indicator for demo mode
+    this.#showDemoBadge();
 
     this.#app.state.update({
       connected: false,
@@ -80,6 +95,7 @@ class DemoMode {
     if (!this.#active) return;
     this.#stopTimer();
     this.#active = false;
+    this.#hideDemoBadge();
     this.#app.state.update({
       status: 'idle',
       progress: 0,
@@ -122,6 +138,7 @@ class DemoMode {
         this.#app.toast.show('Demo complete (simulated)', 'success');
         this.#active = false;
         this.#stopTimer();
+        this.#hideDemoBadge();
         return;
       }
 
@@ -141,9 +158,31 @@ class DemoMode {
     }
   }
 
+  #showDemoBadge() {
+    // Create and show a demo mode badge overlay
+    let badge = document.getElementById('demo-mode-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'demo-mode-badge';
+      badge.className = 'demo-mode-badge';
+      badge.textContent = 'DEMO MODE';
+      badge.setAttribute('aria-label', 'Demo mode active - simulated transfer');
+      document.body.appendChild(badge);
+    }
+    badge.hidden = false;
+  }
+
+  #hideDemoBadge() {
+    const badge = document.getElementById('demo-mode-badge');
+    if (badge) {
+      badge.hidden = true;
+    }
+  }
+
   destroy() {
     this.#stopTimer();
     this.#active = false;
+    this.#hideDemoBadge();
   }
 }
 
