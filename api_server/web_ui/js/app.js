@@ -75,7 +75,7 @@ class TransferHistory {
       return null;
     }
 
-    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const timestamp = new Date().toISOString().replaceAll(':', '-').split('.')[0];
     let filename, data, blob;
 
     if (format === 'json') {
@@ -391,12 +391,12 @@ class App {
     menu.id = 'exportFormatMenu';
     menu.className = 'export-menu';
     menu.innerHTML = `
-      <button class=\"export-menu-item\" data-format=\"json\">
-        <span class=\"export-icon\">📄</span>
+      <button class='export-menu-item' data-format='json'>
+        <span class='export-icon'>📄</span>
         <span>Export as JSON</span>
       </button>
-      <button class=\"export-menu-item\" data-format=\"csv\">
-        <span class=\"export-icon\">📊</span>
+      <button class='export-menu-item' data-format='csv'>
+        <span class='export-icon'>📊</span>
         <span>Export as CSV</span>
       </button>
     `;
@@ -453,9 +453,15 @@ class App {
       this.#renderTransferHistory({ force: true });
 
       const count = this.#getFilteredTransfers().length;
-      const filterName = filterValue === 'all' ? 'all transfers' :
-                        filterValue === 'success' ? 'successful transfers' :
-                        'failed transfers';
+      let filterName;
+
+      if (filterValue === 'all') {
+        filterName = 'all transfers';
+      } else if (filterValue === 'success') {
+        filterName = 'successful transfers';
+      } else {
+        filterName = 'failed transfers';
+      }
 
       this.announcer.announce(`Showing ${filterName}: ${count} items`);
     } catch (error) {
