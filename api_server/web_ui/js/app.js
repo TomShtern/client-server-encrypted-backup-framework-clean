@@ -98,13 +98,8 @@ class TransferHistory {
       blob = new Blob([data], { type: 'text/plain' });
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-
+    // Use shared download utility
+    downloadBlob(blob, filename);
     return filename;
   }
 }
@@ -591,15 +586,15 @@ class App {
       // Hide transient status message to avoid duplication
       this.#hideConnectionStatus();
       ErrorBoundary.handle(error, 'Connection');
-      } finally {
-        this.state.update({ operationInProgress: false });
+    } finally {
+      this.state.update({ operationInProgress: false });
     }
   }
 
   async #handleDisconnect() {
-      if (this.state.snapshot.operationInProgress) return;
+    if (this.state.snapshot.operationInProgress) return;
     try {
-        this.state.update({ operationInProgress: true });
+      this.state.update({ operationInProgress: true });
       this.#setButtonState('disconnecting');
       this.#updateConnectionStatus('Disconnecting...', 'pending');
 
@@ -1110,6 +1105,9 @@ class App {
   }
 
   #renderSpeedChart(state, transferActive) {
+    // Update Sparklines
+    ProfessionalGUIEnhancements.updateStats(state);
+
     if (!transferActive) return;
     if (!ProfessionalGUIEnhancements.chartInstance) return;
     if (!Number.isFinite(state.speed)) return;

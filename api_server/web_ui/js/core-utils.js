@@ -98,6 +98,8 @@ function initializeDom() {
   dom.connectionStatusSpinner = getOptionalElement('connectionStatusSpinner');
   dom.connectionStatusText = getOptionalElement('connectionStatusText');
   dom.connectionStatusIcon = getOptionalElement('connectionStatusIcon');
+  dom.performanceToggle = getOptionalElement('performanceToggle');
+  dom.performanceToggleText = getOptionalElement('performanceToggleText');
   dom.qualityBadge = getOptionalElement('qualityBadge');
   dom.lastChecked = getOptionalElement('lastChecked');
   dom.troubleshootChip = getOptionalElement('troubleshootChip');
@@ -565,55 +567,30 @@ class PerformanceOptimizer {
 }
 
 /**
- * Creates a debounced function that uses both setTimeout and requestAnimationFrame
- * @param {Function} fn - The function to debounce
- * @param {number} [wait=16] - Delay in milliseconds (approximately 1 frame)
- * @returns {Function} Debounced function
+ * Downloads a Blob as a file.
+ * Shared utility used by TransferHistory.export() and log export.
+ *
+ * @param {Blob} blob - The blob to download
+ * @param {string} filename - The filename for the download
+ * @returns {boolean} True if download was initiated successfully
  */
-function rafDebounce(fn, wait = 16) {
-  let timeoutId = null;
-  let rafId = null;
-
-  return function debounced(...args) {
-    const later = () => {
-      timeoutId = null;
-      rafId = requestAnimationFrame(() => {
-        fn.apply(this, args);
-        rafId = null;
-      });
-    };
-
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-    }
-
-    timeoutId = setTimeout(later, wait);
-  };
-}
-
-/**
- * Creates a throttled function that uses requestAnimationFrame
- * @param {Function} fn - The function to throttle
- * @param {number} [limit=16] - Throttle limit in milliseconds (approximately 1 frame)
- * @returns {Function} Throttled function
- */
-function rafThrottle(fn, limit = 16) {
-  let inThrottle = false;
-
-  return function throttled(...args) {
-    if (!inThrottle) {
-      requestAnimationFrame(() => {
-        fn.apply(this, args);
-      });
-      inThrottle = true;
-      setTimeout(() => {
-        inThrottle = false;
-      }, limit);
-    }
-  };
+function downloadBlob(blob, filename) {
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (error) {
+    console.warn('downloadBlob failed:', error);
+    return false;
+  }
 }
 
 /**
@@ -1348,8 +1325,7 @@ const EXPORTED_GLOBALS = {
   validateNumericInput,
   copyTextToClipboard,
   PerformanceOptimizer,
-  rafDebounce,
-  rafThrottle,
+  downloadBlob,
   SmoothCounter,
   performanceOptimizer,
   StateStore,

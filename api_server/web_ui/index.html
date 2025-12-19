@@ -88,7 +88,8 @@
                             <span class="status-text">Checking</span>
                         </span>
                     </div>
-                    <button id="statusOutput" class="status-output header-pill" type="button" aria-expanded="false" aria-controls="connectionDetails">
+                    <button id="statusOutput" class="status-output header-pill" type="button" aria-expanded="false"
+                        aria-controls="connectionDetails">
                         <span id="connHealth" class="latency-indicator" title="Round-trip latency">
                             <span class="latency-label">Latency</span>
                             <svg class="latency-graph" width="24" height="16" viewBox="0 0 24 16" fill="none">
@@ -107,8 +108,9 @@
                         <span id="qualityBadge" class="quality-chip" title="Connection quality">Quality: checking</span>
                         <span id="lastChecked" class="last-checked">Last checked —</span>
                     </button>
-                    <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button" aria-expanded="false"
-                        aria-controls="troubleshootSheet" disabled title="Connect to enable diagnostics">⚡ Troubleshoot</button>
+                    <button id="troubleshootChip" class="chip troubleshoot-chip header-pill" type="button"
+                        aria-expanded="false" aria-controls="troubleshootSheet" disabled
+                        title="Connect to enable diagnostics">⚡ Troubleshoot</button>
                     <div id="connectionDetails" class="connection-details">
                         <h4>Connection Details</h4>
                         <div class="connection-metric">
@@ -128,6 +130,15 @@
                             <span class="connection-metric-value" id="detailUptime">—</span>
                         </div>
                     </div>
+                    <!-- Phase 2: Performance Toggle Button -->
+                    <button type="button" class="performance-toggle header-pill" id="performanceToggle"
+                        title="Toggle Performance Mode (disable glassmorphism)">
+                        <svg class="performance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span id="performanceToggleText">Perf</span>
+                    </button>
                     <div class="theme-toggle-wrapper header-pill">
                         <svg class="theme-icon sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="4" fill="currentColor" />
@@ -153,8 +164,10 @@
                     <div id="inlineErrorBody" class="inline-error-body">—</div>
                 </div>
                 <div class="inline-error-actions">
-                    <a id="inlineErrorAction" class="inline-error-action" href="#" target="_blank" rel="noopener" hidden>Open</a>
-                    <button id="inlineErrorDismiss" class="inline-error-dismiss" type="button" aria-label="Dismiss banner">×</button>
+                    <a id="inlineErrorAction" class="inline-error-action" href="#" target="_blank" rel="noopener"
+                        hidden>Open</a>
+                    <button id="inlineErrorDismiss" class="inline-error-dismiss" type="button"
+                        aria-label="Dismiss banner">×</button>
                 </div>
             </div>
         </div>
@@ -222,7 +235,8 @@
                             </div>
                         </div>
                         <div class="file-actions">
-                            <button type="button" id="clearFileBtn" class="action-btn" title="Remove file" aria-label="Remove selected file">✕</button>
+                            <button type="button" id="clearFileBtn" class="action-btn" title="Remove file"
+                                aria-label="Remove selected file">✕</button>
                         </div>
                     </div>
 
@@ -246,7 +260,8 @@
                             <button class="tab-btn tab-upcoming" role="tab" data-tab="schedule" aria-selected="false"
                                 aria-controls="tab-schedule" title="Feature preview - coming soon">Schedule</button>
                             <button class="tab-btn tab-upcoming" role="tab" data-tab="compression" aria-selected="false"
-                                aria-controls="tab-compression" title="Feature preview - coming soon">Compression</button>
+                                aria-controls="tab-compression"
+                                title="Feature preview - coming soon">Compression</button>
                         </div>
                         <div class="tab-panels">
                             <div id="tab-encryption" class="tab-panel active" role="tabpanel">
@@ -320,15 +335,17 @@
                                 </div>
                                 <div class="setting-row">
                                     <label for="advChunkSize">Chunk Size (MB)</label>
-                                    <input id="advChunkSize" type="text" placeholder="8" class="interactive"
-                                        value="8" aria-describedby="advChunkHint" disabled />
+                                    <input id="advChunkSize" type="text" placeholder="8" class="interactive" value="8"
+                                        aria-describedby="advChunkHint" disabled />
                                     <div id="advChunkHint" class="hint" aria-live="polite">Feature coming soon</div>
                                 </div>
                             </div>
                         </div>
                         <div class="advanced-actions">
-                            <button id="advResetBtn" type="button" class="logs-action-btn" title="Reset advanced settings">Reset</button>
-                            <button id="advRestoreDefaults" type="button" class="text-link" title="Restore defaults without closing the panel">Restore defaults</button>
+                            <button id="advResetBtn" type="button" class="logs-action-btn"
+                                title="Reset advanced settings">Reset</button>
+                            <button id="advRestoreDefaults" type="button" class="text-link"
+                                title="Restore defaults without closing the panel">Restore defaults</button>
                         </div>
                     </div>
                 </div>
@@ -349,7 +366,8 @@
                     <div class="progress-glow"></div>
                     <div class="ring-decoration"></div>
                     <!-- Native progress for accessibility (screen readers). Kept visually hidden. -->
-                    <progress id="progressNative" class="sr-only" max="100" value="0" aria-label="Backup progress">0%</progress>
+                    <progress id="progressNative" class="sr-only" max="100" value="0"
+                        aria-label="Backup progress">0%</progress>
 
                     <!-- Visual ring (decorative). Real progress semantics are provided by #progressNative. -->
                     <svg id="progressRing" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
@@ -393,7 +411,8 @@
                 </div>
 
                 <!-- Connection Status Message -->
-                <output id="connectionStatusMessage" class="connection-status-message" aria-live="polite" aria-atomic="true">
+                <output id="connectionStatusMessage" class="connection-status-message" aria-live="polite"
+                    aria-atomic="true">
                     <span id="connectionStatusSpinner" class="loading-spinner" aria-hidden="true"></span>
                     <span id="connectionStatusIcon" class="status-icon">ℹ</span>
                     <span id="connectionStatusText">Ready to connect</span>
@@ -401,6 +420,7 @@
 
                 <div id="statsGrid" aria-label="Transfer statistics">
                     <div class="stat interactive" id="statBytesContainer" aria-label="Bytes Sent: 0 B">
+                        <div class="stat-sparkline" id="sparklineBytes"></div>
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M3 8L8 3L13 8M8 3V13" stroke="currentColor" stroke-width="1.5"
@@ -413,6 +433,7 @@
                         </div>
                     </div>
                     <div class="stat interactive" id="statSpeedContainer" aria-label="Speed: 0 B/s">
+                        <div class="stat-sparkline" id="sparklineSpeed"></div>
                         <div class="stat-icon">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
@@ -465,88 +486,97 @@
                     <div id="speedChartSummary" class="sr-only">
                         Current speed: calculating...
                     </div>
-                    <div id="speedChartPlaceholder" class="speed-chart-placeholder">No data yet—start a backup to see throughput.</div>
+                    <div id="speedChartPlaceholder" class="speed-chart-placeholder">No data yet—start a backup to see
+                        throughput.</div>
                 </div>
             </section>
 
             <!-- Two-Column Grid: Activity Logs (left) + Transfer History (right) -->
             <div class="logs-transfers-grid">
                 <!-- Activity Logs - Left Column -->
-            <section class="logs stack" aria-labelledby="logTitle">
-                <!-- Phase Title - matches Configuration and Status panels -->
-                <div id="logTitle" class="phase">Activity Logs</div>
+                <section class="logs stack" aria-labelledby="logTitle">
+                    <!-- Phase Title - matches Configuration and Status panels -->
+                    <div id="logTitle" class="phase">Activity Logs</div>
 
-                <!-- Toolbar Row -->
-                <div class="logs-toolbar">
-                    <!-- Search Input -->
-                    <div class="logs-search-wrapper">
-                        <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
-                            <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" />
-                            <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                        </svg>
-                        <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs"
-                            class="logs-search-input" />
-                        <button type="button" class="search-clear-btn" id="searchClearBtn" aria-label="Clear log search" hidden>
-                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5"
+                    <!-- Toolbar Row -->
+                    <div class="logs-toolbar">
+                        <!-- Search Input -->
+                        <div class="logs-search-wrapper">
+                            <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" />
+                                <path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5"
                                     stroke-linecap="round" />
                             </svg>
-                        </button>
+                            <input id="logSearchInput" type="text" placeholder="Search logs..." aria-label="Search logs"
+                                class="logs-search-input" />
+                            <button type="button" class="search-clear-btn" id="searchClearBtn"
+                                aria-label="Clear log search" hidden>
+                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                    <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5"
+                                        stroke-linecap="round" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Filter Pills -->
+                        <fieldset class="logs-filter-segment" aria-label="Log level filter">
+                            <div id="segmentIndicator" class="segment-indicator"></div>
+                            <button id="filterAll" class="segment-btn active" type="button" data-level="all"
+                                aria-pressed="true">All</button>
+                            <button id="filterInfo" class="segment-btn" type="button" data-level="info"
+                                aria-pressed="false">
+                                <span class="segment-dot info"></span>Info
+                            </button>
+                            <button id="filterWarn" class="segment-btn" type="button" data-level="warn"
+                                aria-pressed="false">
+                                <span class="segment-dot warn"></span>Warn
+                            </button>
+                            <button id="filterError" class="segment-btn" type="button" data-level="error"
+                                aria-pressed="false">
+                                <span class="segment-dot error"></span>Error
+                            </button>
+                        </fieldset>
+
+                        <!-- Actions -->
+                        <div class="logs-actions">
+                            <span class="logs-count"><span id="logEntryCount">0</span> entries</span>
+                            <button id="logClearBtn" class="logs-action-btn" type="button"
+                                title="Clear logs">Clear</button>
+                            <button id="logCopyBtn" class="logs-action-btn" type="button"
+                                title="Copy last 50 entries">Copy last 50</button>
+                            <button id="logExportBtn" class="logs-action-btn" type="button"
+                                title="Export logs to a text file">Export</button>
+                            <button id="logDemoBtn" class="logs-action-btn" type="button" title="Add demo logs"
+                                hidden>Demo</button>
+                        </div>
                     </div>
 
-                    <!-- Filter Pills -->
-                    <fieldset class="logs-filter-segment" aria-label="Log level filter">
-                        <div id="segmentIndicator" class="segment-indicator"></div>
-                        <button id="filterAll" class="segment-btn active" type="button" data-level="all"
-                            aria-pressed="true">All</button>
-                        <button id="filterInfo" class="segment-btn" type="button" data-level="info"
-                            aria-pressed="false">
-                            <span class="segment-dot info"></span>Info
-                        </button>
-                        <button id="filterWarn" class="segment-btn" type="button" data-level="warn"
-                            aria-pressed="false">
-                            <span class="segment-dot warn"></span>Warn
-                        </button>
-                        <button id="filterError" class="segment-btn" type="button" data-level="error"
-                            aria-pressed="false">
-                            <span class="segment-dot error"></span>Error
-                        </button>
-                    </fieldset>
-
-                    <!-- Actions -->
-                    <div class="logs-actions">
-                        <span class="logs-count"><span id="logEntryCount">0</span> entries</span>
-                        <button id="logClearBtn" class="logs-action-btn" type="button" title="Clear logs">Clear</button>
-                        <button id="logCopyBtn" class="logs-action-btn" type="button" title="Copy last 50 entries">Copy last 50</button>
-                        <button id="logExportBtn" class="logs-action-btn" type="button" title="Export logs to a text file">Export</button>
-                        <button id="logDemoBtn" class="logs-action-btn" type="button" title="Add demo logs"
-                            hidden>Demo</button>
+                    <!-- Log Entries -->
+                    <div id="logContainer" class="logs-container">
+                        <div class="logs-skeleton" id="logsSkeleton" hidden>
+                            <div class="log-skeleton-row"></div>
+                            <div class="log-skeleton-row"></div>
+                            <div class="log-skeleton-row"></div>
+                            <div class="log-skeleton-row"></div>
+                        </div>
+                        <div class="logs-empty" id="logsEmptyState">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5" />
+                            </svg>
+                            <span id="logsEmptyTitle">No activity yet</span>
+                            <span id="logsEmptyDesc" class="empty-description">Connect and start a backup to see
+                                activity.</span>
+                            <a class="text-link" href="https://github.com" target="_blank" rel="noreferrer">View
+                                docs</a>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Log Entries -->
-                <div id="logContainer" class="logs-container">
-                    <div class="logs-skeleton" id="logsSkeleton" hidden>
-                        <div class="log-skeleton-row"></div>
-                        <div class="log-skeleton-row"></div>
-                        <div class="log-skeleton-row"></div>
-                        <div class="log-skeleton-row"></div>
-                    </div>
-                    <div class="logs-empty" id="logsEmptyState">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="1.5">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <path d="M7 8h10M7 12h8M7 16h6" opacity="0.5" />
-                        </svg>
-                        <span id="logsEmptyTitle">No activity yet</span>
-                        <span id="logsEmptyDesc" class="empty-description">Connect and start a backup to see activity.</span>
-                        <a class="text-link" href="https://github.com" target="_blank" rel="noreferrer">View docs</a>
-                    </div>
-                </div>
-            </section>
+                </section>
 
                 <!-- Transfer History - Right Column -->
-                <section id="transferHistoryPanel" class="stack transfer-history" aria-labelledby="transferHistoryTitle">
+                <section id="transferHistoryPanel" class="stack transfer-history"
+                    aria-labelledby="transferHistoryTitle">
                     <div id="transferHistoryTitle" class="phase">Recent Transfers</div>
 
                     <div class="transfer-history-toolbar">
@@ -557,18 +587,21 @@
                                 <option value="success">Successful Only</option>
                                 <option value="fail">Failed Only</option>
                             </select>
-                            <button id="transferHistoryExportBtn" class="logs-action-btn" type="button" title="Export transfer history" disabled>
+                            <button id="transferHistoryExportBtn" class="logs-action-btn" type="button"
+                                title="Export transfer history" disabled>
                                 <span class="btn-text">Export</span>
                                 <span class="btn-dropdown">▼</span>
                             </button>
-                            <button id="transferHistoryClearBtn" class="logs-action-btn" type="button" title="Clear transfer history" disabled>Clear</button>
+                            <button id="transferHistoryClearBtn" class="logs-action-btn" type="button"
+                                title="Clear transfer history" disabled>Clear</button>
                         </div>
                     </div>
 
                     <ul id="transferHistoryList" class="transfer-history-list" aria-label="Transfer history"></ul>
 
                     <div id="transferHistoryEmpty" class="transfer-history-empty" hidden>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5" aria-hidden="true">
                             <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" opacity="0.5" />
                         </svg>
                         <span class="transfer-history-empty-title">No transfers yet</span>
@@ -595,7 +628,8 @@
     <div id="srLive" class="sr-only" aria-live="polite"></div>
 
     <!-- Keyboard Shortcuts Button -->
-    <button id="shortcutBtn" class="shortcut-btn" title="Keyboard Shortcuts (Shift+?)" aria-label="Keyboard shortcuts">?</button>
+    <button id="shortcutBtn" class="shortcut-btn" title="Keyboard Shortcuts (Shift+?)"
+        aria-label="Keyboard shortcuts">?</button>
 
     <!-- Shortcuts Modal -->
     <dialog id="shortcutModal" class="shortcut-modal">
@@ -655,6 +689,16 @@
             </div>
         </div>
     </dialog>
+
+    <!-- Log Inspector -->
+    <div id="logInspectorOverlay" class="log-inspector-overlay"></div>
+    <aside id="logInspector" class="log-inspector-panel" aria-label="Log Inspector" aria-hidden="true">
+        <header class="log-inspector-header">
+            <h2 class="log-inspector-title">Log Details</h2>
+            <button id="closeLogInspector" class="log-inspector-close" aria-label="Close inspector">×</button>
+        </header>
+        <div id="logInspectorContent" class="log-inspector-content">Select a log entry...</div>
+    </aside>
 
     <!-- Socket.IO is now lazy-loaded on-demand for faster initial page load -->
     <!-- See core.js SocketClient.#ensureIoFactory() -->

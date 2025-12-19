@@ -18,6 +18,9 @@ class ThemeManager {
     const allowed = new Set(['dark', 'light', 'auto']);
     this.mode = allowed.has(saved) ? saved : 'auto';
     this.currentTheme = this.#resolveTheme();
+
+    // Phase 2: Performance mode
+    this.performanceMode = getStorageWithFallback('performanceMode') === 'true';
     this.#init();
   }
 
@@ -30,6 +33,7 @@ class ThemeManager {
 
   #init() {
     this.#apply(this.currentTheme);
+    this.#initPerformanceToggle();
 
     // Checkbox semantics: use change event and treat checked=true as dark mode
     this.themeToggle?.addEventListener('change', () => {
@@ -50,6 +54,37 @@ class ThemeManager {
       if (this.mode !== 'auto') return;
       this.currentTheme = e.matches ? 'dark' : 'light';
       this.#apply(this.currentTheme);
+    });
+  }
+
+  #initPerformanceToggle() {
+    const toggle = dom.performanceToggle;
+    const toggleText = dom.performanceToggleText;
+
+    if (!toggle) return;
+
+    // Apply saved state
+    if (this.performanceMode) {
+      document.documentElement.classList.add('solid-mode');
+      toggle.classList.add('active');
+      if (toggleText) toggleText.textContent = 'Perf (On)';
+    }
+
+    toggle.addEventListener('click', () => {
+      this.performanceMode = !this.performanceMode;
+      setStorageWithFallback('performanceMode', String(this.performanceMode));
+
+      console.log(`[Phase 2] Performance Mode: ${this.performanceMode ? 'ON' : 'OFF'}`);
+
+      if (this.performanceMode) {
+        document.documentElement.classList.add('solid-mode');
+        toggle.classList.add('active');
+        if (toggleText) toggleText.textContent = 'Perf (On)';
+      } else {
+        document.documentElement.classList.remove('solid-mode');
+        toggle.classList.remove('active');
+        if (toggleText) toggleText.textContent = 'Perf';
+      }
     });
   }
 
@@ -729,6 +764,36 @@ class ProfessionalGUIEnhancements {
     this.setupTroubleshootPanel();
     this.setupBrowserNotifications();
     this.addEnhancementStyles();
+    this.setupSparklines();
+    this.setupLogInspector();
+  }
+
+  static setupSparklines() {
+    this.sparkBytes = new SparklineChart('sparklineBytes', '#58a6ff');
+    this.sparkSpeed = new SparklineChart('sparklineSpeed', '#22d3ee');
+  }
+
+  static setupLogInspector() {
+    this.inspector = new LogInspector();
+  }
+
+  static updateStats(state) {
+    if (this.sparkSpeed) this.sparkSpeed.update(state.speed || 0);
+    // For bytes, we probably want movement, so maybe use speed there too or just bytes transferred delta?
+    // Actually bytes transferred is monotonic, sparkline should show *rate* or just fill up?
+    // Sparklines usually show trends. Rate is best.
+    // Let's visualize speed on both for now, or maybe progress delta?
+    // Let's use speed for speedContainer, and maybe 0 for bytes if not relevant, or just mirror speed.
+    // Actually, distinct visual: Bytes could be a "fill" chart? No, sparkline is line.
+    // Let's pass speed to both for visual candy, or distinct random noise in demo?
+    // In real app, Bytes Sent is cumulative. The *rate of change* of Bytes Sent IS Speed.
+    // So distinct sparklines might show: Speed (current throughput), and maybe "Average Speed"?
+    // Let's just update speed on speed chart.
+    // For Bytes chart, maybe we show "Bytes in buffer"?
+    // Let's just show speed on the speed chart for now.
+    // And for Bytes, let's show a fake "activity" pulse based on speed?
+    // Or just duplicate speed.
+    if (this.sparkBytes) this.sparkBytes.update(state.speed || 0);
   }
 
   static #getApp() {
@@ -813,23 +878,8 @@ class ProfessionalGUIEnhancements {
   }
 
   static #downloadTextFile(filename, text) {
-    try {
-      const blob = new Blob([String(text ?? '')], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.rel = 'noopener';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      return true;
-    } catch (error) {
-      console.warn('downloadTextFile failed:', error);
-      return false;
-    }
+    const blob = new Blob([String(text ?? '')], { type: 'text/plain;charset=utf-8' });
+    return downloadBlob(blob, filename);
   }
 
   static setupCopyButtons() {
@@ -1476,7 +1526,171 @@ globalThis.updateDualServerStatus = ({ apiOnline, backupOnline, latency } = {}) 
   if (transitions.length > 0) announceServerTransition(`${transitions.join('. ')}.`);
 };
 
-// Expose key classes for other script files (app.js) while keeping this file lint-friendly.
+// --- New Enhancement Classes ---
+
+class SparklineChart {
+  constructor(elementId, color = '#58a6ff') {
+    this.container = document.getElementById(elementId);
+    this.color = color;
+    this.data = new Array(30).fill(0);
+    this.max = 1;
+    this.isIdle = true; // Phase 2: Track idle state
+
+    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.svg.setAttribute('width', '100%');
+    this.svg.setAttribute('height', '100%');
+    this.svg.setAttribute('preserveAspectRatio', 'none');
+    this.svg.style.overflow = 'visible';
+
+    this.path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    this.path.setAttribute('fill', 'none');
+    this.path.setAttribute('stroke', this.color);
+    this.path.setAttribute('stroke-width', '2');
+    this.path.setAttribute('vector-effect', 'non-scaling-stroke');
+    this.svg.appendChild(this.path);
+
+    // Add gradient fill
+    this.fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    this.fillPath.setAttribute('fill', this.color);
+    this.fillPath.setAttribute('fill-opacity', '0.1');
+    this.fillPath.setAttribute('stroke', 'none');
+    this.svg.insertBefore(this.fillPath, this.path);
+
+    if (this.container) {
+      this.container.appendChild(this.svg);
+      // Phase 2: Start with idle animation
+      this.#updateIdleState();
+    }
+  }
+
+  update(value) {
+    this.data.push(value);
+    this.data.shift();
+
+    // Phase 2: Update idle state based on data activity
+    const hasActivity = this.data.some(v => v > 0);
+    if (hasActivity !== !this.isIdle) {
+      this.isIdle = !hasActivity;
+      this.#updateIdleState();
+    }
+
+    const currentMax = Math.max(...this.data, 1);
+    // Smooth scale adjustment
+    this.max = this.max * 0.9 + currentMax * 0.1;
+    if (this.max < currentMax) this.max = currentMax;
+
+    const w = 100 / (this.data.length - 1);
+    let points = this.data.map((v, i) => {
+      const x = i * w;
+      const y = 100 - (v / this.max) * 100;
+      return `${x},${y}`;
+    });
+
+    const d = `M${points.join(' L')}`;
+    this.path.setAttribute('d', d);
+
+    // Close path for fill
+    const dFill = `M0,100 L${points.join(' L')} L100,100 Z`;
+    this.fillPath.setAttribute('d', dFill);
+  }
+
+  // Phase 2: Manage idle state visual
+  #updateIdleState() {
+    if (!this.container) return;
+    if (this.isIdle) {
+      this.container.classList.add('idle');
+    } else {
+      this.container.classList.remove('idle');
+    }
+  }
+}
+
+class LogInspector {
+  constructor() {
+    this.panel = document.getElementById('logInspector');
+    this.overlay = document.getElementById('logInspectorOverlay');
+    this.content = document.getElementById('logInspectorContent');
+    this.closeBtn = document.getElementById('closeLogInspector');
+
+    const closeHandler = () => this.close();
+    this.overlay?.addEventListener('click', closeHandler);
+    this.closeBtn?.addEventListener('click', closeHandler);
+
+    // Delegate click on log container
+    const logContainer = document.getElementById('logContainer');
+    logContainer?.addEventListener('click', (e) => {
+      const entry = e.target.closest('.log-entry');
+      if (entry) {
+        this.open(entry);
+      }
+    });
+
+    // Add interactive class to existing logs
+    if (logContainer) {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.classList && node.classList.contains('log-entry')) {
+              node.classList.add('interactive');
+            }
+          });
+        });
+      });
+      observer.observe(logContainer, { childList: true });
+    }
+  }
+
+  open(entry) {
+    if (!this.panel) return;
+    const meta = {
+      time: entry.querySelector('.log-time')?.textContent || '—',
+      phase: entry.dataset.phase || 'GENERAL',
+      level: entry.dataset.level || 'info',
+      msg: entry.querySelector('.log-message')?.textContent || '',
+      raw: entry.textContent
+    };
+
+    const colorVar = `var(--${meta.level === 'all' ? 'fg' : meta.level})`;
+
+    this.content.innerHTML = `
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; margin-bottom: 4px;">Time</div>
+        <div style="font-size: 15px; font-family: monospace; color: var(--accent);">${meta.time}</div>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; margin-bottom: 8px;">Level & Phase</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorVar}; box-shadow:0 0 8px ${colorVar};"></span>
+            <span style="font-weight:600; font-size:14px; color:${colorVar}; text-transform:uppercase;">${meta.level}</span>
+            <span style="opacity:0.4;">/</span>
+            <span style="font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${meta.phase}</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; margin-bottom: 8px;">Message</div>
+        <div style="font-size: 14px; line-height: 1.6; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid var(--border);">${meta.msg}</div>
+      </div>
+
+      <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);">
+        <button class="logs-action-btn" onclick="ProfessionalGUIEnhancements.copyWithFeedback(this.getAttribute('data-text'), {button:this})" data-text='${meta.raw.replace(/'/g, "&apos;")}'>
+            Context Copy
+        </button>
+      </div>
+    `;
+
+    this.panel.classList.add('open');
+    this.overlay?.classList.add('open');
+  }
+
+  close() {
+    this.panel?.classList.remove('open');
+    this.overlay?.classList.remove('open');
+  }
+}
+
+// Expose key classes
 globalThis.CyberBackupUI = globalThis.CyberBackupUI || {};
 Object.assign(globalThis.CyberBackupUI, {
   ThemeManager,
@@ -1485,4 +1699,81 @@ Object.assign(globalThis.CyberBackupUI, {
   SpeedChart,
   FocusTrap,
   ProfessionalGUIEnhancements,
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 2: ENHANCED UI COMPONENTS (Cleaned up)
+   - ToastManager: Using version from core-utils.js
+   - LogEnhancer: Kept - adds icons and syntax highlighting
+   - Removed: InteractiveStatsManager (placeholder), SettingsPersistenceManager (unused)
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Log Message Enhancer
+ * Adds icons and syntax highlighting to log messages
+ */
+class LogEnhancer {
+  static enhanceLogEntry(logEntry) {
+    if (!logEntry) return;
+
+    const level = logEntry.dataset.level || 'info';
+    const messageEl = logEntry.querySelector('.log-message');
+
+    if (!messageEl) return;
+
+    // Add icon
+    if (!logEntry.querySelector('.log-level-icon')) {
+      const icon = document.createElement('span');
+      icon.className = 'log-level-icon';
+      icon.textContent = level === 'error' ? '✕' : level === 'warn' ? '⚠' : level === 'success' ? '✓' : 'ℹ';
+      logEntry.insertBefore(icon, logEntry.firstChild);
+    }
+
+    // Syntax highlighting
+    let html = messageEl.textContent;
+
+    // Highlight [Keywords] in brackets
+    html = html.replace(/\[(Connection|Error|Warning|Info|Success|Transfer|File|Upload|Download)\]/gi,
+      match => `<span class="log-keyword">${match}</span>`);
+
+    // Highlight error-related words
+    html = html.replace(/\b(error|failed|failure|exception)\b/gi,
+      match => `<span class="log-error-text">${match}</span>`);
+
+    // Highlight IP addresses
+    html = html.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
+      match => `<span class="log-ip">${match}</span>`);
+
+    // Highlight file paths (basic pattern)
+    html = html.replace(/(?:[a-zA-Z]:\\|\/)[^\s]+/g,
+      match => `<span class="log-path">${match}</span>`);
+
+    messageEl.innerHTML = html;
+  }
+}
+
+// Enhance ProfessionalGUIEnhancements init with log enhancement observer
+const originalEnhancementsInit = ProfessionalGUIEnhancements.init;
+ProfessionalGUIEnhancements.init = function () {
+  if (originalEnhancementsInit) originalEnhancementsInit.call(this);
+
+  // Observe new log entries and enhance them
+  const logContainer = document.getElementById('logContainer');
+  if (logContainer) {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.classList && node.classList.contains('log-entry')) {
+            LogEnhancer.enhanceLogEntry(node);
+          }
+        });
+      });
+    });
+    observer.observe(logContainer, { childList: true });
+  }
+};
+
+// Expose LogEnhancer class
+Object.assign(globalThis.CyberBackupUI, {
+  LogEnhancer
 });

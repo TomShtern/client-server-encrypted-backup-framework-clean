@@ -13,7 +13,6 @@
       "icon": "terminal-powershell"
     }
   },
-  "python.languageServer": "Jedi",
   "python.linting.enabled": true,
   "python.linting.ruffEnabled": true,
   "python.linting.flake8Enabled": false,

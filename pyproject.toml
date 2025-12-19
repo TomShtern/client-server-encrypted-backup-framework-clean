@@ -31,7 +31,13 @@ exclude = [
     "FletV2/archive/utils_unused",
     "FletV2/archive/enhanced_data_table_unused",
     "_legacy",
-    "**/_legacy/**"
+    "**/_legacy/**",
+    "**/vcpkg_installed/**",
+    "**/vcpkg_cache/**",
+    "**/data/**",
+    "**/received_files/**",
+    "**/Debug/**",
+    "**/Release/**"
 ]
 
 [tool.mypy]
