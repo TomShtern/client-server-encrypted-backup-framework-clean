@@ -19,7 +19,11 @@
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build;--clean-downloads-after-build"
+            },
+            "environment": {
+                "VCPKG_BINARY_SOURCES": "clear;files,${sourceDir}/vcpkg-cache,readwrite"
             }
         },
         {
@@ -50,7 +54,11 @@
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows",
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "VCPKG_INSTALL_OPTIONS": "--clean-buildtrees-after-build;--clean-packages-after-build;--clean-downloads-after-build"
+            },
+            "environment": {
+                "VCPKG_BINARY_SOURCES": "clear;files,${sourceDir}/vcpkg-cache,readwrite"
             }
         }
     ],

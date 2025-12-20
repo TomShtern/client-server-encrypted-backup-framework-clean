@@ -188,7 +188,9 @@ vcpkg/installed/
 vcpkg/.vcpkg-root
 vcpkg_installed/
 vcpkg_cache/
+vcpkg-cache/
 !vcpkg.json
+!vcpkg-configuration.json
 !vcpkg/
 !vcpkg/vcpkg.exe
 !vcpkg/bootstrap-vcpkg.bat
