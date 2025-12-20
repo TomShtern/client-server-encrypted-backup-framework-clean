@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+import os
+import sys
+
+# PHASE 0: Path Setup (MUST happen before first-party imports)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# UTF-8 Bootstrap - MUST BE FIRST after path setup
+import Shared.filesystem.utf8_solution as _utf8_solution  # noqa: E402
+
+_utf8_solution.ensure_initialized()
+
 """
 CyberBackup 3.0 API Server - CANONICAL IMPLEMENTATION
 =====================================================
@@ -42,26 +53,19 @@ warnings because the import order is intentional and required for proper path se
 # =============================================================================
 # PHASE 1: Standard Library Imports (No Dependencies)
 # =============================================================================
-import atexit
-import contextlib
-import logging
-import os
-import signal
-import socket
-import sys
-import tempfile
-import threading
-import time
-from collections.abc import Callable
-from datetime import datetime
-from typing import Any, cast
-
-# =============================================================================
-# PHASE 2: Path Setup (MUST happen before first-party imports)
-# =============================================================================
-# This adds the project root to sys.path so that `Shared` and `python_server`
-# can be imported. This CANNOT be moved to the top of the file.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import atexit  # noqa: E402
+import contextlib  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import signal  # noqa: E402
+import socket  # noqa: E402
+import sys  # noqa: E402
+import tempfile  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from collections.abc import Callable  # noqa: E402
+from datetime import datetime  # noqa: E402
+from typing import Any, cast  # noqa: E402
 
 # =============================================================================
 # PHASE 3: Third-Party Imports
@@ -148,8 +152,12 @@ conn_health = get_connection_health_monitor()
 MAX_CONNECTIONS = 10  # Increased - allow more WebSocket connections for better UX
 MAX_CONNECTIONS_PER_IP = 12  # Increased to allow more concurrent connections for assets
 connected_clients: set[str] = set()  # Track connected client IDs
+connected_clients_lock = threading.Lock()  # Lock for connected_clients set
 connection_locks: dict[str, threading.Lock] = {}  # Per-IP connection limits
 ip_connection_counts: dict[str, int] = {}  # Track connections per IP
+ip_connection_counts_lock = threading.Lock()  # Lock for ip_connection_counts dict
+last_known_status: dict[str, Any] = {}  # Cache for the last known server status
+last_known_status_lock = threading.Lock()  # Lock for last_known_status dict
 active_sessions: dict[
     str, Any
 ] = {}  # Track active sessions per IP to prevent multiple browser instances
@@ -307,31 +315,35 @@ def limit_connections_per_ip():
     client_ip = request.remote_addr or "127.0.0.1"
 
     # Track connection count per IP (simplified tracking)
-    current_count = ip_connection_counts.get(client_ip, 0)
+    with ip_connection_counts_lock:
+        current_count = ip_connection_counts.get(client_ip, 0)
 
-    # Allow static file requests and essential endpoints with more lenient limits
-    if request.endpoint in ["serve_client", "serve_client_assets"]:
-        max_allowed = MAX_CONNECTIONS_PER_IP + 4  # Allow more connections for assets
-    else:
-        max_allowed = MAX_CONNECTIONS_PER_IP
+        # Allow static file requests and essential endpoints with more lenient limits
+        if request.endpoint in ["serve_client", "serve_client_assets"]:
+            max_allowed = (
+                MAX_CONNECTIONS_PER_IP + 4
+            )  # Allow more connections for assets
+        else:
+            max_allowed = MAX_CONNECTIONS_PER_IP
 
-    if current_count >= max_allowed:
-        logger.warning(
-            f"Connection limit exceeded for IP {client_ip}: {current_count}/{max_allowed}"
-        )
-        return jsonify({"error": "Too many concurrent connections"}), 429
+        if current_count >= max_allowed:
+            logger.warning(
+                f"Connection limit exceeded for IP {client_ip}: {current_count}/{max_allowed}"
+            )
+            return jsonify({"error": "Too many concurrent connections"}), 429
 
-    # Increment counter
-    ip_connection_counts[client_ip] = current_count + 1
+        # Increment counter
+        ip_connection_counts[client_ip] = current_count + 1
 
 
 @app.after_request
 def decrement_ip_connections(response: Response) -> Response:
     """Decrement connection count after request completes"""
     client_ip = request.remote_addr or "127.0.0.1"
-    current_count = ip_connection_counts.get(client_ip, 0)
-    if current_count > 0:
-        ip_connection_counts[client_ip] = current_count - 1
+    with ip_connection_counts_lock:
+        current_count = ip_connection_counts.get(client_ip, 0)
+        if current_count > 0:
+            ip_connection_counts[client_ip] = current_count - 1
     return response
 
 
@@ -557,7 +569,8 @@ def update_server_status(phase: str, message: str) -> None:
         server_status["phase"] = phase
         server_status["message"] = message
         server_status["last_updated"] = datetime.now().isoformat()
-        last_known_status = _sanitize_job_snapshot(server_status)
+        with last_known_status_lock:
+            last_known_status = _sanitize_job_snapshot(server_status)
     print(f"[SERVER_STATUS] {phase}: {message}")
 
 
@@ -589,19 +602,22 @@ def check_backup_server_status(host: str | None = None, port: int | None = None)
 def handle_connect():
     """Handle WebSocket client connection with limits"""
     # Check connection limit
-    if len(connected_clients) >= MAX_CONNECTIONS:
-        print(f"[WEBSOCKET] Connection rejected - limit reached ({MAX_CONNECTIONS})")
-        return False  # Reject connection
+    with connected_clients_lock:
+        if len(connected_clients) >= MAX_CONNECTIONS:
+            print(
+                f"[WEBSOCKET] Connection rejected - limit reached ({MAX_CONNECTIONS})"
+            )
+            return False  # Reject connection
 
-    # Generate a unique client ID and store it in the session
-    import uuid as uuid_lib
+        # Generate a unique client ID and store it in the session
+        import uuid as uuid_lib
 
-    client_id = str(uuid_lib.uuid4())
-    session["client_id"] = client_id
-    connected_clients.add(client_id)
-    print(
-        f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})"
-    )
+        client_id = str(uuid_lib.uuid4())
+        session["client_id"] = client_id
+        connected_clients.add(client_id)
+        print(
+            f"[WEBSOCKET] Client connected: {client_id} (Total: {len(connected_clients)})"
+        )
 
     # Send initial status to new client
     emit(
@@ -619,10 +635,11 @@ def handle_connect():
 def handle_disconnect():
     """Handle WebSocket client disconnection"""
     if client_id := session.get("client_id"):
-        connected_clients.discard(client_id)
-        print(
-            f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})"
-        )
+        with connected_clients_lock:
+            connected_clients.discard(client_id)
+            print(
+                f"[WEBSOCKET] Client disconnected: {client_id} (Total: {len(connected_clients)})"
+            )
 
 
 @socketio.on("request_status")
@@ -633,13 +650,14 @@ def handle_status_request(data: dict[str, Any] | None) -> None:
     if job_id:
         with active_backup_jobs_lock:
             job_snapshot = active_backup_jobs.get(job_id)
-            status = (
-                _sanitize_job_snapshot(job_snapshot)
-                if isinstance(job_snapshot, dict)
-                else dict(last_known_status)
-            )
+            if isinstance(job_snapshot, dict):
+                status = _sanitize_job_snapshot(job_snapshot)
+            else:
+                with last_known_status_lock:
+                    status = dict(last_known_status)
     else:
-        status = dict(last_known_status)
+        with last_known_status_lock:
+            status = dict(last_known_status)
 
     # Always provide the latest connection status
     status["connected"] = check_backup_server_status() and connection_established
@@ -680,39 +698,43 @@ def cleanup_stale_connections(stop_event: threading.Event | None = None) -> None
                 time.sleep(15)
 
             # Clean up stale clients based on connection count vs active clients
-            initial_count = len(connected_clients)
+            with connected_clients_lock:
+                initial_count = len(connected_clients)
 
-            # Force disconnect any clients that exceed our limit
-            if len(connected_clients) > MAX_CONNECTIONS:
-                excess_clients = list(connected_clients)[MAX_CONNECTIONS:]
-                for client_id in excess_clients:
-                    connected_clients.discard(client_id)
-                    logger.debug(f"[WEBSOCKET] Removed excess client: {client_id}")
+                # Force disconnect any clients that exceed our limit
+                if len(connected_clients) > MAX_CONNECTIONS:
+                    excess_clients = list(connected_clients)[MAX_CONNECTIONS:]
+                    for client_id in excess_clients:
+                        connected_clients.discard(client_id)
+                        logger.debug(f"[WEBSOCKET] Removed excess client: {client_id}")
 
-            # Also clear out any old clients every few cycles
-            if (
-                len(connected_clients) > MAX_CONNECTIONS // 2
-            ):  # If more than half our limit
-                # Remove oldest 25% of clients to keep connections fresh
-                clients_to_remove = list(connected_clients)[
-                    : len(connected_clients) // 4
-                ]
-                for client_id in clients_to_remove:
-                    connected_clients.discard(client_id)
-                    logger.debug(f"[WEBSOCKET] Removed aging client: {client_id}")
+                # Also clear out any old clients every few cycles
+                if (
+                    len(connected_clients) > MAX_CONNECTIONS // 2
+                ):  # If more than half our limit
+                    # Remove oldest 25% of clients to keep connections fresh
+                    # Note: set is unordered, so this is arbitrary but effective for rotation
+                    clients_to_remove = list(connected_clients)[
+                        : len(connected_clients) // 4
+                    ]
+                    for client_id in clients_to_remove:
+                        connected_clients.discard(client_id)
+                        logger.debug(f"[WEBSOCKET] Removed aging client: {client_id}")
 
             # Clean up IP connection counters (reset periodically to prevent memory leaks)
-            if len(ip_connection_counts) > 50:  # If too many IPs tracked
-                ip_connection_counts.clear()
-                logger.debug("[HTTP] Cleared IP connection counters")
+            with ip_connection_counts_lock:
+                if len(ip_connection_counts) > 50:  # If too many IPs tracked
+                    ip_connection_counts.clear()
+                    logger.debug("[HTTP] Cleared IP connection counters")
 
-            if (
-                len(connected_clients) != initial_count
-                or len(ip_connection_counts) > 10
-            ):
-                logger.debug(
-                    f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}"
-                )
+            with connected_clients_lock, ip_connection_counts_lock:
+                if (
+                    len(connected_clients) != initial_count
+                    or len(ip_connection_counts) > 10
+                ):
+                    logger.debug(
+                        f"[WEBSOCKET] Cleanup complete. Active clients: {len(connected_clients)}, IP counters: {len(ip_connection_counts)}"
+                    )
 
         except Exception as e:
             logger.error(f"[WEBSOCKET] Cleanup error: {e}")
@@ -1267,7 +1289,8 @@ def api_start_backup_working():
                 else:
                     job_data["message"] = str(safe_event_data)
 
-                last_known_status = _sanitize_job_snapshot(job_data)
+                with last_known_status_lock:
+                    last_known_status = _sanitize_job_snapshot(job_data)
 
             # Real-time WebSocket broadcasting
             if websocket_enabled and connected_clients:
@@ -1672,7 +1695,8 @@ def api_cancel_job(job_id: str):
                     )
                 job_snapshot = _sanitize_job_snapshot(job_ref)
                 global last_known_status
-                last_known_status = job_snapshot
+                with last_known_status_lock:
+                    last_known_status = job_snapshot
         # Broadcast over WebSocket if enabled
         try:
             if websocket_enabled and connected_clients:
@@ -1710,8 +1734,7 @@ def api_cancel_all_jobs():
             except Exception:
                 ok = False
             with active_backup_jobs_lock:
-                job_ref = active_backup_jobs.get(jid)
-                if job_ref:
+                if job_ref := active_backup_jobs.get(jid):
                     job_ref["phase"] = (
                         "CANCELLED" if ok else job_ref.get("phase", "UNKNOWN")
                     )
@@ -1894,17 +1917,18 @@ if __name__ == "__main__":
     # This allows immediate port reuse after crash/restart
     original_socket_init = socket.socket.__init__
 
-    def patched_socket_init(
-        self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0, fileno=None
-    ):
+    def patched_socket_init(self, family=-1, type=-1, proto=-1, fileno=None):
+        # Use the original init with the provided arguments
         original_socket_init(self, family, type, proto, fileno)
-        if type == socket.SOCK_STREAM:
-            try:
-                self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except Exception:
-                pass  # Ignore if already set or not applicable
 
-    socket.socket.__init__ = patched_socket_init
+        # If it's a TCP socket, set SO_REUSEADDR
+        # We check self.type as the 'type' argument might be -1 (default)
+        if getattr(self, "type", None) == socket.SOCK_STREAM:
+            with contextlib.suppress(Exception):
+                self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # Use setattr to avoid static analysis errors on built-in types
+    setattr(socket.socket, "__init__", patched_socket_init)
     print("[OK] SO_REUSEADDR patch applied - port will be immediately reusable")
 
     # --- Server Configuration ---

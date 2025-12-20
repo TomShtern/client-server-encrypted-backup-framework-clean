@@ -1,27 +1,33 @@
-# GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
-import asyncio
-import base64
-import contextlib
-import functools
-import json
-import logging
+# UTF-8 Bootstrap - MUST BE FIRST
 import os
-import shutil
-import sqlite3
 import sys
-import threading
-import time
-from datetime import datetime
-
-# from logging.handlers import RotatingFileHandler # Removed redundant import
-from pathlib import Path
-from typing import Any
-
-# Enable global UTF-8 support automatically (replaces all manual UTF-8 setup)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Setup standardized import paths BEFORE importing any other Shared modules
-from Shared.filesystem.path_utils import setup_imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+import Shared.filesystem.utf8_solution as _utf8_solution  # noqa: E402
+
+_utf8_solution.ensure_initialized()
+
+# GLOBAL UTF-8 AUTO-PATCHER: Automatically enables UTF-8 for ALL subprocess calls
+import asyncio  # noqa: E402
+import base64  # noqa: E402
+import contextlib  # noqa: E402
+import functools  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import sqlite3  # noqa: E402
+import sys  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from datetime import datetime  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+# Setup standardized import paths BEFORE importing any other Shared modules
+from Shared.filesystem.path_utils import setup_imports  # noqa: E402
 
 setup_imports()
 
@@ -3340,8 +3346,8 @@ if __name__ == "__main__":
 
         # Quick check to ensure PyCryptodome is available and basic operations work
         try:
-            # Test RSA key generation functionality
-            RSA.generate(1024, randfunc=get_random_bytes)
+            # Test RSA key generation functionality (using 2048 bits for security check compliance)
+            RSA.generate(2048, randfunc=get_random_bytes)
             # Test AES cipher creation functionality
             AES.new(
                 get_random_bytes(AES_KEY_SIZE_BYTES),
@@ -3399,6 +3405,7 @@ if __name__ == "__main__":
         )
     except SystemExit as e_sys_exit:
         logger.critical(f"Server startup process was aborted: {e_sys_exit}")
+        raise
     except Exception as e_main_fatal:
         logger.critical(
             f"Server encountered a fatal unhandled exception in main execution: {e_main_fatal}",

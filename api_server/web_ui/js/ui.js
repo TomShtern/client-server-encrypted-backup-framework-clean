@@ -100,9 +100,11 @@ class ThemeManager {
 
   #apply(theme) {
     this.currentTheme = theme;
-    // Toggle classes to match CSS selectors (html.theme-dark, html.theme-light)
+    // CSS only defines html.theme-light; dark is the default (no class)
     document.documentElement.classList.remove('theme-dark', 'theme-light');
-    document.documentElement.classList.add(`theme-${theme}`);
+    if (theme === 'light') {
+      document.documentElement.classList.add('theme-light');
+    }
 
     if (this.themeToggle) {
       this.themeToggle.checked = theme === 'dark';

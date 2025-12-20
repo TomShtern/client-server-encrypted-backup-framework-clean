@@ -12,9 +12,10 @@ Version: 1.0
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
+
 
 class DatabaseConfig:
     """
@@ -31,30 +32,31 @@ class DatabaseConfig:
     _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
     # Database directory structure
-    _DATA_DIR = _PROJECT_ROOT / 'data'
-    _DATABASE_DIR = _DATA_DIR / 'database'
+    _DATA_DIR = _PROJECT_ROOT / "data"
+    _DATABASE_DIR = _DATA_DIR / "database"
 
     # Canonical database paths
-    _CANONICAL_DATABASE_PATH = _DATABASE_DIR / 'defensive.db'
-    _BACKUP_DATABASE_PATH = _DATABASE_DIR / 'backups' / 'defensive_backup_{timestamp}.db'
+    _CANONICAL_DATABASE_PATH = _DATABASE_DIR / "defensive.db"
+    _BACKUP_DATABASE_PATH = _DATABASE_DIR / "backups" / "defensive_backup_{timestamp}.db"
 
     # Legacy database paths (for migration)
-    _LEGACY_DATABASE_PATHS = [
-        _PROJECT_ROOT / 'defensive.db',
-        _PROJECT_ROOT / 'FletV2' / 'defensive.db',
-        _PROJECT_ROOT / 'Database' / 'defensive.db',
-        _PROJECT_ROOT / 'python_server' / 'defensive.db',
-        _PROJECT_ROOT / 'python_server' / 'server' / 'defensive.db',
-        _PROJECT_ROOT / 'data' / 'databases' / 'defensive.db',
+    _LEGACY_DATABASE_PATHS: ClassVar[list[Path]] = [
+        _PROJECT_ROOT / "defensive.db",
+        _PROJECT_ROOT / "FletV2" / "defensive.db",
+        _PROJECT_ROOT / "Database" / "defensive.db",
+        _PROJECT_ROOT / "python_server" / "defensive.db",
+        _PROJECT_ROOT / "python_server" / "server" / "defensive.db",
+        _PROJECT_ROOT / "data" / "databases" / "defensive.db",
     ]
 
     class DatabaseEnvironment:
         """Environment-specific database configuration."""
+
         DEVELOPMENT = "development"
         PRODUCTION = "production"
         TESTING = "testing"
 
-    def __init__(self, environment: str = None):
+    def __init__(self, environment: str | None = None):
         """
         Initialize database configuration.
 
@@ -76,7 +78,7 @@ class DatabaseConfig:
         return str(cls._CANONICAL_DATABASE_PATH.absolute())
 
     @classmethod
-    def get_database_path(cls, environment: str = None) -> str:
+    def get_database_path(cls, environment: str | None = None) -> str:
         """
         Get database path for specific environment.
 
@@ -90,7 +92,7 @@ class DatabaseConfig:
 
         if env == DatabaseConfig.DatabaseEnvironment.TESTING:
             # Use separate test database
-            test_db_path = cls._DATABASE_DIR / 'test_defensive.db'
+            test_db_path = cls._DATABASE_DIR / "test_defensive.db"
             return str(test_db_path.absolute())
 
         # For development and production, use canonical database
@@ -114,7 +116,7 @@ class DatabaseConfig:
     @classmethod
     def get_backup_directory(cls) -> Path:
         """Get the database backup directory path."""
-        return cls._DATABASE_DIR / 'backups'
+        return cls._DATABASE_DIR / "backups"
 
     @classmethod
     def get_legacy_database_paths(cls) -> list:
@@ -129,16 +131,16 @@ class DatabaseConfig:
             str: Environment name
         """
         # Check environment variables
-        env = os.environ.get('CYBERBACKUP_ENV', '').lower()
-        if env in ['prod', 'production']:
+        env = os.environ.get("CYBERBACKUP_ENV", "").lower()
+        if env in ["prod", "production"]:
             return self.DatabaseEnvironment.PRODUCTION
-        elif env in ['test', 'testing']:
+        elif env in ["test", "testing"]:
             return self.DatabaseEnvironment.TESTING
-        elif env in ['dev', 'development']:
+        elif env in ["dev", "development"]:
             return self.DatabaseEnvironment.DEVELOPMENT
 
         # Check for debug mode
-        if os.environ.get('DEBUG', '').lower() in ['true', '1', 'yes']:
+        if os.environ.get("DEBUG", "").lower() in ["true", "1", "yes"]:
             return self.DatabaseEnvironment.DEVELOPMENT
 
         # Default to development
@@ -162,7 +164,7 @@ class DatabaseConfig:
             logger.error(f"Failed to create database directories: {e}")
             raise
 
-    def validate_database_access(self, db_path: str = None) -> dict[str, Any]:
+    def validate_database_access(self, db_path: str | None = None) -> dict[str, Any]:
         """
         Validate database file access and permissions.
 
@@ -177,64 +179,64 @@ class DatabaseConfig:
 
         db_file = Path(db_path)
         result = {
-            'path': db_path,
-            'exists': False,
-            'readable': False,
-            'writable': False,
-            'size': 0,
-            'error': None,
-            'status': 'invalid'
+            "path": db_path,
+            "exists": False,
+            "readable": False,
+            "writable": False,
+            "size": 0,
+            "error": None,
+            "status": "invalid",
         }
 
         try:
             # Check if file exists
-            result['exists'] = db_file.exists()
+            result["exists"] = db_file.exists()
 
-            if result['exists']:
+            if result["exists"]:
                 # Check file size
-                result['size'] = db_file.stat().st_size
+                result["size"] = db_file.stat().st_size
 
                 # Test read access
                 try:
-                    with open(db_file, 'rb') as f:
+                    with open(db_file, "rb") as f:
                         f.read(1)  # Try to read 1 byte
-                    result['readable'] = True
+                    result["readable"] = True
                 except Exception as e:
-                    result['error'] = f"Read access failed: {e}"
+                    result["error"] = f"Read access failed: {e}"
 
                 # Test write access
                 try:
                     # Test by opening in append mode
-                    with open(db_file, 'ab') as f:
+                    with open(db_file, "ab") as f:
                         pass  # Just test access
-                    result['writable'] = True
+                    result["writable"] = True
                 except Exception as e:
-                    result['error'] = f"Write access failed: {e}"
+                    result["error"] = f"Write access failed: {e}"
 
                 # Set status based on access
-                if result['readable'] and result['writable']:
-                    result['status'] = 'valid'
-                elif result['readable']:
-                    result['status'] = 'read_only'
+                if result["readable"] and result["writable"]:
+                    result["status"] = "valid"
+                elif result["readable"]:
+                    result["status"] = "read_only"
                 else:
-                    result['status'] = 'inaccessible'
+                    result["status"] = "inaccessible"
             else:
                 # Check if parent directory is writable
                 parent_dir = db_file.parent
                 if parent_dir.exists() and os.access(parent_dir, os.W_OK):
-                    result['status'] = 'creatable'
-                    result['writable'] = True
+                    result["status"] = "creatable"
+                    result["writable"] = True
                 else:
-                    result['error'] = f"Parent directory not writable: {parent_dir}"
-                    result['status'] = 'cannot_create'
+                    result["error"] = f"Parent directory not writable: {parent_dir}"
+                    result["status"] = "cannot_create"
 
         except Exception as e:
-            result['error'] = f"Validation failed: {e}"
-            result['status'] = 'error'
+            result["error"] = f"Validation failed: {e}"
+            result["status"] = "error"
 
         return result
 
-    def get_database_connection_string(self, environment: str = None) -> str:
+    def get_database_connection_string(self, environment: str | None = None) -> str:
         """
         Get SQLite connection string for the specified environment.
 
@@ -264,19 +266,20 @@ class DatabaseConfig:
             dict: Configuration details
         """
         return {
-            'environment': self.environment,
-            'project_root': str(self._PROJECT_ROOT),
-            'data_directory': str(self._DATA_DIR),
-            'database_directory': str(self._DATABASE_DIR),
-            'canonical_database_path': str(self._CANONICAL_DATABASE_PATH),
-            'backup_directory': str(self.get_backup_directory()),
-            'current_database_path': self.get_database_path(),
-            'legacy_paths': self.get_legacy_database_paths(),
+            "environment": self.environment,
+            "project_root": str(self._PROJECT_ROOT),
+            "data_directory": str(self._DATA_DIR),
+            "database_directory": str(self._DATABASE_DIR),
+            "canonical_database_path": str(self._CANONICAL_DATABASE_PATH),
+            "backup_directory": str(self.get_backup_directory()),
+            "current_database_path": self.get_database_path(),
+            "legacy_paths": self.get_legacy_database_paths(),
         }
 
 
 # Global instance for easy import
 _database_config = None
+
 
 def get_database_config() -> DatabaseConfig:
     """Get global database configuration instance."""
@@ -285,13 +288,16 @@ def get_database_config() -> DatabaseConfig:
         _database_config = DatabaseConfig()
     return _database_config
 
-def get_database_path(environment: str = None) -> str:
+
+def get_database_path(environment: str | None = None) -> str:
     """Get database path for specified environment."""
     return DatabaseConfig.get_database_path(environment)
+
 
 def get_canonical_database_path() -> str:
     """Get canonical database path."""
     return DatabaseConfig.get_canonical_database_path()
+
 
 def validate_database_environment() -> dict[str, Any]:
     """Validate database environment and return status."""
@@ -309,16 +315,18 @@ def get_project_root() -> Path:
     """Get project root directory."""
     return DatabaseConfig.get_project_root()
 
+
 def get_data_directory() -> Path:
     """Get data directory."""
     return DatabaseConfig.get_data_directory()
+
 
 def get_database_directory() -> Path:
     """Get database directory."""
     return DatabaseConfig.get_database_directory()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test the configuration
     config = get_database_config()
 
@@ -342,7 +350,7 @@ if __name__ == '__main__':
     print(f"Writable: {validation['writable']}")
     print(f"Size: {validation['size']} bytes")
 
-    if validation['error']:
+    if validation["error"]:
         print(f"Error: {validation['error']}")
 
     print()

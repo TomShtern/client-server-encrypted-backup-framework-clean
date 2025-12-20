@@ -23,8 +23,12 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from playwright.sync_api import sync_playwright
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Response, ViewportSize
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEB_UI_DIR = ROOT / "api_server" / "web_ui"
@@ -102,7 +106,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _resolve_playwright_launch(
     args: argparse.Namespace,
-) -> tuple[bool, list[str], dict | None]:
+) -> tuple[bool, list[str], ViewportSize | None]:
     """Resolve headless/headed, Chromium args, and viewport.
 
     Returns:
@@ -120,7 +124,7 @@ def _resolve_playwright_launch(
         headless = env_override.lower() not in ("false", "0", "no")
 
     launch_args: list[str] = ["--disable-web-security"]
-    viewport: dict | None = {"width": 1600, "height": 1000}
+    viewport: ViewportSize | None = {"width": 1600, "height": 1000}
     if not headless and args.maximize:
         launch_args.append("--start-maximized")
         viewport = None
@@ -128,7 +132,7 @@ def _resolve_playwright_launch(
     return headless, launch_args, viewport
 
 
-def _navigate_with_retry(page, url: str) -> tuple[object | None, int | None]:
+def _navigate_with_retry(page, url: str) -> tuple[Response | None, int | None]:
     """Navigate to url with a single retry.
 
     Returns:
