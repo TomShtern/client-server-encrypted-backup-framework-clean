@@ -21,7 +21,7 @@ Pure vanilla ES6 single-page application that loads CSS from `styles/app.css` an
 - Integrates with CyberBackup API server via HTTP/WebSocket for encrypted file transfer
 - Real-time progress tracking with Material Design-inspired UI
 - Dark/light theme support with ARIA accessibility
-- Responsive layout supporting desktop and mobile
+
 
 **Metadata:** 17690 bytes; created Nov 16 04:51; last accessed Nov 17 18:03
 
@@ -41,7 +41,7 @@ Implements complete Material Design 3 theme with CSS custom properties for color
 
 **What It Contains:**
 - Base styles and 100+ component styles (header, forms, buttons, file cards, status badges, progress ring, logs)
-- Responsive breakpoints (1200px/768px)
+
 - Motion design with cubic-bezier easing
 - 11 keyframe animations (slideDown, pulse, fadeInUp, etc.)
 - Theme variables, sticky headers with glassmorphic blur
@@ -69,7 +69,7 @@ Uses `!important` overrides to achieve pixel-perfect alignment for the two-colum
 - Header padding reduced by 66%
 - Drop zone height matched to status panel (437px)
 - Compressed section margins
-- Responsive fallbacks at 1024px and 640px breakpoints
+
 
 **Metadata:** 18286 bytes; created Nov 17 08:20; last modified Nov 17 08:30
 

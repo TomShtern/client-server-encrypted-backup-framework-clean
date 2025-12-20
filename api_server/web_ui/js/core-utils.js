@@ -644,43 +644,6 @@ class ScreenReaderAnnouncer {
   }
 }
 
-// --- utils/api-config.js ---
-const API_CONFIG = {
-  API_PORT: 9090,
-  STATIC_PORT: 9091,
-  isFileProtocol() {
-    return globalThis.location?.protocol === 'file:';
-  },
-  getApiBaseUrl() {
-    const { location } = globalThis;
-    if (!location) return '';
-    if (location.protocol === 'file:') {
-      console.warn('[API Config] Page opened via file:// protocol - API calls will not work');
-      return '';
-    }
-    const { hostname = 'localhost', port, protocol } = location;
-    const currentPort = Number.parseInt(port, 10) || (protocol === 'https:' ? 443 : 80);
-    if (currentPort === this.API_PORT) {
-      return '';
-    }
-    return `http://${hostname}:${this.API_PORT}`;
-  },
-  showFileProtocolWarning(toastFn) {
-    if (typeof toastFn === 'function') {
-      toastFn(
-        '⚠️ Running from file:// - API features disabled. Use HTTP server for full functionality.',
-        'warn',
-        8000
-      );
-    }
-    console.warn(
-      '[API Config] Page opened via file:// protocol.\n' +
-      'To enable API features, run: python api_server/cyberbackup_api_server.py\n' +
-      'Then open: http://localhost:9090'
-    );
-  }
-};
-
 // --- utils/storage.js ---
 /**
  * Safe localStorage wrapper that handles errors gracefully.
@@ -783,60 +746,6 @@ class TimerManager {
   }
 }
 
-const CONSTANTS = {
-  MAX_FILE_SIZE: 1024 * 1024 * 1024,
-  USERNAME_PATTERN: /^[\w\-. @]+$/,
-};
-
-const FILE_VALIDATION = {
-  maxSize: CONSTANTS.MAX_FILE_SIZE,
-  allowedExtensions: ['.zip', '.tar', '.tgz', '.gz', '.tar.gz'],
-  allowedMimeTypes: [
-    'application/zip',
-    'application/x-zip-compressed',
-    'application/x-tar',
-    'application/gzip',
-    'application/x-gzip',
-    'application/x-gtar',
-  ],
-  errorMessages: {
-    sizeExceeded: 'File too large. Maximum allowed size is 1 GB.',
-    invalidType: 'Unsupported file type. Only .zip and .tar archives are allowed.',
-    empty: 'File is empty.',
-  },
-
-  isExtensionAllowed(filename) {
-    if (!filename) return false;
-    const lower = filename.toLowerCase();
-    return this.allowedExtensions.some((ext) => lower.endsWith(ext));
-  },
-
-  isMimeAllowed(mime) {
-    if (!mime) return false;
-    return this.allowedMimeTypes.includes(mime.toLowerCase());
-  },
-
-  validate(file) {
-    if (!file) {
-      return { valid: false, error: this.errorMessages.invalidType };
-    }
-
-    if (file.size === 0) {
-      return { valid: false, error: this.errorMessages.empty };
-    }
-
-    if (file.size > this.maxSize) {
-      return { valid: false, error: this.errorMessages.sizeExceeded };
-    }
-
-    const typeOk = this.isMimeAllowed(file.type) || this.isExtensionAllowed(file.name || '');
-    if (!typeOk) {
-      return { valid: false, error: this.errorMessages.invalidType };
-    }
-
-    return { valid: true };
-  },
-};
 
 // Expose shared utilities to classic scripts and tests, avoiding unused-var lint noise
 const EXPORTED_GLOBALS = {

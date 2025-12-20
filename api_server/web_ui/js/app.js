@@ -1,108 +1,11 @@
 /**
  * CyberBackup Client - Main Application
  * Orchestrates Core Logic and UI Components.
- * Depends on: core-utils.js, core.js, ui.js
+ * Depends on: config.js, core-utils.js, core.js, ui-core.js, ui-components.js
  */
-/* global DemoMode, generateUUID, getStorageWithFallback, setStorageWithFallback */
+/* global DemoMode, generateUUID, getStorageWithFallback, setStorageWithFallback, TransferHistory, LogStore, ThemeManager, FileManager, AdvancedSettings, ApiClient, SocketClient, ConnectionMonitor, ErrorBoundary, API_CONFIG, ProfessionalGUIEnhancements */
 
-/**
- * Transfer history manager.
- * Stores last N completed transfers in localStorage (with in-memory fallback).
- */
-class TransferHistory {
-  #maxEntries = 10;
-  #storageKey = 'cyberbackup-history';
 
-  get entries() {
-    try {
-      const data = getStorageWithFallback(this.#storageKey);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  add(transfer) {
-    const { entries } = this;
-    const {
-      filename = 'unknown',
-      size = 0,
-      status = 'completed',
-      serverAddress = '',
-      jobId = '',
-    } = transfer ?? {};
-
-    // Validation
-    const validatedEntry = {
-      id: generateUUID(),
-      jobId: String(jobId || ''),
-      filename: String(filename || 'unknown'),
-      size: Number(size) || 0,
-      status: String(status || 'completed'),
-      timestamp: new Date().toISOString(),
-      serverAddress: String(serverAddress || ''),
-    };
-
-    entries.unshift(validatedEntry);
-    entries.length = Math.min(entries.length, this.#maxEntries);
-
-    try {
-      setStorageWithFallback(this.#storageKey, JSON.stringify(entries));
-    } catch (e) {
-      console.warn('Failed to save transfer history:', e);
-    }
-  }
-
-  clear() {
-    setStorageWithFallback(this.#storageKey, '[]');
-  }
-
-  filter(filterFn) {
-    return this.entries.filter(filterFn);
-  }
-
-  filterByStatus(status) {
-    if (!status || status === 'all') return this.entries;
-    return this.entries.filter(entry => entry.status === status);
-  }
-
-  export(format = 'json', entries = null) {
-    const dataToExport = entries || this.entries;
-
-    if (!dataToExport || dataToExport.length === 0) {
-      return null;
-    }
-
-    const timestamp = new Date().toISOString().replaceAll(':', '-').split('.')[0];
-    let filename, data, blob;
-
-    if (format === 'json') {
-      filename = `transfer-history_${timestamp}.json`;
-      data = JSON.stringify(dataToExport, null, 2);
-      blob = new Blob([data], { type: 'application/json' });
-    } else if (format === 'csv') {
-      filename = `transfer-history_${timestamp}.csv`;
-      const header = 'Timestamp,Job ID,Filename,Size (bytes),Status,Server Address\n';
-      const rows = dataToExport.map(e =>
-        `"${e.timestamp}","${e.jobId || ''}","${e.filename}",${e.size},"${e.status}","${e.serverAddress}"`
-      ).join('\n');
-      data = header + rows;
-      blob = new Blob([data], { type: 'text/csv' });
-    } else {
-      filename = `transfer-history_${timestamp}.txt`;
-      data = dataToExport.map(e =>
-        `[${e.timestamp}] ${e.filename} (${formatters.formatBytes(e.size)}) - ${e.status.toUpperCase()} - ${e.serverAddress}`
-      ).join('\n');
-      blob = new Blob([data], { type: 'text/plain' });
-    }
-
-    // Use shared download utility
-    downloadBlob(blob, filename);
-    return filename;
-  }
-}
 
 /**
  * Main application controller for CyberBackup Client.

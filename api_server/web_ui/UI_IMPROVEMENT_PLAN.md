@@ -12,7 +12,7 @@ scope: "api_server/web_ui"
 - Modernize the visual language (color, depth, typography) while staying lightweight and dependency-free.
 - Improve clarity for connectivity states, file selection, and transfer progress.
 - Enhance logs and empty states so the UI feels alive even when idle.
-- Keep the current vanilla ES6 structure; avoid build steps; ensure accessibility and responsiveness.
+- Keep the current vanilla ES6 structure; avoid build steps; ensure accessibility.
 
 ## Constraints & Principles
 - No new build tools; stay pure HTML/JS/CSS (per current project setup).
@@ -50,8 +50,8 @@ scope: "api_server/web_ui"
    - Friendly illustration/message for no activity; skeleton shimmer for metrics when idle.
 9) **Hover/focus states**
    - Define consistent hover/focus for buttons, chips, inputs; ensure visible focus rings.
-10) **Responsive tweaks**
-    - Stack sections on narrow viewports; ensure dropzone fills width; trim banner padding on mobile.
+55) **Layout tweaks**
+    - Ensure dropzone fills width; ensure consistent padding.
 
 ## Implementation Steps (sequenced)
 1. **Add design tokens**: Extend `css/styles.css` with light/dark palettes and spacing/radius/shadow utilities.
@@ -63,7 +63,7 @@ scope: "api_server/web_ui"
 7. **Logs**: Implement level badges, filter chips with counts, row striping, monospace timestamps, and quick actions (copy last, pause auto-scroll).
 8. **Empty states**: Add illustration or icon + friendly copy for “No activity yet”; skeleton shimmer for metrics.
 9. **Microinteractions**: Add hover/focus styles, transitions, and cursor cues across buttons/links/chips.
-10. **Responsive pass**: Add media queries for stacking, padding adjustments, and ensuring dropzone/CTA sizing on mobile widths.
+
 
 ## Acceptance Checklist
 - [ ] Colors and elevation are consistent across cards, tabs, and dropzone in both light/dark modes.
@@ -72,7 +72,7 @@ scope: "api_server/web_ui"
 - [ ] Latency/metrics block presents clear idle state and improved hierarchy.
 - [ ] Logs show colored level badges, filter chips with counts, striped rows, and utility actions work.
 - [ ] Empty/idle views display friendly illustrations/text; skeletons appear while idle.
-- [ ] Hover/focus states are visible and accessible; responsive layout holds on narrow screens.
+- [ ] Hover/focus states are visible and accessible.
 
 ## Notes
 - Keep assets inline SVG or existing icon set to avoid new dependencies.

@@ -46,14 +46,7 @@ background: color-mix(in srgb, var(--border) 70%, transparent);
 
 ## P1 - High Priority (Visual & UX Polish)
 
-### 4. Remove All Mobile/Responsive Code
-**Files**: `css/styles.css`, `index.html`
-**Issue**: Contains viewport meta tag and some responsive assumptions not needed for desktop-only.
-**Actions**:
-- Remove or simplify `<meta name="viewport">` (keep basic for scaling)
-- Remove any `@media (max-width: ...)` breakpoints if found
-- Set minimum viewport width assumption (e.g., 1024px)
-- Add CSS to enforce minimum width: `html { min-width: 1024px; }`
+
 
 ### 5. Solid Mode Too Aggressive
 **File**: `css/styles.css` (lines 419-436)
@@ -295,8 +288,7 @@ background: color-mix(in srgb, var(--border) 70%, transparent);
 
 ## Code Cleanup Tasks
 
-### 43. Remove Mobile Touch Handling (if any)
-Audit JS files for any touch-specific event handlers and remove.
+
 
 ### 44. Consolidate Animation Keyframes
 **File**: `css/styles.css`
@@ -321,7 +313,7 @@ Remove any `console.log` statements in production code, keep only `console.warn`
 1. #1 - CSS `color-mix()` fallbacks
 2. #2 - Undefined `--solid-backdrop`
 3. #3 - Theme toggle consistency
-4. #4 - Remove mobile code
+
 
 ### Phase 2 - Visual Polish
 5. #5 - Solid mode refinement

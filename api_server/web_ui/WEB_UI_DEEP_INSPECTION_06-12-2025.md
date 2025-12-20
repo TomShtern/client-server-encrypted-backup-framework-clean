@@ -197,20 +197,7 @@ const MAX_TOTAL_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
 ## 📦 MEDIUM PRIORITY (P2)
 
-### 5. Dead Mobile CSS Code (~500+ lines)
 
-**File**: `css/styles.css`
-**Status**: 📦 Dead Code
-
-Multiple `@media` queries for mobile breakpoints that will never execute:
-- `@media (max-width: 1200px)` - tablet
-- `@media (max-width: 768px)` - mobile
-- `@media (max-width: 480px)` - small mobile
-- `@media (max-width: 360px)` - extra small
-
-**Impact**: ~500 lines of unnecessary CSS.
-
-**Fix**: Remove all `@media (max-width: ...)` blocks.
 
 ---
 
@@ -423,7 +410,7 @@ if (dom.stats?.speed) dom.stats.speed.textContent = formatters.formatSpeed(state
 - [ ] Add file limits to FileManager
 
 ### Phase 3: Medium Priority - Estimated 1 hour
-- [ ] Remove ~500 lines of mobile CSS
+
 - [ ] Merge enhancements.css into styles.css
 - [ ] Extract magic numbers to constants
 
