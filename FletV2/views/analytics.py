@@ -237,8 +237,8 @@ def _create_bar_chart(
                         tooltip=f"{label_text}: {value_mb:.2f} MB",
                         border_radius=ft.border_radius.only(top_left=8, top_right=8),
                         gradient=ft.LinearGradient(
-                            begin=ft.alignment.bottom_center,
-                            end=ft.alignment.top_center,
+                            begin=ft.Alignment.BOTTOM_CENTER,
+                            end=ft.Alignment.TOP_CENTER,
                             colors=[
                                 color,
                                 ft.Colors.with_opacity(0.7, color),
@@ -737,7 +737,7 @@ def create_analytics_view(
                             ),
                         ),
                         padding=ft.padding.only(top=12),
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment.CENTER,
                     ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -908,7 +908,7 @@ def create_analytics_view(
             main_layout,
             ft.Container(
                 content=loading_overlay,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment.CENTER,
                 expand=True,
                 visible=False,
             ),

@@ -146,5 +146,10 @@
     }
   ],
   "eslint.validate": ["javascript"],
-  "eslint.probe": ["javascript", "html", "css"]
+  "eslint.probe": [
+    "javascript",
+    "html",
+    "css"
+  ],
+  "workbench.editor.enablePreview": false
 }

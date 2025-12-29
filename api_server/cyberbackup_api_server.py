@@ -100,7 +100,7 @@ from python_server.server.server_singleton import (  # noqa: E402
     ensure_single_server_instance,
 )
 from Shared.config.unified_config import get_config  # noqa: E402
-from Shared.logging.logging_utils import (  # noqa: E402
+from Shared.app_logging.logging_utils import (  # noqa: E402
     create_enhanced_logger,
     create_log_monitor_info,
     log_performance_metrics,

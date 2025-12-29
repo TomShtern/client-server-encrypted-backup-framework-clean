@@ -15,7 +15,7 @@ from typing import Any
 
 import psutil
 
-from Shared.logging.error_handler import ErrorSeverity, handle_subprocess_error
+from Shared.app_logging.error_handler import ErrorSeverity, handle_subprocess_error
 
 logger = logging.getLogger(__name__)
 

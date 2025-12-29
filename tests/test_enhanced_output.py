@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def _import_enhanced_modules():
     """Import enhanced output modules with error handling."""
-    from Shared.logging.enhanced_output import (
+    from Shared.app_logging.enhanced_output import (
         Colors,
         EmojiLogger,
         Emojis,
@@ -106,7 +106,7 @@ def test_enhanced_output():
 
 def _import_utf8_modules():
     """Import UTF-8 modules with error handling."""
-    from Shared.logging.enhanced_output import success_print
+    from Shared.app_logging.enhanced_output import success_print
     from Shared.filesystem.utf8_solution import safe_print
     return safe_print, success_print
 
@@ -138,8 +138,8 @@ def test_utf8_integration():
 
 def _import_logging_modules():
     """Import logging modules with error handling."""
-    from Shared.logging.logging_utils import setup_dual_logging
-    from Shared.logging.enhanced_output import success_print
+    from Shared.app_logging.logging_utils import setup_dual_logging
+    from Shared.app_logging.enhanced_output import success_print
     return setup_dual_logging, success_print
 
 def test_logging_integration():

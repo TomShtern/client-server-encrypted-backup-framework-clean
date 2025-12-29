@@ -77,7 +77,7 @@ class LogCard(ft.Container):
             height=icon_circle_size,
             bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.12),
             border_radius=icon_circle_size / 2,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             # Subtle neomorphic shadow on icon container
             shadow=[
                 ft.BoxShadow(
@@ -99,9 +99,13 @@ class LogCard(ft.Container):
                 color=primary_color,
             ),
             bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.15),
-            padding=ft.padding.symmetric(horizontal=8 if is_compact else 10, vertical=3 if is_compact else 4),
+            padding=ft.padding.symmetric(
+                horizontal=8 if is_compact else 10, vertical=3 if is_compact else 4
+            ),
             border_radius=10 if is_compact else 12,
-            border=ft.border.all(1, LogColorSystem.get_border_color(primary_color, 0.2)),
+            border=ft.border.all(
+                1, LogColorSystem.get_border_color(primary_color, 0.2)
+            ),
         )
 
         # ===== MESSAGE TEXT =====
@@ -135,7 +139,8 @@ class LogCard(ft.Container):
                     ),
                     bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE_VARIANT),
                     padding=ft.padding.symmetric(
-                        horizontal=6 if is_compact else 8, vertical=2 if is_compact else 3
+                        horizontal=6 if is_compact else 8,
+                        vertical=2 if is_compact else 3,
                     ),
                     border_radius=5 if is_compact else 6,
                 )
@@ -203,7 +208,10 @@ class LogCard(ft.Container):
         # ===== MAIN CARD CONTAINER =====
         # Neomorphic container with dual shadows and subtle background tint
         card_padding = ft.padding.only(
-            top=10 if is_compact else 14, bottom=10 if is_compact else 14, right=0, left=0
+            top=10 if is_compact else 14,
+            bottom=10 if is_compact else 14,
+            right=0,
+            left=0,
         )
 
         # Set container properties
@@ -213,14 +221,20 @@ class LogCard(ft.Container):
         # Subtle background tint based on log level
         self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
         # Soft border for definition
-        self.border = ft.border.all(1, LogColorSystem.get_border_color(primary_color, 0.08))
+        self.border = ft.border.all(
+            1, LogColorSystem.get_border_color(primary_color, 0.08)
+        )
 
         # Neomorphic shadows - the key to the soft UI effect
         # Use page reference if available for theme-aware shadows
         if page:
-            self.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low", page)
+            self.shadow = NeomorphicShadows.get_card_shadows(
+                "medium" if index < 3 else "low", page
+            )
         else:
-            self.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low")
+            self.shadow = NeomorphicShadows.get_card_shadows(
+                "medium" if index < 3 else "low"
+            )
 
         # Smooth animations for interactions
         self.animate = ft.Animation(250, ft.AnimationCurve.EASE_OUT)
@@ -252,7 +266,9 @@ class LogCard(ft.Container):
                         "medium" if index < 3 else "low", self.page
                     )
                 else:
-                    self.shadow = NeomorphicShadows.get_card_shadows("medium" if index < 3 else "low")
+                    self.shadow = NeomorphicShadows.get_card_shadows(
+                        "medium" if index < 3 else "low"
+                    )
                 self.scale = 1.0
                 self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
 
@@ -293,7 +309,9 @@ class LogCard(ft.Container):
         return level_map.get(r, "INFO" if r not in LogColorSystem.COLORS else r)
 
     @staticmethod
-    def highlight_text(text: str, search_query: str, is_compact: bool = False) -> ft.Control:
+    def highlight_text(
+        text: str, search_query: str, is_compact: bool = False
+    ) -> ft.Control:
         """Create text with highlighted search matches using spans"""
         # Determine font size based on compact mode
         font_size = 12 if is_compact else 13
@@ -341,7 +359,9 @@ class LogCard(ft.Container):
                     ft.TextSpan(
                         part,
                         ft.TextStyle(
-                            bgcolor=ft.Colors.YELLOW_200, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD
+                            bgcolor=ft.Colors.YELLOW_200,
+                            color=ft.Colors.BLACK,
+                            weight=ft.FontWeight.BOLD,
                         ),
                     )
                 )

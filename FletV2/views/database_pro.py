@@ -35,9 +35,13 @@ if TYPE_CHECKING:
     from FletV2.main import AsyncManager
 
 import flet as ft
+from FletV2.utils.user_feedback import _show_dialog, _close_dialog
 
 # UTF-8 solution for subprocess/console I/O
-from FletV2.components.context_menu import StandardContextMenu, setup_context_menu_target
+from FletV2.components.context_menu import (
+    StandardContextMenu,
+    setup_context_menu_target,
+)
 
 # Import DataTable-related helpers from ui_builders instead of EnhancedDataTable
 from FletV2.theme import (
@@ -45,7 +49,11 @@ from FletV2.theme import (
     themed_button,
 )
 from FletV2.utils.async_helpers import run_sync_in_executor
-from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
+from FletV2.utils.data_export import (
+    export_to_csv,
+    export_to_json,
+    generate_export_filename,
+)
 from FletV2.utils.debug_setup import get_logger
 from FletV2.utils.global_shortcuts import (
     GlobalShortcutManager,
@@ -72,6 +80,19 @@ else:
     logger.setLevel(logging.WARNING)
 
 _ORIGINAL_PRINT = builtins.print
+
+
+def _safe_is_attached(control: ft.Control | None) -> bool:
+    """Check if a control is attached to the page (Flet 0.80.0 compatible).
+
+    In Flet 0.80.0, accessing .page on an unattached control raises RuntimeError.
+    """
+    if control is None:
+        return False
+    try:
+        return control.page is not None
+    except (RuntimeError, AttributeError):
+        return False
 
 
 # Enhanced DataTable event handlers
@@ -104,16 +125,19 @@ def handle_selection_change(
     btn_bulk_delete.disabled = not has_selection
 
     # Update UI
-    if getattr(selected_count_text, "page", None):
+    if _safe_is_attached(selected_count_text):
         selected_count_text.update()
-    if getattr(btn_clear_selection, "page", None):
+    if _safe_is_attached(btn_clear_selection):
         btn_clear_selection.update()
-    if getattr(btn_bulk_delete, "page", None):
+    if _safe_is_attached(btn_bulk_delete):
         btn_bulk_delete.update()
 
 
 def handle_context_menu_action(
-    action: str, data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
+    action: str,
+    data: Iterable[dict[str, Any]],
+    page: ft.Page,
+    server_bridge: ServerBridge | None,
 ):
     """Handle context menu actions for enhanced DataTable"""
     if not server_bridge:
@@ -140,7 +164,9 @@ def handle_context_menu_action(
         confirm_bulk_delete(selected_data, page, server_bridge)
 
 
-def handle_view_details(table_state: dict, page: ft.Page, server_bridge: ServerBridge | None):
+def handle_view_details(
+    table_state: dict, page: ft.Page, server_bridge: ServerBridge | None
+):
     """Handle view details action for native DataTable"""
     selected_rows = table_state.get("selected_rows", set())
     current_data = table_state.get("current_data", [])
@@ -153,7 +179,9 @@ def handle_view_details(table_state: dict, page: ft.Page, server_bridge: ServerB
                 break
 
 
-def handle_edit_record(table_state: dict, page: ft.Page, server_bridge: ServerBridge | None):
+def handle_edit_record(
+    table_state: dict, page: ft.Page, server_bridge: ServerBridge | None
+):
     """Handle edit record action for native DataTable"""
     selected_rows = table_state.get("selected_rows", set())
     current_data = table_state.get("current_data", [])
@@ -172,7 +200,9 @@ def handle_copy_selection(table_state: dict, page: ft.Page):
     current_data = table_state.get("current_data", [])
 
     if selected_rows and current_data:
-        selected_data = [current_data[i] for i in selected_rows if i < len(current_data)]
+        selected_data = [
+            current_data[i] for i in selected_rows if i < len(current_data)
+        ]
         copy_selected_to_clipboard(selected_data, page)
 
 
@@ -182,17 +212,23 @@ def handle_export_selected(table_state: dict, format_type: str, page: ft.Page):
     current_data = table_state.get("current_data", [])
 
     if selected_rows and current_data:
-        selected_data = [current_data[i] for i in selected_rows if i < len(current_data)]
+        selected_data = [
+            current_data[i] for i in selected_rows if i < len(current_data)
+        ]
         export_records(selected_data, format_type, page)
 
 
-def handle_bulk_delete_records(table_state: dict, page: ft.Page, server_bridge: ServerBridge | None):
+def handle_bulk_delete_records(
+    table_state: dict, page: ft.Page, server_bridge: ServerBridge | None
+):
     """Handle bulk delete records action for native DataTable"""
     selected_rows = table_state.get("selected_rows", set())
     current_data = table_state.get("current_data", [])
 
     if selected_rows and current_data and server_bridge:
-        selected_data = [current_data[i] for i in selected_rows if i < len(current_data)]
+        selected_data = [
+            current_data[i] for i in selected_rows if i < len(current_data)
+        ]
         confirm_bulk_delete(selected_data, page, server_bridge)
 
 
@@ -233,7 +269,9 @@ def copy_selected_to_clipboard(selected_data: Iterable[dict[str, Any]], page: ft
 
 
 def export_selected_records(
-    selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
+    selected_data: Iterable[dict[str, Any]],
+    page: ft.Page,
+    server_bridge: ServerBridge | None,
 ):
     """Export selected records"""
     # Implementation would export the selected records
@@ -242,16 +280,16 @@ def export_selected_records(
 
 
 def confirm_bulk_delete(
-    selected_data: Iterable[dict[str, Any]], page: ft.Page, server_bridge: ServerBridge | None
+    selected_data: Iterable[dict[str, Any]],
+    page: ft.Page,
+    server_bridge: ServerBridge | None,
 ):
     """Confirm and execute bulk delete"""
     records = list(selected_data)
     count = len(records)
 
     def close_dialog(_):
-        if page.dialog:
-            page.dialog.open = False
-            page.dialog.update()
+        _close_dialog(page)
 
     def confirm_delete(e):
         # Implementation would delete the records
@@ -261,7 +299,9 @@ def confirm_bulk_delete(
     # Show confirmation dialog
     dialog = ft.AlertDialog(
         title=ft.Text("Confirm Delete"),
-        content=ft.Text(f"Are you sure you want to delete {count} record{'s' if count != 1 else ''}?"),
+        content=ft.Text(
+            f"Are you sure you want to delete {count} record{'s' if count != 1 else ''}?"
+        ),
         actions=[
             ft.TextButton("Cancel", on_click=close_dialog),
             ft.FilledButton("Delete", on_click=confirm_delete),
@@ -269,9 +309,7 @@ def confirm_bulk_delete(
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
-    page.dialog = dialog
-    dialog.open = True
-    page.update()
+    _show_dialog(page, dialog)
 
 
 def export_records(records: list, format_type: str, page: ft.Page):
@@ -306,7 +344,14 @@ MAX_VISIBLE_RECORDS = 100
 MAX_EXPORT_RECORDS = 10000
 MAX_DISPLAY_LENGTH = 100  # Maximum characters to display for string values
 SETUP_DELAY = 0.5  # Seconds to wait for control attachment
-SENSITIVE_FIELDS = {"aes_key", "public_key", "private_key", "password", "secret", "token"}
+SENSITIVE_FIELDS = {
+    "aes_key",
+    "public_key",
+    "private_key",
+    "password",
+    "secret",
+    "token",
+}
 
 
 def stringify_value(value: Any) -> str:
@@ -362,7 +407,9 @@ def _format_table_cell_value(value: Any, col_name: str) -> str:
     # Context-aware truncation based on column name
     if any(key in col_lower for key in ["id", "uuid", "guid"]):
         # IDs: show start and end
-        return f"{str_value[:10]}...{str_value[-8:]}" if len(str_value) > 20 else str_value
+        return (
+            f"{str_value[:10]}...{str_value[-8:]}" if len(str_value) > 20 else str_value
+        )
     elif any(key in col_lower for key in ["key", "hash", "token"]):
         # Keys/hashes: show first 12 chars
         return f"{str_value[:12]}..." if len(str_value) > 16 else str_value
@@ -423,8 +470,12 @@ def _load_database_stats_async(
             def get_files_data():
                 return bridge.get_files()
 
-            clients_result: list[dict[str, Any]] = await run_sync_in_executor(get_clients_data)
-            files_result: list[dict[str, Any]] = await run_sync_in_executor(get_files_data)
+            clients_result: list[dict[str, Any]] = await run_sync_in_executor(
+                get_clients_data
+            )
+            files_result: list[dict[str, Any]] = await run_sync_in_executor(
+                get_files_data
+            )
 
             client_count = len(clients_result) if clients_result else 0
             file_count = len(files_result) if files_result else 0
@@ -537,10 +588,14 @@ def _load_table_data_async(
                 return bridge.get_table_data(current_table)
 
             if _VERBOSE_DB_DIAGNOSTICS:
-                print(f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'")
+                print(
+                    f"🟧 [LOAD_TABLE] About to call get_table_data for '{current_table}'"
+                )
             result = await run_sync_in_executor(get_table_data_op)
             if _VERBOSE_DB_DIAGNOSTICS:
-                print(f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}")
+                print(
+                    f"🟧 [LOAD_TABLE] get_table_data returned: {result.get('success')}"
+                )
 
             # Check for cancellation after expensive operation
             if async_manager and async_manager.is_cancelled():
@@ -589,7 +644,9 @@ def _load_table_data_async(
 
             # Note: DataTable will be refreshed automatically when _refresh_table_display() is called later
             if _VERBOSE_DB_DIAGNOSTICS:
-                print("🟧 [LOAD_TABLE] Data loaded, DataTable refresh will occur during display")
+                print(
+                    "🟧 [LOAD_TABLE] Data loaded, DataTable refresh will occur during display"
+                )
 
     return asyncio.create_task(load_data())
 
@@ -636,7 +693,11 @@ def _build_record_card(
         )
 
     if not rows:
-        rows.append(ft.Text("No displayable fields", size=12, color=ft.Colors.GREY_500, italic=True))
+        rows.append(
+            ft.Text(
+                "No displayable fields", size=12, color=ft.Colors.GREY_500, italic=True
+            )
+        )
 
     # Action buttons
     actions_row = None
@@ -673,13 +734,17 @@ def _build_record_card(
         spacing=8,
     )
 
-    card_content = [header, ft.Divider(height=1, thickness=0.5), ft.Column(rows, spacing=4, tight=True)]
+    card_content = [
+        header,
+        ft.Divider(height=1, thickness=0.5),
+        ft.Column(rows, spacing=4, tight=True),
+    ]
     if actions_row:
         card_content.append(actions_row)
 
     return ft.Container(
         content=ft.Column(card_content, spacing=10, tight=True),
-        padding=ft.Padding(14, 12, 14, 12),
+        padding=ft.padding.symmetric(horizontal=14, vertical=12),
         border_radius=12,
         bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
         border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
@@ -749,8 +814,15 @@ def create_database_view(
         return get_active_bridge() is not None
 
     def is_control_attached(control: ft.Control) -> bool:
-        """Check if control is attached to page."""
-        return getattr(control, "page", None) is not None
+        """Check if control is attached to page.
+
+        In Flet 0.80.0, accessing .page on an unattached control raises RuntimeError,
+        so we must use try/except instead of getattr.
+        """
+        try:
+            return control.page is not None
+        except RuntimeError:
+            return False
 
     # ========================================================================
     # UI CONTROLS
@@ -761,7 +833,9 @@ def create_database_view(
     loading_ring = ft.ProgressRing(width=20, height=20, visible=False)
 
     # Database stats
-    stat_status = ft.Text("Disconnected", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY)
+    stat_status = ft.Text(
+        "Disconnected", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY
+    )
     stat_tables = ft.Text("0", size=20, weight=ft.FontWeight.BOLD)
     stat_records = ft.Text("0", size=20, weight=ft.FontWeight.BOLD)
     stat_size = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
@@ -798,20 +872,24 @@ def create_database_view(
             content=ft.Column(
                 [
                     ft.Icon(ft.Icons.DATASET, size=40, color=ft.Colors.GREY_500),
-                    ft.Text("Loading database records...", size=14, color=ft.Colors.GREY_500),
-                    ft.Text("Select a table to view data", size=12, color=ft.Colors.GREY_400),
+                    ft.Text(
+                        "Loading database records...", size=14, color=ft.Colors.GREY_500
+                    ),
+                    ft.Text(
+                        "Select a table to view data", size=12, color=ft.Colors.GREY_400
+                    ),
                 ],
                 spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding(0, 28, 0, 28),
+            padding=ft.padding.symmetric(vertical=28),
         )
     )
 
     # Container for cards view
     cards_view_container = ft.Container(
         content=records_listview,
-        padding=ft.Padding(8, 8, 8, 24),
+        padding=ft.padding.only(left=8, top=8, right=8, bottom=24),
         visible=False,
     )
 
@@ -842,13 +920,17 @@ def create_database_view(
     data_table = ft.DataTable(
         columns=[
             ft.DataColumn(
-                label=ft.Text("Loading...", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                label=ft.Text(
+                    "Loading...", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE
+                ),
             ),
         ],
         rows=[],
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=8,
-        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        horizontal_lines=ft.BorderSide(
+            1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)
+        ),
         heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
         data_row_min_height=48,
         column_spacing=16,
@@ -859,7 +941,12 @@ def create_database_view(
     )
 
     # State for native DataTable
-    table_state = {"sort_column": None, "sort_ascending": True, "selected_rows": set(), "search_query": ""}
+    table_state = {
+        "sort_column": None,
+        "sort_ascending": True,
+        "selected_rows": set(),
+        "search_query": "",
+    }
 
     def _refresh_table_display():
         """Refresh the DataTable display with current data and sorting"""
@@ -869,7 +956,9 @@ def create_database_view(
             return
 
         if _VERBOSE_DB_DIAGNOSTICS:
-            print(f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records")
+            print(
+                f"🟧 [REFRESH_TABLE] Starting refresh with {len(all_records)} records"
+            )
             print(
                 f"🟧 [REFRESH_TABLE] Sample record keys: {list(all_records[0].keys()) if all_records else 'No records'}"
             )
@@ -880,7 +969,8 @@ def create_database_view(
             try:
                 reverse = not table_state["sort_ascending"]
                 sorted_data.sort(
-                    key=lambda row: str(row.get(table_state["sort_column"], "")), reverse=reverse
+                    key=lambda row: str(row.get(table_state["sort_column"], "")),
+                    reverse=reverse,
                 )
             except Exception as e:
                 if _VERBOSE_DB_DIAGNOSTICS:
@@ -891,7 +981,9 @@ def create_database_view(
         if table_state.get("search_query"):
             search_term = table_state["search_query"].lower()
             sorted_data = [
-                row for row in sorted_data if any(search_term in str(value).lower() for value in row.values())
+                row
+                for row in sorted_data
+                if any(search_term in str(value).lower() for value in row.values())
             ]
 
         # Dynamic DataTable creation based on actual data structure
@@ -911,7 +1003,9 @@ def create_database_view(
             data_table.columns.append(
                 ft.DataColumn(
                     label=ft.Text(
-                        col.replace("_", " ").title(), weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE
+                        col.replace("_", " ").title(),
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
                     ),
                     on_sort=lambda _, col_name=col: _sort_by_column_name(col_name),
                 )
@@ -919,7 +1013,9 @@ def create_database_view(
 
         # Update DataTable rows with actual data
         data_table.rows = []
-        for i, record in enumerate(sorted_data[:1000]):  # Limit to 1000 rows for performance
+        for i, record in enumerate(
+            sorted_data[:1000]
+        ):  # Limit to 1000 rows for performance
             cells = []
             for col in actual_columns[:10]:  # Match columns limit
                 value = record.get(col, "")
@@ -929,7 +1025,9 @@ def create_database_view(
                 elif isinstance(value, (bytes, bytearray)):
                     # Handle binary data
                     hex_str = value.hex()
-                    display_value = f"{hex_str[:16]}..." if len(hex_str) > 16 else hex_str
+                    display_value = (
+                        f"{hex_str[:16]}..." if len(hex_str) > 16 else hex_str
+                    )
                 elif isinstance(value, datetime):
                     display_value = value.strftime("%Y-%m-%d %H:%M")
                 else:
@@ -943,7 +1041,9 @@ def create_database_view(
                 cells.append(ft.DataCell(ft.Text(display_value, size=12)))
 
             data_row = ft.DataRow(
-                selected=False, on_select_changed=lambda e, idx=i: _handle_row_selection(e, idx), cells=cells
+                selected=False,
+                on_select_changed=lambda e, idx=i: _handle_row_selection(e, idx),
+                cells=cells,
             )
             data_table.rows.append(data_row)
 
@@ -970,8 +1070,12 @@ def create_database_view(
             table_state["selected_rows"].discard(row_idx)
 
         # Update selection display
-        selected_data = [all_records[i] for i in table_state["selected_rows"] if i < len(all_records)]
-        handle_selection_change(selected_data, selected_count_text, btn_clear_selection, btn_bulk_delete)
+        selected_data = [
+            all_records[i] for i in table_state["selected_rows"] if i < len(all_records)
+        ]
+        handle_selection_change(
+            selected_data, selected_count_text, btn_clear_selection, btn_bulk_delete
+        )
 
     # Setup keyboard navigation for the native table using Flet's native approach
     def _navigate_table(direction: str):
@@ -985,7 +1089,11 @@ def create_database_view(
 
     def _delete_selected_rows():
         """Delete selected rows"""
-        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
+        if (
+            table_state["selected_rows"]
+            and table_state["current_data"]
+            and server_bridge
+        ):
             selected_data = [
                 table_state["current_data"][i]
                 for i in table_state["selected_rows"]
@@ -1080,7 +1188,11 @@ def create_database_view(
 
     def _handle_context_edit():
         """Handle edit from context menu"""
-        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
+        if (
+            table_state["selected_rows"]
+            and table_state["current_data"]
+            and server_bridge
+        ):
             first_selected_idx = min(table_state["selected_rows"])
             if first_selected_idx < len(table_state["current_data"]):
                 row_data = table_state["current_data"][first_selected_idx]
@@ -1108,7 +1220,11 @@ def create_database_view(
 
     def _handle_context_delete():
         """Handle delete from context menu"""
-        if table_state["selected_rows"] and table_state["current_data"] and server_bridge:
+        if (
+            table_state["selected_rows"]
+            and table_state["current_data"]
+            and server_bridge
+        ):
             selected_data = [
                 table_state["current_data"][i]
                 for i in table_state["selected_rows"]
@@ -1128,7 +1244,7 @@ def create_database_view(
             # Data table (toolbar will be added separately)
             ft.Container(
                 content=data_table,
-                padding=ft.Padding(8, 8, 8, 8),
+                padding=ft.Padding.all(8),
                 bgcolor=ft.Colors.SURFACE,
                 border_radius=8,
             ),
@@ -1192,7 +1308,7 @@ def create_database_view(
     table_view_container = ft.Container(
         content=table_content,  # This includes toolbar, table, and pagination
         visible=True,
-        padding=ft.Padding(8, 8, 8, 8),
+        padding=ft.Padding.all(8),
     )
 
     # Single switcher container to avoid Stack overlay quirks
@@ -1202,7 +1318,9 @@ def create_database_view(
     # Action buttons
     btn_add = themed_button("Add Record", None, "filled", ft.Icons.ADD)
     btn_refresh = themed_button("Refresh", None, "outlined", ft.Icons.REFRESH)
-    btn_export_csv = themed_button("Export CSV", None, "outlined", ft.Icons.FILE_DOWNLOAD)
+    btn_export_csv = themed_button(
+        "Export CSV", None, "outlined", ft.Icons.FILE_DOWNLOAD
+    )
     btn_export_json = themed_button("Export JSON", None, "outlined", ft.Icons.CODE)
 
     # View mode toggle
@@ -1246,7 +1364,9 @@ def create_database_view(
                 records_listview.update()
                 if is_control_attached(cards_view_container):
                     cards_view_container.update()
-            elif view_mode == "table" and data_table and is_control_attached(data_table):
+            elif (
+                view_mode == "table" and data_table and is_control_attached(data_table)
+            ):
                 data_table.update()
                 if is_control_attached(table_view_container):
                     table_view_container.update()
@@ -1262,7 +1382,9 @@ def create_database_view(
             # Avoid breaking the flow if an update fails mid-tree
             pass
 
-    def update_status(message: str, color: str | None = None, loading: bool = False) -> None:
+    def update_status(
+        message: str, color: str | None = None, loading: bool = False
+    ) -> None:
         """Update status text and loading indicator."""
         status_text.value = message
         if color:
@@ -1276,7 +1398,10 @@ def create_database_view(
 
     def update_db_stats_ui() -> None:
         """Update database statistics display."""
-        if not all(is_control_attached(c) for c in [stat_status, stat_tables, stat_records, stat_size]):
+        if not all(
+            is_control_attached(c)
+            for c in [stat_status, stat_tables, stat_records, stat_size]
+        ):
             logger.debug("Database stats controls not attached, skipping update")
             return
 
@@ -1308,14 +1433,20 @@ def create_database_view(
             logger.debug("Table dropdown not attached, skipping update")
             return
 
-        table_dropdown.options = [ft.dropdown.Option(text=t.title(), key=t) for t in available_tables]
-        table_dropdown.value = current_table if current_table in available_tables else available_tables[0]
+        table_dropdown.options = [
+            ft.dropdown.Option(text=t.title(), key=t) for t in available_tables
+        ]
+        table_dropdown.value = (
+            current_table if current_table in available_tables else available_tables[0]
+        )
         table_dropdown.disabled = not is_server_connected()
         table_dropdown.update()
 
     def refresh_records_display() -> None:
         """Refresh the records list (Column with cards) and DataTable."""
-        print(f"🟩 [REFRESH_DISPLAY] ENTERED - filtered_records: {len(filtered_records)}")
+        print(
+            f"🟩 [REFRESH_DISPLAY] ENTERED - filtered_records: {len(filtered_records)}"
+        )
 
         # Note: DataTable refresh is handled automatically by the _refresh_table_display()
         # function which is called when all_records or search_query changes
@@ -1332,27 +1463,40 @@ def create_database_view(
         if not filtered_records:
             # Empty state
             print("🟩 [REFRESH_DISPLAY] NO RECORDS - showing empty state")
-            message = "No records found" if is_server_connected() else "Server not connected"
+            message = (
+                "No records found" if is_server_connected() else "Server not connected"
+            )
             records_listview.controls.append(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(ft.Icons.INBOX_OUTLINED, size=48, color=ft.Colors.GREY_400),
+                            ft.Icon(
+                                ft.Icons.INBOX_OUTLINED,
+                                size=48,
+                                color=ft.Colors.GREY_400,
+                            ),
                             ft.Text(message, size=16, color=ft.Colors.GREY_500),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                     ),
-                    padding=ft.Padding(0, 40, 0, 40),
-                    alignment=ft.alignment.center,
+                    padding=ft.padding.symmetric(vertical=40),
+                    alignment=ft.Alignment.CENTER,
                 )
             )
         else:
             # Summary text
-            print(f"🟩 [REFRESH_DISPLAY] HAS RECORDS - building {len(filtered_records)} cards")
+            print(
+                f"🟩 [REFRESH_DISPLAY] HAS RECORDS - building {len(filtered_records)} cards"
+            )
             count_text = f"Showing {min(len(filtered_records), MAX_VISIBLE_RECORDS)} of {len(filtered_records)} records"
             records_listview.controls.append(
-                ft.Text(count_text, size=13, color=ft.Colors.ON_SURFACE_VARIANT, weight=ft.FontWeight.W_500)
+                ft.Text(
+                    count_text,
+                    size=13,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    weight=ft.FontWeight.W_500,
+                )
             )
 
             # Record cards
@@ -1383,20 +1527,32 @@ def create_database_view(
 
         # CRITICAL: Final validation - NEVER render empty controls (prevents gray screen)
         if not records_listview.controls:
-            print("🟥 [REFRESH_DISPLAY] CRITICAL: Empty controls detected, adding fallback content!")
+            print(
+                "🟥 [REFRESH_DISPLAY] CRITICAL: Empty controls detected, adding fallback content!"
+            )
             records_listview.controls.append(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(ft.Icons.ERROR_OUTLINE, size=48, color=ft.Colors.ERROR),
-                            ft.Text("Error: No content to display", size=16, color=ft.Colors.ERROR),
-                            ft.Text("Please refresh or contact support", size=12, color=ft.Colors.GREY_500),
+                            ft.Icon(
+                                ft.Icons.ERROR_OUTLINE, size=48, color=ft.Colors.ERROR
+                            ),
+                            ft.Text(
+                                "Error: No content to display",
+                                size=16,
+                                color=ft.Colors.ERROR,
+                            ),
+                            ft.Text(
+                                "Please refresh or contact support",
+                                size=12,
+                                color=ft.Colors.GREY_500,
+                            ),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                     ),
-                    padding=ft.Padding(0, 40, 0, 40),
-                    alignment=ft.alignment.center,
+                    padding=ft.padding.symmetric(vertical=40),
+                    alignment=ft.Alignment.CENTER,
                 )
             )
 
@@ -1413,7 +1569,9 @@ def create_database_view(
 
         if count > 0:
             bulk_actions_toolbar.visible = True
-            selected_count_text.value = f"{count} row{'s' if count != 1 else ''} selected"
+            selected_count_text.value = (
+                f"{count} row{'s' if count != 1 else ''} selected"
+            )
         else:
             bulk_actions_toolbar.visible = False
 
@@ -1461,7 +1619,9 @@ def create_database_view(
             nonlocal selected_row_ids
 
             try:
-                update_status(f"Deleting {len(selected_row_ids)} records...", ft.Colors.BLUE, True)
+                update_status(
+                    f"Deleting {len(selected_row_ids)} records...", ft.Colors.BLUE, True
+                )
 
                 bridge = get_active_bridge()
                 if bridge is None:
@@ -1503,7 +1663,7 @@ def create_database_view(
                     )
 
                 # Reload data
-                page.close(dialog)
+                _close_dialog(page)
                 await load_table_data()
 
             except Exception as ex:
@@ -1514,7 +1674,7 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: _close_dialog(page)),
             ft.FilledButton(
                 "Delete All",
                 on_click=lambda __: page.run_task(confirm_bulk_delete),
@@ -1522,7 +1682,7 @@ def create_database_view(
             ),
         ]
 
-        page.open(dialog)
+        _show_dialog(page, dialog)
 
     def update_pagination_controls() -> None:
         """Update pagination controls based on current state."""
@@ -1532,7 +1692,9 @@ def create_database_view(
             btn_next_page.disabled = True
         else:
             total_records = len(filtered_records)
-            total_pages = max(1, (total_records + records_per_page - 1) // records_per_page)
+            total_pages = max(
+                1, (total_records + records_per_page - 1) // records_per_page
+            )
 
             # Update pagination info text
             pagination_info.value = f"Page {current_page + 1} of {total_pages}"
@@ -1603,7 +1765,9 @@ def create_database_view(
         table_view_container.visible = not is_cards
 
         # Swap content in switcher to avoid overlay issues
-        views_switcher.content = cards_view_container if is_cards else table_view_container
+        views_switcher.content = (
+            cards_view_container if is_cards else table_view_container
+        )
         if is_control_attached(views_switcher):
             views_switcher.update()
 
@@ -1644,11 +1808,15 @@ def create_database_view(
             filtered_records = [
                 record
                 for record in all_records
-                if any(query_lower in stringify_value(v).lower() for v in record.values())
+                if any(
+                    query_lower in stringify_value(v).lower() for v in record.values()
+                )
             ]
 
         if _VERBOSE_DB_DIAGNOSTICS:
-            print(f"🟨 [SEARCH_FILTER] filtered_records: {len(filtered_records)}, view_mode: {view_mode}")
+            print(
+                f"🟨 [SEARCH_FILTER] filtered_records: {len(filtered_records)}, view_mode: {view_mode}"
+            )
 
         # Update table_state for search
         table_state["search_query"] = search_query
@@ -1755,7 +1923,11 @@ def create_database_view(
             return
 
         # Get editable columns (exclude ID, auto-generated fields)
-        editable_cols = [col for col in table_columns if col.lower() not in {"id", "uuid", "created_at"}]
+        editable_cols = [
+            col
+            for col in table_columns
+            if col.lower() not in {"id", "uuid", "created_at"}
+        ]
 
         if not editable_cols:
             show_error_message(page, MSG_NO_EDITABLE_COLUMNS)
@@ -1788,7 +1960,9 @@ def create_database_view(
                 update_status("Saving record...", ft.Colors.BLUE, True)
 
                 # Build record data
-                record_data = {col: field.value or None for col, field in input_fields.items()}
+                record_data = {
+                    col: field.value or None for col, field in input_fields.items()
+                }
 
                 bridge = get_active_bridge()
                 if bridge is None:
@@ -1803,7 +1977,7 @@ def create_database_view(
 
                 if result.get("success"):
                     show_success_message(page, MSG_RECORD_ADDED_SUCCESSFULLY)
-                    page.close(dialog)
+                    _close_dialog(page)
                     await load_table_data()
                 else:
                     error = result.get("error", MSG_UNKNOWN_ERROR)
@@ -1817,11 +1991,11 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: _close_dialog(page)),
             ft.FilledButton("Add", on_click=lambda __: page.run_task(save_record)),
         ]
 
-        page.open(dialog)
+        _show_dialog(page, dialog)
 
     def edit_record_dialog(record: dict[str, Any]) -> None:
         """Show dialog to edit existing record."""
@@ -1830,7 +2004,9 @@ def create_database_view(
             return
 
         # Get editable columns
-        editable_cols = [col for col in table_columns if col.lower() not in {"id", "uuid"}]
+        editable_cols = [
+            col for col in table_columns if col.lower() not in {"id", "uuid"}
+        ]
 
         if not editable_cols:
             show_error_message(page, MSG_NO_EDITABLE_COLUMNS)
@@ -1882,7 +2058,7 @@ def create_database_view(
 
                 if result.get("success"):
                     show_success_message(page, MSG_RECORD_UPDATED_SUCCESSFULLY)
-                    page.close(dialog)
+                    _close_dialog(page)
                     await load_table_data()
                 else:
                     error = result.get("error", MSG_UNKNOWN_ERROR)
@@ -1896,11 +2072,11 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: _close_dialog(page)),
             ft.FilledButton("Save", on_click=lambda __: page.run_task(save_changes)),
         ]
 
-        page.open(dialog)
+        _show_dialog(page, dialog)
 
     def delete_record_dialog(record: dict[str, Any]) -> None:
         """Show confirmation dialog to delete record."""
@@ -1939,7 +2115,7 @@ def create_database_view(
 
                 if result.get("success"):
                     show_success_message(page, MSG_RECORD_DELETED_SUCCESSFULLY)
-                    page.close(dialog)
+                    _close_dialog(page)
                     await load_table_data()
                 else:
                     error = result.get("error", MSG_UNKNOWN_ERROR)
@@ -1953,7 +2129,7 @@ def create_database_view(
                 update_status("Ready", ft.Colors.GREY_400, False)
 
         dialog.actions = [
-            ft.TextButton("Cancel", on_click=lambda __: page.close(dialog)),
+            ft.TextButton("Cancel", on_click=lambda __: _close_dialog(page)),
             ft.FilledButton(
                 "Delete",
                 on_click=lambda __: page.run_task(confirm_delete),
@@ -1961,7 +2137,7 @@ def create_database_view(
             ),
         ]
 
-        page.open(dialog)
+        _show_dialog(page, dialog)
 
     # ========================================================================
     # EXPORT FUNCTIONALITY
@@ -1976,7 +2152,9 @@ def create_database_view(
         async def do_export() -> None:
             """Perform the export operation."""
             try:
-                update_status(f"Exporting to {format_type.upper()}...", ft.Colors.BLUE, True)
+                update_status(
+                    f"Exporting to {format_type.upper()}...", ft.Colors.BLUE, True
+                )
 
                 # Prepare data
                 columns = table_columns or list(filtered_records[0].keys())
@@ -2001,7 +2179,9 @@ def create_database_view(
 
                 await run_sync_in_executor(export_operation)
 
-                show_success_message(page, f"Exported {len(records_to_export)} records to {filename}")
+                show_success_message(
+                    page, f"Exported {len(records_to_export)} records to {filename}"
+                )
                 logger.info(f"Exported {len(records_to_export)} records to {filepath}")
 
             except Exception as ex:
@@ -2024,7 +2204,12 @@ def create_database_view(
                 content=create_neumorphic_metric_card(
                     ft.Column(
                         [
-                            ft.Row([ft.Icon(ft.Icons.STORAGE, size=24), ft.Text("Status", size=14)]),
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.STORAGE, size=24),
+                                    ft.Text("Status", size=14),
+                                ]
+                            ),
                             stat_status,
                         ],
                         spacing=8,
@@ -2038,7 +2223,12 @@ def create_database_view(
                 content=create_neumorphic_metric_card(
                     ft.Column(
                         [
-                            ft.Row([ft.Icon(ft.Icons.TABLE_CHART, size=24), ft.Text("Tables", size=14)]),
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.TABLE_CHART, size=24),
+                                    ft.Text("Tables", size=14),
+                                ]
+                            ),
                             stat_tables,
                         ],
                         spacing=8,
@@ -2052,7 +2242,12 @@ def create_database_view(
                 content=create_neumorphic_metric_card(
                     ft.Column(
                         [
-                            ft.Row([ft.Icon(ft.Icons.DATASET, size=24), ft.Text("Records", size=14)]),
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.DATASET, size=24),
+                                    ft.Text("Records", size=14),
+                                ]
+                            ),
                             stat_records,
                         ],
                         spacing=8,
@@ -2066,7 +2261,12 @@ def create_database_view(
                 content=create_neumorphic_metric_card(
                     ft.Column(
                         [
-                            ft.Row([ft.Icon(ft.Icons.FOLDER, size=24), ft.Text("Size", size=14)]),
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.FOLDER, size=24),
+                                    ft.Text("Size", size=14),
+                                ]
+                            ),
                             stat_size,
                         ],
                         spacing=8,
@@ -2166,7 +2366,7 @@ def create_database_view(
             records_section,
         ],
         spacing=20,
-        padding=ft.Padding(20, 20, 20, 20),
+        padding=ft.Padding.all(20),
         expand=1,  # Fills available space
     )
 
@@ -2235,7 +2435,10 @@ def create_database_view(
             # Execute all three database queries concurrently instead of sequentially
             # Performance improvement: ~3x faster (3 queries x 100ms = 300ms → 100ms)
             await asyncio.gather(
-                load_database_stats(), load_table_names(), load_table_data(), return_exceptions=False
+                load_database_stats(),
+                load_table_names(),
+                load_table_data(),
+                return_exceptions=False,
             )
 
             # THEN update UI with loaded data
@@ -2247,7 +2450,9 @@ def create_database_view(
 
             # Force final refresh to ensure display is updated
             if _VERBOSE_DB_DIAGNOSTICS:
-                print(f"🟧 [DATABASE_PRO] Forcing final refresh (view_mode={view_mode})")
+                print(
+                    f"🟧 [DATABASE_PRO] Forcing final refresh (view_mode={view_mode})"
+                )
             if view_mode == "cards":
                 views_switcher.content = cards_view_container
                 refresh_records_display()

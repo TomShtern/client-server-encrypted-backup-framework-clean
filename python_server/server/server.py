@@ -32,7 +32,7 @@ from Shared.filesystem.path_utils import setup_imports  # noqa: E402
 setup_imports()
 
 # Now import ALL Shared modules after path setup - consolidate all imports here
-from Shared.logging.logging_utils import (  # noqa: E402
+from Shared.app_logging.logging_utils import (  # noqa: E402
     create_enhanced_logger,
     create_log_monitor_info,
     setup_dual_logging,

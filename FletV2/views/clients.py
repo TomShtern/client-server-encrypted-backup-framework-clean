@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any
 
 import flet as ft
+from FletV2.utils.user_feedback import _show_dialog, _close_dialog
 
 # ALWAYS import this in any Python file that deals with subprocess or console I/O
 
@@ -30,13 +31,23 @@ except ImportError:  # pragma: no cover - fallback logging
         logger = logging.getLogger(name or __name__)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
+            )
             logger.addHandler(handler)
-        logger.setLevel(logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING)
+        logger.setLevel(
+            logging.DEBUG if getattr(config, "DEBUG_MODE", False) else logging.WARNING
+        )
         return logger
 
 
-from FletV2.utils.async_helpers import create_async_fetch_function, run_sync_in_executor, safe_server_call
+from FletV2.utils.async_helpers import (
+    create_async_fetch_function,
+    run_sync_in_executor,
+    safe_server_call,
+)
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.simple_state import SimpleState
 from FletV2.utils.ui_builders import (
@@ -72,7 +83,9 @@ class _ClientsViewController:
         self.status_filter = "all"
         self.clients_data: list[dict[str, Any]] = []
 
-        self._fetch_clients_async = create_async_fetch_function("get_clients", empty_default=[])
+        self._fetch_clients_async = create_async_fetch_function(
+            "get_clients", empty_default=[]
+        )
 
         self.clients_table = self._create_clients_table()
         (
@@ -109,7 +122,9 @@ class _ClientsViewController:
             primary=False,
         )
 
-    def build(self) -> tuple[ft.Control, Callable[[], None], Callable[[], Awaitable[None]]]:
+    def build(
+        self,
+    ) -> tuple[ft.Control, Callable[[], None], Callable[[], Awaitable[None]]]:
         filters_row = self._create_filters_row()
         stats_section = AppCard(self._create_stats_row(), title="At a glance")
         filters_section = AppCard(filters_row, title="Filters")
@@ -118,7 +133,9 @@ class _ClientsViewController:
 
         # Note: Global search is in the app-level header (main.py), not view-level
         header_actions = [
-            create_action_button("Add client", lambda _: self.add_client(), icon=ft.Icons.PERSON_ADD),
+            create_action_button(
+                "Add client", lambda _: self.add_client(), icon=ft.Icons.PERSON_ADD
+            ),
             self.refresh_button,
         ]
 
@@ -158,15 +175,22 @@ class _ClientsViewController:
                     existing_clients = state_value
 
         if existing_clients:
-            self.apply_clients_data(existing_clients, broadcast=False, source="state_manager_init")
+            self.apply_clients_data(
+                existing_clients, broadcast=False, source="state_manager_init"
+            )
         else:
             await self.load_clients_data()
 
     def dispose(self) -> None:
         logger.debug("Disposing clients view")
-        if self.state_manager is not None and self.state_subscription_callback is not None:
+        if (
+            self.state_manager is not None
+            and self.state_subscription_callback is not None
+        ):
             with contextlib.suppress(Exception):
-                self.state_manager.unsubscribe("clients", self.state_subscription_callback)
+                self.state_manager.unsubscribe(
+                    "clients", self.state_subscription_callback
+                )
             self.state_subscription_callback = None
 
     # ------------------------------------------------------------------
@@ -189,7 +213,9 @@ class _ClientsViewController:
             expand=True,
         )
 
-    def _create_stat_controls(self) -> tuple[ft.Control, ft.Control, ft.Control, ft.Control]:
+    def _create_stat_controls(
+        self,
+    ) -> tuple[ft.Control, ft.Control, ft.Control, ft.Control]:
         total_clients_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
         total_clients_value.semantics_label = "Total clients count"
         connected_clients_value = ft.Text("0", size=24, weight=ft.FontWeight.BOLD)
@@ -212,7 +238,10 @@ class _ClientsViewController:
                 ft.Column(
                     [
                         create_metric_card(
-                            "Total Clients", self.total_clients_value, ft.Icons.PEOPLE, "Total clients metric"
+                            "Total Clients",
+                            self.total_clients_value,
+                            ft.Icons.PEOPLE,
+                            "Total clients metric",
                         )
                     ],
                     col={"sm": 12, "md": 6, "lg": 3},
@@ -256,8 +285,13 @@ class _ClientsViewController:
     def _create_filters_row(self) -> ft.ResponsiveRow:
         return ft.ResponsiveRow(
             controls=[
-                ft.Container(content=self.search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}),
-                ft.Container(content=self.status_filter_dropdown, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+                ft.Container(
+                    content=self.search_field, col={"xs": 12, "sm": 8, "md": 6, "lg": 5}
+                ),
+                ft.Container(
+                    content=self.status_filter_dropdown,
+                    col={"xs": 12, "sm": 4, "md": 3, "lg": 2},
+                ),
                 ft.Container(
                     content=ft.Row(
                         [
@@ -267,7 +301,7 @@ class _ClientsViewController:
                         spacing=8,
                     ),
                     col={"xs": 12, "sm": 12, "md": 3, "lg": 2},
-                    alignment=ft.alignment.center_left,
+                    alignment=ft.Alignment.CENTER_LEFT,
                 ),
             ],
             spacing=12,
@@ -282,7 +316,9 @@ class _ClientsViewController:
     async def load_clients_data(self, *, broadcast: bool | None = None) -> None:
         try:
             self._show_loading()
-            should_broadcast = self.state_manager is not None if broadcast is None else broadcast
+            should_broadcast = (
+                self.state_manager is not None if broadcast is None else broadcast
+            )
             new_clients = await self._fetch_clients_async(self.server_bridge)
             self.apply_clients_data(new_clients, broadcast=should_broadcast)
         except Exception as exc:
@@ -300,7 +336,9 @@ class _ClientsViewController:
     ) -> None:
         normalized: list[dict[str, Any]] = []
         if new_clients:
-            normalized = [dict(item) if isinstance(item, dict) else item for item in new_clients]
+            normalized = [
+                dict(item) if isinstance(item, dict) else item for item in new_clients
+            ]
 
         self.clients_data = normalized
         self.update_stats()
@@ -310,14 +348,21 @@ class _ClientsViewController:
             with contextlib.suppress(Exception):
                 self.state_manager.update(
                     "clients",
-                    [dict(item) if isinstance(item, dict) else item for item in normalized],
+                    [
+                        dict(item) if isinstance(item, dict) else item
+                        for item in normalized
+                    ],
                     source=source,
                 )
 
     def update_stats(self) -> None:
         totals = len(self.clients_data)
         connected = len(
-            [client for client in self.clients_data if str(client.get("status", "")).lower() == "connected"]
+            [
+                client
+                for client in self.clients_data
+                if str(client.get("status", "")).lower() == "connected"
+            ]
         )
         disconnected = len(
             [
@@ -326,7 +371,9 @@ class _ClientsViewController:
                 if str(client.get("status", "")).lower() == "disconnected"
             ]
         )
-        files_total = sum(int(client.get("files_count", 0) or 0) for client in self.clients_data)
+        files_total = sum(
+            int(client.get("files_count", 0) or 0) for client in self.clients_data
+        )
 
         self.total_clients_value.value = str(totals)
         self.connected_clients_value.value = str(connected)
@@ -351,8 +398,12 @@ class _ClientsViewController:
         for client in filtered_clients:
             self.clients_table.rows.append(self._build_client_row(client))
 
-        if getattr(self.clients_table, "page", None):
-            self.clients_table.update()
+        # Flet 0.80.0: accessing .page on unattached control raises RuntimeError
+        try:
+            if self.clients_table.page is not None:
+                self.clients_table.update()
+        except RuntimeError:
+            pass
 
     def filter_clients(self) -> list[dict[str, Any]]:
         filtered = self.clients_data.copy()
@@ -383,7 +434,11 @@ class _ClientsViewController:
     # ------------------------------------------------------------------
 
     def on_search_change(self, event: ft.ControlEvent | str) -> None:
-        value = event if isinstance(event, str) else getattr(getattr(event, "control", None), "value", "")
+        value = (
+            event
+            if isinstance(event, str)
+            else getattr(getattr(event, "control", None), "value", "")
+        )
         self.search_query = value or ""
         self.update_table()
 
@@ -423,21 +478,23 @@ class _ClientsViewController:
                 height=200,
                 scroll=ft.ScrollMode.AUTO,
             ),
-            actions=[ft.TextButton("Close", on_click=lambda _e: self.page.close(details_dialog))],
+            actions=[
+                ft.TextButton("Close", on_click=lambda _e: _close_dialog(self.page))
+            ],
         )
-        self.page.open(details_dialog)
+        _show_dialog(self.page, details_dialog)
 
     def disconnect_client(self, client: dict[str, Any]) -> None:
         async def confirm_disconnect_async(_e: ft.ControlEvent) -> None:
             if not self.server_bridge:
                 show_error_message(self.page, SERVER_NOT_CONNECTED_MESSAGE)
-                self.page.close(confirm_dialog)
+                _close_dialog(self.page)
                 return
 
             client_id = client.get("id")
             if not client_id or not isinstance(client_id, str):
                 show_error_message(self.page, "Invalid client ID")
-                self.page.close(confirm_dialog)
+                _close_dialog(self.page)
                 return
 
             result = await run_sync_in_executor(
@@ -445,37 +502,44 @@ class _ClientsViewController:
             )
 
             if result.get("success"):
-                show_success_message(self.page, f"Client {client.get('name')} disconnected")
+                show_success_message(
+                    self.page, f"Client {client.get('name')} disconnected"
+                )
                 await self.load_clients_data()
             else:
-                show_error_message(self.page, f"Failed to disconnect: {result.get('error', 'Unknown error')}")
+                show_error_message(
+                    self.page,
+                    f"Failed to disconnect: {result.get('error', 'Unknown error')}",
+                )
 
-            self.page.close(confirm_dialog)
+            _close_dialog(self.page)
 
         async def confirm_disconnect(event: ft.ControlEvent) -> None:
             await self._run_with_loading(confirm_disconnect_async, event)
 
         confirm_dialog = ft.AlertDialog(
             title=ft.Text("Confirm Disconnect"),
-            content=ft.Text(f"Are you sure you want to disconnect {client.get('name', 'this client')}?"),
+            content=ft.Text(
+                f"Are you sure you want to disconnect {client.get('name', 'this client')}?"
+            ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: self.page.close(confirm_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: _close_dialog(self.page)),
                 ft.FilledButton("Disconnect", on_click=confirm_disconnect),
             ],
         )
-        self.page.open(confirm_dialog)
+        _show_dialog(self.page, confirm_dialog)
 
     def delete_client(self, client: dict[str, Any]) -> None:
         async def confirm_delete_async(_e: ft.ControlEvent) -> None:
             if not self.server_bridge:
                 show_error_message(self.page, SERVER_NOT_CONNECTED_MESSAGE)
-                self.page.close(delete_dialog)
+                _close_dialog(self.page)
                 return
 
             client_id = client.get("id")
             if not client_id or not isinstance(client_id, str):
                 show_error_message(self.page, "Invalid client ID")
-                self.page.close(delete_dialog)
+                _close_dialog(self.page)
                 return
 
             result = await run_sync_in_executor(
@@ -486,9 +550,12 @@ class _ClientsViewController:
                 show_success_message(self.page, f"Client {client.get('name')} deleted")
                 await self.load_clients_data()
             else:
-                show_error_message(self.page, f"Failed to delete: {result.get('error', 'Unknown error')}")
+                show_error_message(
+                    self.page,
+                    f"Failed to delete: {result.get('error', 'Unknown error')}",
+                )
 
-            self.page.close(delete_dialog)
+            _close_dialog(self.page)
 
         async def confirm_delete(event: ft.ControlEvent) -> None:
             await self._run_with_loading(confirm_delete_async, event)
@@ -499,13 +566,15 @@ class _ClientsViewController:
                 f"Are you sure you want to delete {client.get('name', 'this client')}?\n\nThis action cannot be undone."
             ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: self.page.close(delete_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: _close_dialog(self.page)),
                 ft.FilledButton(
-                    "Delete", on_click=confirm_delete, style=ft.ButtonStyle(bgcolor=ft.Colors.RED)
+                    "Delete",
+                    on_click=confirm_delete,
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.RED),
                 ),
             ],
         )
-        self.page.open(delete_dialog)
+        _show_dialog(self.page, delete_dialog)
 
     def add_client(self) -> None:
         name_field = ft.TextField(label="Client Name", hint_text="Enter client name")
@@ -545,29 +614,40 @@ class _ClientsViewController:
             if result.get("success"):
                 show_success_message(self.page, f"Client {new_client['name']} added")
                 await self.load_clients_data()
-                self.page.close(add_dialog)
+                _close_dialog(self.page)
             else:
-                show_error_message(self.page, f"Failed to add client: {result.get('error', 'Unknown error')}")
+                show_error_message(
+                    self.page,
+                    f"Failed to add client: {result.get('error', 'Unknown error')}",
+                )
 
         async def save_client(event: ft.ControlEvent) -> None:
             await self._run_with_loading(save_client_async, event)
 
         add_dialog = ft.AlertDialog(
             title=ft.Text("Add New Client"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(
+                [name_field, ip_field, status_dropdown],
+                height=200,
+                scroll=ft.ScrollMode.AUTO,
+            ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: self.page.close(add_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: _close_dialog(self.page)),
                 ft.FilledButton("Add", on_click=save_client),
             ],
         )
-        self.page.open(add_dialog)
+        _show_dialog(self.page, add_dialog)
 
     def edit_client(self, client: dict[str, Any]) -> None:
         name_field = ft.TextField(
-            label="Client Name", value=client.get("name", ""), hint_text="Enter client name"
+            label="Client Name",
+            value=client.get("name", ""),
+            hint_text="Enter client name",
         )
         ip_field = ft.TextField(
-            label="IP Address", value=client.get("ip_address", ""), hint_text="Enter IP address"
+            label="IP Address",
+            value=client.get("ip_address", ""),
+            hint_text="Enter IP address",
         )
         status_dropdown = ft.Dropdown(
             label="Status",
@@ -600,7 +680,9 @@ class _ClientsViewController:
 
             client_id = updated_client.get("id") or client.get("id")
             if client_id is None:
-                show_error_message(self.page, "Selected client has no ID; cannot update.")
+                show_error_message(
+                    self.page, "Selected client has no ID; cannot update."
+                )
                 return
 
             result = await run_sync_in_executor(
@@ -612,12 +694,15 @@ class _ClientsViewController:
             )
 
             if result.get("success"):
-                show_success_message(self.page, f"Client {updated_client['name']} updated")
+                show_success_message(
+                    self.page, f"Client {updated_client['name']} updated"
+                )
                 await self.load_clients_data()
-                self.page.close(edit_dialog)
+                _close_dialog(self.page)
             else:
                 show_error_message(
-                    self.page, f"Failed to update client: {result.get('error', 'Unknown error')}"
+                    self.page,
+                    f"Failed to update client: {result.get('error', 'Unknown error')}",
                 )
 
         async def save_changes(event: ft.ControlEvent) -> None:
@@ -625,13 +710,17 @@ class _ClientsViewController:
 
         edit_dialog = ft.AlertDialog(
             title=ft.Text(f"Edit Client: {client.get('name', 'Unknown')}"),
-            content=ft.Column([name_field, ip_field, status_dropdown], height=200, scroll=ft.ScrollMode.AUTO),
+            content=ft.Column(
+                [name_field, ip_field, status_dropdown],
+                height=200,
+                scroll=ft.ScrollMode.AUTO,
+            ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda _e: self.page.close(edit_dialog)),
+                ft.TextButton("Cancel", on_click=lambda _e: _close_dialog(self.page)),
                 ft.FilledButton("Save", on_click=save_changes),
             ],
         )
-        self.page.open(edit_dialog)
+        _show_dialog(self.page, edit_dialog)
 
     def get_status_type(self, status: str) -> str:
         status_mapping = {
@@ -663,22 +752,24 @@ class _ClientsViewController:
                         icon=ft.Icons.MORE_VERT,
                         items=[
                             ft.PopupMenuItem(
-                                text="View Details",
+                                content=ft.Text("View Details"),
                                 icon=ft.Icons.INFO,
-                                on_click=lambda _e, c=client: self.view_client_details(c),
+                                on_click=lambda _e, c=client: self.view_client_details(
+                                    c
+                                ),
                             ),
                             ft.PopupMenuItem(
-                                text="Edit",
+                                content=ft.Text("Edit"),
                                 icon=ft.Icons.EDIT,
                                 on_click=lambda _e, c=client: self.edit_client(c),
                             ),
                             ft.PopupMenuItem(
-                                text="Disconnect",
+                                content=ft.Text("Disconnect"),
                                 icon=ft.Icons.LOGOUT,
                                 on_click=lambda _e, c=client: self.disconnect_client(c),
                             ),
                             ft.PopupMenuItem(
-                                text="Delete",
+                                content=ft.Text("Delete"),
                                 icon=ft.Icons.DELETE,
                                 on_click=lambda _e, c=client: self.delete_client(c),
                             ),
@@ -749,13 +840,17 @@ def create_clients_view(
     """Assemble the clients view using the controller abstraction."""
     logger.info("Creating simplified clients view")
 
-    controller = _ClientsViewController(server_bridge, page, _state_manager, global_search)
+    controller = _ClientsViewController(
+        server_bridge, page, _state_manager, global_search
+    )
 
     if _state_manager is not None:
 
         def _handle_state_clients(new_value: Any, _old_value: Any) -> None:
             if isinstance(new_value, list):
-                controller.apply_clients_data(new_value, broadcast=False, source="state_manager")
+                controller.apply_clients_data(
+                    new_value, broadcast=False, source="state_manager"
+                )
 
         controller.state_subscription_callback = _handle_state_clients
         with contextlib.suppress(Exception):

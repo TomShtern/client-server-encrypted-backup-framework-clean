@@ -13,23 +13,14 @@ from typing import Literal, Union
 
 import flet as ft
 
-# Import Windows 11 integration utilities
-try:
-    from .utils.display_scaling import DisplayScaler, setup_display_scaling
-    from .utils.windows_integration import (
-        WindowsThemeProvider,
-        setup_windows_11_integration,
-    )
-
-    WINDOWS_INTEGRATION_AVAILABLE = True
-except ImportError:
-    WINDOWS_INTEGRATION_AVAILABLE = False
-    # Define placeholder types for type checking when imports fail
-    DisplayScaler = None  # type: ignore[misc, assignment]
-    setup_display_scaling = None  # type: ignore[misc, assignment]
-    WindowsThemeProvider = None  # type: ignore[misc, assignment]
-    setup_windows_11_integration = None  # type: ignore[misc, assignment]
-    print("Warning: Windows integration utilities not available")
+# Windows 11 integration disabled - it overrides the app's blue theme with the
+# user's system accent color which causes unexpected color changes.
+# The app should maintain its own consistent blue theme.
+WINDOWS_INTEGRATION_AVAILABLE = False
+DisplayScaler = None  # type: ignore[misc, assignment]
+setup_display_scaling = None  # type: ignore[misc, assignment]
+WindowsThemeProvider = None  # type: ignore[misc, assignment]
+setup_windows_11_integration = None  # type: ignore[misc, assignment]
 
 # ========================================================================================
 # SETUP ENHANCED THEME
@@ -146,38 +137,38 @@ def create_gradient(gradient_type: str = "primary") -> ft.LinearGradient:
     """Create sophisticated gradients using Flet's native LinearGradient."""
     gradients = {
         "primary": ft.LinearGradient(
-            begin=ft.alignment.center_left,
-            end=ft.alignment.center_right,
+            begin=ft.Alignment.CENTER_LEFT,
+            end=ft.Alignment.CENTER_RIGHT,
             colors=[ft.Colors.BLUE, ft.Colors.PURPLE],
         ),
         "secondary": ft.LinearGradient(
-            begin=ft.alignment.center_left,
-            end=ft.alignment.center_right,
+            begin=ft.Alignment.CENTER_LEFT,
+            end=ft.Alignment.CENTER_RIGHT,
             colors=[ft.Colors.PURPLE, ft.Colors.PINK],
         ),
         "success": ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
             colors=[ft.Colors.GREEN, ft.Colors.LIGHT_GREEN],
         ),
         "warning": ft.LinearGradient(
-            begin=ft.alignment.center,
-            end=ft.alignment.bottom_center,
+            begin=ft.Alignment.CENTER,
+            end=ft.Alignment.BOTTOM_CENTER,
             colors=[ft.Colors.ORANGE, ft.Colors.AMBER],
         ),
         "error": ft.LinearGradient(
-            begin=ft.alignment.center_left,
-            end=ft.alignment.center_right,
+            begin=ft.Alignment.CENTER_LEFT,
+            end=ft.Alignment.CENTER_RIGHT,
             colors=[ft.Colors.RED, ft.Colors.PINK],
         ),
         "info": ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
             colors=[ft.Colors.CYAN, ft.Colors.BLUE],
         ),
         "surface": ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
             colors=[
                 ft.Colors.with_opacity(0.05, ft.Colors.GREY),
                 ft.Colors.with_opacity(0.1, ft.Colors.GREY),
@@ -227,8 +218,13 @@ def create_gradient_button(
         )
     elif variant == "outlined":
         return ft.OutlinedButton(
-            text=text,
-            icon=icon,
+            content=ft.Row(
+                [
+                    ft.Icon(icon, size=16) if icon else ft.Container(),
+                    ft.Text(text, weight=ft.FontWeight.W_500),
+                ],
+                spacing=8 if icon else 0,
+            ),
             on_click=on_click,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=12),
@@ -237,8 +233,13 @@ def create_gradient_button(
         )
     else:  # text variant
         return ft.TextButton(
-            text=text,
-            icon=icon,
+            content=ft.Row(
+                [
+                    ft.Icon(icon, size=16) if icon else ft.Container(),
+                    ft.Text(text, weight=ft.FontWeight.W_500),
+                ],
+                spacing=8 if icon else 0,
+            ),
             on_click=on_click,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=12), color=gradient.colors[0]
@@ -259,7 +260,7 @@ def create_enhanced_card(
         content=content,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
-        padding=ft.padding.all(20),
+        padding=ft.Padding.all(20),
         shadow=ft.BoxShadow(
             spread_radius=1,
             blur_radius=6 + elevation,
@@ -333,7 +334,7 @@ def create_modern_card(
         content=content,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
-        padding=ft.padding.all(20),
+        padding=ft.Padding.all(20),
         shadow=ft.BoxShadow(
             spread_radius=1,
             blur_radius=8 + elevation * 2,
@@ -351,8 +352,21 @@ def themed_button(
     icon: str | None = None,
     disabled: bool = False,
 ):
-    """Themed button using native Flet button types."""
-    common = {"text": text, "icon": icon, "on_click": on_click, "disabled": disabled}
+    """Themed button using native Flet button types (Flet 0.80.0 compatible)."""
+    # In Flet 0.80.0, buttons use content= instead of text=
+    button_content = (
+        ft.Row(
+            [
+                ft.Icon(icon, size=16) if icon else ft.Container(),
+                ft.Text(text, weight=ft.FontWeight.W_500),
+            ],
+            spacing=8 if icon else 0,
+        )
+        if icon
+        else ft.Text(text, weight=ft.FontWeight.W_500)
+    )
+
+    common = {"content": button_content, "on_click": on_click, "disabled": disabled}
 
     if variant == "filled":
         return ft.ElevatedButton(
@@ -452,8 +466,8 @@ def create_loading_indicator(text: str = "Loading...") -> ft.Container:
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=8,
         ),
-        alignment=ft.alignment.center,
-        padding=ft.padding.all(20),
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.all(20),
     )
 
 
@@ -481,14 +495,12 @@ PRONOUNCED_NEUMORPHIC_SHADOWS = [
         blur_radius=12,
         color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
         offset=ft.Offset(6, 6),
-        blur_style=ft.ShadowBlurStyle.NORMAL,
     ),
     ft.BoxShadow(
         spread_radius=1,
         blur_radius=8,
         color=ft.Colors.with_opacity(0.7, ft.Colors.WHITE),
         offset=ft.Offset(-4, -4),
-        blur_style=ft.ShadowBlurStyle.NORMAL,
     ),
 ]
 
@@ -505,7 +517,7 @@ def create_neumorphic_metric_card(
         content=content,
         bgcolor=ft.Colors.SURFACE,
         border_radius=16,
-        padding=ft.padding.all(20),
+        padding=ft.Padding.all(20),
         shadow=shadows,
         animate_scale=ft.Animation(180, ft.AnimationCurve.EASE_OUT_CUBIC)
         if enable_hover

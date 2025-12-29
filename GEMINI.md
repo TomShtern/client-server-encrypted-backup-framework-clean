@@ -441,8 +441,8 @@ The project uses **dual logging** (console + file) with enhanced output:
 
 ```python
 # Import enhanced logging
-from Shared.logging.logging_utils import setup_logging, get_logger
-from Shared.logging.enhanced_output import enhance_existing_logger
+from Shared.app_logging.logging_utils import setup_logging, get_logger
+from Shared.app_logging.enhanced_output import enhance_existing_logger
 
 # Setup logging
 setup_logging(
@@ -587,7 +587,7 @@ cd build/Release
 ### Import Errors After Reorganization
 - ❌ `from Shared.utils.utf8_solution` → ✅ `from Shared.filesystem.utf8_solution`
 - ❌ `from Shared.utils.unified_config` → ✅ `from Shared.config.unified_config`
-- ❌ `from Shared.utils.enhanced_output` → ✅ `from Shared.logging.enhanced_output`
+- ❌ `from Shared.utils.enhanced_output` → ✅ `from Shared.app_logging.enhanced_output`
 
 ## 📋 AI Context Files & Global Rules
 

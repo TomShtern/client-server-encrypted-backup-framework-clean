@@ -273,17 +273,37 @@ os.environ["CYBERBACKUP_DISABLE_GUI"] = "1"
 logger.info("Disabled BackupServer embedded GUI to prevent conflicts")
 
 # Use unified database configuration
+# NOTE: FletV2/config.py shadows the 'config' package, so we must use a different import strategy
 try:
-    from config.database_config import get_database_path
+    # Try importing via sys.path which includes PROJECT_ROOT
+    import importlib.util as _db_importlib
 
-    main_db_path = get_database_path()
-    logger.info(f"Using unified database config: {main_db_path}")
-except ImportError as e:
-    # Fallback to legacy path if unified config not available
-    logger.warning(
-        f"Could not import unified database config: {e}. Using legacy fallback."
-    )
-    main_db_path = os.path.join(PROJECT_ROOT, "defensive.db")
+    _db_config_path = os.path.join(PROJECT_ROOT, "config", "database_config.py")
+    if os.path.isfile(_db_config_path):
+        _db_spec = _db_importlib.spec_from_file_location(
+            "unified_database_config", _db_config_path
+        )
+        if _db_spec and _db_spec.loader:
+            _db_config_module = _db_importlib.module_from_spec(_db_spec)
+            _db_spec.loader.exec_module(_db_config_module)
+            get_database_path = _db_config_module.get_database_path
+            main_db_path = get_database_path()
+            logger.info(f"Using unified database config: {main_db_path}")
+        else:
+            raise ImportError("Failed to load database_config module spec")
+    else:
+        raise ImportError(f"database_config.py not found at {_db_config_path}")
+except Exception as e:
+    # Fallback to FletV2's own config which has get_database_path
+    try:
+        from FletV2.config import get_database_path as _local_get_db_path
+
+        main_db_path = str(_local_get_db_path())
+        logger.info(f"Using FletV2 local database config: {main_db_path}")
+    except ImportError:
+        # Final fallback to legacy path
+        logger.warning(f"Could not import database config: {e}. Using legacy fallback.")
+        main_db_path = os.path.join(PROJECT_ROOT, "defensive.db")
 
 # Set database path environment variable (used if BackupServer is created)
 os.environ["BACKUP_DATABASE_PATH"] = main_db_path
@@ -402,7 +422,9 @@ class FletV2App(ft.Row):
         super().__init__()
         if _VERBOSE_DIAGNOSTICS:
             logger.debug("FletV2App __init__ called")
-        self.page: ft.Page = page  # Ensure page is never None
+        # Flet 0.80.0: 'page' is now a read-only property on controls
+        # Store in _app_page to avoid conflict
+        self._app_page: ft.Page = page
         self.expand = True
 
         # Type annotations for key attributes
@@ -561,11 +583,10 @@ class FletV2App(ft.Row):
                     ),
                     padding=24,
                     expand=True,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                 ),
                 elevation=2,
                 shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                surface_tint_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             ),
             transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
             duration=self.ANIMATION_DURATION_MS,  # Use constant for consistency
@@ -600,32 +621,14 @@ class FletV2App(ft.Row):
 
         self.content_area = ft.Container(
             expand=True,
-            padding=ft.Padding(24, 20, 24, 20),  # Material Design 3 spacing standards
-            border_radius=ft.BorderRadius(
-                16, 0, 0, 16
-            ),  # Modern rounded corners on content side
-            bgcolor=ft.Colors.with_opacity(
-                0.02, ft.Colors.SURFACE
-            ),  # Modern surface hierarchy compatible
-            # Enhanced shadow for modern depth without performance impact
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.06, ft.Colors.BLACK),
-                offset=ft.Offset(0, 2),
-            ),
-            animate=ft.Animation(
-                140, ft.AnimationCurve.EASE_OUT_CUBIC
-            ),  # Modern animation curve
-            animate_opacity=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
+            padding=ft.Padding.all(10),
+            border_radius=ft.BorderRadius(16, 0, 0, 16),
             content=content_column,
         )
 
         # Create navigation rail (using simple approach with collapsible functionality)
-        print("🔧 About to create navigation rail...")
         self.nav_rail_extended = True  # Track extended state
         self.nav_rail = self._create_navigation_rail()
-        print("✅ Navigation rail created")
 
         # Build layout: NavigationRail + content area (pure Flet pattern)
         self.controls = [
@@ -689,7 +692,7 @@ class FletV2App(ft.Row):
             # Use Flet-native simple state management (replaces 1,036-line StateManager)
             from FletV2.utils.simple_state import create_simple_state
 
-            self.state_manager = create_simple_state(self.page, self.server_bridge)
+            self.state_manager = create_simple_state(self._app_page, self.server_bridge)
             logger.info("✅ Simple state manager initialized (Flet-native approach)")
         except ImportError as e:
             logger.warning(f"Could not import simple state manager: {e}")
@@ -1003,7 +1006,7 @@ class FletV2App(ft.Row):
             logger.info("Setting up desktop navigation features")
 
             # Initialize global shortcut manager
-            self.global_shortcut_manager = GlobalShortcutManager(self.page)
+            self.global_shortcut_manager = GlobalShortcutManager(self._app_page)
 
             # Create minimal search field (simple TextField - guaranteed to work)
             self.global_search = create_minimal_search()
@@ -1048,7 +1051,7 @@ class FletV2App(ft.Row):
             )
 
             breadcrumb_container = setup_breadcrumb_navigation(
-                self.page,
+                self._app_page,
                 self.breadcrumb_navigation,
                 self.navigate_to,
             )
@@ -1076,7 +1079,7 @@ class FletV2App(ft.Row):
             )
 
             if needs_update:
-                self.page.update()
+                self._app_page.update()
                 logger.info("🔍 Page updated after navigation setup")
 
             # Prime breadcrumb trail with the current or default view
@@ -1108,24 +1111,24 @@ class FletV2App(ft.Row):
             self._ensure_loop_exception_handler()
 
             print("🔴 [DEBUG] About to call setup_sophisticated_theme()")
-            setup_sophisticated_theme(self.page)
+            setup_sophisticated_theme(self._app_page)
             print("🔴 [DEBUG] setup_sophisticated_theme() completed")
             logger.debug("Theme setup complete")
 
             print("🔴 [DEBUG] About to add app to page")
-            self.page.add(self)
-            print("🔴 [DEBUG] self.page.add(self) completed")
+            self._app_page.add(self)
+            print("🔴 [DEBUG] self._app_page.add(self) completed")
 
             print("🔴 [DEBUG] Setting page properties")
-            self.page.title = "FletV2 - Encrypted Backup Framework"
-            self.page.auto_update = True
+            self._app_page.title = "FletV2 - Encrypted Backup Framework"
+            self._app_page.auto_update = True
             print("🔴 [DEBUG] page.title set")
             print("🔴 [DEBUG] page.auto_update enabled")
 
             self._configure_window_properties()
 
             print("🔴 [DEBUG] About to call page.update()")
-            self.page.update()
+            self._app_page.update()
             print("🔴 [DEBUG] page.update() completed")
 
             self._setup_desktop_navigation()
@@ -1143,7 +1146,7 @@ class FletV2App(ft.Row):
 
             if os.environ.get("FLET_NAV_SMOKE") == "1":
                 with contextlib.suppress(Exception):
-                    self.page.run_task(self._run_nav_smoke_test)
+                    self._app_page.run_task(self._run_nav_smoke_test)
         except Exception as e:
             logger.error(f"❌ Application initialization failed: {e}")
             raise
@@ -1185,11 +1188,11 @@ class FletV2App(ft.Row):
     def _configure_window_properties(self) -> None:
         """Apply desktop window sizing hints when available."""
         try:
-            if hasattr(self.page, "window") and self.page.window:
-                self.page.window.width = 1200
-                self.page.window.height = 800
-                self.page.window.min_width = 800
-                self.page.window.min_height = 600
+            if hasattr(self._app_page, "window") and self._app_page.window:
+                self._app_page.window.width = 1200
+                self._app_page.window.height = 800
+                self._app_page.window.min_width = 800
+                self._app_page.window.min_height = 600
                 print("🔴 [DEBUG] window properties set")
             else:
                 print("🔴 [DEBUG] page.window not available (running in web mode)")
@@ -1336,7 +1339,7 @@ class FletV2App(ft.Row):
         if "server_bridge" in signature.parameters:
             call_kwargs["server_bridge"] = self.server_bridge
         if "page" in signature.parameters:
-            call_kwargs["page"] = self.page
+            call_kwargs["page"] = self._app_page
         if "_state_manager" in signature.parameters:
             call_kwargs["_state_manager"] = self.state_manager
         elif "state_manager" in signature.parameters:
@@ -1468,7 +1471,7 @@ class FletV2App(ft.Row):
                 create_dashboard_stub,  # type: ignore[import-not-found]
             )
 
-            return create_dashboard_stub(self.page)
+            return create_dashboard_stub(self._app_page)
         except ModuleNotFoundError:
             logger.debug("Dashboard stub module not found; using inline fallback UI")
             return self._create_inline_dashboard_stub()
@@ -1589,7 +1592,7 @@ class FletV2App(ft.Row):
                     self._current_setup_task = None
 
         try:
-            task = self.page.run_task(delayed_setup)
+            task = self._app_page.run_task(delayed_setup)
             task_holder["task"] = task
             self._current_setup_task = task
             print(f"🟦 [SETUP_TASK] Created setup task for '{view_name}': {task}")
@@ -1619,7 +1622,7 @@ class FletV2App(ft.Row):
     def _refresh_page_after_visibility(self) -> None:
         with contextlib.suppress(Exception):
             if getattr(self, "page", None):
-                self.page.update()
+                self._app_page.update()
 
     def _force_visible_recursive(
         self, ctrl: Any, depth: int = 0, max_depth: int = 10
@@ -1744,7 +1747,6 @@ if __name__ == "__main__":
         """Main entry point for GUI-only mode (no server integration)."""
         try:
             logger.info("🚀 Launching FletV2 in GUI-only mode (no server)")
-            # Create app without server bridge (will use placeholder data)
             app = FletV2App(page, real_server=None)
             page.run_task(app.initialize)
         except Exception as e:
@@ -1754,17 +1756,10 @@ if __name__ == "__main__":
             traceback.print_exc()
             sys.exit(1)
 
-    # Launch in web browser mode with port fallback
     try:
-        print("🌐 Attempting to start Flet app on port 8550...")
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550)
-    except OSError as e:
-        logger.warning(f"Port 8550 in use ({e}), trying 8551...")
-        try:
-            ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8551)
-        except OSError as e2:
-            logger.warning(f"Port 8551 in use ({e2}), trying 8552...")
-            ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8552)
+        # Flet 0.80.0: use ft.run() instead of deprecated ft.app()
+        # First positional param is 'main', not 'target'
+        ft.run(main, view=ft.AppView.FLET_APP)
     except Exception as e:
         print(f"❌ FATAL ERROR starting Flet app: {e}")
         import traceback

@@ -16,25 +16,51 @@ import flet as ft
 
 
 class FakePage:
-    """A minimal Flet Page stub for headless integration tests."""
+    """A minimal Flet Page stub for headless integration tests.
+
+    Updated to support Flet 0.80.0 dialog API:
+    - show_dialog(dialog) instead of open(dialog)
+    - pop_dialog() instead of close(dialog)
+    """
 
     def __init__(self) -> None:
         self.overlay: list[Any] = []
         self.snack_bar: ft.SnackBar | None = None
         self.last_opened_dialog: ft.AlertDialog | None = None
+        self._dialog_stack: list[ft.AlertDialog] = []
 
-    # API used by views
-    def open(self, dialog: ft.AlertDialog) -> None:
+    # Flet 0.80.0 API - Primary methods
+    def show_dialog(self, dialog: ft.AlertDialog) -> None:
+        """Flet 0.80.0: Opens a dialog."""
         self.last_opened_dialog = dialog
-        dialog.open = True
+        self._dialog_stack.append(dialog)
+
+    def pop_dialog(self) -> None:
+        """Flet 0.80.0: Closes the topmost dialog."""
+        if self._dialog_stack:
+            self._dialog_stack.pop()
+            self.last_opened_dialog = (
+                self._dialog_stack[-1] if self._dialog_stack else None
+            )
+
+    # Legacy API - Keep for backwards compatibility with older tests
+    def open(self, dialog: ft.AlertDialog) -> None:
+        """Legacy: Use show_dialog() instead."""
+        self.show_dialog(dialog)
 
     def close(self, dialog: ft.AlertDialog) -> None:
-        dialog.open = False
+        """Legacy: Use pop_dialog() instead."""
+        self.pop_dialog()
 
     def update(self) -> None:  # no-op
         return None
 
-    def run_task(self, fn_or_coro: Callable[..., Any] | Awaitable[Any] | Coroutine[Any, Any, Any], *args: Any, **kwargs: Any) -> None:
+    def run_task(
+        self,
+        fn_or_coro: Callable[..., Any] | Awaitable[Any] | Coroutine[Any, Any, Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """Execute a function with args or a coroutine synchronously for tests."""
         try:
             # If a coroutine instance was passed
@@ -126,7 +152,10 @@ def confirm_dialog_action(page: FakePage, action_text: str = "Delete") -> bool:
     for act in actions:
         try:
             # Buttons may be created with text positional arg (Flet sets .text attribute)
-            if isinstance(act, (ft.FilledButton, ft.TextButton)) and getattr(act, "text", None) == action_text:
+            if (
+                isinstance(act, (ft.FilledButton, ft.TextButton))
+                and getattr(act, "text", None) == action_text
+            ):
                 if getattr(act, "on_click", None):
                     act.on_click(None)
                     return True

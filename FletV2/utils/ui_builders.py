@@ -82,10 +82,8 @@ def create_search_bar(
             size=20,
         ),
         view_elevation=4,
-        view_surface_tint_color=ft.Colors.SURFACE,
         view_header_height=56,
         bar_overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-        bar_surface_tint_color=ft.Colors.SURFACE,
         bar_padding=ft.padding.symmetric(horizontal=16),
         on_tap=on_tap,
         on_submit=lambda e: on_submit(e.control.value) if on_submit else None,
@@ -98,7 +96,9 @@ def create_search_bar(
     # Enhanced styling with Material Design 3 shadow and border radius
     search_bar.bar_bgcolor = ft.Colors.SURFACE
     search_bar.bar_shape = ft.RoundedRectangleBorder(radius=16)
-    search_bar.bar_border_side = ft.BorderSide(1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE))
+    search_bar.bar_border_side = ft.BorderSide(
+        1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)
+    )
 
     return search_bar
 
@@ -247,11 +247,11 @@ def create_filter_dropdown(
         else:
             dropdown_options.append(ft.dropdown.Option(option))
 
-    return ft.Dropdown(
+    # In Flet 0.80.0, Dropdown uses on_select instead of on_change, or it may need to be bound after creation
+    dropdown = ft.Dropdown(
         label=label,
         value=value,
         options=dropdown_options,
-        on_change=on_change,
         border=ft.InputBorder.OUTLINE,
         border_radius=12,
         filled=True,
@@ -262,19 +262,34 @@ def create_filter_dropdown(
         expand=expand,
     )
 
+    # Bind the change handler after creation (Flet 0.80.0 pattern)
+    if on_change:
+        dropdown.on_change = lambda e: on_change(e)
+
+    return dropdown
+
 
 def create_action_button(text, on_click, icon=None, primary=True):
     """Create a consistent action button that respects the active theme."""
 
     button_cls = ft.FilledButton if primary else ft.OutlinedButton
 
+    # In Flet 0.80.0, buttons use positional content parameter or content= instead of text=
     return button_cls(
-        text=text,
-        icon=icon,
+        content=ft.Row(
+            [
+                ft.Icon(icon, size=18) if icon else None,
+                ft.Text(text),
+            ],
+            spacing=8,
+            tight=True,
+        )
+        if icon
+        else ft.Text(text),
         on_click=on_click,
         style=ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=12),
-            padding=ft.Padding(16, 10, 16, 10),
+            padding=ft.padding.symmetric(horizontal=16, vertical=10),
         ),
     )
 
@@ -354,7 +369,10 @@ def create_info_row(
     """
     if isinstance(value, str):
         value_control = ft.Text(
-            value, size=value_size, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE
+            value,
+            size=value_size,
+            weight=ft.FontWeight.W_600,
+            color=ft.Colors.ON_SURFACE,
         )
     else:
         value_control = value
@@ -392,7 +410,10 @@ def create_confirmation_dialog(title, message, on_confirm, on_cancel):
     return ft.AlertDialog(
         title=ft.Text(title),
         content=ft.Text(message),
-        actions=[ft.TextButton("Cancel", on_click=on_cancel), ft.TextButton("Confirm", on_click=on_confirm)],
+        actions=[
+            ft.TextButton("Cancel", on_click=on_cancel),
+            ft.TextButton("Confirm", on_click=on_confirm),
+        ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
@@ -477,7 +498,9 @@ def create_status_badge(text: str, status: str) -> ft.Control:
 
     color = get_status_color(status)
     return ft.Container(
-        content=ft.Text(text, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD),
+        content=ft.Text(
+            text, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD
+        ),
         padding=ft.padding.symmetric(horizontal=8, vertical=4),
         border_radius=12,
         bgcolor=color,
@@ -507,12 +530,14 @@ def create_log_level_badge(level: str) -> ft.Control:
 
     fg, _bg = get_level_colors(level)
     return ft.Container(
-        content=ft.Text(level, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+        content=ft.Text(
+            level, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE
+        ),
         padding=ft.padding.symmetric(horizontal=8, vertical=4),
         bgcolor=fg,
         border_radius=12,
         border=ft.border.all(1, fg),
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
     )
 
 

@@ -203,7 +203,7 @@ def main(page: ft.Page):
         # Feedback text
         ft.Container(
             content=feedback_text,
-            padding=ft.padding.all(10),
+            padding=ft.Padding.all(10),
             bgcolor=ft.Colors.SURFACE,
             border_radius=4,
         ),

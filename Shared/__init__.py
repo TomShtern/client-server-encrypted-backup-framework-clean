@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Make commonly used modules easily accessible
 from . import crc
 from .config import unified_config as config
-from .logging import logging_utils
+from .app_logging import logging_utils
 from .monitoring import observability
 from .validation import filename_validator
 

@@ -1,4 +1,4 @@
-# Type stubs for Flet 0.28.3 - Enhanced Core Types
+# Type stubs for Flet 0.80.0 - Enhanced Core Types
 from collections.abc import Callable
 from typing import Any
 
@@ -43,6 +43,9 @@ class Page:
     # Overlays
     overlay: list[Control]
 
+    # Services (Flet 0.80.0) - for FilePicker, AudioRecorder, etc.
+    services: list[Control]
+
     # Additional window and page properties
     adaptive: bool
     window_center: bool | None
@@ -67,6 +70,14 @@ class Page:
     def go(self, route: str) -> None: ...
     def show_snack_bar(self, snack_bar: SnackBar) -> None: ...
     def run_task(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any: ...
+
+    # Dialog methods (Flet 0.80.0)
+    def show_dialog(self, dialog: AlertDialog) -> None: ...
+    def pop_dialog(self) -> None: ...
+
+    # Clipboard (Flet 0.80.0)
+    def set_clipboard(self, text: str) -> None: ...
+    def get_clipboard(self) -> str: ...
 
 class Control:
     # Common properties
@@ -229,9 +240,88 @@ class Banner:
     actions: list[Control] | None
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
+class AlertDialog(Control):
+    """Alert dialog component for Flet 0.80.0."""
+
+    title: Control | None
+    content: Control | None
+    actions: list[Control] | None
+    actions_alignment: MainAxisAlignment | None
+    modal: bool | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class Dropdown(Control):
+    """Dropdown selection component."""
+
+    label: str | None
+    value: str | None
+    options: list[Any] | None
+    on_change: Callable[[ControlEvent], None] | None
+    disabled: bool | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class DataTable(Control):
+    """Data table component."""
+
+    columns: list[DataColumn] | None
+    rows: list[DataRow] | None
+    border: Any | None
+    border_radius: int | BorderRadius | None
+    horizontal_lines: Any | None
+    heading_row_color: str | None
+    data_row_min_height: int | float | None
+    column_spacing: int | float | None
+    show_checkbox_column: bool | None
+    sort_column_index: int | None
+    sort_ascending: bool | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class DataColumn:
+    """Data table column."""
+
+    label: Control | None
+    on_sort: Callable[[int], None] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class DataRow:
+    """Data table row."""
+
+    cells: list[DataCell] | None
+    selected: bool | None
+    on_select_changed: Callable[[ControlEvent], None] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class DataCell:
+    """Data table cell."""
+
+    content: Control | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class FilePicker(Control):
+    """File picker component (Flet 0.80.0)."""
+
+    on_result: Callable[[Any], None] | None
+    def save_file(self, dialog_title: str = ..., file_name: str = ...) -> None: ...
+    def pick_files(
+        self, allow_multiple: bool = ..., allowed_extensions: list[str] | None = ...
+    ) -> None: ...
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class FilePickerResultEvent:
+    """File picker result event."""
+
+    path: str | None
+    files: list[Any] | None
+
 # Supporting classes
 class BorderRadius:
-    def __init__(self, top_left: int = 0, top_right: int = 0, bottom_left: int = 0, bottom_right: int = 0) -> None: ...
+    def __init__(
+        self,
+        top_left: int = 0,
+        top_right: int = 0,
+        bottom_left: int = 0,
+        bottom_right: int = 0,
+    ) -> None: ...
 
 class BoxShadow:
     spread_radius: float
@@ -250,8 +340,13 @@ class Padding:
     top: float
     right: float
     bottom: float
-    def __init__(self, left: int | float = 0, top: int | float = 0,
-                 right: int | float = 0, bottom: int | float = 0) -> None: ...
+    def __init__(
+        self,
+        left: int | float = 0,
+        top: int | float = 0,
+        right: int | float = 0,
+        bottom: int | float = 0,
+    ) -> None: ...
 
 # Enums and constants
 class Colors:
@@ -419,8 +514,13 @@ class SnackBarBehavior:
     FLOATING: SnackBarBehavior
 
 class Margin:
-    def __init__(self, left: int | float = 0, top: int | float = 0,
-                 right: int | float = 0, bottom: int | float = 0) -> None: ...
+    def __init__(
+        self,
+        left: int | float = 0,
+        top: int | float = 0,
+        right: int | float = 0,
+        bottom: int | float = 0,
+    ) -> None: ...
 
 # Utility namespaces and functions
 
@@ -428,11 +528,15 @@ class padding:
     @staticmethod
     def all(value: int | float) -> Padding: ...
     @staticmethod
-    def symmetric(*, horizontal: int | float = 0, vertical: int | float = 0) -> Padding: ...
+    def symmetric(
+        *, horizontal: int | float = 0, vertical: int | float = 0
+    ) -> Padding: ...
 
 class margin:
     @staticmethod
-    def symmetric(*, horizontal: int | float = 0, vertical: int | float = 0) -> Padding: ...
+    def symmetric(
+        *, horizontal: int | float = 0, vertical: int | float = 0
+    ) -> Padding: ...
 
 class border:
     @staticmethod
@@ -458,20 +562,103 @@ class AnimatedSwitcherTransition:
     FADE: AnimatedSwitcherTransition
 
 # Functions
-def run(target: Callable[[Page], None] | Callable[[Page], Any], **kwargs: Any) -> None: ...
+def run(
+    target: Callable[[Page], None] | Callable[[Page], Any], **kwargs: Any
+) -> None: ...
 
 # Type aliases
 AppView = Any
 DARK_MODE: str
 LIGHT_MODE: str
+
 class MainAxisAlignment:
     START: MainAxisAlignment
     CENTER: MainAxisAlignment
     SPACE_BETWEEN: MainAxisAlignment
+
 class CrossAxisAlignment:
     START: CrossAxisAlignment
     CENTER: CrossAxisAlignment
+
 Ref = Any
-DataTable = Any
 Scale = Any
 Rotate = Any
+
+# Additional controls for Flet 0.80.0
+class PopupMenuButton(Control):
+    """Popup menu button component."""
+
+    icon: str | None
+    items: list[PopupMenuItem] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class PopupMenuItem(Control):
+    """Popup menu item."""
+
+    text: str | None
+    content: Control | None
+    icon: str | None
+    on_click: Callable[[ControlEvent], None] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class Tab:
+    """Tab for TabBar."""
+
+    label: str | None
+    icon: str | None
+    content: Control | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class TabBar(Control):
+    """Tab bar component (Flet 0.80.0)."""
+
+    tabs: list[Tab] | None
+    selected_index: int | None
+    scrollable: bool | None
+    on_change: Callable[[ControlEvent], None] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class TabBarView(Control):
+    """Tab bar view component (Flet 0.80.0)."""
+
+    controls: list[Control] | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class Tabs(Control):
+    """Tabs wrapper component (Flet 0.80.0)."""
+
+    content: Control | None
+    length: int | None
+    selected_index: int | None
+    animation_duration: int | None
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+class Alignment:
+    """Alignment constants."""
+
+    CENTER: Alignment
+    CENTER_LEFT: Alignment
+    CENTER_RIGHT: Alignment
+    TOP_LEFT: Alignment
+    TOP_CENTER: Alignment
+    TOP_RIGHT: Alignment
+    BOTTOM_LEFT: Alignment
+    BOTTOM_CENTER: Alignment
+    BOTTOM_RIGHT: Alignment
+
+class BorderSide:
+    """Border side specification."""
+
+    width: int | float
+    color: str
+    def __init__(self, width: int | float = 1, color: str = ...) -> None: ...
+
+class KeyboardType:
+    """Keyboard type for text fields."""
+
+    TEXT: KeyboardType
+    NUMBER: KeyboardType
+    PHONE: KeyboardType
+    EMAIL: KeyboardType
+    URL: KeyboardType
+    MULTILINE: KeyboardType

@@ -125,13 +125,14 @@ class ContextMenu(ft.PopupMenuButton):
                 submenu_items = self._create_submenu_items(item.submenu)
                 popup_items.append(
                     ft.PopupMenuItem(
-                        text=item.label, icon=item.icon, items=submenu_items, disabled=not item.enabled
+                        content=ft.Text(item.label), icon=item.icon, items=submenu_items, disabled=not item.enabled
                     )
                 )
             else:  # ACTION
+                label_text = f"{item.label}\t{item.shortcut}" if item.shortcut else item.label
                 popup_items.append(
                     ft.PopupMenuItem(
-                        text=f"{item.label}\t{item.shortcut}" if item.shortcut else item.label,
+                        content=ft.Text(label_text),
                         icon=item.icon,
                         on_click=lambda e, i=item: self._on_item_click(e, i),
                         disabled=not item.enabled,
@@ -148,11 +149,12 @@ class ContextMenu(ft.PopupMenuButton):
             if item.type == MenuItemType.SEPARATOR:
                 items.append(ft.PopupMenuItem())
             elif item.type == MenuItemType.LABEL:
-                items.append(ft.PopupMenuItem(text=item.label, on_click=None, disabled=True))
+                items.append(ft.PopupMenuItem(content=ft.Text(item.label), on_click=None, disabled=True))
             else:
+                label_text = f"{item.label}\t{item.shortcut}" if item.shortcut else item.label
                 items.append(
                     ft.PopupMenuItem(
-                        text=f"{item.label}\t{item.shortcut}" if item.shortcut else item.label,
+                        content=ft.Text(label_text),
                         icon=item.icon,
                         on_click=lambda e, i=item: self._on_item_click(e, i),
                         disabled=not item.enabled,
@@ -443,6 +445,10 @@ def setup_context_menu_target(control: ft.Control, context_menu: ContextMenu, pa
     # Set up the right-click handler
     control.on_tap_down = on_right_click
 
-    # Update the control
-    if getattr(control, "page", None):
-        control.update()
+    # Update the control (only if it's been added to page)
+    try:
+        if control.page:
+            control.update()
+    except RuntimeError:
+        # Control not yet added to page - that's okay, will be updated when it is
+        pass

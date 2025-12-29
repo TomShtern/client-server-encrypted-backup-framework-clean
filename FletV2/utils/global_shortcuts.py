@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Any
 
 import flet as ft
+from FletV2.utils.user_feedback import _show_dialog, _close_dialog
 
 
 class ShortcutCategory(Enum):
@@ -60,6 +61,7 @@ class GlobalShortcutManager:
         self.page = page
         self.shortcuts: dict[str, GlobalShortcut] = {}
         self.current_context = "global"
+        self.shortcuts_dialog: ft.AlertDialog | None = None
 
         # Register NATIVE Flet keyboard event handler
         self.page.on_keyboard_event = self._handle_keyboard_event
@@ -178,7 +180,9 @@ class GlobalShortcutManager:
             # Shortcut matched, stop processing
             return
 
-    def get_shortcuts_help(self, category: ShortcutCategory | None = None) -> list[dict[str, str]]:
+    def get_shortcuts_help(
+        self, category: ShortcutCategory | None = None
+    ) -> list[dict[str, str]]:
         """Get formatted help for shortcuts, optionally filtered by category"""
         help_list = []
 
@@ -204,7 +208,11 @@ class GlobalShortcutManager:
                     key_parts.append("Win")
 
                 # Add the key name (capitalized for display)
-                key_parts.append(shortcut.key.upper() if len(shortcut.key) == 1 else shortcut.key.title())
+                key_parts.append(
+                    shortcut.key.upper()
+                    if len(shortcut.key) == 1
+                    else shortcut.key.title()
+                )
 
                 help_list.append(
                     {
@@ -225,108 +233,77 @@ class GlobalShortcutManager:
         view_shortcuts = self.get_shortcuts_help(ShortcutCategory.VIEW)
         action_shortcuts = self.get_shortcuts_help(ShortcutCategory.ACTIONS)
 
-        tabs = ft.Tabs(
-            scrollable=True,
+        # Helper to build shortcut list content
+        def build_shortcut_list(title: str, shortcuts: list) -> ft.Control:
+            return ft.Column(
+                [ft.Text(title, weight=ft.FontWeight.BOLD, size=16)]
+                + [
+                    ft.Row(
+                        [
+                            ft.Text(
+                                s["shortcut"], width=150, weight=ft.FontWeight.W_500
+                            ),
+                            ft.Text(s["description"], expand=True),
+                        ]
+                    )
+                    for s in shortcuts
+                ]
+                if shortcuts
+                else [ft.Text(f"No {title.lower()} available")],
+                spacing=8,
+                scroll=ft.ScrollMode.AUTO,
+            )
+
+        # Build tab content
+        tab_contents = [
+            build_shortcut_list("Navigation Shortcuts", nav_shortcuts),
+            build_shortcut_list("Editing Shortcuts", edit_shortcuts),
+            build_shortcut_list("View Shortcuts", view_shortcuts),
+            build_shortcut_list("Action Shortcuts", action_shortcuts),
+        ]
+
+        # Flet 0.80.0: Tabs wraps TabBar + TabBarView
+        tab_bar = ft.TabBar(
             tabs=[
-                ft.Tab(
-                    text="Navigation",
-                    content=ft.Column(
-                        [ft.Text("Navigation Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
-                        + [
-                            ft.Row(
-                                [
-                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                    ft.Text(s["description"], expand=True),
-                                ]
-                            )
-                            for s in nav_shortcuts
-                        ]
-                        if nav_shortcuts
-                        else [ft.Text("No navigation shortcuts available")],
-                        spacing=8,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                ),
-                ft.Tab(
-                    text="Editing",
-                    content=ft.Column(
-                        [ft.Text("Editing Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
-                        + [
-                            ft.Row(
-                                [
-                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                    ft.Text(s["description"], expand=True),
-                                ]
-                            )
-                            for s in edit_shortcuts
-                        ]
-                        if edit_shortcuts
-                        else [ft.Text("No editing shortcuts available")],
-                        spacing=8,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                ),
-                ft.Tab(
-                    text="View",
-                    content=ft.Column(
-                        [ft.Text("View Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
-                        + [
-                            ft.Row(
-                                [
-                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                    ft.Text(s["description"], expand=True),
-                                ]
-                            )
-                            for s in view_shortcuts
-                        ]
-                        if view_shortcuts
-                        else [ft.Text("No view shortcuts available")],
-                        spacing=8,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                ),
-                ft.Tab(
-                    text="Actions",
-                    content=ft.Column(
-                        [ft.Text("Action Shortcuts", weight=ft.FontWeight.BOLD, size=16)]
-                        + [
-                            ft.Row(
-                                [
-                                    ft.Text(s["shortcut"], width=150, weight=ft.FontWeight.W_500),
-                                    ft.Text(s["description"], expand=True),
-                                ]
-                            )
-                            for s in action_shortcuts
-                        ]
-                        if action_shortcuts
-                        else [ft.Text("No action shortcuts available")],
-                        spacing=8,
-                        scroll=ft.ScrollMode.AUTO,
-                    ),
-                ),
+                ft.Tab(label="Navigation"),
+                ft.Tab(label="Editing"),
+                ft.Tab(label="View"),
+                ft.Tab(label="Actions"),
             ],
+            scrollable=True,
+        )
+
+        tab_view = ft.TabBarView(
+            controls=tab_contents,
             expand=True,
+        )
+
+        tabs = ft.Tabs(
+            content=ft.Column(controls=[tab_bar, tab_view], expand=True, spacing=0),
+            length=4,
+            selected_index=0,
+            animation_duration=300,
         )
 
         return ft.AlertDialog(
             title=ft.Text("Keyboard Shortcuts"),
             content=ft.Container(content=tabs, width=600, height=500),
-            actions=[ft.TextButton("Close", on_click=lambda e: self._close_shortcuts_dialog())],
+            actions=[
+                ft.TextButton(
+                    "Close", on_click=lambda e: self._close_shortcuts_dialog()
+                )
+            ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
     def _close_shortcuts_dialog(self):
         """Close the shortcuts dialog"""
-        if hasattr(self.page, "dialog") and self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
+        _close_dialog(self.page)
 
     def show_shortcuts_dialog(self):
         """Show the keyboard shortcuts dialog"""
-        dialog = self.create_shortcuts_dialog()
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
+        self.shortcuts_dialog = self.create_shortcuts_dialog()
+        self.page.show_dialog(self.shortcuts_dialog)
 
 
 def create_standard_application_shortcuts(
@@ -439,13 +416,15 @@ def create_standard_application_shortcuts(
         }
 
         for key, view_name in view_mapping.items():
-            shortcut_ids[f"view_{view_name}_numeric"] = shortcut_manager.register_shortcut(
-                shortcut_id=f"view_{view_name}_numeric",
-                key=key,
-                ctrl=True,
-                action=lambda e, v=view_name: view_navigator(v),
-                description=f"Go to {view_name.title()}",
-                category=ShortcutCategory.NAVIGATION,
+            shortcut_ids[f"view_{view_name}_numeric"] = (
+                shortcut_manager.register_shortcut(
+                    shortcut_id=f"view_{view_name}_numeric",
+                    key=key,
+                    ctrl=True,
+                    action=lambda e, v=view_name: view_navigator(v),
+                    description=f"Go to {view_name.title()}",
+                    category=ShortcutCategory.NAVIGATION,
+                )
             )
 
     # Refresh shortcut
@@ -499,7 +478,9 @@ def create_standard_application_shortcuts(
 
 
 def create_view_specific_shortcuts(
-    shortcut_manager: GlobalShortcutManager, view_context: str, view_actions: dict[str, Callable]
+    shortcut_manager: GlobalShortcutManager,
+    view_context: str,
+    view_actions: dict[str, Callable],
 ) -> dict[str, str]:
     """
     Create shortcuts specific to a particular view using Flet native events.

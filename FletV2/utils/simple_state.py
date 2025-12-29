@@ -61,7 +61,13 @@ class SimpleState:
         """Get state value - simple dictionary access"""
         return self.state.get(key, default)
 
-    def update(self, key: str, value: Any, update_control: str | None = None, source: str = "manual"):
+    def update(
+        self,
+        key: str,
+        value: Any,
+        update_control: str | None = None,
+        source: str = "manual",
+    ):
         """
         Update state and optionally refresh specific control.
 
@@ -80,19 +86,40 @@ class SimpleState:
         """Register control for targeted updates (replaces callback system)"""
         self.controls[name] = control
 
-    def subscribe(self, key: str, callback: Callable[[Any, Any], None], control: ft.Control | None = None):
+    def subscribe(
+        self,
+        key: str,
+        callback: Callable[[Any, Any], None],
+        control: ft.Control | None = None,
+    ):
         """
         Subscribe to state changes (simplified for compatibility).
 
         In the SimpleState approach, we just call the callback immediately
         and rely on direct state.update() calls for changes.
+
+        Note: If the control is not yet attached to a page, we skip the
+        immediate callback invocation to prevent "Control must be added
+        to the page first" errors.
         """
+        # Check if the control is actually attached to a page
+        # Flet 0.80.0: accessing .page on unattached control raises RuntimeError
+        if control:
+            try:
+                if control.page is None:
+                    # Defer the callback - control not yet attached
+                    return
+            except RuntimeError:
+                # Control not yet attached to page
+                return
+
         # Call immediately with current value
         current_value = self.get(key)
         try:
             callback(current_value, None)
-        except Exception as e:
-            print(f"Callback subscription failed: {e}")
+        except Exception:
+            # Control lifecycle error during subscription - silently ignore
+            pass
 
     def unsubscribe(self, key: str, callback: Callable[[Any, Any], None]):
         """
@@ -108,7 +135,9 @@ class SimpleState:
         loading_states[operation] = is_loading
         self.update("loading_states", loading_states)
 
-    def add_notification(self, message: str, notification_type: str = "info", auto_dismiss: int = 5):
+    def add_notification(
+        self, message: str, notification_type: str = "info", auto_dismiss: int = 5
+    ):
         """Add notification to state"""
         notifications = self.get("notifications", [])
         notification = {
@@ -123,7 +152,9 @@ class SimpleState:
 
         # Auto-dismiss using Flet's native run_task
         if auto_dismiss > 0:
-            self.page.run_task(self._dismiss_notification_after, notification["id"], auto_dismiss)
+            self.page.run_task(
+                self._dismiss_notification_after, notification["id"], auto_dismiss
+            )
 
     async def _dismiss_notification_after(self, notification_id: str, delay: int):
         """Auto-dismiss notification after delay"""
@@ -164,7 +195,9 @@ class SimpleState:
     # Simple logs management (replaces complex async system)
     async def load_logs(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         """Load logs data using simple pattern"""
-        filters = filters or self.get("logs_filters", {"level": "ALL", "component": "ALL", "search": ""})
+        filters = filters or self.get(
+            "logs_filters", {"level": "ALL", "component": "ALL", "search": ""}
+        )
 
         result = await self.fetch_data("get_logs", 1000, 0, filters)
         if result.get("success"):
@@ -180,10 +213,14 @@ class SimpleState:
         if not filters.get("level") or filters["level"] == "ALL":
             filtered = logs_data
         else:
-            filtered = [log for log in logs_data if log.get("level") == filters["level"]]
+            filtered = [
+                log for log in logs_data if log.get("level") == filters["level"]
+            ]
 
         if filters.get("component") and filters["component"] != "ALL":
-            filtered = [log for log in filtered if log.get("component") == filters["component"]]
+            filtered = [
+                log for log in filtered if log.get("component") == filters["component"]
+            ]
 
         if filters.get("search"):
             search_term = filters["search"].lower()

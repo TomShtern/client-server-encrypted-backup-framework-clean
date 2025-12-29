@@ -26,8 +26,8 @@ from typing import IO, Any
 
 from Shared.filesystem.file_lifecycle import SynchronizedFileManager
 from Shared.filesystem.utf8_solution import Popen_utf8
-from Shared.logging.enhanced_output import EmojiLogger
-from Shared.logging.error_handler import ErrorSeverity, handle_subprocess_error
+from Shared.app_logging.enhanced_output import EmojiLogger
+from Shared.app_logging.error_handler import ErrorSeverity, handle_subprocess_error
 from Shared.monitoring.unified_monitor import UnifiedFileMonitor
 
 logger = logging.getLogger(__name__)

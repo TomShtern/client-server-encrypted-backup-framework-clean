@@ -410,7 +410,7 @@ def _build_metric_block(
     # Clean card with subtle shadow and color accent
     card_content = ft.Container(
         content=body,
-        padding=ft.padding.all(20),
+        padding=ft.Padding.all(20),
         bgcolor=ft.Colors.SURFACE,
         border_radius=12,
         border=ft.border.only(top=ft.BorderSide(3, accent)),
@@ -477,6 +477,8 @@ def create_dashboard_view(
     # Fallback uptime tracking when server reports 0 but direct bridge is active
     fallback_uptime_start: float | None = None
     # Do not modify page.scroll; keep page-level scroll behavior unchanged
+    # Track current activity dialog for proper cleanup
+    current_activity_dialog: ft.AlertDialog | None = None
 
     metrics_config = [
         (
@@ -644,7 +646,7 @@ def create_dashboard_view(
             spacing=12,
             vertical_alignment=ft.CrossAxisAlignment.START,
         ),
-        padding=ft.padding.all(16),
+        padding=ft.Padding.all(16),
         border_radius=12,
         bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE_TINT),
         border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
@@ -656,7 +658,7 @@ def create_dashboard_view(
         content=loading_ring,
         width=24,
         height=24,
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
     )
 
     refresh_button = create_action_button("Refresh", None, icon=ft.Icons.REFRESH)
@@ -719,7 +721,7 @@ def create_dashboard_view(
                 ],
                 spacing=12,
             ),
-            padding=ft.padding.all(12),
+            padding=ft.Padding.all(12),
             bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
             border_radius=12,
         )
@@ -751,7 +753,7 @@ def create_dashboard_view(
     # The footer should be part of the main content column, not a separate container that might cause layout issues.
     # It should also be aligned to the end of the column, not necessarily the bottom right of a separate container.
     footer_container = ft.Container(
-        content=footer_text, alignment=ft.alignment.center_right
+        content=footer_text, alignment=ft.Alignment.CENTER_RIGHT
     )
 
     error_panel = ft.Container(visible=False)
@@ -842,8 +844,12 @@ def create_dashboard_view(
         if not control:
             return
         with contextlib.suppress(Exception):
-            if getattr(control, "page", None):
-                control.update()
+            # Flet 0.80.0: accessing .page on unattached control raises RuntimeError
+            try:
+                if control.page is not None:
+                    control.update()
+            except RuntimeError:
+                pass
 
     def _register_task(task: asyncio.Task[Any] | None) -> asyncio.Task[Any] | None:
         if not task:
@@ -889,7 +895,11 @@ def create_dashboard_view(
 
         loading_ring.visible = visible
 
-        if not getattr(loading_ring, "page", None):
+        # Flet 0.80.0: accessing .page on unattached control raises RuntimeError
+        try:
+            if loading_ring.page is None:
+                return
+        except RuntimeError:
             return
 
         await asyncio.sleep(0)
@@ -999,8 +1009,13 @@ def create_dashboard_view(
         uptime_text = format_uptime(display_uptime_seconds)
         metrics_changed |= _update_metric_block("uptime", uptime_text, status_label)
 
-        if metrics_changed and getattr(metrics_row, "page", None):
-            _safe_update(metrics_row)
+        # Flet 0.80.0: accessing .page on unattached control raises RuntimeError
+        if metrics_changed:
+            try:
+                if metrics_row.page is not None:
+                    _safe_update(metrics_row)
+            except RuntimeError:
+                pass
 
         await asyncio.sleep(0)
 
@@ -1165,15 +1180,16 @@ def create_dashboard_view(
     export_button.on_click = _on_export
 
     def _open_activity_details(entry: dict[str, Any]) -> None:
+        nonlocal current_activity_dialog
         pretty = json.dumps(entry, indent=2, default=str)
-        dialog = ft.AlertDialog(
+        current_activity_dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("Event details"),
             content=ft.Container(
                 content=ft.ListView(
                     controls=[ft.Text(pretty, size=12, selectable=True)],
                     spacing=6,
-                    padding=ft.padding.all(6),
+                    padding=ft.Padding.all(6),
                     expand=True,
                 ),
                 width=600,
@@ -1182,14 +1198,19 @@ def create_dashboard_view(
             actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.dialog = dialog
-        dialog.open = True
-        # Note: page.update() not needed due to page.auto_update = True
+        # Flet 0.80.0: Use overlay to show dialog
+        page.overlay.append(current_activity_dialog)
+        current_activity_dialog.open = True
+        page.update()
 
     def _close_dialog() -> None:
-        if page.dialog:
-            page.dialog.open = False
-            # Note: page.update() not needed due to page.auto_update = True
+        nonlocal current_activity_dialog
+        if current_activity_dialog:
+            current_activity_dialog.open = False
+            page.update()
+            if current_activity_dialog in page.overlay:
+                page.overlay.remove(current_activity_dialog)
+            current_activity_dialog = None
 
     def _build_activity_tile(entry: dict[str, Any]) -> ft.Control:
         """Build enhanced activity tile with strong color coding and hover effects."""
@@ -1235,7 +1256,7 @@ def create_dashboard_view(
                 height=40,
                 bgcolor=ft.Colors.with_opacity(0.18, palette["accent"]),
                 border_radius=20,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment.CENTER,
             ),
             title=ft.Row(
                 [
@@ -1331,7 +1352,7 @@ def create_dashboard_view(
                         spacing=8,
                     ),
                     padding=40,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                 )
             )
             activity_summary_text.value = "No activity"
@@ -1664,7 +1685,7 @@ def create_dashboard_view(
 
             card_content = ft.Container(
                 content=body,
-                padding=ft.padding.all(20),
+                padding=ft.Padding.all(20),
                 bgcolor=ft.Colors.SURFACE,
                 border_radius=12,
                 border=ft.border.only(top=ft.BorderSide(3, accent)),

@@ -19,6 +19,49 @@ MOCK_PREFIX = "🧪 DEMO: "
 REAL_PREFIX = "✅ "
 
 
+# =============================================================================
+# FLET 0.80.0 DIALOG HELPERS
+# In Flet 0.80.0, page.show_dialog() and _close_dialog(page) don't exist.
+# We must use page.overlay to manage dialogs.
+# =============================================================================
+
+# Track active dialogs per page for cleanup
+_active_dialogs: dict[int, list[ft.AlertDialog]] = {}
+
+
+def _show_dialog(page: ft.Page, dialog: ft.AlertDialog) -> None:
+    """Open a dialog in Flet 0.80.0 using overlay."""
+    page_id = id(page)
+    if page_id not in _active_dialogs:
+        _active_dialogs[page_id] = []
+    _active_dialogs[page_id].append(dialog)
+    page.overlay.append(dialog)
+    dialog.open = True
+    page.update()
+
+
+def _close_dialog(page: ft.Page, dialog: ft.AlertDialog | None = None) -> None:
+    """Close a dialog in Flet 0.80.0."""
+    page_id = id(page)
+
+    # If no specific dialog, close the last one
+    if dialog is None:
+        if page_id in _active_dialogs and _active_dialogs[page_id]:
+            dialog = _active_dialogs[page_id].pop()
+        else:
+            return
+    else:
+        # Remove from tracking
+        if page_id in _active_dialogs and dialog in _active_dialogs[page_id]:
+            _active_dialogs[page_id].remove(dialog)
+
+    if dialog:
+        dialog.open = False
+        page.update()
+        if dialog in page.overlay:
+            page.overlay.remove(dialog)
+
+
 def _ensure_snack_bar(page: ft.Page) -> ft.SnackBar:
     snack = getattr(page, "snack_bar", None)
     if not isinstance(snack, ft.SnackBar):
@@ -69,8 +112,7 @@ class DialogManager:
         """
 
         def close_dialog():
-            dialog.open = False
-            dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+            _close_dialog(page)
 
         def handle_confirm(e):
             try:
@@ -108,7 +150,9 @@ class DialogManager:
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
             ft.FilledButton(
-                confirm_text, on_click=handle_confirm, style=ft.ButtonStyle(bgcolor=confirm_color)
+                confirm_text,
+                on_click=handle_confirm,
+                style=ft.ButtonStyle(bgcolor=confirm_color),
             ),
         ]
 
@@ -121,9 +165,7 @@ class DialogManager:
         )
 
         # Auto-manage dialog lifecycle
-        page.overlay.append(dialog)
-        dialog.open = True
-        dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+        _show_dialog(page, dialog)
 
         return dialog
 
@@ -149,8 +191,7 @@ class DialogManager:
         """
 
         def close_dialog():
-            dialog.open = False
-            dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+            _close_dialog(page)
 
         def handle_ok(_):
             close_dialog()
@@ -168,15 +209,13 @@ class DialogManager:
                 content=content_control,
                 width=width,
                 height=height,
-                padding=ft.Padding(10, 10, 10, 10) if width or height else None,
+                padding=ft.Padding.all(10) if width or height else None,
             ),
             actions=[ft.FilledButton(ok_text, on_click=handle_ok)],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        page.overlay.append(dialog)
-        dialog.open = True
-        dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+        _show_dialog(page, dialog)
 
         return dialog
 
@@ -213,8 +252,7 @@ class DialogManager:
         """
 
         def close_dialog():
-            dialog.open = False
-            dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+            _close_dialog(page)
 
         async def _invoke_submit(value: str):
             import inspect
@@ -273,7 +311,9 @@ class DialogManager:
 
         input_field = ft.TextField(**input_kwargs)
 
-        dialog_content = ft.Column([ft.Text(content, size=14), input_field], spacing=16, tight=True)
+        dialog_content = ft.Column(
+            [ft.Text(content, size=14), input_field], spacing=16, tight=True
+        )
 
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
@@ -288,9 +328,7 @@ class DialogManager:
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        page.overlay.append(dialog)
-        dialog.open = True
-        dialog.update()  # 10x performance improvement: use dialog.update() instead of page.update()
+        _show_dialog(page, dialog)
 
         # Auto-focus input field
         input_field.focus()
@@ -316,8 +354,7 @@ class DialogManager:
         field_controls: dict[str, ft.TextField] = {}
 
         def close_dialog():
-            dialog.open = False
-            dialog.update()
+            _close_dialog(page)
 
         async def _invoke_submit(values: dict[str, str]):
             import inspect
@@ -380,9 +417,7 @@ class DialogManager:
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        page.overlay.append(dialog)
-        dialog.open = True
-        dialog.update()
+        _show_dialog(page, dialog)
 
         # Focus the first input for convenience
         for control in controls_list:
@@ -418,7 +453,12 @@ def show_confirmation(
         )
     """
     return DialogManager.create_confirmation_dialog(
-        page, title, message, on_confirm, confirm_text=confirm_text, is_destructive=is_destructive
+        page,
+        title,
+        message,
+        on_confirm,
+        confirm_text=confirm_text,
+        is_destructive=is_destructive,
     )
 
 
@@ -531,14 +571,19 @@ def show_user_feedback(
         snack_bar.duration = 4000
         _open_snack_bar(page)
 
-        logger.info(f"User feedback shown: {'ERROR' if is_error else 'INFO'} - {message}")
+        logger.info(
+            f"User feedback shown: {'ERROR' if is_error else 'INFO'} - {message}"
+        )
 
     except Exception as e:
         logger.error(f"Failed to show user feedback: {e}")
 
 
 def show_success_message(
-    page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None
+    page: ft.Page,
+    message: str,
+    action_label: str | None = None,
+    mode: str | None = None,
 ) -> None:
     """Show success message to user with optional mode indicator."""
     try:
@@ -562,13 +607,18 @@ def show_success_message(
         logger.error(f"Failed to show user feedback: {e}")
 
 
-def show_error_message(page: ft.Page, message: str, action_label: str | None = None) -> None:
+def show_error_message(
+    page: ft.Page, message: str, action_label: str | None = None
+) -> None:
     """Show error message to user."""
     show_user_feedback(page, message, is_error=True, action_label=action_label)
 
 
 def show_info_message(
-    page: ft.Page, message: str, action_label: str | None = None, mode: str | None = None
+    page: ft.Page,
+    message: str,
+    action_label: str | None = None,
+    mode: str | None = None,
 ) -> None:
     """Show info message to user with optional mode indicator."""
     # Add mode prefix if specified
@@ -586,13 +636,17 @@ def show_info_message(
         snack_bar.duration = 5000 if mode == "mock" else 4000
         _open_snack_bar(page)
 
-        logger.info(f"Info message shown ({mode or 'standard'} mode): {display_message}")
+        logger.info(
+            f"Info message shown ({mode or 'standard'} mode): {display_message}"
+        )
 
     except Exception as e:
         logger.error(f"Failed to show info message: {e}")
 
 
-def show_warning_message(page: ft.Page, message: str, action_label: str | None = None) -> None:
+def show_warning_message(
+    page: ft.Page, message: str, action_label: str | None = None
+) -> None:
     """Show warning message to user."""
     try:
         snack_bar = _ensure_snack_bar(page)

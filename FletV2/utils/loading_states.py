@@ -34,7 +34,7 @@ def create_loading_indicator(message="Loading..."):
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
         padding=20,
     )
 
@@ -66,7 +66,7 @@ def create_error_display(error_message):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=10,
         ),
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
         padding=20,
     )
 
@@ -100,7 +100,7 @@ def create_empty_state(title, message, icon=None):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=10,
         ),
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment.CENTER,
         padding=40,
     )
 
@@ -251,9 +251,9 @@ class LoadingStateManager:
 
         self.config.error_banner.content = ft.Text(
             error_message,
-            color=ft.colors.ON_ERROR_CONTAINER,
+            color=ft.Colors.ON_ERROR_CONTAINER,
         )
-        self.config.error_banner.bgcolor = ft.colors.ERROR_CONTAINER
+        self.config.error_banner.bgcolor = ft.Colors.ERROR_CONTAINER
         self.config.error_banner.open = True
 
         self._update_page()
@@ -272,9 +272,9 @@ class LoadingStateManager:
         if self.config.success_banner:
             self.config.success_banner.content = ft.Text(
                 message,
-                color=ft.colors.ON_TERTIARY_CONTAINER,
+                color=ft.Colors.ON_TERTIARY_CONTAINER,
             )
-            self.config.success_banner.bgcolor = ft.colors.TERTIARY_CONTAINER
+            self.config.success_banner.bgcolor = ft.Colors.TERTIARY_CONTAINER
             self.config.success_banner.open = True
             self._update_page()
             logger.info(f"UI Success: {message}")

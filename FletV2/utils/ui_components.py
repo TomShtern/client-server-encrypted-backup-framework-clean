@@ -18,6 +18,7 @@ __all__ = [
     "create_progress_indicator",
     "create_pulsing_status_indicator",
     "create_status_pill",
+    "is_control_attached",
     "safe_update_control",
     "safe_update_controls",
 ]
@@ -25,6 +26,26 @@ __all__ = [
 _TOKENS = get_design_tokens()
 _SPACING = _TOKENS["spacing"]
 _RADII = _TOKENS["radii"]
+
+
+def is_control_attached(control: ft.Control | None) -> bool:
+    """Check if a control is attached to a page.
+
+    In Flet 0.80.0, accessing .page on an unattached control raises RuntimeError,
+    so we use try/except instead of getattr.
+
+    Args:
+        control: The Flet control to check
+
+    Returns:
+        True if the control is attached to a page, False otherwise
+    """
+    if control is None:
+        return False
+    try:
+        return control.page is not None
+    except (RuntimeError, AttributeError):
+        return False
 
 
 def AppCard(
@@ -62,7 +83,7 @@ def AppCard(
             scroll=ft.ScrollMode.AUTO if expand_content else None,
         ),
         expand=1 if expand_content else None,
-        padding=ft.padding.all(padding if padding is not None else _SPACING["xl"]),
+        padding=ft.Padding.all(padding if padding is not None else _SPACING["xl"]),
         border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
         border_radius=_RADII["lg"],
         shadow=ft.BoxShadow(
@@ -72,8 +93,12 @@ def AppCard(
             color=ft.Colors.with_opacity(0.16, ft.Colors.SURFACE_TINT),
         ),
         bgcolor=ft.Colors.SURFACE,
-        animate=None if disable_hover else ft.Animation(150, ft.AnimationCurve.EASE_OUT),
-        animate_scale=None if disable_hover else ft.Animation(120, ft.AnimationCurve.EASE_OUT),
+        animate=None
+        if disable_hover
+        else ft.Animation(150, ft.AnimationCurve.EASE_OUT),
+        animate_scale=None
+        if disable_hover
+        else ft.Animation(120, ft.AnimationCurve.EASE_OUT),
         tooltip=tooltip,
     )
 
@@ -100,7 +125,8 @@ def AppButton(
     """Unified button surface with consistent shape and padding."""
 
     content = ft.Row(
-        ([ft.Icon(icon, size=16)] if icon else []) + [ft.Text(text, size=14, weight=ft.FontWeight.W_500)],
+        ([ft.Icon(icon, size=16)] if icon else [])
+        + [ft.Text(text, size=14, weight=ft.FontWeight.W_500)],
         spacing=_SPACING["sm"],
         tight=True,
     )
@@ -115,10 +141,14 @@ def AppButton(
         style = ft.ButtonStyle(shape=shape, padding=padding)
         return ft.FilledTonalButton(content=content, on_click=on_click, style=style)
     if variant == "danger":
-        style = ft.ButtonStyle(shape=shape, padding=padding, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE)
+        style = ft.ButtonStyle(
+            shape=shape, padding=padding, bgcolor=ft.Colors.RED, color=ft.Colors.WHITE
+        )
         return ft.FilledButton(content=content, on_click=on_click, style=style)
     if variant == "success":
-        style = ft.ButtonStyle(shape=shape, padding=padding, bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE)
+        style = ft.ButtonStyle(
+            shape=shape, padding=padding, bgcolor=ft.Colors.GREEN, color=ft.Colors.WHITE
+        )
         return ft.FilledButton(content=content, on_click=on_click, style=style)
 
     style = ft.ButtonStyle(shape=shape, padding=padding)
@@ -150,7 +180,9 @@ def StatusPill(label: str, level: str = "info") -> ft.Container:
     color = palette.get(level.lower(), palette["neutral"])
 
     return ft.Container(
-        content=ft.Text(label, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+        content=ft.Text(
+            label, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600
+        ),
         padding=ft.padding.symmetric(horizontal=_SPACING["md"], vertical=2),
         bgcolor=color,
         border_radius=_RADII.get("chip", _RADII["lg"]),
@@ -183,7 +215,9 @@ def create_pulsing_status_indicator(status: str, text: str) -> ft.Container:
         border_radius=6,
         bgcolor=color,
         animate=ft.Animation(1500, ft.AnimationCurve.EASE_IN_OUT),
-        shadow=ft.BoxShadow(spread_radius=2, blur_radius=8, color=ft.Colors.with_opacity(0.4, color)),
+        shadow=ft.BoxShadow(
+            spread_radius=2, blur_radius=8, color=ft.Colors.with_opacity(0.4, color)
+        ),
     )
 
     return ft.Container(
@@ -194,7 +228,9 @@ def create_pulsing_status_indicator(status: str, text: str) -> ft.Container:
             ],
             spacing=_SPACING["sm"],
         ),
-        padding=ft.padding.symmetric(horizontal=_SPACING["lg"], vertical=_SPACING["sm"]),
+        padding=ft.padding.symmetric(
+            horizontal=_SPACING["lg"], vertical=_SPACING["sm"]
+        ),
         border_radius=_RADII["lg"],
         bgcolor=ft.Colors.with_opacity(0.1, color),
         border=ft.border.all(1, ft.Colors.with_opacity(0.2, color)),
@@ -206,7 +242,7 @@ def DataTableWrapper(table: ft.DataTable) -> ft.Container:
 
     return ft.Container(
         content=table,
-        padding=ft.padding.all(_SPACING["lg"]),
+        padding=ft.Padding.all(_SPACING["lg"]),
         border=ft.border.all(1, ft.Colors.OUTLINE),
         border_radius=_RADII["lg"],
         bgcolor=ft.Colors.SURFACE,
@@ -216,7 +252,9 @@ def DataTableWrapper(table: ft.DataTable) -> ft.Container:
 def FilterBar(controls: list[ft.Control]) -> ft.Row:
     """Consistent layout for filter rows."""
 
-    return ft.Row(controls, spacing=_SPACING["lg"], alignment=ft.MainAxisAlignment.START)
+    return ft.Row(
+        controls, spacing=_SPACING["lg"], alignment=ft.MainAxisAlignment.START
+    )
 
 
 def safe_update_control(control: ft.Control | None, force: bool = False) -> bool:
@@ -226,7 +264,7 @@ def safe_update_control(control: ft.Control | None, force: bool = False) -> bool
         if control is None or not hasattr(control, "update"):
             return False
 
-        if not force and getattr(control, "page", None) is None:
+        if not force and not is_control_attached(control):
             return False
 
         control.update()
@@ -241,7 +279,9 @@ def safe_update_controls(*controls: ft.Control, force: bool = False) -> int:
     return sum(safe_update_control(control, force) for control in controls)
 
 
-def create_progress_indicator(operation: str, state_manager: Any | None = None) -> ft.Container:
+def create_progress_indicator(
+    operation: str, state_manager: Any | None = None
+) -> ft.Container:
     """Compact progress indicator used by settings action blocks."""
 
     _ = operation, state_manager  # Maintained for compatibility hooks

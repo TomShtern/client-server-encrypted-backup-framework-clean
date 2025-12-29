@@ -283,8 +283,8 @@ class WindowsThemeProvider:
             return ft.BoxDecoration(
                 color=ft.Colors.with_opacity(opacity, "#202020"),
                 gradient=ft.LinearGradient(
-                    begin=ft.alignment.top_left,
-                    end=ft.alignment.bottom_right,
+                    begin=ft.Alignment.TOP_LEFT,
+                    end=ft.Alignment.BOTTOM_RIGHT,
                     colors=[
                         ft.Colors.with_opacity(opacity, "#2C2C2C"),
                         ft.Colors.with_opacity(opacity * 0.7, "#1C1C1C"),
@@ -297,8 +297,8 @@ class WindowsThemeProvider:
             return ft.BoxDecoration(
                 color=ft.Colors.with_opacity(opacity, "#F3F3F3"),
                 gradient=ft.LinearGradient(
-                    begin=ft.alignment.top_left,
-                    end=ft.alignment.bottom_right,
+                    begin=ft.Alignment.TOP_LEFT,
+                    end=ft.Alignment.BOTTOM_RIGHT,
                     colors=[
                         ft.Colors.with_opacity(opacity, "#FFFFFF"),
                         ft.Colors.with_opacity(opacity * 0.8, "#F0F0F0"),

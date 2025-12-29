@@ -57,13 +57,30 @@ class FletV2Manager:
         self.page = None
 
         # Real-time data storage (same as old GUI)
-        self.server_status = {"running": False, "address": "localhost", "port": 1256, "uptime": "00:00:00"}
+        self.server_status = {
+            "running": False,
+            "address": "localhost",
+            "port": 1256,
+            "uptime": "00:00:00",
+        }
 
-        self.client_stats = {"connected": 0, "total_registered": 0, "active_transfers": 0}
+        self.client_stats = {
+            "connected": 0,
+            "total_registered": 0,
+            "active_transfers": 0,
+        }
 
-        self.transfer_stats = {"bytes_transferred": 0, "transfer_rate": 0, "last_activity": "Never"}
+        self.transfer_stats = {
+            "bytes_transferred": 0,
+            "transfer_rate": 0,
+            "last_activity": "Never",
+        }
 
-        self.maintenance_stats = {"last_cleanup": "Never", "files_cleaned": 0, "clients_cleaned": 0}
+        self.maintenance_stats = {
+            "last_cleanup": "Never",
+            "files_cleaned": 0,
+            "clients_cleaned": 0,
+        }
 
         self.logger.info("FletV2Manager initialized")
 
@@ -103,10 +120,10 @@ class FletV2Manager:
                 # Start update processing
                 self._start_update_processor()
 
-                await page.update_async()
+                await page.update()
 
             # Run FletV2 (same as old GUI runs tkinter mainloop)
-            ft.app(target=flet_main, view=ft.AppView.FLET_APP)
+            ft.run(flet_main)
 
         except Exception as e:
             self.logger.error(f"FletV2 GUI error: {e}")
@@ -186,10 +203,13 @@ class FletV2Manager:
     def update_server_status(self, running: bool, address: str, port: int, uptime: str):
         """Update server status - same method as old GUIManager."""
         self.queue_update(
-            "server_status", {"running": running, "address": address, "port": port, "uptime": uptime}
+            "server_status",
+            {"running": running, "address": address, "port": port, "uptime": uptime},
         )
 
-    def update_client_stats(self, connected: int, total_registered: int, active_transfers: int):
+    def update_client_stats(
+        self, connected: int, total_registered: int, active_transfers: int
+    ):
         """Update client statistics - same method as old GUIManager."""
         self.queue_update(
             "client_stats",
@@ -200,7 +220,9 @@ class FletV2Manager:
             },
         )
 
-    def update_transfer_stats(self, bytes_transferred: int, transfer_rate: float, last_activity: str):
+    def update_transfer_stats(
+        self, bytes_transferred: int, transfer_rate: float, last_activity: str
+    ):
         """Update transfer statistics - same method as old GUIManager."""
         self.queue_update(
             "transfer_stats",
@@ -211,7 +233,9 @@ class FletV2Manager:
             },
         )
 
-    def update_maintenance_stats(self, last_cleanup: str, files_cleaned: int, clients_cleaned: int):
+    def update_maintenance_stats(
+        self, last_cleanup: str, files_cleaned: int, clients_cleaned: int
+    ):
         """Update maintenance statistics - same method as old GUIManager."""
         self.queue_update(
             "maintenance_stats",

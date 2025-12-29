@@ -49,7 +49,7 @@ print("=" * 70)
 # This ensures all Flet framework and application logs are captured
 print("\n[0/4] Initializing log capture system...")
 try:
-    from Shared.logging.flet_log_capture import get_flet_log_capture
+    from Shared.app_logging.flet_log_capture import get_flet_log_capture
 
     _log_capture = get_flet_log_capture()
     print("[OK] Log capture initialized - ready to capture framework and app logs")
@@ -103,10 +103,11 @@ print("=" * 70)
 _app_instance = None
 
 
-def gui_with_server_main(page: ft.Page):
+async def gui_with_server_main(page: ft.Page):
     """
     Initialize FletV2App with real server instance as native desktop application.
 
+    Flet 0.80.0: Target function MUST be async to properly await initialization.
     Configures desktop window properties and integrates with BackupServer.
     The server object is passed to ServerBridge for direct method calls (no API layer).
     """
@@ -119,8 +120,6 @@ def gui_with_server_main(page: ft.Page):
     page.window.min_width = 900
     page.window.min_height = 600
     page.window.resizable = True
-    page.window.center()  # Center window on screen at launch
-    page.update()  # Apply window configuration immediately
 
     print("🟢 [START] gui_with_server_main function ENTERED")
     print("🟢 [WINDOW] Desktop window configured: 1200x800, resizable, centered")
@@ -135,9 +134,22 @@ def gui_with_server_main(page: ft.Page):
     )
 
     # Create FletV2App with real server
-    app = main.FletV2App(page, real_server=server_instance)
+    print("🟠 [BEFORE_APP] About to create FletV2App...")
+    print(f"🟠 [BEFORE_APP] main module: {main}")
+    print(f"🟠 [BEFORE_APP] main.FletV2App: {main.FletV2App}")
+    try:
+        app = main.FletV2App(page, real_server=server_instance)
+        print(f"🟠 [AFTER_APP] FletV2App created successfully: {app}")
+    except Exception as create_err:
+        print(f"🔴 [ERROR] FletV2App creation failed: {create_err}")
+        import traceback
+
+        traceback.print_exc()
+        raise
 
     # Set up cleanup handler for when page disconnects
+    print("🟠 [CLEANUP] Setting up cleanup handler...")
+
     def cleanup_on_disconnect(e):
         print("\n[PAGE DISCONNECT] Cleaning up resources...")
         try:
@@ -152,35 +164,44 @@ def gui_with_server_main(page: ft.Page):
             print(f"[WARN] Cleanup error: {cleanup_err}")
 
     page.on_disconnect = cleanup_on_disconnect
+    print("🟠 [CLEANUP] Cleanup handler set successfully")
 
-    # Initialize the app using Flet's task runner
-    async def async_init():
-        try:
-            print("[INIT] Starting async initialization...")
-            print(f"[DEBUG] App object: {app}")
-            print(
-                f"[DEBUG] App.initialize callable? {callable(getattr(app, 'initialize', None))}"
-            )
-            print("[DEBUG] About to await app.initialize()...")
-            await app.initialize()
-            print("[DEBUG] app.initialize() returned successfully")
-            print(f"\n{'=' * 70}")
-            print(f"{'[READY] FletV2 GUI is Running':^70}")
-            if server_instance:
-                print(f"{'[OK] Real server connected - Full CRUD operational':^70}")
-            else:
-                print(f"{'[WARN]  Mock mode - Server connection failed':^70}")
-            print(f"{'=' * 70}\n")
-        except Exception as init_err:
-            print(f"[ERROR] App initialization failed: {init_err}")
-            import traceback
+    # Initialize the app - AWAIT directly since this function is async
+    print("🟡 [INIT] Entering initialization try block...")
+    try:
+        # Flet 0.80.0: window.center() is async but only works in desktop mode
+        # In WEB mode, window operations hang forever - skip them entirely
+        _view_mode = os.environ.get("FLET_VIEW", "DESKTOP").upper().strip()
+        if _view_mode != "WEB":
+            print("🟡 [WINDOW] Desktop mode - calling page.window.center()...")
+            try:
+                await page.window.center()
+                print("🟡 [WINDOW] window.center() completed")
+            except Exception as center_err:
+                print(f"🟡 [WINDOW] window.center() failed: {center_err}")
+        else:
+            print("🟡 [WINDOW] Web mode - skipping window.center() (would hang)")
 
-            traceback.print_exc()
+        print("[INIT] Starting async initialization...")
+        print(f"[DEBUG] App object: {app}")
+        print(
+            f"[DEBUG] App.initialize callable? {callable(getattr(app, 'initialize', None))}"
+        )
+        print("[DEBUG] About to await app.initialize()...")
+        await app.initialize()
+        print("[DEBUG] app.initialize() returned successfully")
+        print(f"\n{'=' * 70}")
+        print(f"{'[READY] FletV2 GUI is Running':^70}")
+        if server_instance:
+            print(f"{'[OK] Real server connected - Full CRUD operational':^70}")
+        else:
+            print(f"{'[WARN]  Mock mode - Server connection failed':^70}")
+        print(f"{'=' * 70}\n")
+    except Exception as init_err:
+        print(f"[ERROR] App initialization failed: {init_err}")
+        import traceback
 
-    #  Schedule initialization
-    print("[DEBUG] Scheduling async initialization task...")
-    page.run_task(async_init)
-    print("[DEBUG] Task scheduled")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
@@ -224,8 +245,8 @@ if __name__ == "__main__":
             )
         try:
             # Launch in WEB_BROWSER view so automated tools can capture screenshots
-            ft.app(
-                target=gui_with_server_main,
+            ft.run(
+                gui_with_server_main,
                 view=ft.AppView.WEB_BROWSER,
                 port=chosen_port,
             )
@@ -247,7 +268,7 @@ if __name__ == "__main__":
 
         try:
             # Launch as native desktop application (default mode)
-            ft.app(target=gui_with_server_main, view=ft.AppView.FLET_APP)
+            ft.run(gui_with_server_main, view=ft.AppView.FLET_APP)
             print("[OK] FletV2 desktop application closed normally")
 
         except Exception as launch_err:

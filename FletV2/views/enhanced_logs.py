@@ -22,7 +22,11 @@ if TYPE_CHECKING:
 
 from FletV2.components.log_card import LogCard
 from FletV2.utils.async_helpers import debounce, run_sync_in_executor, safe_server_call
-from FletV2.utils.data_export import export_to_csv, export_to_json, generate_export_filename
+from FletV2.utils.data_export import (
+    export_to_csv,
+    export_to_json,
+    generate_export_filename,
+)
 from FletV2.utils.loading_states import (
     create_empty_state,
     create_error_display,
@@ -49,10 +53,11 @@ for _path in (_flet_v2_root, _repo_root):
 logger = logging.getLogger(__name__)
 
 try:
-    from Shared.logging.flet_log_capture import get_flet_log_capture
+    from Shared.app_logging.flet_log_capture import get_flet_log_capture
 
     _flet_log_capture = get_flet_log_capture()
-except Exception:  # pragma: no cover - log capture optional in GUI-only mode
+except Exception as exc:  # pragma: no cover - log capture optional in GUI-only mode
+    logger.debug("Flet log capture initialization failed (optional): %s", exc)
     _flet_log_capture = None
 
 
@@ -61,7 +66,9 @@ except Exception:  # pragma: no cover - log capture optional in GUI-only mode
 # ============================================================================
 
 
-async def fetch_server_logs_async(bridge: Any | None, _page: ft.Page) -> list[dict[str, Any]]:
+async def fetch_server_logs_async(
+    bridge: Any | None, _page: ft.Page
+) -> list[dict[str, Any]]:
     """Retrieve and normalize server logs without blocking the UI."""
 
     if not bridge:
@@ -162,7 +169,8 @@ def _filter_by_query(logs: list[dict[str, Any]], query: str) -> list[dict[str, A
     return [
         entry
         for entry in logs
-        if regex.search(entry.get("message", "")) or regex.search(entry.get("component", ""))
+        if regex.search(entry.get("message", ""))
+        or regex.search(entry.get("component", ""))
     ]
 
 
@@ -230,7 +238,9 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
     return ft.Container(
         content=ft.Row(
             [
-                ft.Text(f"Total logs: {stats['total']}", size=14, weight=ft.FontWeight.BOLD),
+                ft.Text(
+                    f"Total logs: {stats['total']}", size=14, weight=ft.FontWeight.BOLD
+                ),
                 ft.VerticalDivider(width=1),
                 *badges,
             ],
@@ -243,9 +253,12 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
     )
 
 
-def _render_log_controls(logs: list[dict[str, Any]], search_query: str, page: ft.Page) -> list[ft.Control]:
+def _render_log_controls(
+    logs: list[dict[str, Any]], search_query: str, page: ft.Page
+) -> list[ft.Control]:
     return [
-        LogCard(entry, index=index, search_query=search_query, page=page) for index, entry in enumerate(logs)
+        LogCard(entry, index=index, search_query=search_query, page=page)
+        for index, entry in enumerate(logs)
     ]
 
 
@@ -276,25 +289,31 @@ def _create_filter_controls(
     return ft.ResponsiveRow(
         controls=[
             ft.Container(
-                content=create_search_bar(on_change=search_on_change, placeholder="Search logs…"),
+                content=create_search_bar(
+                    on_change=search_on_change, placeholder="Search logs…"
+                ),
                 col={"xs": 12, "sm": 8, "md": 6, "lg": 5},
             ),
-            ft.Container(content=level_filter, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}),
+            ft.Container(
+                content=level_filter, col={"xs": 12, "sm": 4, "md": 3, "lg": 2}
+            ),
             ft.Container(
                 content=include_switch,
                 col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
-                alignment=ft.alignment.center_left,
+                alignment=ft.Alignment.CENTER_LEFT,
             ),
             ft.Container(
-                content=create_action_button("Refresh", on_refresh, icon=ft.Icons.REFRESH, primary=False),
+                content=create_action_button(
+                    "Refresh", on_refresh, icon=ft.Icons.REFRESH, primary=False
+                ),
                 col={"xs": 12, "sm": 6, "md": 3, "lg": 2},
-                alignment=ft.alignment.center_left,
+                alignment=ft.Alignment.CENTER_LEFT,
             ),
             ft.Container(
                 content=last_refresh_text,
                 padding=ft.padding.only(left=4),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
-                alignment=ft.alignment.center_left,
+                alignment=ft.Alignment.CENTER_LEFT,
             ),
         ],
         spacing=12,
@@ -306,9 +325,14 @@ def _create_filter_controls(
 def _create_export_actions(handle_export: Callable[[str], None]) -> list[ft.Control]:
     """Create export action buttons."""
     return [
-        create_action_button("Export CSV", lambda __: handle_export("csv"), icon=ft.Icons.DOWNLOAD),
         create_action_button(
-            "Export JSON", lambda __: handle_export("json"), icon=ft.Icons.CODE, primary=False
+            "Export CSV", lambda __: handle_export("csv"), icon=ft.Icons.DOWNLOAD
+        ),
+        create_action_button(
+            "Export JSON",
+            lambda __: handle_export("json"),
+            icon=ft.Icons.CODE,
+            primary=False,
         ),
     ]
 
@@ -356,16 +380,23 @@ def _create_event_handlers(
     """Create and return all event handlers."""
 
     def _safe_control_update(control: ft.Control | None) -> None:
-        if control and getattr(control, "page", None):
-            with contextlib.suppress(Exception):
-                control.update()
+        if not control:
+            return
+        # Flet 0.80.0+ raises RuntimeError when accessing .page on a control
+        # that has not yet been added to a page or has been removed.
+        with contextlib.suppress(RuntimeError):
+            if control.page is not None:
+                with contextlib.suppress(Exception):
+                    control.update()
 
     def apply_filters_and_render() -> None:
         combined = list(state["server_logs"])
         if state["include_app_logs"]:
             combined.extend(state["app_logs"])
 
-        combined.sort(key=lambda entry: _parse_timestamp(entry.get("time", "")), reverse=True)
+        combined.sort(
+            key=lambda entry: _parse_timestamp(entry.get("time", "")), reverse=True
+        )
 
         state["available_levels"] = _determine_levels(combined)
         available_with_all = ["All", *state["available_levels"]]
@@ -381,7 +412,9 @@ def _create_event_handlers(
         # Batch UI updates for better performance
         log_list_container.controls.clear()
         if filtered:
-            log_list_container.controls.extend(_render_log_controls(filtered, state["search_query"], page))
+            log_list_container.controls.extend(
+                _render_log_controls(filtered, state["search_query"], page)
+            )
         else:
             log_list_container.controls.append(
                 create_empty_state("No logs", "Adjust filters or refresh to load logs.")
@@ -389,11 +422,15 @@ def _create_event_handlers(
 
         stats_container.content = _build_stats_view(state["stats"])
 
-        level_filter.options = [ft.dropdown.Option(value) for value in available_with_all]
+        level_filter.options = [
+            ft.dropdown.Option(value) for value in available_with_all
+        ]
         level_filter.value = state["selected_level"]
 
         if state["last_refresh"]:
-            last_refresh_text.value = state["last_refresh"].strftime("Last refresh: %Y-%m-%d %H:%M:%S")
+            last_refresh_text.value = state["last_refresh"].strftime(
+                "Last refresh: %Y-%m-%d %H:%M:%S"
+            )
         else:
             last_refresh_text.value = "Last refresh: ?"
 
@@ -460,12 +497,16 @@ class _LogsViewController:
         self.stats_container = ft.Container(expand=False)
         self.error_container = ft.Container(visible=False)
         self.level_filter = _create_level_filter()
-        self.include_switch = ft.Switch(label="Include app logs", value=self.state["include_app_logs"])
-        self.last_refresh_text = ft.Text("Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
+        self.include_switch = ft.Switch(
+            label="Include app logs", value=self.state["include_app_logs"]
+        )
+        self.last_refresh_text = ft.Text(
+            "Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
         self.loading_overlay = ft.Container(
             content=create_loading_indicator("Loading logs…"),
             visible=False,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             expand=True,
         )
 
@@ -499,7 +540,9 @@ class _LogsViewController:
 
         self.stats_section = AppCard(self.stats_container, title="Summary")
         self.filter_actions = _create_export_actions(self._handle_export)
-        self.filter_section = AppCard(self.filters_layout, title="Filters", actions=self.filter_actions)
+        self.filter_section = AppCard(
+            self.filters_layout, title="Filters", actions=self.filter_actions
+        )
         self.logs_section = AppCard(self.log_list_container, title="Log entries")
         self.logs_section.expand = True
 
@@ -538,9 +581,12 @@ class _LogsViewController:
     def _safe_update(self, control: ft.Control | None) -> None:
         if self.disposed or not control:
             return
-        if getattr(control, "page", None):
-            with contextlib.suppress(Exception):
-                control.update()
+        # Flet 0.80.0+ raises RuntimeError when accessing .page on a control
+        # that has not yet been added to a page or has been removed.
+        with contextlib.suppress(RuntimeError):
+            if control.page is not None:
+                with contextlib.suppress(Exception):
+                    control.update()
 
     async def _handle_search_async(self, query: str) -> None:
         await asyncio.sleep(0)
@@ -585,7 +631,9 @@ class _LogsViewController:
         except RuntimeError as exc:
             message = str(exc).lower()
             if "shutdown" in message or "closed" in message:
-                logger.debug("Skipping log task scheduling after loop shutdown: %s", exc)
+                logger.debug(
+                    "Skipping log task scheduling after loop shutdown: %s", exc
+                )
                 return
             raise
 
@@ -604,14 +652,20 @@ class _LogsViewController:
     # ------------------------------------------------------------------
 
     def _on_search_change(self, event: ft.ControlEvent | str) -> None:
-        value = event if isinstance(event, str) else getattr(getattr(event, "control", None), "value", "")
+        value = (
+            event
+            if isinstance(event, str)
+            else getattr(getattr(event, "control", None), "value", "")
+        )
         self._schedule_task(lambda: self.debounced_search(value or ""))
 
     def _on_level_change(self, event: ft.ControlEvent) -> None:
         self._schedule_task(lambda: self.handle_level_change(event.control.value))
 
     def _on_include_change(self, event: ft.ControlEvent) -> None:
-        self._schedule_task(lambda: self.handle_include_toggle(bool(event.control.value)))
+        self._schedule_task(
+            lambda: self.handle_include_toggle(bool(event.control.value))
+        )
 
     def _on_refresh(self, _event: ft.ControlEvent | None = None) -> None:
         self._schedule_task(lambda: self.refresh_logs(toast=True))
@@ -661,7 +715,9 @@ class _LogsViewController:
             raise
         except Exception as exc:  # pragma: no cover - defensive UI feedback
             logger.exception("Failed to refresh logs")
-            self.error_container.content = AppCard(create_error_display(str(exc)), title="Error")
+            self.error_container.content = AppCard(
+                create_error_display(str(exc)), title="Error"
+            )
             self.error_container.visible = True
             self._safe_update(self.error_container)
             show_error_message(self.page, f"Failed to refresh logs: {exc}")
@@ -717,7 +773,9 @@ class _LogsViewController:
     # Public API
     # ------------------------------------------------------------------
 
-    def build(self) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
+    def build(
+        self,
+    ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
         return self.content_stack, self.dispose, self.setup
 
 
