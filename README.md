@@ -64,7 +64,21 @@ python api_server/cyberbackup_api_server.py
 ### Prerequisites
 - Windows with MSVC Build Tools
 - Python 3.x
-- Boost.Asio library
+- CMake 3.15+
+
+### vcpkg Setup (Required for C++ Client)
+
+The project uses [vcpkg](https://github.com/microsoft/vcpkg) for C++ dependency management. On a fresh machine, set up vcpkg with:
+
+```powershell
+# Clone vcpkg to project root
+git clone https://github.com/Microsoft/vcpkg.git
+.\vcpkg\bootstrap-vcpkg.bat
+
+# Dependencies are automatically installed via vcpkg.json during CMake configure
+```
+
+The project's `vcpkg.json` defines all required dependencies (Crypto++, Boost, etc.) which are installed automatically when you build.
 
 ### Building the Client
 ```batch

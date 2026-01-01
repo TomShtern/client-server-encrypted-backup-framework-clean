@@ -180,21 +180,12 @@ client/*_validation.txt
 third_party/
 supermemory-mcp/
 node_modules/
-# vcpkg - keep directory structure but ignore build artifacts and cache
-vcpkg/buildtrees/
-vcpkg/packages/
-vcpkg/downloads/
-vcpkg/installed/
-vcpkg/.vcpkg-root
+# vcpkg - Package manager (not tracked, install separately)
+# Only vcpkg.json and vcpkg-configuration.json are tracked
+vcpkg/
 vcpkg_installed/
 vcpkg_cache/
 vcpkg-cache/
-!vcpkg.json
-!vcpkg-configuration.json
-!vcpkg/
-!vcpkg/vcpkg.exe
-!vcpkg/bootstrap-vcpkg.bat
-!vcpkg/scripts/
 
 # Runtime & Status Files (specific files only)
 client/gui_progress.json
