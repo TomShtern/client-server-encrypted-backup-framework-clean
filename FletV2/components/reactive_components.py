@@ -51,7 +51,7 @@ def ToastNotification():
             color=ft.Colors.WHITE,
             size=14,
         ),
-        padding=ft.padding.symmetric(horizontal=16, vertical=12),
+        padding=ft.Padding.symmetric(horizontal=16, vertical=12),
         bgcolor=bg_color,
         border_radius=8,
         margin=ft.margin.all(8),
@@ -83,7 +83,7 @@ def ClientsList():
         return ft.Container(
             content=ft.Text(
                 f"Error: {app_state.get_error('clients')}",
-                color=ft.Colors.ERROR,
+                color="error",
             ),
             padding=ft.Padding.all(20),
         )
@@ -133,7 +133,7 @@ def FilesList():
         return ft.Container(
             content=ft.Text(
                 f"Error: {app_state.get_error('files')}",
-                color=ft.Colors.ERROR,
+                color="error",
             ),
             padding=ft.Padding.all(20),
         )
@@ -239,10 +239,10 @@ def ServerStatusBadge():
             ],
             spacing=4,
         ),
-        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
         bgcolor=ft.Colors.with_opacity(0.1, color),
         border_radius=12,
-        border=ft.border.all(1, color),
+        border=ft.Border.all(1, color),
     )
 
 
@@ -260,7 +260,7 @@ def DataMetricsCard(title: str, value: int | str, icon: str = ft.Icons.TRENDING_
                 [
                     ft.Row(
                         [
-                            ft.Icon(icon, size=24, color=ft.Colors.PRIMARY),
+                            ft.Icon(icon, size=24, color="primary"),
                             ft.Text(title, size=12, color=ft.Colors.GREY_500),
                         ],
                         spacing=8,
@@ -269,7 +269,7 @@ def DataMetricsCard(title: str, value: int | str, icon: str = ft.Icons.TRENDING_
                         str(value),
                         size=28,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.ON_SURFACE,
+                        color="onSurface",
                     ),
                 ],
                 spacing=8,

@@ -322,7 +322,7 @@ class IntegratedServerManager:
                 except Exception as e:
                     logger.error(f"❌ GUI initialization failed: {e}")
                     # Simple error display
-                    error_text = ft.Text(f"Failed to start: {e}", color=ft.Colors.ERROR)
+                    error_text = ft.Text(f"Failed to start: {e}", color="error")
                     page.add(error_text)
 
             # Step 4: Launch GUI with appropriate view

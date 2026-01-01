@@ -1,6 +1,6 @@
 """
 Neomorphic design utilities for Flet applications
-Flet 0.28.3 Compatible
+Flet 0.80.0 Compatible
 """
 
 import flet as ft

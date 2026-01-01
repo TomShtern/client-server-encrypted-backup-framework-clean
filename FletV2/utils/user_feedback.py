@@ -93,7 +93,7 @@ class DialogManager:
         on_cancel: Callable | None = None,
         confirm_text: str = "Confirm",
         cancel_text: str = "Cancel",
-        confirm_color: str = ft.Colors.PRIMARY,
+        confirm_color: str = "primary",
         is_destructive: bool = False,
     ) -> ft.AlertDialog:
         """
@@ -145,7 +145,7 @@ class DialogManager:
 
         # Use destructive styling for dangerous actions
         if is_destructive:
-            confirm_color = ft.Colors.ERROR
+            confirm_color = "error"
 
         actions = [
             ft.TextButton(cancel_text, on_click=handle_cancel),
@@ -566,7 +566,7 @@ def show_user_feedback(
     try:
         snack_bar = _ensure_snack_bar(page)
         snack_bar.content = ft.Text(message)
-        snack_bar.bgcolor = ft.Colors.ERROR if is_error else ft.Colors.BLUE
+        snack_bar.bgcolor = "error" if is_error else ft.Colors.BLUE
         snack_bar.action = action_label or "DISMISS"
         snack_bar.duration = 4000
         _open_snack_bar(page)

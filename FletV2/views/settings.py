@@ -110,18 +110,18 @@ def create_settings_view(
     def switch_tab(index: int):
         for i, btn in enumerate(tab_buttons):
             is_sel = i == index
-            btn.border = ft.border.only(
+            btn.border = ft.Border.only(
                 bottom=ft.BorderSide(
-                    2, ft.Colors.PRIMARY if is_sel else ft.Colors.TRANSPARENT
+                    2, "primary" if is_sel else ft.Colors.TRANSPARENT
                 )
             )
             row = btn.content
             if isinstance(row, ft.Row) and len(row.controls) >= 2:
                 row.controls[0].color = (
-                    ft.Colors.PRIMARY if is_sel else ft.Colors.GREY_600
+                    "primary" if is_sel else ft.Colors.GREY_600
                 )
                 row.controls[1].color = (
-                    ft.Colors.PRIMARY if is_sel else ft.Colors.GREY_600
+                    "primary" if is_sel else ft.Colors.GREY_600
                 )
                 row.controls[1].weight = (
                     ft.FontWeight.W_600 if is_sel else ft.FontWeight.W_400
@@ -138,20 +138,20 @@ def create_settings_view(
                     ft.Icon(
                         icon,
                         size=18,
-                        color=ft.Colors.PRIMARY if selected else ft.Colors.GREY_600,
+                        color="primary" if selected else ft.Colors.GREY_600,
                     ),
                     ft.Text(
                         label,
                         weight=ft.FontWeight.W_600 if selected else ft.FontWeight.W_400,
-                        color=ft.Colors.PRIMARY if selected else ft.Colors.GREY_600,
+                        color="primary" if selected else ft.Colors.GREY_600,
                     ),
                 ],
                 spacing=6,
             ),
-            padding=ft.padding.symmetric(horizontal=16, vertical=10),
-            border=ft.border.only(
+            padding=ft.Padding.symmetric(vertical=10, horizontal=16),
+            border=ft.Border.only(
                 bottom=ft.BorderSide(
-                    2, ft.Colors.PRIMARY if selected else ft.Colors.TRANSPARENT
+                    2, "primary" if selected else ft.Colors.TRANSPARENT
                 )
             ),
             on_click=lambda e, idx=index: switch_tab(idx),
@@ -237,32 +237,32 @@ def create_settings_view(
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=10,
             ),
-            padding=ft.padding.symmetric(horizontal=16, vertical=8),
-            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_200)),
+            padding=ft.Padding.symmetric(vertical=8, horizontal=16),
+            border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_200)),
         )
 
     def section(title: str, icon, rows: list):
         hdr = ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(icon, size=18, color=ft.Colors.PRIMARY),
+                    ft.Icon(icon, size=18, color="primary"),
                     ft.Text(title, size=14, weight=ft.FontWeight.W_600),
                 ],
                 spacing=10,
             ),
-            padding=ft.padding.only(left=16, right=12, top=10, bottom=6),
+            padding=ft.Padding.only(left=16, right=12, top=10, bottom=6),
         )
         return ft.Container(
             content=ft.Column([hdr, *rows], spacing=0),
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="surface",
             border_radius=10,
-            border=ft.border.only(
-                left=ft.BorderSide(3, ft.Colors.PRIMARY),
-                top=ft.BorderSide(1, ft.Colors.OUTLINE),
-                right=ft.BorderSide(1, ft.Colors.OUTLINE),
-                bottom=ft.BorderSide(1, ft.Colors.OUTLINE),
+            border=ft.Border.only(
+                left=ft.BorderSide(3, "primary"),
+                top=ft.BorderSide(1, "outline"),
+                right=ft.BorderSide(1, "outline"),
+                bottom=ft.BorderSide(1, "outline"),
             ),
-            margin=ft.margin.only(bottom=10),
+            margin=ft.Margin.only(bottom=10),
         )
 
     def apply_deps():
@@ -695,13 +695,13 @@ def create_settings_view(
 
     tab_bar = ft.Container(
         content=ft.Row(controls=tab_buttons, spacing=0),
-        border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE)),
+        border=ft.Border.only(bottom=ft.BorderSide(1, "outline")),
     )
 
     header = ft.Container(
         content=ft.Row(
             [
-                ft.Icon(ft.Icons.SETTINGS, size=26, color=ft.Colors.PRIMARY),
+                ft.Icon(ft.Icons.SETTINGS, size=26, color="primary"),
                 ft.Text("Settings", size=26, weight=ft.FontWeight.BOLD),
                 ft.Container(expand=True),
                 ft.OutlinedButton("Reset", icon=ft.Icons.RESTORE, on_click=on_reset),
@@ -709,7 +709,7 @@ def create_settings_view(
             ],
             spacing=8,
         ),
-        padding=ft.padding.symmetric(horizontal=16, vertical=12),
+        padding=ft.Padding.symmetric(vertical=12, horizontal=16),
     )
 
     description = ft.Container(
@@ -718,7 +718,7 @@ def create_settings_view(
             size=14,
             color=ft.Colors.GREY_600,
         ),
-        padding=ft.padding.only(left=16, bottom=8),
+        padding=ft.Padding.only(left=16, bottom=8),
     )
 
     mode_color = ft.Colors.GREEN if server_bridge else ft.Colors.AMBER
@@ -738,11 +738,11 @@ def create_settings_view(
             spacing=6,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        padding=ft.padding.symmetric(horizontal=16, vertical=6),
-        bgcolor=ft.Colors.SURFACE,
-        border=ft.border.only(
-            bottom=ft.BorderSide(1, ft.Colors.OUTLINE),
-            top=ft.BorderSide(2, ft.Colors.PRIMARY),
+        padding=ft.Padding.symmetric(vertical=6, horizontal=16),
+        bgcolor="surface",
+        border=ft.Border.only(
+            bottom=ft.BorderSide(1, "outline"),
+            top=ft.BorderSide(2, "primary"),
         ),
     )
 
@@ -796,3 +796,4 @@ class SettingsView:
     async def setup(self):
         if self._setup:
             await self._setup()
+

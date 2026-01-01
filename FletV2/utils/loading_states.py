@@ -30,7 +30,7 @@ def create_loading_indicator(message="Loading..."):
         content=ft.Column(
             [
                 ft.ProgressRing(),
-                ft.Text(message, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(message, size=14, color="onSurfaceVariant"),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
@@ -52,14 +52,14 @@ def create_error_display(error_message):
     return ft.Container(
         content=ft.Column(
             [
-                ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.ERROR, size=48),
+                ft.Icon(ft.Icons.ERROR_OUTLINE, color="error", size=48),
                 ft.Text(
-                    "Error", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR
+                    "Error", size=20, weight=ft.FontWeight.BOLD, color="error"
                 ),
                 ft.Text(
                     error_message,
                     size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                     text_align=ft.TextAlign.CENTER,
                 ),
             ],
@@ -88,12 +88,12 @@ def create_empty_state(title, message, icon=None):
     return ft.Container(
         content=ft.Column(
             [
-                ft.Icon(resolved_icon, color=ft.Colors.ON_SURFACE_VARIANT, size=64),
+                ft.Icon(resolved_icon, color="onSurfaceVariant", size=64),
                 ft.Text(title, size=20, weight=ft.FontWeight.BOLD),
                 ft.Text(
                     message,
                     size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                     text_align=ft.TextAlign.CENTER,
                 ),
             ],
@@ -251,9 +251,9 @@ class LoadingStateManager:
 
         self.config.error_banner.content = ft.Text(
             error_message,
-            color=ft.Colors.ON_ERROR_CONTAINER,
+            color="onErrorContainer",
         )
-        self.config.error_banner.bgcolor = ft.Colors.ERROR_CONTAINER
+        self.config.error_banner.bgcolor = "errorContainer"
         self.config.error_banner.open = True
 
         self._update_page()
@@ -272,9 +272,9 @@ class LoadingStateManager:
         if self.config.success_banner:
             self.config.success_banner.content = ft.Text(
                 message,
-                color=ft.Colors.ON_TERTIARY_CONTAINER,
+                color="onTertiaryContainer",
             )
-            self.config.success_banner.bgcolor = ft.Colors.TERTIARY_CONTAINER
+            self.config.success_banner.bgcolor = "tertiaryContainer"
             self.config.success_banner.open = True
             self._update_page()
             logger.info(f"UI Success: {message}")

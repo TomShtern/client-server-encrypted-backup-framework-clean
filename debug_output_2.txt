@@ -1,0 +1,9 @@
+2026-01-01 17:57:34,200 - FletV2.debug_setup - INFO - [debug_setup:198:setup_terminal_debugging] - Enhanced terminal debugging setup complete
+2026-01-01 17:57:34,313 - flet_desktop - INFO - [__init__:62:__locate_and_unpack_flet_view] - Starting Flet View app...
+2026-01-01 17:57:34,314 - flet_desktop - INFO - [__init__:86:__locate_and_unpack_flet_view] - Looking for Flet executable at: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2026-01-01 17:57:34,314 - flet_desktop - INFO - [__init__:88:__locate_and_unpack_flet_view] - Flet View found in: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2026-01-01 17:57:34,784 - FletV2.main - WARNING - [main:526:_initialize_server_bridge] - Γתá∩╕ן Starting in GUI-only standalone mode without server bridge
+2026-01-01 17:57:34,785 - FletV2.main - WARNING - [main:529:_initialize_server_bridge] - GUI will be functional but data operations will show empty states
+2026-01-01 17:57:34,786 - FletV2.main - WARNING - [main:532:_initialize_server_bridge] - Use 'python start_with_server.py' for full server integration
+C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py:1722: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+  if asyncio.iscoroutinefunction(setup_func):

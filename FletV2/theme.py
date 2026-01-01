@@ -9,7 +9,7 @@ Achievement: 797 → ~200 lines (75% reduction) with superior visual quality.
 """
 
 import warnings
-from typing import Literal, Union
+from typing import Callable, Literal, Union
 
 import flet as ft
 
@@ -59,20 +59,31 @@ def setup_sophisticated_theme(page: ft.Page, theme_mode: str = "system") -> None
     # Setup base Flet theme (when windows integration is not handling it)
     if not windows_theme_provider:
         # Fallback to standard theme setup
+        # Fallback to standard theme setup (Matte Professional Default)
         page.theme = ft.Theme(
             color_scheme_seed=ft.Colors.BLUE,
+            scaffold_bgcolor="#131b26",  # Deep Navy/Charcoal Base
             use_material3=True,
             text_theme=ft.TextTheme(
-                headline_large=ft.TextStyle(size=32, weight=ft.FontWeight.W_700),
-                body_large=ft.TextStyle(size=16, weight=ft.FontWeight.W_400),
+                headline_large=ft.TextStyle(
+                    size=32, weight=ft.FontWeight.W_700, color="#FFFFFF"
+                ),
+                body_large=ft.TextStyle(
+                    size=16, weight=ft.FontWeight.W_400, color="#E2E8F0"
+                ),
             ),
         )
         page.dark_theme = ft.Theme(
             color_scheme_seed=ft.Colors.BLUE,
+            scaffold_bgcolor="#131b26",  # Deep Navy/Charcoal Base
             use_material3=True,
             text_theme=ft.TextTheme(
-                headline_large=ft.TextStyle(size=32, weight=ft.FontWeight.W_700),
-                body_large=ft.TextStyle(size=16, weight=ft.FontWeight.W_400),
+                headline_large=ft.TextStyle(
+                    size=32, weight=ft.FontWeight.W_700, color="#FFFFFF"
+                ),
+                body_large=ft.TextStyle(
+                    size=16, weight=ft.FontWeight.W_400, color="#E2E8F0"
+                ),
             ),
         )
         page.theme_mode = (
@@ -284,34 +295,52 @@ def create_metric_card_enhanced(
     trend: str = "up",
     icon: str | None = None,
     color_type: str = "primary",
+    value_control: ft.Control | None = None,
+    change_control: ft.Control | None = None,
 ) -> ft.Container:
-    """Create enhanced metric card with trend indicators and gradients."""
+    """Create enhanced metric card with trend indicators and gradients.
+
+    Args:
+        title: Card title
+        value: Metric value (ignored if value_control provided)
+        change: Change indicator text (ignored if change_control provided)
+        trend: Trend direction ("up" or "down")
+        icon: Optional icon to use instead of trend icon
+        color_type: Color scheme ("primary", "success", "warning", etc.)
+        value_control: Optional custom control for value (for dynamic updates)
+        change_control: Optional custom control for change indicator (for dynamic updates)
+    """
     trend_color = ft.Colors.GREEN if trend == "up" else ft.Colors.RED
     trend_icon = ft.Icons.TRENDING_UP if trend == "up" else ft.Icons.TRENDING_DOWN
+
+    # Use provided controls or create default ones
+    if value_control is None:
+        value_control = ft.Text(value, size=28, weight=ft.FontWeight.BOLD)
+
+    if change_control is None:
+        change_control = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(icon or trend_icon, size=14, color=trend_color),
+                    ft.Text(change or "", size=12, color=trend_color),
+                ],
+                spacing=4,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.1, create_gradient(color_type).colors[0]),
+            border_radius=8,
+            padding=ft.padding.symmetric(6, 8),
+        )
 
     content = ft.Column(
         [
             ft.Row(
                 [
                     ft.Text(title, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(icon or trend_icon, size=14, color=trend_color),
-                                ft.Text(change or "", size=12, color=trend_color),
-                            ],
-                            spacing=4,
-                        ),
-                        bgcolor=ft.Colors.with_opacity(
-                            0.1, create_gradient(color_type).colors[0]
-                        ),
-                        border_radius=8,
-                        padding=ft.padding.symmetric(6, 8),
-                    ),
+                    change_control,
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            ft.Text(value, size=28, weight=ft.FontWeight.BOLD),
+            value_control,
         ],
         spacing=8,
     )
@@ -319,6 +348,103 @@ def create_metric_card_enhanced(
     return create_enhanced_card(
         content, gradient_background=color_type, hover_effect=True
     )
+
+
+# ========================================================================================
+# MATTE PROFESSIONAL THEME COMPONENTS (New)
+# ========================================================================================
+
+
+def create_matte_card(
+    content: ft.Control | None = None,
+    accent_color: str = "",
+    title: str | None = None,
+    icon: str | None = None,
+    value_control: ft.Control | None = None,
+    subtext_control: ft.Control | None = None,
+    on_click: Callable | None = None,
+) -> ft.Container:
+    """Create a premium matte-finish card with squircle shape and colored glow.
+
+    Args:
+        content: Optional content control (unused, kept for API compatibility)
+        accent_color: Color for the top border accent and glow
+        title: Card title text
+        icon: Icon to display
+        value_control: Main value display control
+        subtext_control: Subtext display control
+        on_click: Click handler - makes the entire card clickable
+    """
+
+    # Header section with Icon and Title
+    header = ft.Row(
+        [
+            ft.Text(
+                spans=[
+                    ft.TextSpan(
+                        title.upper() if title else "",
+                        style=ft.TextStyle(
+                            size=12,
+                            weight=ft.FontWeight.BOLD,
+                            color="#94A3B8",  # Slate-400
+                            letter_spacing=1.0,
+                        ),
+                    )
+                ],
+            ),
+            ft.Icon(icon, size=20, color=accent_color) if icon else ft.Container(),
+        ],
+        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    card_content = ft.Column(
+        [
+            header,
+            ft.Container(height=12),  # Spacer
+            value_control if value_control else ft.Container(),
+            subtext_control if subtext_control else ft.Container(),
+        ],
+        spacing=0,
+    )
+
+    # Determine glow color from accent_color
+    glow_color = accent_color if accent_color else "#38BDF8"  # Default to cyan
+
+    return ft.Container(
+        content=card_content,
+        bgcolor="#1E293B",  # Slate-800 - solid, opaque matte
+        gradient=ft.LinearGradient(
+            begin=ft.Alignment.TOP_CENTER,
+            end=ft.Alignment.BOTTOM_CENTER,
+            colors=["#1E293B", "#0F172A"],  # Subtle depth gradient
+        ),
+        border=ft.Border(
+            top=ft.BorderSide(2, accent_color),
+            bottom=ft.BorderSide(1, "#334155"),  # Slate-700
+            left=ft.BorderSide(1, "#334155"),
+            right=ft.BorderSide(1, "#334155"),
+        ),
+        border_radius=ft.border_radius.all(18),  # Squircle shape
+        padding=24,
+        animate_scale=ft.Animation(100, ft.AnimationCurve.EASE_OUT),
+        on_hover=lambda e: _on_matte_card_hover(e),
+        on_click=on_click,
+        ink=True if on_click else False,
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=16,
+            color=ft.Colors.with_opacity(
+                0.15, glow_color
+            ),  # Reduced opacity for better matte look
+            offset=ft.Offset(0, 4),
+        ),
+    )
+
+
+def _on_matte_card_hover(e):
+    e.control.scale = 1.01 if e.data == "true" else 1.0
+    e.control.update()
 
 
 # ========================================================================================
@@ -669,6 +795,7 @@ __all__ = [
     "create_gradient",
     "create_gradient_button",
     "create_loading_indicator",
+    "create_matte_card",
     "create_metric_card",
     "create_metric_card_enhanced",
     # Native components

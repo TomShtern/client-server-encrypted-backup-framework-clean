@@ -132,7 +132,7 @@ def _metric_card(
                             title,
                             size=12,
                             weight=ft.FontWeight.W_600,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color="onSurfaceVariant",
                             text_align=ft.TextAlign.LEFT,
                         ),
                     ],
@@ -144,24 +144,24 @@ def _metric_card(
                         value,
                         size=34,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.ON_SURFACE,
+                        color="onSurface",
                     ),
-                    padding=ft.padding.only(top=8, bottom=4),
+                    padding=ft.Padding.only(top=8, bottom=4),
                 ),
                 ft.Text(
                     subtitle,
                     size=11,
                     weight=ft.FontWeight.W_500,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                     opacity=0.8,
                 ),
             ],
             spacing=10,
         ),
         padding=20,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
         border_radius=16,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.12, "outline")),
         shadow=[
             ft.BoxShadow(
                 blur_radius=16,
@@ -265,7 +265,7 @@ def _create_bar_chart(
 
     chart = ft.BarChart(
         bar_groups=bar_groups,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.12, "outline")),
         left_axis=ft.ChartAxis(
             labels_size=32,
             show_labels=True,
@@ -279,7 +279,7 @@ def _create_bar_chart(
                         create_clean_label(str(item.get(x_key, ""))),
                         size=11,
                         weight=ft.FontWeight.W_600,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                 )
                 for idx, item in enumerate(data)
@@ -288,10 +288,10 @@ def _create_bar_chart(
         ),
         horizontal_grid_lines=ft.ChartGridLines(
             interval=max(1, chart_max / 5),  # MB intervals (minimum 1 MB)
-            color=ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE),
+            color=ft.Colors.with_opacity(0.08, "outline"),
             width=1,
         ),
-        tooltip_bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.SURFACE),
+        tooltip_bgcolor=ft.Colors.with_opacity(0.95, "surface"),
         max_y=chart_max * 1.2,
         interactive=True,
         expand=True,
@@ -305,16 +305,16 @@ def _create_bar_chart(
                     title,
                     size=14,
                     weight=ft.FontWeight.W_600,
-                    color=ft.Colors.ON_SURFACE,
+                    color="onSurface",
                 ),
                 ft.Container(content=chart, height=220, expand=True),
             ],
             spacing=12,
         ),
         padding=20,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
         border_radius=16,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.1, "outline")),
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
     )
 
@@ -405,12 +405,12 @@ def _create_pie_chart(
                                 label,
                                 size=12,
                                 weight=ft.FontWeight.W_600,
-                                color=ft.Colors.ON_SURFACE,
+                                color="onSurface",
                             ),
                             ft.Text(
                                 f"{value} files ({percentage:.1f}%)",
                                 size=10,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                color="onSurfaceVariant",
                             ),
                         ],
                         spacing=2,
@@ -420,7 +420,7 @@ def _create_pie_chart(
                 spacing=12,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(vertical=6, horizontal=10),
+            padding=ft.Padding.symmetric(vertical=6, horizontal=10),
             border_radius=10,
             ink=True,
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
@@ -429,7 +429,7 @@ def _create_pie_chart(
         def on_legend_hover(e, target=legend_item):
             target.scale = 1.05 if e.data == "true" else 1.0
             target.bgcolor = (
-                ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY)
+                ft.Colors.with_opacity(0.08, "primary")
                 if e.data == "true"
                 else None
             )
@@ -445,7 +445,7 @@ def _create_pie_chart(
                     title,
                     size=14,
                     weight=ft.FontWeight.W_600,
-                    color=ft.Colors.ON_SURFACE,
+                    color="onSurface",
                 ),
                 ft.Row(
                     [
@@ -469,9 +469,9 @@ def _create_pie_chart(
             spacing=16,
         ),
         padding=20,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
         border_radius=16,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.1, "outline")),
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
     )
 
@@ -521,15 +521,15 @@ def _create_line_chart(
                 below_line_cutoff_y=0,
             )
         ],
-        border=ft.border.all(1, ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.12, "outline")),
         horizontal_grid_lines=ft.ChartGridLines(
             interval=max(0.5, max_y / 5),
-            color=ft.Colors.with_opacity(0.08, ft.Colors.OUTLINE),
+            color=ft.Colors.with_opacity(0.08, "outline"),
             width=1,
         ),
         vertical_grid_lines=ft.ChartGridLines(
             interval=1,
-            color=ft.Colors.with_opacity(0.05, ft.Colors.OUTLINE),
+            color=ft.Colors.with_opacity(0.05, "outline"),
             width=1,
         ),
         left_axis=ft.ChartAxis(
@@ -545,14 +545,14 @@ def _create_line_chart(
                         format_date_label(str(item.get(x_key, ""))),
                         size=10,
                         weight=ft.FontWeight.W_500,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                 )
                 for idx, item in enumerate(data)
             ],
             labels_size=32,
         ),
-        tooltip_bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.SURFACE),
+        tooltip_bgcolor=ft.Colors.with_opacity(0.95, "surface"),
         max_y=max_y,
         min_y=0,
         interactive=True,
@@ -567,16 +567,16 @@ def _create_line_chart(
                     title,
                     size=14,
                     weight=ft.FontWeight.W_600,
-                    color=ft.Colors.ON_SURFACE,
+                    color="onSurface",
                 ),
                 ft.Container(content=chart, height=220, expand=True),
             ],
             spacing=12,
         ),
         padding=20,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
         border_radius=16,
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.1, "outline")),
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
     )
 
@@ -615,9 +615,9 @@ def create_analytics_view(
                 spacing=12,
             ),
             padding=24,
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="surface",
             border_radius=16,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.1, "outline")),
             col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
         )
         for _ in range(4)
@@ -729,14 +729,14 @@ def create_analytics_view(
                 [
                     create_error_display(str(exc)),
                     ft.Container(
-                        content=ft.ElevatedButton(
+                        content=ft.Button(
                             "Retry",
                             icon=ft.Icons.REFRESH,
                             on_click=lambda _: schedule_task(
                                 lambda: refresh_data(toast=False)
                             ),
                         ),
-                        padding=ft.padding.only(top=12),
+                        padding=ft.Padding.only(top=12),
                         alignment=ft.Alignment.CENTER,
                     ),
                 ],
@@ -899,7 +899,7 @@ def create_analytics_view(
 
     main_layout = ft.Container(
         content=content_column,
-        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        padding=ft.Padding.symmetric(vertical=16, horizontal=20),
         expand=True,
     )
 
@@ -983,3 +983,4 @@ def create_analytics_view(
         logger.debug("Analytics view disposed cleanly")
 
     return stack, dispose, setup
+

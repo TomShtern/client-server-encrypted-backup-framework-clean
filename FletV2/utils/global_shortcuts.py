@@ -13,7 +13,8 @@ from enum import Enum
 from typing import Any
 
 import flet as ft
-from FletV2.utils.user_feedback import _show_dialog, _close_dialog
+
+from FletV2.utils.user_feedback import _close_dialog
 
 
 class ShortcutCategory(Enum):

@@ -71,7 +71,7 @@ def main(page: ft.Page):
                 ft.Text(
                     "Watch the terminal output for all logging messages!",
                     size=12,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                 ),
             ],
             spacing=15,

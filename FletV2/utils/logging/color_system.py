@@ -1,7 +1,7 @@
 """
 Professional color system for log levels with distinct, recognizable colors.
 Each level has a primary color, background tint, and semantic meaning.
-Compatible with Flet 0.28.3
+Compatible with Flet 0.80.0
 """
 
 import flet as ft

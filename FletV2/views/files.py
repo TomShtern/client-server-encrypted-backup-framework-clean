@@ -428,7 +428,7 @@ def create_files_view(
                         content=ft.Text(
                             data.get("hash", "N/A"), selectable=True, size=12
                         ),
-                        bgcolor=ft.Colors.SURFACE_TINT,
+                        bgcolor="surfaceTint",
                         padding=8,
                         border_radius=4,
                     ),
@@ -665,7 +665,7 @@ def create_files_view(
 
     files_container = ft.Container(
         content=main_content,
-        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        padding=ft.Padding.symmetric(vertical=16, horizontal=20),
         expand=True,
     )
 
@@ -679,3 +679,4 @@ def create_files_view(
         # No subscriptions to clean up currently
 
     return files_container, dispose, setup_subscriptions
+

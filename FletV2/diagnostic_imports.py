@@ -17,7 +17,7 @@ if base_dir not in sys.path:
 
 print("[STEP 1] Testing basic ft.run() with NO extra imports...")
 
-import flet as ft
+import flet as ft  # noqa: E402 - Intentional delayed import for diagnostics
 
 
 def simple_main(page: ft.Page):
@@ -62,7 +62,7 @@ except Exception as e:
 
 print("\n[STEP 4] Adding FletV2 components import...")
 try:
-    from FletV2.components.breadcrumb import BreadcrumbFactory
+    from FletV2.components.breadcrumb import BreadcrumbFactory  # noqa: F401 - Testing import side effects
 
     print("  breadcrumb imported")
 except Exception as e:

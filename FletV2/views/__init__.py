@@ -24,3 +24,4 @@ def __getattr__(name):
         return None
     except Exception as e:
         raise AttributeError(f"module 'views' has no attribute '{name}': {e}") from e
+

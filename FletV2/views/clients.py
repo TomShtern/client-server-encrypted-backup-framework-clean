@@ -160,7 +160,7 @@ class _ClientsViewController:
 
         main_layout = ft.Container(
             content=main_column,
-            padding=ft.padding.symmetric(horizontal=20, vertical=16),
+            padding=ft.Padding.symmetric(vertical=16, horizontal=20),
             expand=True,
         )
 
@@ -857,3 +857,4 @@ def create_clients_view(
             _state_manager.subscribe("clients", controller.state_subscription_callback)
 
     return controller.build()
+

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from FletV2.main import AsyncManager
 
 import flet as ft
-from FletV2.utils.user_feedback import _show_dialog, _close_dialog
 
 # UTF-8 solution for subprocess/console I/O
 from FletV2.components.context_menu import (
@@ -45,7 +44,7 @@ from FletV2.components.context_menu import (
 
 # Import DataTable-related helpers from ui_builders instead of EnhancedDataTable
 from FletV2.theme import (
-    create_neumorphic_metric_card,
+    create_enhanced_card,  # Use main card builder
     themed_button,
 )
 from FletV2.utils.async_helpers import run_sync_in_executor
@@ -61,7 +60,12 @@ from FletV2.utils.global_shortcuts import (
 )
 from FletV2.utils.server_bridge import ServerBridge
 from FletV2.utils.simple_state import SimpleState
-from FletV2.utils.user_feedback import show_error_message, show_success_message
+from FletV2.utils.user_feedback import (
+    _close_dialog,
+    _show_dialog,
+    show_error_message,
+    show_success_message,
+)
 
 # Ensure proper path setup
 _views_dir = os.path.dirname(os.path.abspath(__file__))
@@ -80,6 +84,19 @@ else:
     logger.setLevel(logging.WARNING)
 
 _ORIGINAL_PRINT = builtins.print
+
+
+# HELPER: Local definition to avoid circular imports/version mismatches
+def create_neumorphic_metric_card(
+    content: ft.Control, intensity: str = "pronounced"
+) -> ft.Container:
+    """Backward compatibility wrapper for neumorphic cards."""
+    return create_enhanced_card(
+        content=content,
+        gradient_background="surface",
+        elevation=0,
+        hover_effect=True,
+    )
 
 
 def _safe_is_attached(control: ft.Control | None) -> bool:
@@ -682,7 +699,7 @@ def _build_record_card(
                     ft.Text(
                         key.replace("_", " ").title() + ":",
                         size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                         width=140,
                         weight=ft.FontWeight.W_500,
                     ),
@@ -714,7 +731,7 @@ def _build_record_card(
                     icon=ft.Icons.DELETE_OUTLINED,
                     tooltip="Delete record",
                     icon_size=18,
-                    icon_color=ft.Colors.ERROR,
+                    icon_color="error",
                     on_click=lambda _e, r=record: delete_callback(r),
                 ),
             ],
@@ -724,7 +741,7 @@ def _build_record_card(
     # Card header
     header = ft.Row(
         [
-            ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=16, color=ft.Colors.PRIMARY),
+            ft.Icon(ft.Icons.ARTICLE_OUTLINED, size=16, color="primary"),
             ft.Text(
                 f"{current_table.title()} #{index + 1}",
                 size=14,
@@ -744,10 +761,10 @@ def _build_record_card(
 
     return ft.Container(
         content=ft.Column(card_content, spacing=10, tight=True),
-        padding=ft.padding.symmetric(horizontal=14, vertical=12),
+        padding=ft.Padding.symmetric(vertical=12, horizontal=14),
         border_radius=12,
-        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.SURFACE),
-        border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)),
+        bgcolor=ft.Colors.with_opacity(0.05, "surface"),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.1, "outline")),
     )
 
 
@@ -882,35 +899,35 @@ def create_database_view(
                 spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(vertical=28),
+            padding=ft.Padding.symmetric(vertical=28),
         )
     )
 
     # Container for cards view
     cards_view_container = ft.Container(
         content=records_listview,
-        padding=ft.padding.only(left=8, top=8, right=8, bottom=24),
+        padding=ft.Padding.only(left=8, top=8, right=8, bottom=24),
         visible=False,
     )
 
     selected_count_text = ft.Text(
         "0 rows selected",
         size=14,
-        color=ft.Colors.ON_PRIMARY,
+        color="onPrimary",
         weight=ft.FontWeight.W_500,
     )
 
     btn_clear_selection = ft.TextButton(
         "Clear Selection",
         icon=ft.Icons.CLEAR,
-        style=ft.ButtonStyle(color=ft.Colors.ON_PRIMARY),
+        style=ft.ButtonStyle(color="onPrimary"),
         on_click=lambda e: _clear_selection(),
     )
 
     btn_bulk_delete = ft.FilledButton(
         "Delete Selected",
         icon=ft.Icons.DELETE_SWEEP,
-        style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+        style=ft.ButtonStyle(bgcolor="error"),
         on_click=lambda e: _delete_selected_rows(),
     )
 
@@ -921,17 +938,17 @@ def create_database_view(
         columns=[
             ft.DataColumn(
                 label=ft.Text(
-                    "Loading...", weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE
+                    "Loading...", weight=ft.FontWeight.BOLD, color="onSurface"
                 ),
             ),
         ],
         rows=[],
-        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border=ft.Border.all(1, "outline"),
         border_radius=8,
         horizontal_lines=ft.BorderSide(
-            1, ft.Colors.with_opacity(0.1, ft.Colors.OUTLINE)
+            1, ft.Colors.with_opacity(0.1, "outline")
         ),
-        heading_row_color=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+        heading_row_color=ft.Colors.with_opacity(0.05, "primary"),
         data_row_min_height=48,
         column_spacing=16,
         show_checkbox_column=True,
@@ -1005,7 +1022,7 @@ def create_database_view(
                     label=ft.Text(
                         col.replace("_", " ").title(),
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.ON_SURFACE,
+                        color="onSurface",
                     ),
                     on_sort=lambda _, col_name=col: _sort_by_column_name(col_name),
                 )
@@ -1245,7 +1262,7 @@ def create_database_view(
             ft.Container(
                 content=data_table,
                 padding=ft.Padding.all(8),
-                bgcolor=ft.Colors.SURFACE,
+                bgcolor="surface",
                 border_radius=8,
             ),
         ],
@@ -1264,7 +1281,7 @@ def create_database_view(
             ],
             spacing=12,
         ),
-        bgcolor=ft.Colors.PRIMARY,
+        bgcolor="primary",
         border_radius=8,
         padding=12,
         visible=False,  # Hidden by default
@@ -1274,7 +1291,7 @@ def create_database_view(
     pagination_info = ft.Text(
         "Page 1 of 1",
         size=13,
-        color=ft.Colors.ON_SURFACE_VARIANT,
+        color="onSurfaceVariant",
         weight=ft.FontWeight.W_500,
     )
 
@@ -1330,8 +1347,8 @@ def create_database_view(
         selected=False,
         style=ft.ButtonStyle(
             color={
-                ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT,
-                ft.ControlState.SELECTED: ft.Colors.PRIMARY,
+                ft.ControlState.DEFAULT: "onSurfaceVariant",
+                ft.ControlState.SELECTED: "primary",
             }
         ),
     )
@@ -1341,8 +1358,8 @@ def create_database_view(
         selected=True,
         style=ft.ButtonStyle(
             color={
-                ft.ControlState.DEFAULT: ft.Colors.ON_SURFACE_VARIANT,
-                ft.ControlState.SELECTED: ft.Colors.PRIMARY,
+                ft.ControlState.DEFAULT: "onSurfaceVariant",
+                ft.ControlState.SELECTED: "primary",
             }
         ),
     )
@@ -1415,7 +1432,7 @@ def create_database_view(
         if "connected" in status_lower:
             stat_status.color = ft.Colors.GREEN
         elif "error" in status_lower:
-            stat_status.color = ft.Colors.ERROR
+            stat_status.color = "error"
         else:
             stat_status.color = ft.Colors.GREY
 
@@ -1480,7 +1497,7 @@ def create_database_view(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                     ),
-                    padding=ft.padding.symmetric(vertical=40),
+                    padding=ft.Padding.symmetric(vertical=40),
                     alignment=ft.Alignment.CENTER,
                 )
             )
@@ -1494,7 +1511,7 @@ def create_database_view(
                 ft.Text(
                     count_text,
                     size=13,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                     weight=ft.FontWeight.W_500,
                 )
             )
@@ -1535,12 +1552,12 @@ def create_database_view(
                     content=ft.Column(
                         [
                             ft.Icon(
-                                ft.Icons.ERROR_OUTLINE, size=48, color=ft.Colors.ERROR
+                                ft.Icons.ERROR_OUTLINE, size=48, color="error"
                             ),
                             ft.Text(
                                 "Error: No content to display",
                                 size=16,
-                                color=ft.Colors.ERROR,
+                                color="error",
                             ),
                             ft.Text(
                                 "Please refresh or contact support",
@@ -1551,7 +1568,7 @@ def create_database_view(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                     ),
-                    padding=ft.padding.symmetric(vertical=40),
+                    padding=ft.Padding.symmetric(vertical=40),
                     alignment=ft.Alignment.CENTER,
                 )
             )
@@ -1678,7 +1695,7 @@ def create_database_view(
             ft.FilledButton(
                 "Delete All",
                 on_click=lambda __: page.run_task(confirm_bulk_delete),
-                style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+                style=ft.ButtonStyle(bgcolor="error"),
             ),
         ]
 
@@ -2133,7 +2150,7 @@ def create_database_view(
             ft.FilledButton(
                 "Delete",
                 on_click=lambda __: page.run_task(confirm_delete),
-                style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR),
+                style=ft.ButtonStyle(bgcolor="error"),
             ),
         ]
 
@@ -2292,7 +2309,7 @@ def create_database_view(
             spacing=12,
             alignment=ft.MainAxisAlignment.START,
         ),
-        bgcolor=ft.Colors.SURFACE,  # SURFACE_VARIANT doesn't exist in Flet 0.28.3
+        bgcolor="surface",  # SURFACE_VARIANT doesn't exist in Flet 0.28.3
         border_radius=8,
         padding=12,
     )
@@ -2305,8 +2322,8 @@ def create_database_view(
             btn_export_csv,
             btn_export_json,
             ft.Container(expand=True),  # Spacer
-            ft.VerticalDivider(width=1, thickness=1, color=ft.Colors.OUTLINE_VARIANT),
-            ft.Text("View:", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.VerticalDivider(width=1, thickness=1, color="outlineVariant"),
+            ft.Text("View:", size=13, color="onSurfaceVariant"),
             btn_view_cards,
             btn_view_table,
         ],
@@ -2320,7 +2337,7 @@ def create_database_view(
             ft.Text(
                 "Inspect tables, edit records, and manage database state.",
                 size=14,
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                color="onSurfaceVariant",
             ),
         ],
         spacing=4,
@@ -2341,9 +2358,9 @@ def create_database_view(
                 ft.Text(
                     "Full CRUD operations with search and export capabilities",
                     size=13,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                 ),
-                ft.Divider(height=1, thickness=0.5, color=ft.Colors.OUTLINE_VARIANT),
+                ft.Divider(height=1, thickness=0.5, color="outlineVariant"),
                 # Single container switches between cards/table views
                 views_switcher,
             ],
@@ -2351,7 +2368,7 @@ def create_database_view(
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.START,
         ),
-        bgcolor=ft.Colors.SURFACE,  # SURFACE_VARIANT doesn't exist in Flet 0.28.3
+        bgcolor="surface",  # SURFACE_VARIANT doesn't exist in Flet 0.28.3
         border_radius=8,
         padding=16,
     )

@@ -78,13 +78,13 @@ def create_search_bar(
         bar_hint_text=placeholder,
         bar_leading=ft.Icon(
             prefix_icon,
-            color=ft.Colors.PRIMARY,
+            color="primary",
             size=20,
         ),
         view_elevation=4,
         view_header_height=56,
-        bar_overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-        bar_padding=ft.padding.symmetric(horizontal=16),
+        bar_overlay_color=ft.Colors.with_opacity(0.1, "primary"),
+        bar_padding=ft.Padding.symmetric(horizontal=16),
         on_tap=on_tap,
         on_submit=lambda e: on_submit(e.control.value) if on_submit else None,
         on_change=lambda e: on_change(e.control.value) if on_change else None,
@@ -94,10 +94,10 @@ def create_search_bar(
     )
 
     # Enhanced styling with Material Design 3 shadow and border radius
-    search_bar.bar_bgcolor = ft.Colors.SURFACE
+    search_bar.bar_bgcolor = "surface"
     search_bar.bar_shape = ft.RoundedRectangleBorder(radius=16)
     search_bar.bar_border_side = ft.BorderSide(
-        1, ft.Colors.with_opacity(0.2, ft.Colors.OUTLINE)
+        1, ft.Colors.with_opacity(0.2, "outline")
     )
 
     return search_bar
@@ -144,7 +144,7 @@ def create_filter_chip(
 
     # Set default padding if not provided
     if padding is None:
-        padding = ft.padding.symmetric(horizontal=12, vertical=6)
+        padding = ft.Padding.symmetric(vertical=6, horizontal=12)
 
     # Create the native FilterChip with Material Design 3 styling
     chip = ft.FilterChip(
@@ -153,14 +153,14 @@ def create_filter_chip(
         on_select=lambda e: on_select(text, e.control.selected) if on_select else None,
         label_style=ft.TextStyle(
             size=12,
-            color=text_color or ft.Colors.ON_SURFACE,
+            color=text_color or "onSurface",
             weight=ft.FontWeight.W_500,
         ),
         padding=padding,
         bg_color=bg_color,
         icon=icon,
         elevation=1,
-        shadow_color=ft.Colors.with_opacity(0.2, ft.Colors.SHADOW),
+        shadow_color=ft.Colors.with_opacity(0.2, "shadow"),
     )
 
     return chip
@@ -192,8 +192,8 @@ def create_status_chip(
         chip = create_status_chip(
             icon=ft.Icons.HOURGLASS_BOTTOM,
             text_control=uptime_text,
-            bg_color=ft.Colors.PRIMARY,
-            text_color=ft.Colors.ON_PRIMARY
+            bg_color="primary",
+            text_color="onPrimary"
         )
     """
 
@@ -210,14 +210,14 @@ def create_status_chip(
             spacing=6,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
         bgcolor=ft.Colors.with_opacity(0.12, bg_color),
-        border=ft.border.all(1, ft.Colors.with_opacity(0.24, bg_color)),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.24, bg_color)),
         border_radius=16,  # Material Design 3 recommends 16px for chips
         shadow=ft.BoxShadow(
             spread_radius=1,
             blur_radius=2,
-            color=ft.Colors.with_opacity(0.1, ft.Colors.SHADOW),
+            color=ft.Colors.with_opacity(0.1, "shadow"),
             offset=ft.Offset(0, 1),
         ),
         animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
@@ -255,9 +255,9 @@ def create_filter_dropdown(
         border=ft.InputBorder.OUTLINE,
         border_radius=12,
         filled=True,
-        fill_color=ft.Colors.SURFACE,
-        focused_border_color=ft.Colors.PRIMARY,
-        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        fill_color="surface",
+        focused_border_color="primary",
+        content_padding=ft.Padding.symmetric(vertical=8, horizontal=12),
         width=None if expand else width,
         expand=expand,
     )
@@ -289,7 +289,7 @@ def create_action_button(text, on_click, icon=None, primary=True):
         on_click=on_click,
         style=ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=12),
-            padding=ft.padding.symmetric(horizontal=16, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
         ),
     )
 
@@ -305,7 +305,7 @@ def create_view_header(
 
     leading_controls: list[ft.Control] = []
     if icon:
-        leading_controls.append(ft.Icon(icon, size=26, color=ft.Colors.PRIMARY))
+        leading_controls.append(ft.Icon(icon, size=26, color="primary"))
     leading_controls.append(ft.Text(title, size=26, weight=ft.FontWeight.BOLD))
 
     title_row = ft.Row(
@@ -329,13 +329,13 @@ def create_view_header(
             ft.Text(
                 description,
                 size=14,
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                color="onSurfaceVariant",
             )
         )
 
     return ft.Container(
         content=ft.Column(header_controls, spacing=4),
-        padding=ft.padding.only(bottom=12),
+        padding=ft.Padding.only(bottom=12),
     )
 
 
@@ -372,17 +372,17 @@ def create_info_row(
             value,
             size=value_size,
             weight=ft.FontWeight.W_600,
-            color=ft.Colors.ON_SURFACE,
+            color="onSurface",
         )
     else:
         value_control = value
 
     return ft.Row(
         [
-            ft.Icon(icon, size=18, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Icon(icon, size=18, color="onSurfaceVariant"),
             ft.Column(
                 [
-                    ft.Text(label, size=label_size, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(label, size=label_size, color="onSurfaceVariant"),
                     value_control,
                 ],
                 spacing=2,
@@ -423,46 +423,64 @@ def create_metric_card(
     value_control: ft.Control,
     icon: str,
     description: str = "",
+    accent_color: str | None = None,
 ) -> ft.Card:
     """
-    Create a metric card matching the EXACT pattern from clients.py and files.py.
+    Create a metric card with enhanced Material Design 3 styling.
 
-    This is the duplicated code from:
-    - clients.py:67-80
-    - files.py:65-77
-
-    Now consolidated into a single reusable function.
+    Features vibrant accent-colored squircle icons for visual interest.
+    Used across clients, files, and other views.
 
     Args:
         title: Card title
         value_control: Control displaying the value (e.g., ft.Text("42"))
         icon: Material icon name (e.g., ft.Icons.PEOPLE)
         description: Optional description for accessibility
+        accent_color: Optional accent color for the icon (defaults to PRIMARY)
 
     Returns:
-        Configured Card with metric display
-
-    Example:
-        total_value = ft.Text("0", size=28, weight=ft.FontWeight.BOLD)
-        card = create_metric_card("Total Clients", total_value, ft.Icons.PEOPLE)
+        Configured Card with metric display and accent color
     """
+    # Default accent colors based on icon type for vibrant look
+    if accent_color is None:
+        icon_color_map = {
+            ft.Icons.PEOPLE: ft.Colors.PURPLE,
+            ft.Icons.WIFI: ft.Colors.TEAL,
+            ft.Icons.WIFI_OFF: ft.Colors.RED,
+            ft.Icons.FOLDER: ft.Colors.BLUE,
+            ft.Icons.CHECK_CIRCLE: ft.Colors.GREEN,
+            ft.Icons.STORAGE: ft.Colors.INDIGO,
+            ft.Icons.ERROR: ft.Colors.RED,
+            ft.Icons.PERSON: ft.Colors.PURPLE,
+        }
+        accent_color = icon_color_map.get(icon, "primary")
+
+    # Squircle icon container (Enhanced design feature)
+    icon_container = ft.Container(
+        content=ft.Icon(icon, size=20, color=ft.Colors.WHITE),
+        bgcolor=accent_color,
+        border_radius=10,
+        padding=8,
+    )
+
     card = ft.Card(
         content=ft.Container(
             content=ft.Column(
                 [
                     ft.Row(
                         [
-                            ft.Icon(icon, size=24),
-                            ft.Text(title, size=14, weight=ft.FontWeight.W_500),
+                            icon_container,
+                            ft.Text(title, size=13, weight=ft.FontWeight.W_500),
                         ],
-                        spacing=8,
+                        spacing=10,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                     value_control,
                 ],
-                spacing=8,
+                spacing=10,
                 tight=True,
             ),
-            padding=20,
+            padding=16,
         ),
         elevation=2,
     )
@@ -501,10 +519,10 @@ def create_status_badge(text: str, status: str) -> ft.Control:
         content=ft.Text(
             text, size=11, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD
         ),
-        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
         border_radius=12,
         bgcolor=color,
-        border=ft.border.all(1, color),
+        border=ft.Border.all(1, color),
     )
 
 
@@ -520,7 +538,7 @@ _LEVEL_COLOR_FG = {
 def get_level_colors(level: str) -> tuple[str, str]:
     """Return foreground/background colors for log levels."""
 
-    fg = _LEVEL_COLOR_FG.get(level.upper(), ft.Colors.ON_SURFACE)
+    fg = _LEVEL_COLOR_FG.get(level.upper(), "onSurface")
     bg = ft.Colors.with_opacity(0.08, fg)
     return fg, bg
 
@@ -533,10 +551,10 @@ def create_log_level_badge(level: str) -> ft.Control:
         content=ft.Text(
             level, size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE
         ),
-        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
         bgcolor=fg,
         border_radius=12,
-        border=ft.border.all(1, fg),
+        border=ft.Border.all(1, fg),
         alignment=ft.Alignment.CENTER,
     )
 

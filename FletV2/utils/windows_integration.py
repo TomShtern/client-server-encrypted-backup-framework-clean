@@ -365,38 +365,38 @@ class WindowsThemeProvider:
         if self.current_theme == WindowsTheme.DARK:
             if is_primary:
                 return ft.ButtonStyle(
-                    bgcolor=ft.Colors.PRIMARY,
-                    color=ft.Colors.ON_PRIMARY,
+                    bgcolor="primary",
+                    color="onPrimary",
                     elevation=2,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
                 )
             else:
                 return ft.ButtonStyle(
-                    bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
-                    color=ft.Colors.ON_SURFACE,
+                    bgcolor=ft.Colors.with_opacity(0.1, "onSurface"),
+                    color="onSurface",
                     elevation=0,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                    overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+                    overlay_color=ft.Colors.with_opacity(0.1, "onSurface"),
                 )
         else:
             if is_primary:
                 return ft.ButtonStyle(
-                    bgcolor=ft.Colors.PRIMARY,
-                    color=ft.Colors.ON_PRIMARY,
+                    bgcolor="primary",
+                    color="onPrimary",
                     elevation=1,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
                 )
             else:
                 return ft.ButtonStyle(
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
-                    color=ft.Colors.ON_SURFACE,
+                    bgcolor=ft.Colors.with_opacity(0.05, "onSurface"),
+                    color="onSurface",
                     elevation=0,
                     shape=ft.RoundedRectangleBorder(radius=4),
                     padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                    overlay_color=ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE),
+                    overlay_color=ft.Colors.with_opacity(0.08, "onSurface"),
                 )
 
     def enable_theme_change_monitoring(self):

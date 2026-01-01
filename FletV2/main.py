@@ -559,13 +559,13 @@ class FletV2App(ft.Row):
                                         width=24,
                                         height=24,
                                         stroke_width=3,
-                                        color=ft.Colors.PRIMARY,
+                                        color="primary",
                                     ),
                                     ft.Text(
                                         "Loading Application...",
                                         size=16,
                                         weight=ft.FontWeight.W_500,
-                                        color=ft.Colors.ON_SURFACE,
+                                        color="onSurface",
                                     ),
                                 ],
                                 alignment=ft.MainAxisAlignment.CENTER,
@@ -573,8 +573,8 @@ class FletV2App(ft.Row):
                             ),
                             ft.Chip(
                                 label=ft.Text("Encrypted Backup Framework", size=12),
-                                bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-                                color=ft.Colors.PRIMARY,
+                                bgcolor=ft.Colors.with_opacity(0.1, "primary"),
+                                color="primary",
                                 height=32,
                             ),
                         ],
@@ -586,7 +586,7 @@ class FletV2App(ft.Row):
                     alignment=ft.Alignment.CENTER,
                 ),
                 elevation=2,
-                shadow_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                shadow_color=ft.Colors.with_opacity(0.1, "primary"),
             ),
             transition=ft.AnimatedSwitcherTransition.FADE,  # Optimal performance transition
             duration=self.ANIMATION_DURATION_MS,  # Use constant for consistency
@@ -598,12 +598,60 @@ class FletV2App(ft.Row):
 
         self._breadcrumb_strip = ft.Container(visible=False, expand=True)
         self._global_search_container = ft.Container(visible=False, expand=False)
+        self._header_actions_container = ft.Row(
+            spacing=12, alignment=ft.MainAxisAlignment.END, expand=False
+        )
 
-        # Header row with breadcrumb (left) and global search (right)
+        # Global connection status badge for the top bar
+        self._status_dot = ft.Container(
+            width=8,
+            height=8,
+            border_radius=4,
+            bgcolor="#64748B",  # Slate-500 default
+            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
+        )
+        self._status_text = ft.Text(
+            "Checking...",
+            size=11,
+            weight=ft.FontWeight.W_500,
+            color="#94A3B8",  # Slate-400
+        )
+        self._global_status_badge = ft.Container(
+            content=ft.Row(
+                [self._status_dot, self._status_text],
+                spacing=8,
+                tight=True,
+            ),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            border_radius=16,  # Pill shape
+            bgcolor="#1E293B",  # Slate-800
+            border=ft.Border.all(1, "#334155"),  # Slate-700
+            visible=True,
+        )
+
+        # Server control toggle button
+        self._server_toggle_button = ft.IconButton(
+            icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
+            tooltip="Start/Stop Server",
+            icon_size=20,
+            icon_color="#10B981",  # Green
+            on_click=self._on_server_toggle,
+        )
+
+        # Header row with breadcrumb (left) and global search/status (right)
         self._header_row = ft.Row(
             controls=[
                 self._breadcrumb_strip,
-                self._global_search_container,
+                ft.Row(
+                    [
+                        self._server_toggle_button,  # Server control button
+                        self._global_status_badge,  # Status indicator moved to top bar
+                        self._global_search_container,
+                        self._header_actions_container,
+                    ],
+                    spacing=12,
+                    alignment=ft.MainAxisAlignment.END,
+                ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -621,8 +669,9 @@ class FletV2App(ft.Row):
 
         self.content_area = ft.Container(
             expand=True,
-            padding=ft.Padding.all(10),
+            padding=ft.Padding.all(16),
             border_radius=ft.BorderRadius(16, 0, 0, 16),
+            bgcolor="#111625",  # Unified Dark Theme Content Area (Match Sidebar)
             content=content_column,
         )
 
@@ -631,11 +680,9 @@ class FletV2App(ft.Row):
         self.nav_rail = self._create_navigation_rail()
 
         # Build layout: NavigationRail + content area (pure Flet pattern)
+        # Note: Removed VerticalDivider for cleaner dark-to-light transition
         self.controls = [
             self.nav_rail,
-            ft.VerticalDivider(
-                width=1, color=ft.Colors.with_opacity(0.12, ft.Colors.OUTLINE)
-            ),
             self.content_area,
         ]
 
@@ -706,6 +753,82 @@ class FletV2App(ft.Row):
 
         print(f"🔴 [CRITICAL] Traceback: {traceback.format_exc()}")
         raise
+
+    def _on_server_toggle(self, e) -> None:
+        """Handle server start/stop toggle button click."""
+        if not self.server_bridge:
+            self._show_snackbar(
+                "No server configured. Run with start_with_server.py", "warning"
+            )
+            return
+
+        try:
+            # Check current status
+            status = self.server_bridge.get_server_status()
+            is_running = (
+                status.get("server_running", False)
+                if isinstance(status, dict)
+                else False
+            )
+
+            if is_running:
+                # Stop server
+                result = self.server_bridge.stop_server()
+                if result.get("success"):
+                    self._show_snackbar("Server stopped", "info")
+                    self._update_server_button(running=False)
+                else:
+                    self._show_snackbar(
+                        f"Failed to stop: {result.get('error', 'Unknown')}", "error"
+                    )
+            else:
+                # Start server
+                result = self.server_bridge.start_server()
+                if result.get("success"):
+                    self._show_snackbar("Server started", "success")
+                    self._update_server_button(running=True)
+                else:
+                    self._show_snackbar(
+                        f"Failed to start: {result.get('error', 'Unknown')}", "error"
+                    )
+
+        except Exception as ex:
+            logger.error(f"Server toggle error: {ex}")
+            self._show_snackbar(f"Error: {ex}", "error")
+
+    def _update_server_button(self, running: bool) -> None:
+        """Update server button icon based on state."""
+        if hasattr(self, "_server_toggle_button"):
+            if running:
+                self._server_toggle_button.icon = ft.Icons.STOP_CIRCLE_OUTLINED
+                self._server_toggle_button.icon_color = "#EF4444"  # Red
+                self._server_toggle_button.tooltip = "Stop Server"
+            else:
+                self._server_toggle_button.icon = ft.Icons.PLAY_CIRCLE_OUTLINE
+                self._server_toggle_button.icon_color = "#10B981"  # Green
+                self._server_toggle_button.tooltip = "Start Server"
+            try:
+                self._server_toggle_button.update()
+            except Exception:
+                pass  # Control may not be attached
+
+    def _show_snackbar(self, message: str, level: str = "info") -> None:
+        """Show a snackbar notification."""
+        colors = {
+            "success": "#10B981",
+            "error": "#EF4444",
+            "warning": "#F59E0B",
+            "info": "#3B82F6",
+        }
+        bgcolor = colors.get(level, colors["info"])
+
+        self._app_page.snack_bar = ft.SnackBar(
+            content=ft.Text(message, color="#FFFFFF"),
+            bgcolor=bgcolor,
+            duration=3000,
+        )
+        self._app_page.snack_bar.open = True
+        self._app_page.update()
 
     def dispose(self) -> None:
         """Clean up resources when app is disposed."""
@@ -929,17 +1052,19 @@ class FletV2App(ft.Row):
                     label="Experimental",
                 ),
             ],
-            # Enhanced theme integration using native Flet styling
-            bgcolor=ft.Colors.SURFACE,
-            indicator_color=ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY),
-            indicator_shape=ft.RoundedRectangleBorder(radius=12),
+            # Unified Dark Theme: Dark Sidebar
+            bgcolor="#111625",  # Deep Blue Dark Background
+            indicator_color="#2A85FF",  # Bright Blue Active Indicator
+            indicator_shape=ft.RoundedRectangleBorder(
+                radius=8
+            ),  # Less rounded, more rect
             selected_label_text_style=ft.TextStyle(
-                size=13, weight=ft.FontWeight.W_600, color=ft.Colors.PRIMARY
+                size=13, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE
             ),
             unselected_label_text_style=ft.TextStyle(
                 size=12,
                 weight=ft.FontWeight.W_400,
-                color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE),
+                color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
             ),
             # Native leading area for toggle button
             leading=ft.IconButton(
@@ -948,7 +1073,7 @@ class FletV2App(ft.Row):
                 if self.nav_rail_extended
                 else "Expand sidebar",
                 on_click=toggle_rail,
-                icon_color=ft.Colors.PRIMARY,
+                icon_color=ft.Colors.WHITE,  # White icon for dark sidebar
             ),
         )
 
@@ -1121,6 +1246,7 @@ class FletV2App(ft.Row):
 
             print("🔴 [DEBUG] Setting page properties")
             self._app_page.title = "FletV2 - Encrypted Backup Framework"
+            self._app_page.bgcolor = "#111625"  # Force Dark Background
             self._app_page.auto_update = True
             print("🔴 [DEBUG] page.title set")
             print("🔴 [DEBUG] page.auto_update enabled")
@@ -1270,6 +1396,9 @@ class FletV2App(ft.Row):
         # Comment 12: Dispose of current view before loading new one
         self._dispose_current_view(view_name)
 
+        # Clear previous header actions
+        self.set_header_actions([])
+
         # IMPORTANT: Reset and associate AsyncManager with new view
         self.async_manager = AsyncManager()  # Fresh manager for each view
         self.async_manager.set_view(view_name)
@@ -1350,7 +1479,38 @@ class FletV2App(ft.Row):
             call_kwargs["async_manager"] = self.async_manager
         if "global_search" in signature.parameters:
             call_kwargs["global_search"] = self.global_search
+        if "set_header_actions" in signature.parameters:
+            call_kwargs["set_header_actions"] = self.set_header_actions
+        if "update_status_callback" in signature.parameters:
+            call_kwargs["update_status_callback"] = self.update_connection_status
         return call_kwargs
+
+    def set_header_actions(self, controls: list[ft.Control] | None) -> None:
+        """Update the header actions area for the current view."""
+        # Clear existing actions first
+        self._header_actions_container.controls.clear()
+
+        if controls:
+            self._header_actions_container.controls.extend(controls)
+
+        # Only update if attached to page
+        if getattr(self._header_actions_container, "page", None):
+            self._header_actions_container.update()
+
+    def update_connection_status(self, connected: bool) -> None:
+        """Update the global connection status badge from any view."""
+        if connected:
+            self._status_dot.bgcolor = "#22C55E"  # Green-500
+            self._status_text.value = "Connected"
+            self._status_text.color = "#22C55E"
+        else:
+            self._status_dot.bgcolor = "#EF4444"  # Red-500
+            self._status_text.value = "Disconnected"
+            self._status_text.color = "#EF4444"
+
+        # Only update if attached to page
+        if getattr(self._global_status_badge, "page", None):
+            self._global_status_badge.update()
 
     def _normalize_view_result(
         self,
@@ -1436,9 +1596,9 @@ class FletV2App(ft.Row):
                         f"❌ Failed to load view: {view_name}",
                         size=20,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.ERROR,
+                        color="error",
                     ),
-                    ft.Text(details, size=14, color=ft.Colors.ERROR),
+                    ft.Text(details, size=14, color="error"),
                     ft.Text(
                         "Traceback (truncated):", size=12, weight=ft.FontWeight.W_600
                     ),
@@ -1446,21 +1606,21 @@ class FletV2App(ft.Row):
                         traceback_text,
                         selectable=True,
                         size=11,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                     ft.Divider(),
                     ft.Text(
                         "This is a diagnostics panel. Navigate to another view to continue.",
                         size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                 ],
                 spacing=8,
                 scroll=ft.ScrollMode.ALWAYS,
             ),
             padding=20,
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ERROR),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.4, ft.Colors.ERROR)),
+            bgcolor=ft.Colors.with_opacity(0.05, "error"),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.4, "error")),
             border_radius=12,
         )
 
@@ -1708,9 +1868,7 @@ class FletV2App(ft.Row):
                 [
                     ft.Row(
                         [
-                            ft.Icon(
-                                ft.Icons.DASHBOARD, color=ft.Colors.PRIMARY, size=28
-                            ),
+                            ft.Icon(ft.Icons.DASHBOARD, color="primary", size=28),
                             ft.Text(
                                 "Dashboard Stub Active",
                                 size=22,
@@ -1722,12 +1880,12 @@ class FletV2App(ft.Row):
                     ft.Text(
                         "The dashboard failed to load. Review logs for details.",
                         size=13,
-                        color=ft.Colors.ON_SURFACE,
+                        color="onSurface",
                     ),
                     ft.Text(
                         "Once the issue is resolved, restart or navigate back to reload the dashboard.",
                         size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                 ],
                 spacing=12,

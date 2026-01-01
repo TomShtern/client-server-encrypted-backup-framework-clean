@@ -137,9 +137,9 @@ def main(page: ft.Page):
             ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD)),
         ],
         rows=[create_clickable_row(client) for client in clients],
-        heading_row_color=ft.Colors.SURFACE,
+        heading_row_color="surface",
         data_row_min_height=50,
-        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border=ft.Border.all(1, "outline"),
         border_radius=8,
     )
 
@@ -190,9 +190,9 @@ def main(page: ft.Page):
             ft.DataColumn(ft.Text("Actions", weight=ft.FontWeight.BOLD)),
         ],
         rows=[create_dropdown_row(client) for client in clients],
-        heading_row_color=ft.Colors.SURFACE,
+        heading_row_color="surface",
         data_row_min_height=50,
-        border=ft.border.all(1, ft.Colors.OUTLINE),
+        border=ft.Border.all(1, "outline"),
         border_radius=8,
     )
 
@@ -204,7 +204,7 @@ def main(page: ft.Page):
         ft.Container(
             content=feedback_text,
             padding=ft.Padding.all(10),
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="surface",
             border_radius=4,
         ),
         ft.Divider(),

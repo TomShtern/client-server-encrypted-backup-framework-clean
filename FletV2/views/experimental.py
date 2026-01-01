@@ -68,7 +68,7 @@ def create_experimental_view(
                     ft.Text(
                         card_data["description"],
                         size=14,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        color="onSurfaceVariant",
                     ),
                     ft.Row(
                         [
@@ -82,7 +82,7 @@ def create_experimental_view(
             ),
             padding=24,
             border_radius=16,
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="surface",
             shadow=MODERATE_NEUMORPHIC_SHADOWS,
         )
 
@@ -119,7 +119,7 @@ def create_experimental_view(
         ),
         padding=24,
         border_radius=16,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
         shadow=MODERATE_NEUMORPHIC_SHADOWS,
     )
 
@@ -145,7 +145,7 @@ def create_experimental_view(
             ft.Text(
                 "This is a safe space for testing new features, UI experiments, and development workflows.",
                 size=16,
-                color=ft.Colors.ON_SURFACE_VARIANT,
+                color="onSurfaceVariant",
             ),
             ft.Divider(height=32),
             # Experimental cards grid
@@ -174,3 +174,4 @@ def create_experimental_view(
         pass
 
     return main_container, dispose, setup_subscriptions
+

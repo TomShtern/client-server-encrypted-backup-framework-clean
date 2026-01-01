@@ -117,12 +117,12 @@ class BreadcrumbNavigation(ft.Row):
                 separator_text = ft.Text(
                     self.separator,
                     size=14,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color="onSurfaceVariant",
                     weight=ft.FontWeight.W_400,
                 )
                 self.controls.append(
                     ft.Container(
-                        content=separator_text, margin=ft.margin.symmetric(horizontal=4)
+                        content=separator_text, margin=ft.Margin.symmetric(horizontal=4)
                     )
                 )
 
@@ -132,11 +132,11 @@ class BreadcrumbNavigation(ft.Row):
                 current_text = ft.Text(
                     item.label,
                     size=14,
-                    color=ft.Colors.PRIMARY,
+                    color="primary",
                     weight=ft.FontWeight.W_500,
                 )
                 if item.icon:
-                    icon_control = ft.Icon(item.icon, size=16, color=ft.Colors.PRIMARY)
+                    icon_control = ft.Icon(item.icon, size=16, color="primary")
                     item_control = ft.Row(
                         [icon_control, current_text],
                         spacing=4,
@@ -161,10 +161,10 @@ class BreadcrumbNavigation(ft.Row):
                     if item.icon
                     else ft.Text(item.label),
                     style=ft.ButtonStyle(
-                        color=ft.Colors.PRIMARY,
-                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        color="primary",
+                        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                         shape=ft.RoundedRectangleBorder(radius=4),
-                        overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
+                        overlay_color=ft.Colors.with_opacity(0.1, "primary"),
                     ),
                     on_click=lambda _, item=item: self._navigate_to_item(item),
                     tooltip=item.tooltip,
@@ -439,9 +439,9 @@ def setup_breadcrumb_navigation(
     # Add breadcrumb to a container for proper styling
     breadcrumb_container = ft.Container(
         content=breadcrumb,
-        padding=ft.padding.symmetric(horizontal=16, vertical=8),
-        bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.SURFACE),
-        border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+        padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+        bgcolor=ft.Colors.with_opacity(0.02, "surface"),
+        border=ft.Border.only(bottom=ft.BorderSide(1, "outlineVariant")),
     )
 
     return breadcrumb_container

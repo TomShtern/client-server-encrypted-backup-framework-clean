@@ -1,0 +1,125 @@
+2025-12-30 20:26:08,378 - FletV2.debug_setup - INFO - [debug_setup:198:setup_terminal_debugging] - Enhanced terminal debugging setup complete
+2025-12-30 20:26:08,510 - flet_desktop - INFO - [__init__:62:__locate_and_unpack_flet_view] - Starting Flet View app...
+2025-12-30 20:26:08,511 - flet_desktop - INFO - [__init__:86:__locate_and_unpack_flet_view] - Looking for Flet executable at: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2025-12-30 20:26:08,511 - flet_desktop - INFO - [__init__:88:__locate_and_unpack_flet_view] - Flet View found in: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2025-12-30 20:26:08,924 - FletV2.main - WARNING - [main:526:_initialize_server_bridge] - ⚠️ Starting in GUI-only standalone mode without server bridge
+2025-12-30 20:26:08,930 - FletV2.main - WARNING - [main:529:_initialize_server_bridge] - GUI will be functional but data operations will show empty states
+2025-12-30 20:26:08,931 - FletV2.main - WARNING - [main:532:_initialize_server_bridge] - Use 'python start_with_server.py' for full server integration
+Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1749, in main
+    app = FletV2App(page, real_server=None)
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 488, in __init__
+    self._build_initial_layout()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 576, in _build_initial_layout
+    bgcolor=ft.colors.with_opacity(0.1, "primary"),
+            ^^^^^^^^^
+AttributeError: module 'flet' has no attribute 'colors'. Did you mean: 'Colors'?
+2025-12-30 20:26:09,204 - asyncio - ERROR - [base_events:1875:default_exception_handler] - Task exception was never retrieved
+future: <Task finished name='Task-11' coro=<__get_on_session_created.<locals>.on_session_created() done, defined at C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet\app.py:253> exception=SystemExit(1)>
+Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1749, in main
+    app = FletV2App(page, real_server=None)
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 488, in __init__
+    self._build_initial_layout()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 576, in _build_initial_layout
+    bgcolor=ft.colors.with_opacity(0.1, "primary"),
+            ^^^^^^^^^
+AttributeError: module 'flet' has no attribute 'colors'. Did you mean: 'Colors'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1761, in <module>
+    ft.run(main, view=ft.AppView.FLET_APP)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet\app.py", line 96, in run
+    return asyncio.run(
+           ~~~~~~~~~~~^
+        run_async(
+        ^^^^^^^^^^
+    ...<11 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Python314\Lib\asyncio\runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 677, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 2046, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet\app.py", line 271, in on_session_created
+    main(session.page)
+    ~~~~^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1756, in main
+    sys.exit(1)
+    ~~~~~~~~^^^
+SystemExit: 1
+Stack Trace:
+Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1749, in main
+    app = FletV2App(page, real_server=None)
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 488, in __init__
+    self._build_initial_layout()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 576, in _build_initial_layout
+    bgcolor=ft.colors.with_opacity(0.1, "primary"),
+            ^^^^^^^^^
+AttributeError: module 'flet' has no attribute 'colors'. Did you mean: 'Colors'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1761, in <module>
+    ft.run(main, view=ft.AppView.FLET_APP)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet\app.py", line 96, in run
+    return asyncio.run(
+           ~~~~~~~~~~~^
+        run_async(
+        ^^^^^^^^^^
+    ...<11 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Python314\Lib\asyncio\runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 677, in run_forever
+    self._run_once()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 2046, in _run_once
+    handle._run()
+    ~~~~~~~~~~~^^
+  File "C:\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet\app.py", line 271, in on_session_created
+    main(session.page)
+    ~~~~^^^^^^^^^^^^^^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1756, in main
+    sys.exit(1)
+    ~~~~~~~~^^^
+SystemExit: 1
+

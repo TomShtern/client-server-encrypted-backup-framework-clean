@@ -1,0 +1,31 @@
+2026-01-01 18:01:29,601 - FletV2.debug_setup - INFO - [debug_setup:198:setup_terminal_debugging] - Enhanced terminal debugging setup complete
+2026-01-01 18:01:29,709 - flet_desktop - INFO - [__init__:62:__locate_and_unpack_flet_view] - Starting Flet View app...
+2026-01-01 18:01:29,710 - flet_desktop - INFO - [__init__:86:__locate_and_unpack_flet_view] - Looking for Flet executable at: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2026-01-01 18:01:29,710 - flet_desktop - INFO - [__init__:88:__locate_and_unpack_flet_view] - Flet View found in: C:\Users\tom7s\AppData\Roaming\Python\Python314\site-packages\flet_desktop\app\flet\flet.exe
+2026-01-01 18:01:30,186 - FletV2.main - WARNING - [main:526:_initialize_server_bridge] - Γתá∩╕ן Starting in GUI-only standalone mode without server bridge
+2026-01-01 18:01:30,187 - FletV2.main - WARNING - [main:529:_initialize_server_bridge] - GUI will be functional but data operations will show empty states
+2026-01-01 18:01:30,187 - FletV2.main - WARNING - [main:532:_initialize_server_bridge] - Use 'python start_with_server.py' for full server integration
+2026-01-01 18:01:30,297 - FletV2.main - ERROR - [main:1562:_handle_view_loading_error] - Γ¥ל Error loading view 'dashboard': Container.__init__() got an unexpected keyword argument 'max_width'
+2026-01-01 18:01:30,300 - FletV2.main - ERROR - [main:1567:_handle_view_loading_error] - Full traceback: Traceback (most recent call last):
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1417, in _perform_view_loading
+    content, dispose_func, setup_func = self._load_view_content(
+                                        ~~~~~~~~~~~~~~~~~~~~~~~^
+        view_name, module_name, function_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\FletV2\main.py", line 1457, in _load_view_content
+    result = view_function(**call_kwargs)
+  File "C:\Users\tom7s\Desktopp\Claude_Folder_2\Client_Server_Encrypted_Backup_Framework\Shared\..\FletV2\views\dashboard.py", line 553, in create_dashboard_view
+    ft.Container(
+    ~~~~~~~~~~~~^
+        content=ft.Column(
+        ^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        max_width=1600,
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: Container.__init__() got an unexpected keyword argument 'max_width'
+
+2026-01-01 18:01:30,300 - FletV2.main - WARNING - [main:1579:_handle_view_loading_error] - Attempting fallback stub dashboard due to failure

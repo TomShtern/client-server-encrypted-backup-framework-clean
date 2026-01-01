@@ -13,7 +13,8 @@ watchdog>=2.1.0
 filetype>=1.2.0
 
 # GUI Frameworks
-flet>=0.28.3                    # Primary GUI framework (Material Design 3) - Updated to latest
+flet>=0.80.0                    # Primary GUI framework (Material Design 3) - Updated to latest
+flet-charts                     # Charts extension for Flet (LineChart, BarChart, etc.)
 plyer>=2.1.0                    # Cross-platform native features
 matplotlib>=3.7.0               # Charts for GUI analytics
 

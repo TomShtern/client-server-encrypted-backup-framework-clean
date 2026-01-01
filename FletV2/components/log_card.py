@@ -1,6 +1,6 @@
 """
 Reusable LogCard component for Flet applications
-Flet 0.28.3 Compatible
+Flet 0.80.0 Compatible
 """
 
 from collections.abc import Callable
@@ -38,8 +38,8 @@ class LogCard(ft.Container):
     ):
         super().__init__(*args, **kwargs)
 
-        # Store page reference
-        self.page = page  # Extract log data safely
+        # Store page reference (use _page_ref to avoid collision with ft.Container.page property)
+        self._page_ref = page
         time_s = str(log.get("time", ""))
         level = self.map_level(log.get("level"))
         comp = str(log.get("component", ""))
@@ -99,11 +99,11 @@ class LogCard(ft.Container):
                 color=primary_color,
             ),
             bgcolor=LogColorSystem.get_surface_tint(primary_color, 0.15),
-            padding=ft.padding.symmetric(
+            padding=ft.Padding.symmetric(
                 horizontal=8 if is_compact else 10, vertical=3 if is_compact else 4
             ),
             border_radius=10 if is_compact else 12,
-            border=ft.border.all(
+            border=ft.Border.all(
                 1, LogColorSystem.get_border_color(primary_color, 0.2)
             ),
         )
@@ -125,20 +125,20 @@ class LogCard(ft.Container):
                             ft.Icon(
                                 ft.Icons.WIDGETS_ROUNDED,
                                 size=10 if is_compact else 11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                color="onSurfaceVariant",
                             ),
                             ft.Text(
                                 comp,
                                 size=10 if is_compact else 11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                color="onSurfaceVariant",
                                 weight=ft.FontWeight.W_500,
                             ),
                         ],
                         spacing=3 if is_compact else 4,
                         tight=True,
                     ),
-                    bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE_VARIANT),
-                    padding=ft.padding.symmetric(
+                    bgcolor=ft.Colors.with_opacity(0.05, "onSurfaceVariant"),
+                    padding=ft.Padding.symmetric(
                         horizontal=6 if is_compact else 8,
                         vertical=2 if is_compact else 3,
                     ),
@@ -157,12 +157,12 @@ class LogCard(ft.Container):
                         ft.Icon(
                             ft.Icons.ACCESS_TIME_ROUNDED,
                             size=time_icon_size,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color="onSurfaceVariant",
                         ),
                         ft.Text(
                             time_s,
                             size=time_text_size,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            color="onSurfaceVariant",
                             weight=ft.FontWeight.W_400,
                         ),
                     ],
@@ -207,7 +207,7 @@ class LogCard(ft.Container):
 
         # ===== MAIN CARD CONTAINER =====
         # Neomorphic container with dual shadows and subtle background tint
-        card_padding = ft.padding.only(
+        card_padding = ft.Padding.only(
             top=10 if is_compact else 14,
             bottom=10 if is_compact else 14,
             right=0,
@@ -221,15 +221,15 @@ class LogCard(ft.Container):
         # Subtle background tint based on log level
         self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
         # Soft border for definition
-        self.border = ft.border.all(
+        self.border = ft.Border.all(
             1, LogColorSystem.get_border_color(primary_color, 0.08)
         )
 
         # Neomorphic shadows - the key to the soft UI effect
         # Use page reference if available for theme-aware shadows
-        if page:
+        if self._page_ref:
             self.shadow = NeomorphicShadows.get_card_shadows(
-                "medium" if index < 3 else "low", page
+                "medium" if index < 3 else "low", self._page_ref
             )
         else:
             self.shadow = NeomorphicShadows.get_card_shadows(
@@ -254,16 +254,16 @@ class LogCard(ft.Container):
 
             if is_hovering:
                 # Use page reference if available
-                if self.page:
-                    self.shadow = NeomorphicShadows.get_hover_shadows(self.page)
+                if self._page_ref:
+                    self.shadow = NeomorphicShadows.get_hover_shadows(self._page_ref)
                 else:
                     self.shadow = NeomorphicShadows.get_hover_shadows()
                 self.scale = 1.015
                 self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.04)
             else:
-                if self.page:
+                if self._page_ref:
                     self.shadow = NeomorphicShadows.get_card_shadows(
-                        "medium" if index < 3 else "low", self.page
+                        "medium" if index < 3 else "low", self._page_ref
                     )
                 else:
                     self.shadow = NeomorphicShadows.get_card_shadows(
@@ -273,7 +273,7 @@ class LogCard(ft.Container):
                 self.bgcolor = LogColorSystem.get_surface_tint(primary_color, 0.02)
 
             # Only update if control is attached to page
-            if self.page:
+            if self._page_ref:
                 self.update()
 
         self.on_hover = on_card_hover
@@ -322,7 +322,7 @@ class LogCard(ft.Container):
                 text or "(empty message)",
                 size=font_size,
                 weight=ft.FontWeight.W_500,
-                color=ft.Colors.ON_SURFACE,
+                color="onSurface",
                 selectable=True,
             )
 
@@ -373,6 +373,6 @@ class LogCard(ft.Container):
             spans=spans,
             size=font_size,
             weight=ft.FontWeight.W_500,
-            color=ft.Colors.ON_SURFACE,
+            color="onSurface",
             selectable=True,
         )

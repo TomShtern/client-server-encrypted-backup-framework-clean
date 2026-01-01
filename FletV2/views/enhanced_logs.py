@@ -223,14 +223,14 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
         ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.CIRCLE, size=10, color=ft.Colors.PRIMARY),
+                    ft.Icon(ft.Icons.CIRCLE, size=10, color="primary"),
                     ft.Text(f"{level}: {count}", size=12),
                 ],
                 spacing=6,
             ),
-            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            padding=ft.Padding.symmetric(vertical=4, horizontal=8),
             border_radius=8,
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor="surface",
         )
         for level, count in stats["by_level"].items()
     ]
@@ -247,9 +247,9 @@ def _build_stats_view(stats: dict[str, Any]) -> ft.Control:
             spacing=10,
             wrap=True,
         ),
-        padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        padding=ft.Padding.symmetric(vertical=8, horizontal=12),
         border_radius=12,
-        bgcolor=ft.Colors.SURFACE,
+        bgcolor="surface",
     )
 
 
@@ -311,7 +311,7 @@ def _create_filter_controls(
             ),
             ft.Container(
                 content=last_refresh_text,
-                padding=ft.padding.only(left=4),
+                padding=ft.Padding.only(left=4),
                 col={"xs": 12, "sm": 12, "md": 6, "lg": 3},
                 alignment=ft.Alignment.CENTER_LEFT,
             ),
@@ -501,7 +501,7 @@ class _LogsViewController:
             label="Include app logs", value=self.state["include_app_logs"]
         )
         self.last_refresh_text = ft.Text(
-            "Last refresh: ?", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+            "Last refresh: ?", size=12, color="onSurfaceVariant"
         )
         self.loading_overlay = ft.Container(
             content=create_loading_indicator("Loading logs…"),
@@ -568,7 +568,7 @@ class _LogsViewController:
 
         main_layout = ft.Container(
             content=content_column,
-            padding=ft.padding.symmetric(horizontal=20, vertical=16),
+            padding=ft.Padding.symmetric(vertical=16, horizontal=20),
             expand=True,
         )
 
@@ -788,3 +788,4 @@ def create_logs_view(
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
     controller = _LogsViewController(server_bridge, page, async_manager, global_search)
     return controller.build()
+

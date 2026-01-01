@@ -19,14 +19,14 @@ def create_minimal_search() -> ft.TextField:
     """
     return ft.TextField(
         hint_text="Search (Ctrl+F)",
-        width=280,
-        height=44,
-        border_radius=18,
-        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.PRIMARY),
-        border_color=ft.Colors.OUTLINE,
-        text_size=14,
+        width=260,
+        height=40,
+        border_radius=12,  # ROUNDED RECTANGLE (consistent with cards)
+        bgcolor="#1E293B",  # Matches card background
+        border_color="#334155",  # Matches card border
+        text_size=13,
         prefix_icon=ft.Icons.SEARCH,
-        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        content_padding=ft.Padding.only(left=8, right=14, top=0, bottom=0),
         on_focus=lambda e: print("Search focused!"),
         on_change=lambda e: print(f"Search: {e.control.value}"),
     )
