@@ -26,8 +26,8 @@ docutils>=0.22                  # Documentation utilities
 idna>=3.10                      # IDNA for URLs
 pillow>=10.4.0                  # Image processing (PIL)
 pygments>=2.19.0                # Syntax highlighting (docs/tools)
-pypiwin32>=223                  # Win32 compatibility helpers
-pywin32>=311                    # Windows extensions
+pypiwin32>=223; sys_platform == 'win32'  # Win32 compatibility helpers (Windows only)
+pywin32>=311; sys_platform == 'win32'    # Windows extensions (Windows only)
 requests>=2.32.4                # Synchronous HTTP client
 urllib3>=2.2.5                  # HTTP library used by requests
 loguru>=0.7.0                   # Structured logging (optional)
@@ -45,7 +45,7 @@ rich>=13.7.0                    # Rich console output
 click>=8.1.0                    # CLI helpers
 websockets>=11.0                # Websocket library (optional)
 sse-starlette>=1.6.0            # SSE for ASGI (optional)
-python-magic-bin>=0.4.14        # libmagic windows binary (file detection)
+python-magic-bin>=0.4.14; sys_platform == 'win32'  # libmagic windows binary (Windows only)
 xxhash>=3.3.0                   # Fast hashing (optional)
 pydantic-settings>=2.5.2        # Settings helper required by mcp and some tooling
 schedule>=1.2.0                 # Simple scheduler (optional)
