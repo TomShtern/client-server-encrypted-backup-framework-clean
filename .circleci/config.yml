@@ -48,10 +48,10 @@ commands:
             .\bootstrap-vcpkg.bat
 
       - run:
-          name: Install C++ dependencies
+          name: Install C++ dependencies (manifest mode)
           command: |
-            cd vcpkg
-            .\vcpkg.exe install cryptopp boost zlib sentry-native --triplet x64-windows
+            # Run vcpkg install from project root (uses vcpkg.json manifest)
+            vcpkg/vcpkg.exe install --triplet x64-windows
 
       - run:
           name: Verify vcpkg dependencies
