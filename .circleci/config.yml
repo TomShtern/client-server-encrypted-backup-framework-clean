@@ -63,13 +63,21 @@ commands:
     description: "Build the C++ encryption client"
     steps:
       - run:
+          name: Install CMake
+          command: |
+            choco install cmake --installargs '"ADD_CMAKE_TO_PATH=System"' -y
+            refreshenv
+
+      - run:
           name: Configure CMake with vcpkg
           command: |
+            $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
             cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 
       - run:
           name: Build C++ client
           command: |
+            $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
             cmake --build build --config Release
 
       - run:
