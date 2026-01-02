@@ -15,7 +15,7 @@ executors:
   cpp-windows-executor:
     machine:
       image: windows-server-2022-gui:current
-    resource_class: windows.medium
+    resource_class: medium
     shell: powershell.exe -ExecutionPolicy Bypass
     working_directory: ~/project
 
@@ -40,6 +40,13 @@ commands:
   setup-vcpkg-deps:
     description: "Set up vcpkg and install C++ dependencies"
     steps:
+      - run:
+          name: Clone vcpkg
+          command: |
+            if (-not (Test-Path "vcpkg")) {
+              git clone https://github.com/microsoft/vcpkg.git
+            }
+
       - run:
           name: Bootstrap vcpkg
           command: |
@@ -301,7 +308,7 @@ workflows:
   nightly-tests:
     triggers:
       - schedule:
-          cron: "0 2 * * *"  # Run at 2 AM UTC daily
+          cron: "0 2 * * *" # Run at 2 AM UTC daily
           filters:
             branches:
               only:
