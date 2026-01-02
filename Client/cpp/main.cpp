@@ -33,28 +33,28 @@ bool g_batchMode = false;
 // Production-ready main function with comprehensive error handling
 int main(int argc, char* argv[]) {
     int exitCode = 1;
-    
+
     // Initialize Sentry for error tracking
     sentry_options_t *options = sentry_options_new();
-    sentry_options_set_dsn(options, "https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312");
+    sentry_options_set_dsn(options, "https://bb128a8f30e8b50b154981e7db43fc0c@o4509746411470848.ingest.us.sentry.io/4510642718769152");
     sentry_options_set_environment(options, "production");
     sentry_options_set_release(options, "cyberbackup-cpp@3.0.0");
-    
+
     if (sentry_init(options) == 0) {
         std::cout << "[SENTRY] Error tracking initialized successfully" << std::endl;
-        
+
         // Set context information
         sentry_set_tag("component", "cpp-client");
         sentry_set_tag("framework", "cyberbackup");
         sentry_set_tag("platform", "windows");
-        
+
         sentry_value_t user = sentry_value_new_object();
         sentry_value_set_by_key(user, "id", sentry_value_new_string("cpp-client"));
         sentry_set_user(user);
     } else {
         std::cout << "[WARNING] Failed to initialize Sentry error tracking" << std::endl;
     }
-    
+
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
             break;
         }
     }
-    
+
     try {
         // Initialize console output
         if (g_batchMode) {
@@ -98,9 +98,9 @@ int main(int argc, char* argv[]) {
         if (g_batchMode) {
             // Batch mode: perform single backup operation and exit
             std::cout << "[INFO] Starting backup operation..." << std::endl;
-            
+
             bool backupSuccess = client.runBackupOperation();
-            
+
             if (backupSuccess) {
                 std::cout << "[SUCCESS] Backup completed successfully!" << std::endl;
                 exitCode = 0;
@@ -123,44 +123,44 @@ int main(int argc, char* argv[]) {
             std::cout << "[INFO] Shutdown requested, cleaning up..." << std::endl;
             exitCode = 0;
         }
-        
+
     } catch (const std::bad_alloc& e) {
         std::cerr << "[ERROR] Memory allocation failed: " << e.what() << std::endl;
-        
+
         // Report to Sentry
         sentry_value_t exc = sentry_value_new_exception("std::bad_alloc", e.what());
         sentry_value_t event = sentry_value_new_event();
         sentry_value_set_by_key(event, "exception", exc);
         sentry_capture_event(event);
-        
+
         exitCode = 2;
     } catch (const std::exception& e) {
         std::cerr << "[ERROR] Fatal error: " << e.what() << std::endl;
-        
+
         // Report to Sentry
         sentry_value_t exc = sentry_value_new_exception("std::exception", e.what());
         sentry_value_t event = sentry_value_new_event();
         sentry_value_set_by_key(event, "exception", exc);
         sentry_capture_event(event);
-        
+
         exitCode = 3;
     } catch (...) {
         std::cerr << "[ERROR] Unknown fatal error occurred!" << std::endl;
-        
+
         // Report to Sentry
         sentry_value_t exc = sentry_value_new_exception("unknown_exception", "Unknown fatal error");
         sentry_value_t event = sentry_value_new_event();
         sentry_value_set_by_key(event, "exception", exc);
         sentry_capture_event(event);
-        
+
         exitCode = 4;
     }
 
     std::cout << "Client exiting with code: " << exitCode << std::endl;
-    
+
     // Cleanup Sentry
     sentry_close();
-    
+
 #ifdef _WIN32
     // On Windows, wait for user input in debug builds
     #ifdef _DEBUG
@@ -168,6 +168,6 @@ int main(int argc, char* argv[]) {
     _getch();
     #endif
 #endif
-    
+
     return exitCode;
 }

@@ -103,21 +103,6 @@ The project's `vcpkg.json` defines all required dependencies (Crypto++, Boost, e
    .\start_client.bat
    ```
 
-## Critical Architecture Notes
-
-### Network Listener Requirement
-
-⚠️ **CRITICAL**: The BackupServer network listener on port 1256 **must be started** for C++ client backups to work.
-
-- **Correct**: `server_instance.start()` is called in `FletV2/start_with_server.py` (line 78)
-- **Verified**: Console output shows "Network server started - ready for client connections"
-- **Impact**: Without this, C++ clients cannot connect and all backups fail
-
-This was a critical bug fixed in January 2025. The server instance was being created but the network listener thread was never launched.
-
-### Shared Database
-
-Both FletV2 GUI and API Server access the same SQLite database (`defensive.db`) using file-level locking for safe concurrent access.
 
 ## ⚠️ Critical Architecture Notes
 
@@ -146,37 +131,41 @@ The legacy TkInter GUI (40,000+ lines) has been archived to `_legacy/server_gui/
 
 ```
 ├── FletV2/                     # Modern desktop GUI (Material Design 3)
-│   ├── main.py                # Application entry point
-│   ├── start_with_server.py   # Launcher with integrated BackupServer
-│   ├── views/                 # Feature views (dashboard, clients, files, etc.)
-│   ├── utils/                 # ServerBridge, state management, UI components
-│   └── theme.py               # Tri-style design system
-├── python_server/             # Core backup server
+│   ├── main.py                 # Application entry point
+│   ├── start_with_server.py    # Launcher with integrated BackupServer
+│   ├── views/                  # Feature views (dashboard, clients, files, etc.)
+│   ├── components/             # Reusable UI components
+│   ├── utils/                  # ServerBridge, state management
+│   └── theme.py                # Material Design 3 theming
+├── python_server/              # Core backup server
 │   └── server/
-│       ├── server.py          # BackupServer with network listener
-│       ├── database.py        # SQLite integration
-│       ├── protocol.py        # Binary protocol implementation
-│       └── network_server.py  # TCP network layer
-├── api_server/                # Flask bridge for C++ client web GUI
-│   └── cyberbackup_api_server.py
-├── Client/                    # C++ backup client
-│   ├── src/                   # Client source code
-│   └── include/               # Protocol definitions
-├── Shared/                    # Cross-cutting utilities
-│   ├── logging_config.py      # Structured logging
-│   └── utils/                 # UTF-8 bootstrap, retry logic, metrics
-├── scripts/                   # Build and deployment scripts
-│   └── one_click_build_and_run.py  # Complete system launcher
-├── _legacy/                   # Archived legacy code
-│   └── server_gui/            # TkInter GUI (deprecated Jan 2025)
-├── tests/             # Test suite
-├── docs/              # Documentation
-├── build/             # Build artifacts
-├── client/            # Client executable output
-├── third_party/       # External libraries
-├── build.bat          # Main build script
-├── clean.bat          # Cleanup script
-└── transfer.info      # Client configuration
+│       ├── server.py           # BackupServer with network listener
+│       ├── database.py         # SQLite integration
+│       ├── protocol.py         # Binary protocol implementation
+│       └── network_server.py   # TCP network layer
+├── api_server/                 # Flask bridge for C++ client web GUI
+│   ├── cyberbackup_api_server.py
+│   └── real_backup_executor.py # C++ subprocess manager
+├── Client/                     # C++ backup client
+│   ├── cpp/                    # Source files (main.cpp, client.cpp, etc.)
+│   └── deps/                   # Crypto wrappers (RSA, AES, CRC)
+├── Shared/                     # Cross-cutting utilities (modular subpackages)
+│   ├── sentry_config.py        # Sentry error monitoring
+│   ├── filesystem/             # UTF-8 handling, file operations, path utils
+│   ├── app_logging/            # Enhanced logging, error handling
+│   ├── config/                 # Unified configuration management
+│   ├── monitoring/             # Performance/process/file monitoring
+│   └── validation/             # Client name and data validation
+├── config/                     # JSON configuration files
+├── data/                       # Runtime data (database, received files, keys)
+├── scripts/                    # Build and deployment scripts
+│   └── one_click_build_and_run.py
+├── tests/                      # Test suite
+├── docs/                       # Documentation
+├── build/                      # C++ build artifacts
+├── vcpkg/                      # C++ package manager
+├── build.bat                   # Windows build script
+└── requirements.txt            # Python dependencies
 ```
 
 ## Features
@@ -187,6 +176,41 @@ The legacy TkInter GUI (40,000+ lines) has been archived to `_legacy/server_gui/
 - **Key Management**: Automatic RSA key generation and storage
 - **Progress Tracking**: Real-time transfer statistics
 - **Error Recovery**: Automatic retry mechanisms
+
+## Sentry Error Monitoring
+
+The project includes integrated error monitoring via [Sentry](https://sentry.io) for both Python and C++ components.
+
+### Configuration Files
+
+| Component | File | Lines |
+|-----------|------|-------|
+| Python | `Shared/sentry_config.py` | DSN, all init settings, helper functions |
+| C++ | `Client/cpp/main.cpp` | Lines 37-56 (init + shutdown) |
+
+### What's Captured
+
+- **Errors**: All unhandled exceptions with full stack traces
+- **Performance**: Transaction tracing (100% sample rate)
+- **Profiling**: Session profiling enabled
+- **Logs**: Sent to Sentry dashboard
+- **Context**: User PII, request headers, component tags
+
+### Manual Usage (Optional)
+
+```python
+from Shared.sentry_config import capture_error, capture_message
+
+# Track custom messages
+capture_message("Backup started", level="info", component="gui")
+
+# Track errors with context
+capture_error(exception, component="backup", extra_context={"file": "data.txt"})
+```
+
+### Dashboard
+
+View errors and performance at: https://sentry.io (login required)
 
 ## Configuration
 
@@ -205,10 +229,11 @@ python tests\consolidated_tests.py
 ## Development
 
 The project uses:
-- **Build System**: Custom batch files with MSVC
-- **Crypto**: Crypto++ library for encryption
-- **Networking**: Boost.Asio for cross-platform networking
-- **GUI**: Modern web-based interface
+- **Build System**: CMake with vcpkg for C++ dependency management
+- **Crypto**: Crypto++ (C++), PyCryptodome (Python)
+- **Networking**: Boost.Asio (C++), Flask-SocketIO (Python)
+- **Desktop GUI**: Flet 0.28+ (Material Design 3)
+- **Observability**: Sentry for error monitoring
 
 ## License
 

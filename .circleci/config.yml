@@ -9,7 +9,7 @@ orbs:
 executors:
   python-executor:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.13
     working_directory: ~/project
 
   cpp-windows-executor:
@@ -102,7 +102,7 @@ jobs:
       - run:
           name: Verify UTF-8 solution import
           command: |
-            python -c "import Shared.utils.utf8_solution; print('✅ UTF-8 solution imported successfully')"
+            python -c "import Shared.filesystem.utf8_solution; print('✅ UTF-8 solution imported successfully')"
 
   # C++ build job (Windows only due to vcpkg requirements)
   cpp-build:
@@ -139,7 +139,7 @@ jobs:
             fi
 
             # Test UTF-8 functionality
-            python scripts/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
+            python scripts/testing/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
 
   # Integration tests (requires both C++ and Python)
   integration-tests:

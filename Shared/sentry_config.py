@@ -19,7 +19,7 @@ import os
 from typing import Any
 
 # Sentry DSN Configuration
-SENTRY_DSN = "https://094a0bee5d42a7f7e8ec8a78a37c8819@o4509746411470848.ingest.us.sentry.io/4509747877773312"
+SENTRY_DSN = "https://bb128a8f30e8b50b154981e7db43fc0c@o4509746411470848.ingest.us.sentry.io/4510642718769152"
 SENTRY_ENVIRONMENT = os.getenv("CYBERBACKUP_ENV", "development")
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,9 @@ def init_sentry(
     environment: str | None = None,
     debug: bool = False,
     sample_rate: float = 1.0,
-    traces_sample_rate: float = 0.1,
+    traces_sample_rate: float = 1.0,
+    profile_session_sample_rate: float = 1.0,
+    enable_logs: bool = True,
 ) -> bool:
     """
     Initialize Sentry error monitoring for a component.
@@ -42,13 +44,13 @@ def init_sentry(
         environment: Environment name (defaults to SENTRY_ENVIRONMENT)
         debug: Enable Sentry debug mode
         sample_rate: Error sampling rate (1.0 = all errors)
-        traces_sample_rate: Performance tracing sample rate
+        traces_sample_rate: Performance tracing sample rate (1.0 = 100%)
+        profile_session_sample_rate: Profiling sample rate (1.0 = 100%)
+        enable_logs: Enable sending logs to Sentry
 
     Returns:
         bool: True if Sentry was successfully initialized, False otherwise
     """
-    # TEMPORARY: Disable Sentry to debug FletV2 GUI initialization issues
-    return False
 
     try:
         import sentry_sdk
@@ -61,14 +63,16 @@ def init_sentry(
             event_level=logging.ERROR,  # Send errors and above as events
         )
 
-        # Initialize Sentry
+        # Initialize Sentry with full feature set
         sentry_sdk.init(
             dsn=dsn or SENTRY_DSN,
             environment=environment or SENTRY_ENVIRONMENT,
             debug=debug,
             sample_rate=sample_rate,
             traces_sample_rate=traces_sample_rate,
-            send_default_pii=True,  # Send user IP, etc.
+            profile_session_sample_rate=profile_session_sample_rate,
+            send_default_pii=True,  # Send user IP, request headers, etc.
+            enable_logs=enable_logs,  # Enable sending logs to Sentry
             integrations=[
                 logging_integration,
                 ThreadingIntegration(propagate_hub=True),
@@ -91,7 +95,9 @@ def init_sentry(
         return True
 
     except ImportError:
-        logger.warning(f"[SENTRY] SDK not available for {component_name} - error tracking disabled")
+        logger.warning(
+            f"[SENTRY] SDK not available for {component_name} - error tracking disabled"
+        )
         return False
     except Exception as e:
         logger.error(f"[SENTRY] Failed to initialize for {component_name}: {e}")
@@ -142,7 +148,9 @@ def _get_release_version() -> str:
     return "cyberbackup@3.0.0"
 
 
-def capture_error(error: Exception, component: str, extra_context: dict[str, Any] | None = None) -> None:
+def capture_error(
+    error: Exception, component: str, extra_context: dict[str, Any] | None = None
+) -> None:
     """
     Capture an error with additional context.
 
@@ -170,7 +178,10 @@ def capture_error(error: Exception, component: str, extra_context: dict[str, Any
 
 
 def capture_message(
-    message: str, level: str = "info", component: str = "unknown", extra_context: dict[str, Any] | None = None
+    message: str,
+    level: str = "info",
+    component: str = "unknown",
+    extra_context: dict[str, Any] | None = None,
 ) -> None:
     """
     Capture a message with additional context.
@@ -207,12 +218,16 @@ def capture_message(
         logger.error(f"[{component}] Failed to capture message in Sentry: {e}")
 
 
-def set_user_context(user_id: str, username: str | None = None, ip_address: str | None = None) -> None:
+def set_user_context(
+    user_id: str, username: str | None = None, ip_address: str | None = None
+) -> None:
     """Set user context for Sentry events."""
     try:
         import sentry_sdk
 
-        sentry_sdk.set_user({"id": user_id, "username": username, "ip_address": ip_address})
+        sentry_sdk.set_user(
+            {"id": user_id, "username": username, "ip_address": ip_address}
+        )
     except ImportError:
         pass
 
