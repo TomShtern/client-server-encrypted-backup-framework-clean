@@ -41,7 +41,7 @@ textual>=0.38.0                 # TUI toolkit (dev/ops)
 typer>=0.9.0                    # CLI toolkit
 python-bidi>=0.4.2              # Bi-directional text handling
 wcwidth>=0.2.6                  # Character width calculations
-rich>=13.7.0                    # Rich console output
+rich                            # Rich console output (version managed by semgrep)
 click>=8.1.0                    # CLI helpers
 websockets>=11.0                # Websocket library (optional)
 sse-starlette>=1.6.0            # SSE for ASGI (optional)
