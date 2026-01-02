@@ -4,19 +4,13 @@ version: 2.1
 orbs:
   node: circleci/node@5.2.0
   python: circleci/python@2.1.1
+  win: circleci/windows@5.0
 
 # Define reusable executors
 executors:
   python-executor:
     docker:
       - image: cimg/python:3.13
-    working_directory: ~/project
-
-  cpp-windows-executor:
-    machine:
-      image: windows-server-2022-gui:current
-    resource_class: medium
-    shell: powershell.exe -ExecutionPolicy Bypass
     working_directory: ~/project
 
 # Define reusable commands
@@ -113,7 +107,7 @@ jobs:
 
   # C++ build job (Windows only due to vcpkg requirements)
   cpp-build:
-    executor: cpp-windows-executor
+    executor: win/server-2022
     steps:
       - checkout
       - setup-vcpkg-deps
@@ -150,7 +144,7 @@ jobs:
 
   # Integration tests (requires both C++ and Python)
   integration-tests:
-    executor: cpp-windows-executor
+    executor: win/server-2022
     steps:
       - checkout
       - attach_workspace:
