@@ -147,6 +147,8 @@ workflows:
     jobs:
       - path-filtering/filter:
           name: check-changed-files
+          # The path-filtering orb requires Python 3.9+ (uses 3.6 by default)
+          tag: "3.9"
           base-revision: main # Compare against main branch
           config-path: .circleci/continue-config.yml # Config to run after filtering
           # Mapping: regex pattern -> parameter value
