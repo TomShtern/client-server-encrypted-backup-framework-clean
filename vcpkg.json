@@ -5,7 +5,6 @@
     "boost-iostreams",
     "boost-process",
     "cryptopp",
-    "drogon",
     "nlohmann-json",
     "sentry-native",
     "spdlog",

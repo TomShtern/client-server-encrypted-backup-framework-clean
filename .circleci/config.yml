@@ -1,20 +1,37 @@
 version: 2.1
 
-# Orbs provide pre-packaged sets of configuration
+# Orbs: Pre-built CircleCI packages that provide reusable config
+# - win: Provides Windows Server 2022 executor for C++ builds
+# - path-filtering: Analyzes git diff to conditionally trigger jobs
 orbs:
-  node: circleci/node@5.2.0
-  python: circleci/python@2.1.1
   win: circleci/windows@5.0
+  path-filtering: circleci/path-filtering@1.0.0
 
-# Define reusable executors
+# setup: true = This is a "setup config" that runs BEFORE the main pipeline
+# It only runs the setup-workflow, then hands off to continue-config.yml
+setup: true
+
+# Executors: Reusable job environments with specific resources
+# resource_class controls CPU/RAM allocation (affects credits usage)
+# - small: 1 vCPU, 2GB RAM (cheaper, for light tasks)
+# - medium: 2 vCPU, 4GB RAM (default, for heavier tasks)
 executors:
-  python-executor:
+  python-small:
     docker:
-      - image: cimg/python:3.13
+      - image: cimg/python:3.13 # CircleCI's Python 3.13 image
+    resource_class: small
     working_directory: ~/project
 
-# Define reusable commands
+  python-medium:
+    docker:
+      - image: cimg/python:3.13
+    resource_class: medium
+    working_directory: ~/project
+
+# Commands: Reusable step sequences (like functions)
+# These are shared between config.yml and continue-config.yml
 commands:
+  # Install Python deps and verify imports work
   install-python-deps:
     description: "Install Python dependencies and verify imports"
     steps:
@@ -23,19 +40,22 @@ commands:
           command: |
             pip install --upgrade pip
             pip install -r requirements.txt
-            pip install ruff
+            pip install ruff  # Linter
 
       - run:
           name: Verify critical imports
+          # Fails fast if core dependencies are broken
           command: |
             python -c "import flask, flask_cors, flask_socketio, sentry_sdk, watchdog, psutil"
             echo "✅ All Python dependencies imported successfully"
 
+  # Set up vcpkg (C++ package manager) with caching for faster builds
   setup-vcpkg-deps:
     description: "Set up vcpkg and install C++ dependencies"
     steps:
       - run:
           name: Clone vcpkg
+          # PowerShell: Clone vcpkg repo if not present
           command: |
             if (-not (Test-Path "vcpkg")) {
               git clone https://github.com/microsoft/vcpkg.git
@@ -43,15 +63,32 @@ commands:
 
       - run:
           name: Bootstrap vcpkg
+          # Compiles vcpkg.exe (one-time setup)
           command: |
             cd vcpkg
             .\bootstrap-vcpkg.bat
 
+      # Cache: Restore previously built packages (saves ~30 min)
+      # Key based on vcpkg.json checksum - invalidates when deps change
+      - restore_cache:
+          keys:
+            - vcpkg-packages-v1-{{ checksum "vcpkg.json" }}
+            - vcpkg-packages-v1-
+
       - run:
           name: Install C++ dependencies (manifest mode)
+          # Reads vcpkg.json and installs all listed packages
           command: |
-            # Run vcpkg install from project root (uses vcpkg.json manifest)
             vcpkg/vcpkg.exe install --triplet x64-windows
+
+      # Cache: Save built packages for future builds
+      - save_cache:
+          key: vcpkg-packages-v1-{{ checksum "vcpkg.json" }}
+          paths:
+            - vcpkg_installed
+            - vcpkg/installed
+            - vcpkg/packages
+            - C:\Users\circleci\AppData\Local\vcpkg
 
       - run:
           name: Verify vcpkg dependencies
@@ -59,29 +96,34 @@ commands:
             cd vcpkg
             .\vcpkg.exe list
 
+  # Build the C++ client using CMake + vcpkg
   build-cpp-client:
     description: "Build the C++ encryption client"
     steps:
       - run:
           name: Install CMake
+          # Chocolatey: Windows package manager (pre-installed on CircleCI)
           command: |
             choco install cmake --installargs '"ADD_CMAKE_TO_PATH=System"' -y
             refreshenv
 
       - run:
           name: Configure CMake with vcpkg
+          # Links vcpkg packages to CMake build system
           command: |
             $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
             cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 
       - run:
           name: Build C++ client
+          # --parallel 4: Use 4 CPU cores for faster compilation
           command: |
             $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
-            cmake --build build --config Release
+            cmake --build build --config Release --parallel 4
 
       - run:
           name: Verify build artifacts
+          # Fail the build if executable wasn't created
           command: |
             if (Test-Path "build/Release/EncryptedBackupClient.exe") {
               Write-Host "✅ C++ client built successfully"
@@ -91,240 +133,34 @@ commands:
               exit 1
             }
 
-# Define jobs
-jobs:
-  # Python dependency verification and linting
-  python-lint-and-deps:
-    executor: python-executor
-    steps:
-      - checkout
-      - install-python-deps
+# NOTE: All job definitions are in continue-config.yml
+# This setup config only runs the path-filtering workflow, which then
+# triggers continue-config.yml with the appropriate parameters.
 
-      - run:
-          name: Run Ruff linting
-          command: |
-            echo "Running Ruff format check..."
-            ruff format --check . || echo "⚠️  Formatting issues found (non-blocking)"
-            echo "Running Ruff diagnostics..."
-            ruff check . || echo "⚠️  Linting issues found (non-blocking)"
-
-      - run:
-          name: Verify UTF-8 solution import
-          command: |
-            python -c "import Shared.filesystem.utf8_solution; print('✅ UTF-8 solution imported successfully')"
-
-  # C++ build job (Windows only due to vcpkg requirements)
-  cpp-build:
-    executor: win/server-2022
-    steps:
-      - checkout
-      - setup-vcpkg-deps
-      - build-cpp-client
-
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - build/Release/EncryptedBackupClient.exe
-
-  # Python unit tests
-  python-unit-tests:
-    executor: python-executor
-    steps:
-      - checkout
-      - install-python-deps
-
-      - run:
-          name: Run Python unit tests
-          command: |
-            # Run individual test files that don't require full system
-            echo "Running isolated Python tests..."
-
-            # Test imports and basic functionality
-            python scripts/testing/quick_validation.py || echo "⚠️  Quick validation issues (non-blocking)"
-
-            # Test specific modules if available
-            if [ -f "tests/test_api.py" ]; then
-              python tests/test_api.py || echo "⚠️  API tests issues (non-blocking)"
-            fi
-
-            # Test UTF-8 functionality
-            python scripts/testing/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
-
-  # Integration tests (requires both C++ and Python)
-  integration-tests:
-    executor: win/server-2022
-    steps:
-      - checkout
-      - attach_workspace:
-          at: ~/project
-
-      - run:
-          name: Install Python dependencies on Windows
-          command: |
-            pip install --upgrade pip
-            pip install -r requirements.txt
-
-      - run:
-          name: Start test servers in background
-          command: |
-            # Start backup server in background
-            Start-Process python -ArgumentList "python_server/server/server.py" -WindowStyle Hidden
-            Start-Sleep 5
-
-            # Start API server in background
-            Start-Process python -ArgumentList "api_server/cyberbackup_api_server.py" -WindowStyle Hidden
-            Start-Sleep 5
-          background: true
-
-      - run:
-          name: Wait for servers to be ready
-          command: |
-            # Check if servers are running
-            $timeout = 30
-            $elapsed = 0
-
-            while ($elapsed -lt $timeout) {
-              $apiRunning = (netstat -an | Select-String ":9090") -ne $null
-              $serverRunning = (netstat -an | Select-String ":1256") -ne $null
-
-              if ($apiRunning -and $serverRunning) {
-                Write-Host "✅ Both servers are running"
-                break
-              }
-
-              Start-Sleep 2
-              $elapsed += 2
-              Write-Host "Waiting for servers... ($elapsed/$timeout seconds)"
-            }
-
-            if ($elapsed -ge $timeout) {
-              Write-Host "⚠️  Servers didn't start in time, continuing anyway"
-            }
-
-      - run:
-          name: Run integration tests
-          command: |
-            # Run integration test suite
-            if (Test-Path "tests/integration/run_integration_tests.py") {
-              python tests/integration/run_integration_tests.py || echo "⚠️  Integration tests issues (non-blocking)"
-            }
-
-            # Run master test suite if available
-            if (Test-Path "scripts/testing/master_test_suite.py") {
-              python scripts/testing/master_test_suite.py || echo "⚠️  Master test suite issues (non-blocking)"
-            }
-
-            # Test file transfer functionality
-            if (Test-Path "tests/test_upload.py") {
-              python tests/test_upload.py || echo "⚠️  Upload tests issues (non-blocking)"
-            }
-
-  # Security and vulnerability scanning
-  security-scan:
-    executor: python-executor
-    steps:
-      - checkout
-      - install-python-deps
-
-      - run:
-          name: Install security scanning tools
-          command: |
-            pip install safety bandit semgrep
-
-      - run:
-          name: Check for known vulnerabilities in dependencies
-          command: |
-            safety check || echo "⚠️  Security vulnerabilities found in dependencies"
-
-      - run:
-          name: Run static security analysis
-          command: |
-            bandit -r . -f json -o bandit-report.json || echo "⚠️  Security issues found (non-blocking)"
-
-      - run:
-          name: Scan for encryption vulnerabilities
-          command: |
-            # Check for your specific security issues mentioned in CLAUDE.md
-            echo "Scanning for static IV usage..."
-            grep -r "static.*IV\|zero.*IV" . --include="*.cpp" --include="*.h" || echo "✅ No static IV patterns found"
-
-            echo "Scanning for CRC32 without HMAC..."
-            grep -r "CRC32\|crc32" . --include="*.cpp" --include="*.h" | grep -v "HMAC" || echo "✅ CRC usage appears secure"
-
-            echo "Checking for hardcoded keys..."
-            bandit -r . -f json -o security-detailed.json --severity-level medium || echo "⚠️  Potential security issues found"
-
-      - store_artifacts:
-          path: bandit-report.json
-          destination: security-reports/bandit-report.json
-
-      - store_artifacts:
-          path: security-detailed.json
-          destination: security-reports/security-detailed.json
-
-  # Performance and system validation
-  system-validation:
-    executor: python-executor
-    steps:
-      - checkout
-      - install-python-deps
-
-      - run:
-          name: Validate system dependencies
-          command: |
-            python scripts/check_dependencies.py || echo "⚠️  Dependency issues found"
-
-      - run:
-          name: Test system startup sequence
-          command: |
-            # Test one-click build script (dry run)
-            if [ -f "scripts/test_one_click_dry_run.py" ]; then
-              python scripts/test_one_click_dry_run.py || echo "⚠️  Build script issues (non-blocking)"
-            fi
-
-# Define workflows
+# Workflows: Define which jobs run and in what order
 workflows:
   version: 2
 
-  # Main build and test workflow
-  build-and-test:
+  # SETUP WORKFLOW: Analyzes git changes and triggers continue-config.yml
+  # This is the ONLY workflow that runs from this file (due to setup: true)
+  setup-workflow:
     jobs:
-      # Stage 1: Basic validation (runs in parallel)
-      - python-lint-and-deps
-      - cpp-build
-      - security-scan
-      - system-validation
+      - path-filtering/filter:
+          name: check-changed-files
+          base-revision: main # Compare against main branch
+          config-path: .circleci/continue-config.yml # Config to run after filtering
+          # Mapping: regex pattern -> parameter value
+          # If ANY file matches pattern, parameter is set to true
+          mapping: |
+            Client/.* run-cpp-build true
+            CMakeLists.txt run-cpp-build true
+            vcpkg.json run-cpp-build true
+            .*.py run-python-tests true
+            python_server/.* run-python-tests true
+            api_server/.* run-python-tests true
+            Shared/.* run-python-tests true
+            FletV2/.* run-python-tests true
+            requirements.txt run-python-tests true
 
-      # Stage 2: Unit tests (depends on dependencies being validated)
-      - python-unit-tests:
-          requires:
-            - python-lint-and-deps
-
-      # Stage 3: Integration tests (requires both C++ build and Python validation)
-      - integration-tests:
-          requires:
-            - cpp-build
-            - python-unit-tests
-
-  # Nightly comprehensive testing
-  nightly-tests:
-    triggers:
-      - schedule:
-          cron: "0 2 * * *" # Run at 2 AM UTC daily
-          filters:
-            branches:
-              only:
-                - main
-                - clean-main
-    jobs:
-      - python-lint-and-deps
-      - cpp-build
-      - security-scan
-      - system-validation
-      - python-unit-tests:
-          requires:
-            - python-lint-and-deps
-      - integration-tests:
-          requires:
-            - cpp-build
-            - python-unit-tests
+  # NOTE: Nightly workflow is in continue-config.yml (scheduled triggers
+  # don't work in setup configs)

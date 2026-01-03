@@ -1,0 +1,324 @@
+version: 2.1
+
+# CONTINUE CONFIG: This file runs AFTER path-filtering analyzes git changes
+# It contains all job definitions and conditional/scheduled workflows
+
+orbs:
+  win: circleci/windows@5.0 # Windows Server 2022 for C++ builds
+
+# Pipeline Parameters: Set by path-filtering orb based on changed files
+# These control which workflows run (conditional builds)
+parameters:
+  run-cpp-build:
+    type: boolean
+    default: false # Set to true if C++ files changed
+  run-python-tests:
+    type: boolean
+    default: false # Set to true if Python files changed
+
+# Executors: Job environments with resource allocation
+# resource_class affects credit usage (free tier: 30,000 credits/month)
+executors:
+  python-small: # 1 vCPU, 2GB RAM - for linting, simple checks
+    docker:
+      - image: cimg/python:3.13
+    resource_class: small
+    working_directory: ~/project
+
+  #NOTE from Tom: Windows minimum is medium = 4 CPU, 16GB RAM
+  python-medium: # 2 vCPU, 4GB RAM - for tests, security scans
+    docker:
+      - image: cimg/python:3.13
+    resource_class: medium
+    working_directory: ~/project
+
+# Define reusable commands
+commands:
+  install-python-deps:
+    description: "Install Python dependencies and verify imports"
+    steps:
+      - run:
+          name: Install Python dependencies
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install ruff
+
+      - run:
+          name: Verify critical imports
+          command: |
+            python -c "import flask, flask_cors, flask_socketio, sentry_sdk, watchdog, psutil"
+            echo "✅ All Python dependencies imported successfully"
+
+  setup-vcpkg-deps:
+    description: "Set up vcpkg and install C++ dependencies"
+    steps:
+      - run:
+          name: Clone vcpkg
+          command: |
+            if (-not (Test-Path "vcpkg")) {
+              git clone https://github.com/microsoft/vcpkg.git
+            }
+
+      - run:
+          name: Bootstrap vcpkg
+          command: |
+            cd vcpkg
+            .\bootstrap-vcpkg.bat
+
+      - restore_cache:
+          keys:
+            - vcpkg-packages-v1-{{ checksum "vcpkg.json" }}
+            - vcpkg-packages-v1-
+
+      - run:
+          name: Install C++ dependencies (manifest mode)
+          command: |
+            vcpkg/vcpkg.exe install --triplet x64-windows
+
+      - save_cache:
+          key: vcpkg-packages-v1-{{ checksum "vcpkg.json" }}
+          paths:
+            - vcpkg_installed
+            - vcpkg/installed
+            - vcpkg/packages
+            - C:\Users\circleci\AppData\Local\vcpkg
+
+      - run:
+          name: Verify vcpkg dependencies
+          command: |
+            cd vcpkg
+            .\vcpkg.exe list
+
+  build-cpp-client:
+    description: "Build the C++ encryption client"
+    steps:
+      - run:
+          name: Install CMake
+          command: |
+            choco install cmake --installargs '"ADD_CMAKE_TO_PATH=System"' -y
+            refreshenv
+
+      - run:
+          name: Configure CMake with vcpkg
+          command: |
+            $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
+            cmake -B build -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+      - run:
+          name: Build C++ client
+          command: |
+            $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
+            cmake --build build --config Release --parallel 4
+
+      - run:
+          name: Verify build artifacts
+          command: |
+            if (Test-Path "build/Release/EncryptedBackupClient.exe") {
+              Write-Host "✅ C++ client built successfully"
+              Get-ChildItem build/Release/EncryptedBackupClient.exe | Format-List
+            } else {
+              Write-Host "❌ C++ client build failed"
+              exit 1
+            }
+
+# ============================================================================
+# JOBS: Individual tasks that run in isolated environments
+# ============================================================================
+jobs:
+  # LINTING JOB: Check code style and imports (runs on small executor)
+  python-lint-and-deps:
+    executor: python-small
+    steps:
+      - checkout # Clone the repo
+      - install-python-deps # Use command defined above
+
+      - run:
+          name: Run Ruff linting
+          command: |
+            echo "Running Ruff format check..."
+            ruff format --check . || echo "⚠️  Formatting issues found (non-blocking)"
+            echo "Running Ruff diagnostics..."
+            ruff check . || echo "⚠️  Linting issues found (non-blocking)"
+
+      - run:
+          name: Verify UTF-8 solution import
+          command: |
+            python -c "import Shared.filesystem.utf8_solution; print('✅ UTF-8 solution imported successfully')"
+
+  # C++ BUILD JOB: Compile native encryption client (Windows only)
+  # Only runs when run-cpp-build parameter is true
+  cpp-build:
+    executor: win/server-2022 # Windows executor for MSVC compiler
+    steps:
+      - checkout
+      - setup-vcpkg-deps # Install C++ dependencies with caching
+      - build-cpp-client # CMake configure + build
+
+      # persist_to_workspace: Share build artifacts with later jobs
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - build/Release/EncryptedBackupClient.exe
+
+  # PYTHON TESTS JOB: Run test suite (medium executor for more resources)
+  python-unit-tests:
+    executor: python-medium
+    steps:
+      - checkout
+      - install-python-deps
+
+      - run:
+          name: Run Python unit tests
+          # Non-blocking: Tests report issues but don't fail the build
+          command: |
+            echo "Running isolated Python tests..."
+            python scripts/testing/quick_validation.py || echo "⚠️  Quick validation issues (non-blocking)"
+            if [ -f "tests/test_api.py" ]; then
+              python tests/test_api.py || echo "⚠️  API tests issues (non-blocking)"
+            fi
+            python scripts/testing/test_emoji_support.py || echo "⚠️  UTF-8 tests issues (non-blocking)"
+
+  # SECURITY SCAN JOB: Check for vulnerabilities and security issues
+  security-scan:
+    executor: python-medium
+    steps:
+      - checkout
+      - install-python-deps
+
+      - run:
+          name: Install security scanning tools
+          # safety: checks dependencies, bandit: static analysis, semgrep: pattern matching
+          command: |
+            pip install safety bandit semgrep
+
+      - run:
+          name: Check for known vulnerabilities
+          # Checks requirements.txt against CVE database
+          command: |
+            safety check || echo "⚠️  Security vulnerabilities found"
+
+      - run:
+          name: Run static security analysis
+          # Scans Python code for security anti-patterns
+          command: |
+            bandit -r . -f json -o bandit-report.json || echo "⚠️  Security issues found (non-blocking)"
+
+      # store_artifacts: Save reports for download in CircleCI UI
+      - store_artifacts:
+          path: bandit-report.json
+          destination: security-reports/bandit-report.json
+
+  # SYSTEM VALIDATION JOB: Verify project dependencies and scripts
+  system-validation:
+    executor: python-small
+    steps:
+      - checkout
+      - install-python-deps
+
+      - run:
+          name: Validate system dependencies
+          # Ensures all required tools and packages are available
+          command: |
+            python scripts/check_dependencies.py || echo "⚠️  Dependency issues found"
+
+  # INTEGRATION TESTS JOB: Test C++ client + Python server together
+  # Requires cpp-build to complete first (uses its artifacts)
+  integration-tests:
+    executor: win/server-2022
+    steps:
+      - checkout
+      # attach_workspace: Retrieve C++ executable from cpp-build job
+      - attach_workspace:
+          at: ~/project
+
+      - run:
+          name: Install Python dependencies on Windows
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+      - run:
+          name: Verify C++ client exists
+          # Gracefully skip if C++ build was skipped
+          command: |
+            if (Test-Path "build/Release/EncryptedBackupClient.exe") {
+              Write-Host "✅ C++ client found"
+            } else {
+              Write-Host "⚠️  C++ client not found - skipping integration tests"
+              exit 0
+            }
+
+      - run:
+          name: Run integration tests
+          # Tests real client-server communication
+          # PowerShell: $? checks if last command succeeded
+          command: |
+            if (Test-Path "tests/integration/run_integration_tests.py") {
+              python tests/integration/run_integration_tests.py
+              if (-not $?) { Write-Host "⚠️  Integration tests issues (non-blocking)" }
+            } else {
+              Write-Host "⚠️  No integration tests found"
+            }
+
+# ============================================================================
+# WORKFLOWS: Define job execution order and conditions
+# ============================================================================
+workflows:
+  version: 2
+
+  # CONDITIONAL WORKFLOW: Runs based on which files changed
+  # Triggered when path-filtering sets run-python-tests OR run-cpp-build = true
+  build-and-test:
+    when:
+      or:
+        - << pipeline.parameters.run-python-tests >>
+        - << pipeline.parameters.run-cpp-build >>
+    jobs:
+      # Stage 1: Parallel validation (no dependencies)
+      - python-lint-and-deps
+      - security-scan
+      - system-validation
+
+      # Stage 2: Tests (requires linting to pass first)
+      - python-unit-tests:
+          requires:
+            - python-lint-and-deps
+
+  # C++ WORKFLOW: Only runs when C++ files change
+  # Saves credits by skipping Windows builds for Python-only changes
+  cpp-build-workflow:
+    when: << pipeline.parameters.run-cpp-build >>
+    jobs:
+      - cpp-build
+
+      # Integration tests need the C++ executable
+      - integration-tests:
+          requires:
+            - cpp-build
+
+  # NIGHTLY WORKFLOW: Scheduled comprehensive testing
+  # Runs all jobs regardless of file changes (catches hidden regressions)
+  nightly-tests:
+    triggers:
+      - schedule:
+          cron: "0 2 * * *" # 2 AM UTC daily (midnight in Israel timezone)
+          filters:
+            branches:
+              only:
+                - main
+                - clean-main
+    jobs:
+      # All jobs run in parallel where possible
+      - python-lint-and-deps
+      - cpp-build
+      - security-scan
+      - system-validation
+      # Sequential dependencies
+      - python-unit-tests:
+          requires:
+            - python-lint-and-deps
+      - integration-tests:
+          requires:
+            - cpp-build
+            - python-unit-tests
