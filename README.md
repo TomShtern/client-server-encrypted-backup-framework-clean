@@ -235,6 +235,62 @@ The project uses:
 - **Desktop GUI**: Flet 0.28+ (Material Design 3)
 - **Observability**: Sentry for error monitoring
 
+## CI/CD (CircleCI)
+
+The project uses CircleCI for continuous integration with optimized conditional builds.
+
+### Pipeline Structure
+
+| Config File | Purpose |
+|-------------|---------|
+| `.circleci/config.yml` | Setup config with path filtering |
+| `.circleci/continue-config.yml` | All job definitions and workflows |
+
+### Workflows
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| **setup-workflow** | Every push | Analyzes changed files, triggers conditional builds |
+| **build-and-test** | Python changes | Linting, tests, security scan, validation |
+| **cpp-build-workflow** | C++/CMake changes | C++ build, integration tests |
+| **nightly-tests** | Daily 2 AM UTC | All jobs (catches hidden regressions) |
+
+### Conditional Builds (Cost Optimization)
+
+The pipeline uses **path filtering** to skip expensive Windows builds when only Python files change:
+
+```yaml
+# File change patterns → workflow triggers
+Client/.*              → run-cpp-build: true
+CMakeLists.txt         → run-cpp-build: true
+*.py                   → run-python-tests: true
+requirements.txt       → run-python-tests: true
+```
+
+**Result**: Python-only changes run in ~2 minutes instead of ~30 minutes.
+
+### Resource Classes
+
+| Job | Resource | Use Case |
+|-----|----------|----------|
+| `python-lint-and-deps` | `small` (1 vCPU, 2GB) | Linting, imports |
+| `python-unit-tests` | `medium` (2 vCPU, 4GB) | Test suite |
+| `security-scan` | `medium` | Semgrep, Bandit |
+| `cpp-build` | Windows `medium` (4 vCPU, 16GB) | C++ compilation |
+
+### Build Optimizations
+
+- **vcpkg Caching**: Dependencies cached by `vcpkg.json` checksum (~30 min → ~5 min)
+- **Parallel Builds**: CMake uses `--parallel 4` for faster compilation
+- **Removed Unused Deps**: `drogon` removed from `vcpkg.json` (~15 min saved)
+
+### Running Locally
+
+Validate CircleCI config before pushing:
+```bash
+circleci config validate .circleci/config.yml
+```
+
 ## License
 
 See project documentation for license information.
