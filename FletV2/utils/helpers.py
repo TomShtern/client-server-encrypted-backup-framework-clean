@@ -18,6 +18,7 @@ try:
 
     _PSUTIL_AVAILABLE = True
 except ImportError:
+    psutil = None  # type: ignore[assignment]
     _PSUTIL_AVAILABLE = False
 
 
@@ -126,6 +127,8 @@ def get_disk_usage(path: str = "/") -> dict[str, Any]:
         if os.name == "nt" and path == "/":
             path = "C:\\"
 
+        if psutil is None:
+            raise ImportError("psutil not available")
         usage = psutil.disk_usage(path)
         return {
             "used": usage.used,

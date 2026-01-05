@@ -245,9 +245,10 @@ if __name__ == "__main__":
             )
         try:
             # Launch in WEB_BROWSER view so automated tools can capture screenshots
-            ft.run(
-                gui_with_server_main,
-                view=ft.AppView.WEB_BROWSER,
+            # Flet 0.28.3: use ft.app() with view and port parameters
+            ft.app(
+                target=gui_with_server_main,
+                view=ft.WEB_BROWSER,
                 port=chosen_port,
             )
             print("[OK] FletV2 web application closed normally")
@@ -268,7 +269,8 @@ if __name__ == "__main__":
 
         try:
             # Launch as native desktop application (default mode)
-            ft.run(gui_with_server_main, view=ft.AppView.FLET_APP)
+            # Flet 0.28.3: use ft.app() with target parameter
+            ft.app(target=gui_with_server_main)
             print("[OK] FletV2 desktop application closed normally")
 
         except Exception as launch_err:

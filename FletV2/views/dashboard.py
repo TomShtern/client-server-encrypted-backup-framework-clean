@@ -23,6 +23,7 @@ try:
 
     _PSUTIL_AVAILABLE = True
 except ImportError:
+    psutil = None  # type: ignore[assignment]
     _PSUTIL_AVAILABLE = False
 
 import base64
@@ -330,7 +331,6 @@ def create_dashboard_view(
     files_subtext_ref = ft.Ref[ft.Text]()
     uptime_value_ref = ft.Ref[ft.Text]()
     uptime_subtext_ref = ft.Ref[ft.Text]()
-    db_status_ref = ft.Ref[ft.Text]()
 
     # Metric chart refs
     cpu_value_ref = ft.Ref[ft.Text]()
@@ -731,9 +731,10 @@ def create_dashboard_view(
                             filtered_logs = logs
                             if _current_filter != "all":
                                 filtered_logs = [
-                                    l
-                                    for l in logs
-                                    if l.get("level", "info").lower() == _current_filter
+                                    log_item
+                                    for log_item in logs
+                                    if log_item.get("level", "info").lower()
+                                    == _current_filter
                                 ]
 
                             # Limit to 5-6 items
@@ -788,7 +789,7 @@ def create_dashboard_view(
         _update_connection_status(is_connected)
 
         # 3. System Stats (CPU/Mem)
-        if _PSUTIL_AVAILABLE:
+        if _PSUTIL_AVAILABLE and psutil is not None:
             try:
                 # CPU
                 cpu = psutil.cpu_percent(interval=None)
@@ -853,32 +854,7 @@ def create_dashboard_view(
                 # The health_gauge_ref needs to be attached to the inner HealthGaugeWithTooltip
                 # But HealthGaugeWithTooltip returns a Container.
 
-                # Let's check how we initialized it:
-                # content=ft.Container(content=HealthGaugeWithTooltip(100), ...)
-                # logic relies on health_gauge_ref.current being the container that holds the gauge
-                pass
-                # Re-implementation note: Since we changed the structure in lines 433-440,
-                # we need to make sure health_gauge_ref is attached to something updatable.
-                # The easiest way is to wrap HealthGaugeWithTooltip in a ref-holding Container (which we did).
-
-                # However, the previous code assumed health_gauge_ref was a specific container.
-                # Let's fix the initialization block above first (Wait, I can't edit previous blocks here).
-                # I will handle the ref assignment logic by correcting the initialization in a separate step or
-                # hoping I can catch it here.
-
-                # Actually, I missed attaching the ref in the replacement chunk for lines 433+.
-                # I need to fix that chunk or fix it here by locating the container differently.
-                # BETTER: I will assume I can't change the chunk I already wrote in this specific call (parallel).
-                # I should have added `ref=health_gauge_ref` to the container in the matte card.
-
-                # SINCE I CANNOT EDIT PREVIOUS CHUNKS IN THIS CALL: I will add a separate replacement chunk
-                # to fix the ref attachment in the initialization if possible.
-                # OR I will rely on the fact that I haven't submitted the tool call yet?
-                # No, I am constructing the tool call now. I should go back and edit that chunk.
-
-                # ... Editing chunk 4 ...
-                # Added content=ft.Container(ref=health_gauge_ref, ...)
-
+                # Update health gauge with current health value
                 if health_gauge_ref.current:
                     health_gauge_ref.current.content = HealthGaugeWithTooltip(health)
                     safe_update_control(health_gauge_ref.current)

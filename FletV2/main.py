@@ -1915,9 +1915,8 @@ if __name__ == "__main__":
             sys.exit(1)
 
     try:
-        # Flet 0.80.0: use ft.run() instead of deprecated ft.app()
-        # First positional param is 'main', not 'target'
-        ft.run(main, view=ft.AppView.FLET_APP)
+        # Flet 0.28.3: use ft.app() with target parameter
+        ft.app(target=main)
     except Exception as e:
         print(f"❌ FATAL ERROR starting Flet app: {e}")
         import traceback

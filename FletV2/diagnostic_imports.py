@@ -2,8 +2,8 @@
 Minimal diagnostic to find what import in main.py causes ft.run() to hang.
 """
 
-import sys
 import os
+import sys
 
 # Path setup from main.py
 here_path = os.path.abspath(__file__)
@@ -34,7 +34,7 @@ except Exception as e:
 
 print("\n[STEP 2] Adding utf8_solution import...")
 try:
-    from Shared.filesystem.utf8_solution import utf8
+    import Shared.filesystem.utf8_solution as utf8
 
     print("  utf8_solution imported")
     utf8.ensure_initialized()
@@ -62,7 +62,9 @@ except Exception as e:
 
 print("\n[STEP 4] Adding FletV2 components import...")
 try:
-    from FletV2.components.breadcrumb import BreadcrumbFactory  # noqa: F401 - Testing import side effects
+    from FletV2.components.breadcrumb import (
+        BreadcrumbFactory,  # noqa: F401 - Testing import side effects
+    )
 
     print("  breadcrumb imported")
 except Exception as e:

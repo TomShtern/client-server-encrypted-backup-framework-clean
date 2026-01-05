@@ -29,20 +29,20 @@ def test_sync(page: ft.Page):
 
 try:
     print("  → Calling ft.app with sync function...")
-    ft.app(target=test_sync, view=ft.AppView.FLET_APP)
+    ft.app(target=test_sync)
     print("  ✓ ft.app() returned")
 except Exception as e:
     print(f"  ✗ ft.app() failed: {e}")
 
-print("\n[Step 3] Testing ft.run with sync function...")
+print("\n[Step 3] Testing ft.app with sync function (desktop mode)...")
 try:
-    print("  → Calling ft.run with sync function...")
-    ft.run(test_sync, view=ft.AppView.FLET_APP)
-    print("  ✓ ft.run() returned")
+    print("  → Calling ft.app with sync function (desktop)...")
+    ft.app(target=test_sync)
+    print("  ✓ ft.app() returned")
 except Exception as e:
-    print(f"  ✗ ft.run() failed: {e}")
+    print(f"  ✗ ft.app() failed: {e}")
 
-print("\n[Step 4] Testing ft.run with async function...")
+print("\n[Step 4] Testing ft.app with async function...")
 
 
 async def test_async(page: ft.Page):
@@ -52,11 +52,11 @@ async def test_async(page: ft.Page):
 
 
 try:
-    print("  → Calling ft.run with async function...")
-    ft.run(test_async, view=ft.AppView.FLET_APP)
-    print("  ✓ ft.run() returned")
+    print("  → Calling ft.app with async function...")
+    ft.app(target=test_async)
+    print("  ✓ ft.app() returned")
 except Exception as e:
-    print(f"  ✗ ft.run() failed: {e}")
+    print(f"  ✗ ft.app() failed: {e}")
 
 print("\n[Step 5] Testing WEB_BROWSER view (the failing mode)...")
 
@@ -68,19 +68,19 @@ async def test_web(page: ft.Page):
 
 
 try:
-    print("  → Calling ft.run with WEB_BROWSER view...")
-    ft.run(test_web, view=ft.AppView.WEB_BROWSER, port=9999)
-    print("  ✓ ft.run() returned")
+    print("  → Calling ft.app with web_browser view...")
+    ft.app(target=test_web, view=ft.WEB_BROWSER, port=9999)
+    print("  ✓ ft.app() returned")
 except Exception as e:
-    print(f"  ✗ ft.run() failed: {e}")
+    print(f"  ✗ ft.app() failed: {e}")
 
 print("\n[Step 6] Testing with specific port 8550...")
 try:
-    print("  → Calling ft.run on port 8550...")
-    ft.run(test_web, view=ft.AppView.WEB_BROWSER, port=8550)
-    print("  ✓ ft.run() returned")
+    print("  → Calling ft.app on port 8550...")
+    ft.app(target=test_web, view=ft.WEB_BROWSER, port=8550)
+    print("  ✓ ft.app() returned")
 except Exception as e:
-    print(f"  ✗ ft.run() failed: {e}")
+    print(f"  ✗ ft.app() failed: {e}")
 
 print("\n" + "=" * 70)
 print("Diagnostic complete")

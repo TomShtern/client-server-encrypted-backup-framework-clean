@@ -73,7 +73,7 @@ COLOR_SEEDS = {
 
 def create_settings_view(
     server_bridge=None,
-    page: ft.Page = None,
+    page: ft.Page | None = None,
     state_manager=None,
     global_search=None,
 ) -> tuple[ft.Control, Callable[[], None], Callable[[], Coroutine[Any, Any, None]]]:
@@ -111,18 +111,12 @@ def create_settings_view(
         for i, btn in enumerate(tab_buttons):
             is_sel = i == index
             btn.border = ft.Border.only(
-                bottom=ft.BorderSide(
-                    2, "primary" if is_sel else ft.Colors.TRANSPARENT
-                )
+                bottom=ft.BorderSide(2, "primary" if is_sel else ft.Colors.TRANSPARENT)
             )
             row = btn.content
             if isinstance(row, ft.Row) and len(row.controls) >= 2:
-                row.controls[0].color = (
-                    "primary" if is_sel else ft.Colors.GREY_600
-                )
-                row.controls[1].color = (
-                    "primary" if is_sel else ft.Colors.GREY_600
-                )
+                row.controls[0].color = "primary" if is_sel else ft.Colors.GREY_600
+                row.controls[1].color = "primary" if is_sel else ft.Colors.GREY_600
                 row.controls[1].weight = (
                     ft.FontWeight.W_600 if is_sel else ft.FontWeight.W_400
                 )
@@ -220,7 +214,7 @@ def create_settings_view(
         dd.on_change = on_change
         return dd
 
-    def row(label: str, control, desc: str = None):
+    def row(label: str, control, desc: str | None = None):
         is_sw = isinstance(control, ft.Switch)
         if desc:
             control.tooltip = desc
@@ -269,12 +263,12 @@ def create_settings_view(
         ssl_on = bool(data.get("server", {}).get("enable_ssl"))
         for k in ("ssl_cert_path", "ssl_key_path"):
             c = controls.get(("server", k))
-            if isinstance(c, ft.TextField):
+            if c is not None and isinstance(c, ft.TextField):
                 c.disabled = not ssl_on
                 safe_update(c)
         auth_on = bool(data.get("security", {}).get("require_auth"))
         api_c = controls.get(("security", "api_key"))
-        if isinstance(api_c, ft.TextField):
+        if api_c is not None and isinstance(api_c, ft.TextField):
             api_c.disabled = not auth_on
             safe_update(api_c)
 
@@ -796,4 +790,3 @@ class SettingsView:
     async def setup(self):
         if self._setup:
             await self._setup()
-

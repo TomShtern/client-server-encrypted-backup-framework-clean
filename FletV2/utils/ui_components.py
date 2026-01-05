@@ -15,7 +15,6 @@ __all__ = [
     "FilterBar",
     "SectionHeader",
     "StatusPill",
-    "create_progress_indicator",
     "create_pulsing_status_indicator",
     "create_status_pill",
     "create_matte_card",
